@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f",
+    "db:restart": "docker compose restart",
+    "db:redis-fix": "docker compose run --rm redis redis-check-aof --fix /data/appendonly.aof"
   },
   "keywords": [],
   "author": "",
