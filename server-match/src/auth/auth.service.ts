@@ -30,11 +30,11 @@ export class AuthService {
                 break;
         }
         if (!emailSent) {
-            throw new InternalServerErrorException('인증 이메일 전송에 실패했습니다. 나중에 다시 시도해 주세요.');
+            throw new InternalServerErrorException('Verification email send failed');
         }
 
         return {
-            message: '인증 코드 발송 성공'
+            message: 'Verification code sent successfully',
         }
     }
 }

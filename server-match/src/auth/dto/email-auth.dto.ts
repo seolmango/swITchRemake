@@ -10,6 +10,6 @@ export class SendEmailDto {
     @IsEmail()
     email!: string;
 
-    @IsEnum(EmailAuthType, { message: 'vtype은 signup, reset-password, delete 중 하나여야 합니다.' })
+    @IsEnum(EmailAuthType, { message: 'vtype must be signup or reset-password or delete' })
     vtype!: EmailAuthType;
 }

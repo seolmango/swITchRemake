@@ -4,6 +4,7 @@ import { DatabaseModule } from "./database/database.module";
 import { RedisModule } from "./redis/redis.module";
 import { EmailModule } from "./email/email.module";
 import { AuthModule } from "./auth/auth.module";
+import { UserModule } from "./user/user.module";
 import * as path from 'path';
 
 @Module({
@@ -16,6 +17,7 @@ import * as path from 'path';
         RedisModule,
         EmailModule,
         AuthModule,
+        UserModule,
     ],
     controllers: [],
     providers: [],
