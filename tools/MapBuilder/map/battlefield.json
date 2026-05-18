@@ -1,0 +1,6 @@
+{
+  "name": "BattleField",
+  "size": 50,
+  "barrier": 1,
+  "data": "battlefield.csv"
+}

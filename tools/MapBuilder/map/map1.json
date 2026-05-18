@@ -1,0 +1,6 @@
+{
+  "name": "TestMap1",
+  "size": 30,
+  "barrier": 1,
+  "data": "map1.csv"
+}
