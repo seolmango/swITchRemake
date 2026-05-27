@@ -6,6 +6,10 @@ import { EmailModule } from "./email/email.module";
 import { AuthModule } from "./auth/auth.module";
 import { UserModule } from "./user/user.module";
 import * as path from 'path';
+import { ThrottlerModule } from "@nestjs/throttler";
+import { APP_GUARD } from "@nestjs/core";
+import { JwtAuthGuard } from "./auth/jwt-auth.guard";
+import { RateLimiterGuard } from "./ratelimiter.guard";
 
 @Module({
     imports: [
@@ -13,6 +17,7 @@ import * as path from 'path';
             isGlobal: true,
             envFilePath: path.resolve(__dirname, '../../.env'),
         }),
+        ThrottlerModule.forRoot([{ttl: 60000, limit: 0}]),
         DatabaseModule,
         RedisModule,
         EmailModule,
@@ -20,6 +25,15 @@ import * as path from 'path';
         UserModule,
     ],
     controllers: [],
-    providers: [],
+    providers: [
+        {
+            provide: APP_GUARD,
+            useClass: JwtAuthGuard,
+        },
+        {
+            provide: APP_GUARD,
+            useClass: RateLimiterGuard,
+        }
+    ],
 })
 export class AppModule {}

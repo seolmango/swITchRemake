@@ -8,7 +8,7 @@ import { sql } from 'drizzle-orm';
 async function bootstrap() {
     const app = await NestFactory.create<NestFastifyApplication>(
         AppModule,
-        new FastifyAdapter()
+        new FastifyAdapter({ trustProxy: true })
     );
     const logger = new Logger('Bootstrap');
 
