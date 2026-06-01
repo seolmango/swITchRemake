@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from "react";
 import { Color } from "../../theme/color.ts";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 
@@ -30,6 +30,8 @@ export const RoundButton = React.memo<RoundButtonProps>(({
     const { theme, textSizeRatio } = useSettingsStore();
     const [isHovered, setIsHovered] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
+    const [calculatedSize, setCalculatedSize] = useState(0);
+    const measureRef = useRef<HTMLSpanElement>(null);
 
     const isActive = (isHovered || isFocused) && !disabled;
 
@@ -44,17 +46,38 @@ export const RoundButton = React.memo<RoundButtonProps>(({
         return { currentBg: bg, currentStroke: stroke, currentTextColor: textColor };
     }, [type, theme, isActive]);
 
-    const finalSize = useMemo(() => {
-        const innerWidth = width - 20;
-        const innerHeight = height - 20;
+    const calculateSize = useCallback(() => {
+        if (typeof content !== 'string' || !measureRef.current) return;
 
-        if (typeof content === 'string') {
-            const estimatedCharWidth = 0.6;
-            const maxByWidth = innerWidth / Math.max(content.length * estimatedCharWidth, 1);
-            const maxByHeight = innerHeight * 0.8;
-            return Math.min(maxByWidth, maxByHeight) * textSizeRatio;
+        const currentWidth = measureRef.current.offsetWidth;
+        const currentHeight = measureRef.current.offsetHeight;
+
+        if (currentWidth === 0 || currentHeight === 0) return;
+
+        const innerWidth = width - 30;
+        const innerHeight = height - 30;
+        const scaleX = innerWidth / currentWidth;
+        const scaleY = innerHeight / currentHeight;
+
+        setCalculatedSize(100 * Math.min(scaleX, scaleY) * textSizeRatio);
+    }, [content, width, height, textSizeRatio]);
+
+    useLayoutEffect(() => {
+        calculateSize();
+    }, [calculateSize]);
+
+    React.useEffect(() => {
+        if (document.fonts) {
+            document.fonts.ready.then(() => {
+                calculateSize();
+            });
         }
+    }, [calculateSize]);
 
+    const iconSize = useMemo(() => {
+        if (typeof content === 'string') return 0;
+        const innerWidth = width - 30;
+        const innerHeight = height - 30;
         return Math.min(innerWidth, innerHeight) * 0.8 * textSizeRatio;
     }, [width, height, content, textSizeRatio]);
 
@@ -108,20 +131,42 @@ export const RoundButton = React.memo<RoundButtonProps>(({
             onKeyDown={handleKeyDown}
         >
             {typeof content === 'string' ? (
-                <span style={{
-                    fontSize: `${finalSize}px`,
-                    color: currentTextColor,
-                    transition: 'color 0.2s ease-out',
-                    lineHeight: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                }}>
-                    {content}
-                </span>
+                <>
+                    <span
+                        ref={measureRef}
+                        style={{
+                            position: 'absolute',
+                            visibility: 'hidden',
+                            fontSize: '100px',
+                            whiteSpace: 'nowrap',
+                            lineHeight: 1
+                        }}
+                    >
+                        {content}
+                    </span>
+                    {calculatedSize > 0 && (
+                        <svg
+                            width="100%"
+                            height="100%"
+                            style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
+                        >
+                            <text
+                                x="50%"
+                                y="50%"
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                fill={currentTextColor}
+                                fontSize={`${calculatedSize}px`}
+                                style={{ transition: 'fill 0.2s ease-out' }}
+                            >
+                                {content}
+                            </text>
+                        </svg>
+                    )}
+                </>
             ) : (
                 React.cloneElement(content as React.ReactElement<{ size?: number; style?: React.CSSProperties }>, {
-                    size: finalSize,
+                    size: iconSize,
                     style: {
                         color: currentTextColor,
                         transition: 'color 0.2s ease-out',

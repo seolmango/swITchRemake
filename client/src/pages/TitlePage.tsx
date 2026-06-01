@@ -2,8 +2,10 @@ import React from "react";
 import { GameContainer } from "../components/layout/GameContainer.tsx";
 import swITch_Title from "../assets/images/swITch_Title.webp";
 import { RoundButton } from "../components/common/RoundButton.tsx";
+import { useTranslation } from "react-i18next";
 
 export const TitlePage: React.FC = () => {
+    const { t } = useTranslation();
     return (
         <GameContainer>
             <img
@@ -24,10 +26,8 @@ export const TitlePage: React.FC = () => {
                 y={700}
                 width={400}
                 height={100}
-                theme={0}
                 type={0}
-                content="Start Game"
-                size={36}
+                content={t('button.game-start')}
                 onClick={() => {}}
             />
         </GameContainer>
