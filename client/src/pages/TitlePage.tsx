@@ -1,25 +1,14 @@
 import React from "react";
 import { GameContainer } from "../components/layout/GameContainer.tsx";
-import swITch_Title from "../assets/images/swITch_Title.webp";
 import { RoundButton } from "../components/common/RoundButton.tsx";
 import { useTranslation } from "react-i18next";
+import { TitleLogo } from "../components/common/logo.tsx";
 
 export const TitlePage: React.FC = () => {
     const { t } = useTranslation();
     return (
         <GameContainer>
-            <img
-                src={swITch_Title}
-                alt="title"
-                style={{
-                    position: 'absolute',
-                    left: "960px",
-                    top: "300px",
-                    transform: "translate(-50%, -50%)",
-                    width: "1070px",
-                    userSelect: "none",
-                }}
-            />
+            <TitleLogo x={960} y={300} width={1080}/>
 
             <RoundButton
                 x={960}
