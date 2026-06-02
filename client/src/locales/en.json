@@ -1,5 +1,8 @@
 {
-  "button": {
-    "game-start": "Game Start"
+  "titlePage" : {
+    "button" : {
+      "gameStart" : "Start Game",
+      "gameGuide" : "How to Play"
+    }
   }
 }

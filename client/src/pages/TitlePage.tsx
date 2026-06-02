@@ -12,11 +12,21 @@ export const TitlePage: React.FC = () => {
 
             <RoundButton
                 x={960}
-                y={700}
-                width={400}
-                height={100}
+                y={680}
+                width={600}
+                height={120}
                 type={0}
-                content={t('button.game-start')}
+                content={t('titlePage.button.gameStart')}
+                onClick={() => {}}
+            />
+
+            <RoundButton
+                x={960}
+                y={850}
+                width={600}
+                height={120}
+                type={1}
+                content={t('titlePage.button.gameGuide')}
                 onClick={() => {}}
             />
         </GameContainer>

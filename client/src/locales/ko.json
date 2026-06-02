@@ -1,5 +1,8 @@
 {
-  "button": {
-    "game-start": "게임 시작"
+  "titlePage" : {
+    "button" : {
+      "gameStart" : "게임 시작",
+      "gameGuide" : "도움말"
+    }
   }
 }
