@@ -9,7 +9,7 @@ import {PostgresJsDatabase} from "drizzle-orm/postgres-js";
 import * as schema from '../database/schema';
 import {eq} from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
-import {LoginDto, RefreshTokenDto } from "./dto/login.dto";
+import {LoginDto } from "./dto/login.dto";
 
 
 @Injectable()
@@ -66,9 +66,7 @@ export class AuthService {
         return this.generateToken(user.id, user.email);
     }
 
-    async refresh(dto: RefreshTokenDto) {
-        const { refreshToken } = dto;
-
+    async refresh(refreshToken: string) {
         try {
             const payload = this.jwtService.verify(refreshToken, {
                 secret: this.configService.get<string>('JWT_REFRESH_SECRET'),

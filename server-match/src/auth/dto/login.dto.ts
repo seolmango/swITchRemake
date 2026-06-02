@@ -9,8 +9,3 @@ export class LoginDto {
     @Matches(/^[A-Za-z0-9!@#$%^&*]+$/)
     password!: string;
 }
-
-export class RefreshTokenDto {
-    @IsString()
-    refreshToken!: string;
-}
