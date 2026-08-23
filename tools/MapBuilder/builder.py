@@ -1,10 +1,52 @@
-import json, csv, math, argparse, copy
+import json, csv, math, argparse, copy, hashlib, subprocess
 import shutil
 from PIL import Image, ImageDraw
 from pathlib import Path
 import cv2
 import numpy as np
 from tqdm import tqdm
+
+MAP_BUNDLE_SCHEMA_VERSION = 1
+
+
+def positive_integer_setting(value, name):
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(f'setting.{name} must be a positive integer')
+    return value
+
+
+def json_stringify(value):
+    """Return the exact JSON string used by server-game's JSON.stringify hash."""
+    source_json = json.dumps(value, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+    result = subprocess.run(
+        ['node', '-e', 'process.stdout.write(JSON.stringify(JSON.parse(require("fs").readFileSync(0, "utf8"))))'],
+        input=source_json,
+        text=True,
+        encoding='utf-8',
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Node JSON.stringify failed: {result.stderr.strip()}")
+    return result.stdout
+
+
+def make_server_map_bundle(maps, simulation_hz, tile_size):
+    """Build the versioned server map envelope and its loader-compatible SHA-256."""
+    unsigned_bundle = {
+        'schemaVersion': MAP_BUNDLE_SCHEMA_VERSION,
+        'simulationHz': simulation_hz,
+        'tileSize': tile_size,
+        'maps': maps,
+    }
+    map_bundle_hash = hashlib.sha256(json_stringify(unsigned_bundle).encode('utf-8')).hexdigest()
+    return {
+        'schemaVersion': MAP_BUNDLE_SCHEMA_VERSION,
+        'mapBundleHash': map_bundle_hash,
+        'simulationHz': simulation_hz,
+        'tileSize': tile_size,
+        'maps': maps,
+    }
 
 # CLI 파라미터 파싱
 parser = argparse.ArgumentParser(description="swITch Map Maker CLI")
@@ -21,12 +63,17 @@ except FileNotFoundError:
 else:
     print(f"[세팅 파일 로딩] 성공!")
 
+tile_size = positive_integer_setting(settings.get('tile_size'), 'tile_size')
+# Preserve integer coordinates for the normal even tile size while also allowing odd-sized tiles.
+half_tile_size = tile_size // 2 if tile_size % 2 == 0 else tile_size / 2
+simulation_hz = positive_integer_setting(settings.get('simulation_hz'), 'simulation_hz')
+
 # 타일맵 이미지 불러오기
 tile_store = {}
 for i, tiles in enumerate(settings["tile_data"]):
     with Image.open(settings["asset_path"]+tiles["file"]) as img:
         tile_image = img.convert("RGBA")
-        tile_image = tile_image.resize((256, 256))
+        tile_image = tile_image.resize((tile_size, tile_size))
         temp = {
             "physics": tiles["physics"], # 0은 바닥 1은 벽
             "image": tile_image,
@@ -69,7 +116,7 @@ for i, map_file in enumerate(map_files):
     # 시뮬레이션
     barrier_index = 0
     barrier_speed = map_info["barrier"]
-    endpoint = map_info["size"] * 128
+    endpoint = map_info["size"] * half_tile_size
     crt_tick = 0
     map_size = map_info["size"]
     crt_map = []
@@ -86,12 +133,12 @@ for i, map_file in enumerate(map_files):
         # 해당 타일이 배리어에 완전히 가려지기 전의 변경만 반영(최적화)
         if crt_tick in events:
             for x, y, new_tile in events[crt_tick]:
-                distance = min(x, y, map_size-x-1, map_size-y-1) * 256 - barrier_index
-                if distance >= -256:
+                distance = min(x, y, map_size-x-1, map_size-y-1) * tile_size - barrier_index
+                if distance >= -tile_size:
                     temp_change[(x, y)] = (crt_map[y][x],new_tile)
                     crt_map[y][x] = new_tile
         # 혹시라도 벽이면 부숴야함
-        checking_distance = barrier_index // 256 + 1
+        checking_distance = barrier_index // tile_size + 1
         checking_index = set()
         for t in range(checking_distance, map_size-checking_distance):
             checking_index.add((checking_distance, t))
@@ -151,7 +198,7 @@ for i, map_file in enumerate(map_files):
                         sx, sy = candidates[0][1], candidates[0][2]
                         found_alt = True
                         break
-            positions.append([sx * 256 + 128, sy * 256 + 128])
+            positions.append([sx * tile_size + half_tile_size, sy * tile_size + half_tile_size])
 
         start_positions[player_count] = positions
 
@@ -178,12 +225,12 @@ if args.task == "build":
     cols = math.ceil(math.sqrt(num_tiles))
     rows = math.ceil(num_tiles / cols)
 
-    tileset_img = Image.new("RGBA", (cols * 256, rows * 256))
+    tileset_img = Image.new("RGBA", (cols * tile_size, rows * tile_size))
     for t_id, t_info in tile_store.items():
         idx = t_info["index"]
         gx = idx % cols
         gy = idx // cols
-        tileset_img.paste(t_info["image"], (gx * 256, gy * 256))
+        tileset_img.paste(t_info["image"], (gx * tile_size, gy * tile_size))
 
     tileset_img.save(out_dir / "tileset.webp", format="WEBP", lossless=True)
     print(f"[빌드] 타일셋 생성 완료 (크기: {cols}x{rows}) -> tileset.webp")
@@ -221,8 +268,14 @@ if args.task == "build":
             "p": temp_map["start_pos"]
         }
 
+    server_map_bundle = make_server_map_bundle(
+        server_maps,
+        simulation_hz,
+        tile_size,
+    )
+
     with open(out_dir / "server_maps.json", "w", encoding="utf-8") as f:
-        json.dump(server_maps, f, ensure_ascii=False, separators=(',', ':'))
+        json.dump(server_map_bundle, f, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
     with open(out_dir / "client_maps.json", "w", encoding="utf-8") as f:
         json.dump(client_maps, f, ensure_ascii=False, separators=(',', ':'))
 
@@ -244,13 +297,13 @@ elif args.task == "preview":
         canvas_copy = base_img.copy()
         draw = ImageDraw.Draw(canvas_copy)
 
-        cx_px = m_size * 128
-        cy_px = m_size * 128
+        cx_px = m_size * half_tile_size
+        cy_px = m_size * half_tile_size
 
         for p_cnt, (color, _) in preview_colors.items():
             if p_cnt in start_pos_data:
                 ratio = 0.7 + (int(p_cnt) - 3) * 0.03
-                radius_px = ratio * m_size * 128
+                radius_px = ratio * m_size * half_tile_size
 
                 line_color = color[:3] + (120,)
                 draw.ellipse(
@@ -274,11 +327,11 @@ elif args.task == "preview":
         map_out_dir = out_base_dir / m_name
         map_out_dir.mkdir(parents=True, exist_ok=True)
 
-        preview_img = Image.new("RGBA", (256 * m_size, 256 * m_size))
+        preview_img = Image.new("RGBA", (tile_size * m_size, tile_size * m_size))
         for y in range(m_size):
             for x in range(m_size):
                 t_id = temp_map["initial_map"][y][x]
-                preview_img.paste(tile_store[t_id]["image"], (x * 256, y * 256))
+                preview_img.paste(tile_store[t_id]["image"], (x * tile_size, y * tile_size))
 
         initial_dotted = overlay_start_positions(preview_img, temp_map["start_pos"], m_size)
         initial_dotted.save(map_out_dir / "initial.png", format="PNG", lossless=True, quality=100)
@@ -286,7 +339,7 @@ elif args.task == "preview":
         for tick in sorted(temp_map["timeline"].keys()):
             changes = temp_map["timeline"][tick]
             for x, y, new_tile_id in changes:
-                preview_img.paste(tile_store[new_tile_id]["image"], (x * 256, y * 256))
+                preview_img.paste(tile_store[new_tile_id]["image"], (x * tile_size, y * tile_size))
 
             preview_img.save(map_out_dir / f"{tick}tick.png", format="PNG", lossless=True, quality=100)
 
@@ -320,7 +373,7 @@ elif args.task == "video":
                 if t_id in video_tiles:
                     base_canvas.paste(video_tiles[t_id], (x * v_tile_size, y * v_tile_size))
 
-        endpoint = m_size * 128
+        endpoint = m_size * half_tile_size
         barrier_index = 0.0
         crt_tick = 0
         total_frames = math.ceil(endpoint / b_speed)
@@ -339,7 +392,7 @@ elif args.task == "video":
 
             draw = ImageDraw.Draw(frame_img)
 
-            scale = v_tile_size / 256
+            scale = v_tile_size / tile_size
             barrier_px = barrier_index * scale
 
             safe_x1 = barrier_px

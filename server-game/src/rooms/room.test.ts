@@ -1,0 +1,241 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+import { ErrorCode, PlayerRole, RoomState, type InputState } from 'shared';
+import type { SeatReservation } from '../gateway/ticket-store';
+import type { Connection } from '../transport/game-transport';
+import { Room, type RoomLifecyclePort, type RoomOptions, type RoomStartSnapshot } from './room';
+
+class FakeConnection implements Connection {
+    readonly messages: Parameters<Connection['sendJson']>[0][] = [];
+    readonly binaries: ArrayBuffer[] = [];
+    readonly closes: { code: number; reason: string }[] = [];
+    readonly lobbyStats = null;
+
+    public constructor(
+        readonly id: number,
+        readonly userId: number | string,
+        readonly nickname: string,
+        readonly roomId: string,
+        readonly playerId: number,
+        readonly resume = false,
+        readonly isGuest = false,
+    ) {}
+
+    public sendJson(message: Parameters<Connection['sendJson']>[0]): void { this.messages.push(message); }
+    public sendBinary(payload: ArrayBuffer): void { this.binaries.push(payload); }
+    public bufferedBytes(): number { return 0; }
+    public close(code: number, reason: string): void { this.closes.push({ code, reason }); }
+}
+
+class FakeLifecycle implements RoomLifecyclePort {
+    readonly starts: RoomStartSnapshot[] = [];
+    readonly connections: { playerId: number; connected: boolean }[] = [];
+    readonly timeouts: number[] = [];
+    readonly removals: { playerId: number; reason: string }[] = [];
+
+    public startGame(snapshot: RoomStartSnapshot) {
+        this.starts.push(snapshot);
+        return { startTick: 200, taggerId: snapshot.playerIds[0]! };
+    }
+    public connectionChanged(_roomId: string, playerId: number, connected: boolean): void {
+        this.connections.push({ playerId, connected });
+    }
+    public participantTimedOut(_roomId: string, playerId: number): void { this.timeouts.push(playerId); }
+    public participantRemoved(_roomId: string, playerId: number, reason: string): void {
+        this.removals.push({ playerId, reason });
+    }
+}
+
+function seat(userId: number, now: number, resume = false): SeatReservation {
+    return {
+        userId,
+        nickname: `p${userId}`,
+        lobbyStats: { games: userId, wins: 0, switchSuccessRate: 0 },
+        roomId: 'room-1',
+        serverId: 'game-1',
+        issuedAt: now,
+        expiresAt: now + 15_000,
+        resume,
+    };
+}
+
+function setup() {
+    let now = 0;
+    let tick = 10;
+    const lifecycle = new FakeLifecycle();
+    const owner = seat(1, now);
+    const options: RoomOptions = {
+        id: 'room-1',
+        matchId: 'match-1',
+        name: 'test',
+        password: 'secret',
+        capacity: 8,
+        mapId: 'map-a',
+        ownerReservation: owner,
+        minPlayersToStart: 3,
+        simulationHz: 60,
+        rules: { rulesVersion: 'test' },
+        hudGameplay: { cooldownMs: 123 },
+        timing: {
+            countdownMs: 3_000,
+            postGameMs: 30_000,
+            reconnectGraceMs: 10_000,
+            startLockOnJoinMs: 5_000,
+            startLockOnMapChangeMs: 10_000,
+            startLockJoinBudgetMs: 15_000,
+            startLockJoinBudgetWindowMs: 60_000,
+        },
+        lifecycle,
+        isKnownMap: (mapId) => mapId === 'map-a' || mapId === 'map-b',
+        getServerTick: () => tick,
+        now: () => now,
+    };
+    const room = new Room(options);
+    const connect = (reservation: SeatReservation) => {
+        const admission = room.admitReservation(reservation)!;
+        const connection = new FakeConnection(
+            reservation.userId as number,
+            reservation.userId,
+            reservation.nickname,
+            reservation.roomId,
+            admission.playerId,
+            reservation.resume,
+        );
+        assert.equal(room.bindConnection(connection), true);
+        return connection;
+    };
+    return {
+        room,
+        owner,
+        lifecycle,
+        connect,
+        setNow(value: number) { now = value; },
+        setTick(value: number) { tick = value; },
+        getNow() { return now; },
+    };
+}
+
+test('ALLOCATING부터 POST_GAME 복귀까지 명단과 관전 자격을 서버가 관리한다', async () => {
+    const context = setup();
+    const c1 = context.connect(context.owner);
+    assert.equal(context.room.state, RoomState.Waiting);
+
+    const r2 = seat(2, 0);
+    const r3 = seat(3, 0);
+    assert.equal(context.room.reserveJoin(r2, 'secret'), null);
+    assert.equal(context.room.reserveJoin(r3, 'secret'), null);
+    const c2 = context.connect(r2);
+    context.connect(r3);
+    await Promise.resolve();
+
+    assert.equal(context.room.requestStart(1), ErrorCode.StartLocked);
+    context.setNow(5_001);
+    assert.equal(context.room.requestStart(1), null);
+    assert.equal(context.room.state, RoomState.Countdown);
+    assert.equal(context.room.reserveJoin(seat(4, 5_001), 'secret'), 'ROOM_LOCKED');
+
+    context.setNow(8_001);
+    context.room.advance();
+    assert.equal(context.room.state, RoomState.Playing);
+    assert.deepEqual(context.lifecycle.starts[0]?.playerIds, [1, 2, 3]);
+    assert.equal(context.room.snapshotAccess(1), 'filtered');
+    assert.equal(context.room.setSpectating(1, true), ErrorCode.SpectateDenied, '살아 있는 플레이어는 관전할 수 없다');
+
+    assert.equal(context.room.markEliminated(2, 1), true);
+    assert.equal(context.room.snapshotAccess(2), 'unfiltered');
+    assert.equal(context.room.setSpectating(2, false), null);
+    assert.equal(context.room.snapshotAccess(2), 'none', '대기실로 돌아가면 스냅샷을 받지 않는다');
+    assert.equal(context.room.setSpectating(2, true), null);
+
+    assert.equal(c2.messages.some((message) => message.type === 'player.eliminated'), true);
+    assert.equal(context.room.finishGame([1, 3]), true);
+    assert.equal(context.room.state, RoomState.PostGame);
+    context.setNow(38_001);
+    context.room.advance();
+    assert.equal(context.room.state, RoomState.Waiting);
+    assert.equal(context.room.memberByUser(2)?.role, PlayerRole.Player);
+    assert.equal(c1.closes.length, 0);
+});
+
+test('최신 u16 sequence만 유지하고 disconnect 즉시 입력을 중립화한 뒤 같은 자리를 복구한다', () => {
+    const context = setup();
+    const c1 = context.connect(context.owner);
+    const r2 = seat(2, 0);
+    const r3 = seat(3, 0);
+    context.room.reserveJoin(r2, 'secret');
+    context.room.reserveJoin(r3, 'secret');
+    context.connect(r2);
+    context.connect(r3);
+    context.setNow(5_001);
+    context.room.requestStart(1);
+    context.setNow(8_001);
+    context.room.advance();
+
+    const input = (sequence: number, right: boolean): InputState => ({
+        sequence, left: false, right, up: false, down: false, heldActions: 3,
+    });
+    assert.equal(context.room.acceptInput(c1, input(65_535, true)), true);
+    assert.equal(context.room.acceptInput(c1, input(0, true)), true, 'u16 wrap 이후 입력이 최신이다');
+    assert.equal(context.room.acceptInput(c1, input(65_534, false)), false, '과거 입력은 무시한다');
+    assert.equal(context.room.resolvedInputs()[0]?.lastProcessedSequence, 0);
+
+    context.room.disconnect(c1, 'network');
+    assert.equal(context.room.resolvedInputs().some((value) => value.playerId === 1), false);
+    assert.deepEqual(context.lifecycle.connections.at(-1), { playerId: 1, connected: false });
+
+    const resume = seat(1, context.getNow(), true);
+    assert.equal(context.room.canReserveResume(1), null);
+    const admission = context.room.admitReservation(resume)!;
+    assert.equal(admission.playerId, 1);
+    const resumed = new FakeConnection(99, 1, 'p1', 'room-1', 1, true);
+    assert.equal(context.room.bindConnection(resumed), true);
+    assert.equal(context.room.acceptInput(resumed, input(1, true)), true);
+    assert.equal(context.room.resolvedInputs().find((value) => value.playerId === 1)?.lastProcessedSequence, 1);
+});
+
+test('재접속 유예 만료는 slot을 해제하고 시뮬레이션 경계에 알린다', () => {
+    const context = setup();
+    const c1 = context.connect(context.owner);
+    const r2 = seat(2, 0);
+    context.room.reserveJoin(r2, 'secret');
+    const c2 = context.connect(r2);
+    context.room.disconnect(c1, 'network');
+
+    context.setNow(10_001);
+    context.room.advance();
+    assert.equal(context.room.memberByUser(1), null);
+    assert.deepEqual(context.lifecycle.timeouts, [1]);
+    assert.equal(context.room.hostId, 2);
+    assert.equal(c2.messages.some((message) => message.type === 'lobby.hostChanged'), true);
+});
+
+test('resume admission 뒤 연결이 완성되지 않아도 원래 grace가 끝날 때까지 자리를 보존한다', () => {
+    const context = setup();
+    const c1 = context.connect(context.owner);
+    const r2 = seat(2, 0);
+    context.room.reserveJoin(r2, 'secret');
+    context.connect(r2);
+    context.room.disconnect(c1, 'network');
+
+    const shortResume = { ...seat(1, 0, true), expiresAt: 1_000 };
+    assert.notEqual(context.room.admitReservation(shortResume), null);
+    context.setNow(1_001);
+    context.room.advance();
+    assert.notEqual(context.room.memberByUser(1), null, 'resume 소켓 실패가 기존 10초 grace를 잘라먹으면 안 된다');
+
+    const retry = seat(1, 1_001, true);
+    assert.equal(context.room.canReserveResume(1), null);
+    assert.notEqual(context.room.admitReservation(retry), null);
+});
+
+test('강퇴한 사용자는 방이 살아 있는 동안 다시 예약할 수 없다', () => {
+    const context = setup();
+    context.connect(context.owner);
+    const r2 = seat(2, 0);
+    context.room.reserveJoin(r2, 'secret');
+    const c2 = context.connect(r2);
+    assert.equal(context.room.kick(1, 2), null);
+    assert.equal(c2.closes[0]?.code, 1008);
+    assert.equal(context.room.reserveJoin(seat(2, 1), 'secret'), 'KICKED_FROM_ROOM');
+});

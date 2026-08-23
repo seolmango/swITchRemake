@@ -33,5 +33,7 @@
     }
   ],
   "output_path": "build/",
-  "map_file_path": "map/"
+  "map_file_path": "map/",
+  "simulation_hz": 60,
+  "tile_size": 256
 }
