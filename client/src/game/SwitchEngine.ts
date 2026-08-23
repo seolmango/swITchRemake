@@ -4,7 +4,7 @@ import type { SceneAccessor } from './internal/SceneAccessor.ts';
 import { MapController } from './MapController.ts';
 import { PlayerHandle } from './PlayerHandle.ts';
 import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EngineMode, type DisplayOptions, type EngineSettings, type PlayerInit, type Theme } from './types.ts';
-import { decodeSnapshot } from './protocol/decode.ts';
+import { decodeSnapshot } from 'shared';
 
 export interface SwitchEngineOptions {
     theme?: Theme;

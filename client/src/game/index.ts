@@ -27,13 +27,13 @@ export {
 } from './types.ts';
 export { EFFECT_DEFS, MOTION_PRESETS, QUALITY_PRESETS, TILE_SIZE } from './constants.ts';
 export { EMOJI_COUNT, emojiDataUri, isEmojiId } from './emoji.ts';
-export { decodeSnapshot, SnapshotDecodeError } from './protocol/decode.ts';
-export { encodeSnapshot } from './protocol/encode.ts';
+// 프로토콜은 `shared`가 단일 정의다. 엔진 소비자가 import 두 군데를 신경 쓰지 않도록 여기서 다시 내보낸다.
 export {
+    decodeSnapshot,
+    encodeSnapshot,
+    SnapshotDecodeError,
     PROTOCOL_VERSION,
     SectionType,
-    EventType,
     type Snapshot,
     type SnapshotPlayer,
-    type SnapshotEvent,
-} from './protocol/types.ts';
+} from 'shared';

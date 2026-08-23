@@ -1,19 +1,12 @@
 import type { ColorVisionMode } from '../theme/cvd.ts';
 
-// Engine-facing data types. Kept independent from `shared` (still an empty
-// scaffold package as of writing) so the renderer has no compile-time
-// dependency on netcode/protocol work that hasn't landed yet. Shapes here
-// intentionally mirror the field names used in the map/game-design docs so a
-// future `shared` adapter is a thin re-export, not a rewrite.
+// Engine-facing data types. The wire-format types (TilePhysics, EffectType) now
+// live in `shared` and are re-exported here, so the renderer keeps its single
+// import surface while there is only one definition of each in the repo.
 
 /** Per-tile physics category. Matches tools/MapBuilder's `physics` values. */
-export const TilePhysics = {
-    Floor: 0,
-    Wall: 1,
-    Bush: 2,
-    Gas: 3,
-} as const;
-export type TilePhysics = (typeof TilePhysics)[keyof typeof TilePhysics];
+export { TilePhysics } from 'shared';
+import type { TilePhysics } from 'shared';
 
 /** A concealment tile group (flood-filled bush/gas blob) the renderer draws as one blob. */
 export interface RegionState {
@@ -37,12 +30,7 @@ export interface MapView {
     tiles: readonly (readonly TilePhysics[])[];
 }
 
-export const EffectType = {
-    Dash: 'dash',
-    Frenzy: 'frenzy',
-    Exhaust: 'exhaust',
-} as const;
-export type EffectType = (typeof EffectType)[keyof typeof EffectType];
+export { EffectType } from 'shared';
 
 export interface EffectState {
     /** Seconds (or any consistent unit) remaining; only used against `total` to compute a fill ratio. */

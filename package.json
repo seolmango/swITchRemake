@@ -8,12 +8,22 @@
     "db:logs": "docker compose logs -f",
     "db:restart": "docker compose restart",
     "db:redis-fix": "docker compose run --rm redis redis-check-aof --fix /data/appendonly.aof",
-    "match:dev": "npm run dev -w server-match"
+    "match:dev": "npm run dev -w server-match",
+    "shared:build": "npm run build -w shared",
+    "shared:watch": "npm run watch -w shared",
+    "shared:test": "npm test -w shared",
+    "game:build": "npm run build -w server-game",
+    "game:dev": "npm run dev -w server-game"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "description": "",
-  "workspaces": ["shared", "client", "server-game", "server-match"]
+  "workspaces": [
+    "shared",
+    "client",
+    "server-game",
+    "server-match"
+  ]
 }

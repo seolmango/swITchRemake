@@ -1,0 +1,107 @@
+/**
+ * swITch 공유 계약.
+ *
+ * 클라이언트, 매칭 서버, 인게임 서버가 모두 이 패키지를 통해서만 서로의 형식을 안다.
+ * 같은 상수를 양쪽에 복사하는 순간 계약이 갈라지기 시작한다.
+ *
+ * 원본 문서: docs/SERVER_ARCHITECTURE.md
+ */
+
+export {
+    PROTOCOL_VERSION,
+    SNAPSHOT_HEADER_BYTES,
+    SECTION_HEADER_BYTES,
+    SectionType,
+    RETIRED_SECTION_TYPES,
+    SnapshotFlags,
+    PlayerFlags,
+    TilePhysics,
+    EffectType,
+    EFFECT_BITS,
+    MAX_PLAYERS_PER_ROOM,
+} from './protocol/constants';
+
+export {
+    decodeSnapshot,
+    encodeSnapshot,
+    SnapshotDecodeError,
+    type Snapshot,
+    type SnapshotPlayer,
+} from './protocol/snapshot';
+
+export {
+    MessageType,
+    INPUT_PACKET_BYTES,
+    MovementBits,
+    InputDecodeError,
+    encodeInput,
+    decodeInput,
+    movementVector,
+    compareSequence,
+    isNewerSequence,
+    nextSequence,
+    type InputState,
+} from './protocol/input';
+
+export {
+    JSON_MESSAGE_VERSION,
+    RoomState,
+    PlayerRole,
+    ErrorCode,
+    NON_RETRYABLE_ERRORS,
+    isRetryable,
+    CloseCode,
+    ViolationKind,
+    type ClientMessage,
+    type ClientMessageType,
+    type ServerMessage,
+    type ServerMessageType,
+    type LobbyPlayer,
+    type ViolationSignal,
+} from './protocol/events';
+
+export {
+    CONTROL_VERSION,
+    CommandType,
+    ControlErrorCode,
+    CLIENT_MASKED_ERRORS,
+    ConsumerGroup,
+    HEARTBEAT_INTERVAL_MS,
+    HEARTBEAT_TTL_MS,
+    isGuestActor,
+    makeKeys,
+    type ActorId,
+    type ControlCommand,
+    type ControlReply,
+    type ControlCommandMap,
+    type CreateRoomPayload,
+    type CreateRoomResult,
+    type ReserveJoinPayload,
+    type ReserveResumePayload,
+    type ReleaseSeatPayload,
+    type KickUserPayload,
+    type SeatGrant,
+    type GameServerHeartbeat,
+    type RedisKeys,
+} from './control/commands';
+
+export {
+    MATCH_RESULT_VERSION,
+    RESULT_SANITY,
+    statsEligible,
+    winnerUserIds,
+    type MatchResultMessage,
+    type MatchParticipantResult,
+    type ReplayHandleInfo,
+} from './control/results';
+
+export { VISIBILITY_CORE_VERSION } from './visibility/version';
+export { computeVisibility, isConcealed, VISIBILITY } from './visibility/core';
+export {
+    packVisibleMask,
+    unpackVisibleMask,
+    type ComputeVisibility,
+    type VisibilityWorld,
+    type VisibilityActor,
+    type VisibilityResult,
+} from './visibility/types';

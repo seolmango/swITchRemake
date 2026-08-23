@@ -1003,9 +1003,13 @@ shared/src/
     commands.ts       CREATE_ROOM 등 명령과 응답 타입
     results.ts        경기 결과 메시지 타입
   visibility/
-    core.ts           시야 판정 순수 함수
+    types.ts          입출력 계약 (S 단계에서 확정)
+    core.ts           시야 판정 순수 함수 (C 단계에서 구현)
     version.ts        VISIBILITY_CORE_VERSION
 ```
+
+`types.ts`와 `version.ts`는 계약이라 S에서 고정하고, 실제 판정 알고리즘 `core.ts`는 시뮬레이션과
+함께 C에서 채운다. 인터페이스를 먼저 박아두는 이유는 그 경계가 나중에 리플레이가 붙을 자리이기 때문이다.
 
 시야 코어를 `server-game`이 아니라 `shared`에 두는 것은 의도적이다.
 
@@ -1023,13 +1027,14 @@ WebSocket 구현 교체를 위해 게임 로직은 `GameTransport` 인터페이�
 
 서버 구현 전에 `docs/ENGINE.md`와 클라이언트 protocol 코드를 다음과 같이 맞춘다.
 
+0. (반영 완료 2026-08-23) 아래 1~7의 프로토콜 정리는 `shared` 패키지 구축과 함께 끝났다. 남은 것은 8번뿐이다.
 1. (반영 완료) 플레이어 기본 레코드 크기를 실제 코드 기준 10바이트로 수정했다.
 2. (반영 완료) `emojiId` 존재 조건을 코드와 같은 flags bit2 (`0x04`)로 통일했다. `ENGINE.md`가 같은 표 안에서 bit3과 bit2를 동시에 적고 있었다.
-3. 저빈도 `EVENTS` 섹션은 JSON 이벤트로 이동한다. 이동 후 `ENGINE.md`의 `0x08 EVENTS` 설명과 클라이언트 decoder에서 함께 제거한다.
-4. 스냅샷 헤더의 tick은 `u32`로 올린다. 헤더가 2바이트 늘지만 wrap 비교 버그가 사라진다. `docs/ENGINE.md`의 헤더 표와 클라이언트 decoder를 함께 고친다. 입력 패킷의 `inputSequence`는 `u16`을 유지하고 wrap 비교 함수를 쓴다.
-5. protocol 상수, 타입, encoder/decoder의 공통 부분을 `shared` package로 이동한다.
-6. 모든 decoder는 section length와 실제 payload 길이를 검증해 잘못된 패킷이 프로세스를 죽이지 못하게 한다.
-7. 서버의 입력 decoder에도 같은 길이 검증을 적용한다. 클라이언트만 검증하면 조작된 패킷 하나로 서버 프로세스가 죽는다.
+3. (반영 완료) 저빈도 `EVENTS` 섹션을 JSON `player.blinked`로 옮기고 `0x08`을 폐기 번호로 표시했다.
+4. (반영 완료) 스냅샷 헤더의 tick을 `u32`로 올렸다. 입력 패킷의 `inputSequence`는 `u16`을 유지하고 `shared`의 `compareSequence`를 쓴다.
+5. (반영 완료) protocol 상수, 타입, encoder/decoder를 `shared`로 옮겼다. 클라이언트의 `game/protocol/`은 삭제됐고 `game/index.ts`가 `shared`를 다시 내보낸다.
+6. (반영 완료) 모든 decoder가 section length와 실제 payload 길이를 검증한다. count가 payload보다 큰 조작 패킷에 회귀 테스트가 붙어 있다.
+7. (반영 완료) 입력 decoder는 길이가 정확히 6바이트일 때만 처리한다. 서버와 클라이언트가 같은 함수를 쓴다.
 8. 스냅샷 인코딩 대상은 연결이다. `shared`의 encoder는 "이 연결이 볼 수 있는 상태"를 입력으로 받고, 무엇을 보여줄지 고르는 판단은 시야 계산이 담당한다. encoder가 검열 판단을 하지 않게 경계를 지킨다.
 
 ## 23. 구현 순서

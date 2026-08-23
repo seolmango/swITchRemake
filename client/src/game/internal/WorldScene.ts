@@ -7,7 +7,7 @@ import { applyColorVision, Palette } from '../palette.ts';
 import { CAMERA, CAMERA_FX, CULL_MARGIN, MOTION_PRESETS, QUALITY_PRESETS, type RenderOptions } from '../constants.ts';
 import { EMOJI_COUNT, emojiDataUri, emojiTextureKey } from '../emoji.ts';
 import { Color } from '../../theme/color.ts';
-import { EFFECT_BITS, EventType, type Snapshot } from '../protocol/types.ts';
+import { EFFECT_BITS, type Snapshot } from 'shared';
 
 export interface WorldSceneInit {
     theme: Theme;
@@ -453,14 +453,8 @@ export class WorldScene extends Phaser.Scene {
             this.setTagger(tagger);
         }
 
-        if (snapshot.events) {
-            for (const e of snapshot.events) {
-                if (e.type === EventType.Blink) {
-                    const sprite = this.players.get(e.playerId);
-                    if (sprite) this.playBlink(e.playerId, e.fromX, e.fromY, sprite.state.x, sprite.state.y);
-                }
-            }
-        }
+        // 점멸 같은 저빈도 연출은 더 이상 스냅샷 섹션이 아니라 JSON 이벤트(`player.blinked`)로 온다.
+        // 전송 계층이 그 메시지를 받아 `PlayerHandle.playBlink`를 부른다.
     }
 
     setDisplayOptions(options: Partial<DisplayOptions>): void {
