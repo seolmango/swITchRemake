@@ -87,6 +87,7 @@ export interface RoomProjection {
     readonly roomId: string;
     readonly matchId: string;
     readonly name: string;
+    readonly ownerName: string;
     readonly mapId: string;
     readonly state: RoomStateValue;
     readonly playerCount: number;
@@ -172,13 +173,15 @@ export class Room {
     }
 
     public projection(): RoomProjection {
+        const hostId = this.#roster.hostId;
         return {
             roomId: this.id,
             matchId: this.matchId,
             name: this.name,
+            ownerName: hostId === null ? '' : (this.#roster.getByPlayerId(hostId)?.nickname ?? ''),
             mapId: this.#mapId,
             state: this.state,
-            playerCount: this.#roster.size,
+            playerCount: this.#roster.occupiedSize,
             capacity: this.#roster.capacity,
             hasPassword: this.#password !== null,
             locked: this.#locked,

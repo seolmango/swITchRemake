@@ -383,10 +383,18 @@ test('registry가 heartbeat/room TTL, waiting index, active-room lease와 stale 
     assert.equal(h.redis.sorted.get(h.keys.roomsWaiting())?.has('dead-room'), false);
     assert.equal(h.redis.sorted.get(h.keys.gameServersAlive())?.has('dead-server'), false);
     assert.equal(h.redis.ttls.get(h.keys.userActiveRoom(1)), 30_000);
-    const projection = JSON.parse(h.redis.values.get(h.keys.room(grant.roomId))!) as { state: string; status: string; serverId: string };
+    const projection = JSON.parse(h.redis.values.get(h.keys.room(grant.roomId))!) as {
+        state: string;
+        status: string;
+        serverId: string;
+        ownerName: string;
+        playerCount: number;
+    };
     assert.equal(projection.state, RoomState.Waiting);
     assert.equal(projection.status, RoomState.Waiting);
     assert.equal(projection.serverId, 'game-1');
+    assert.equal(projection.ownerName, 'owner');
+    assert.equal(projection.playerCount, 1);
 
     h.redis.values.delete(h.keys.userActiveRoom(1));
     await h.registry.publish();
