@@ -23,18 +23,15 @@ export class AuthController {
     @RateLimiter({ anon: 5, user: 7, ttl: 60000 })
     async login(
         @Body() loginDto: LoginDto,
+        @Req() req: FastifyRequest,
         @Res({ passthrough: true }) res: FastifyReply,
     ) {
-        const { accessToken, refreshToken } = await this.authService.login(loginDto);
-
-        res.setCookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: Number(this.configService.get('JWT_REFRESH_EXPIRATION')),
-            path: '/',
-            signed: true,
+        const { accessToken, refreshToken } = await this.authService.login(loginDto, {
+            ip: req.ip,
+            userAgent: this.userAgent(req),
         });
+
+        res.setCookie('refreshToken', refreshToken, this.cookieOptions());
 
         return { accessToken };
     }
@@ -55,17 +52,41 @@ export class AuthController {
             throw new UnauthorizedException('Invalid refresh token provided');
         }
 
-        const tokens = await this.authService.refresh(unsignedCookie.value);
+        let tokens;
+        try {
+            tokens = await this.authService.refresh(unsignedCookie.value, {
+                ip: req.ip,
+                userAgent: this.userAgent(req),
+            });
+        } catch (error) {
+            res.clearCookie('refreshToken', this.cookieOptions());
+            throw error;
+        }
 
-        res.setCookie('refreshToken', tokens.refreshToken, {
+        res.setCookie('refreshToken', tokens.refreshToken, this.cookieOptions());
+
+        return { accessToken: tokens.accessToken };
+    }
+
+    @Post('guest')
+    @RateLimiter({ anon: 5, user: 0, ttl: 60_000 })
+    async guest(@Req() req: FastifyRequest) {
+        return this.authService.createGuest(req.ip);
+    }
+
+    private cookieOptions() {
+        return {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'strict' as const,
             maxAge: Number(this.configService.get('JWT_REFRESH_EXPIRATION')),
             path: '/',
             signed: true,
-        });
+        };
+    }
 
-        return { accessToken: tokens.accessToken };
+    private userAgent(req: FastifyRequest): string | undefined {
+        const value = req.headers['user-agent'];
+        return Array.isArray(value) ? value[0] : value;
     }
 }

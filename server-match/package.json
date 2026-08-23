@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
+    "test": "npm run build && node --test dist/**/*.spec.js",
     "start": "node dist/main.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push"
   },
   "keywords": [],

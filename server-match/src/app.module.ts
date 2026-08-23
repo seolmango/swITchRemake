@@ -11,6 +11,10 @@ import { APP_GUARD } from "@nestjs/core";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 import { RateLimiterGuard } from "./ratelimiter.guard";
 import { HealthModule } from './health/health.module';
+import { SessionModule } from './session/session.module';
+import { SanctionModule } from './sanction/sanction.module';
+import { RoomsModule } from './rooms/rooms.module';
+import { ResultsModule } from './results/results.module';
 
 @Module({
     imports: [
@@ -24,6 +28,10 @@ import { HealthModule } from './health/health.module';
         EmailModule,
         AuthModule,
         UserModule,
+        SessionModule,
+        SanctionModule,
+        RoomsModule,
+        ResultsModule,
         HealthModule,
     ],
     controllers: [],
