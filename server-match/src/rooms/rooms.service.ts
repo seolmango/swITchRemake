@@ -83,6 +83,8 @@ interface PendingReply {
     timer: NodeJS.Timeout;
 }
 
+type ClientSeatGrant = SeatGrant & { roomId: string };
+
 @Injectable()
 export class RoomsService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(RoomsService.name);
@@ -184,7 +186,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
-    async join(principal: ActorId | RoomPrincipal, roomId: string, password?: string, clientIp?: string): Promise<SeatGrant | { alreadyAssigned: true; roomId?: string }> {
+    async join(principal: ActorId | RoomPrincipal, roomId: string, password?: string, clientIp?: string): Promise<ClientSeatGrant | { alreadyAssigned: true; roomId?: string }> {
         const actor = await this.requireActor(principal);
         await this.enforceJoinAbuseLimits(actor, roomId, clientIp);
         const room = await this.readLiveRoom(roomId);
@@ -218,7 +220,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                 this.throwControlError(reply.code);
             }
             await this.assignActiveRoom(actor.id, claim, requestId, reply.serverId, roomId);
-            return reply.payload;
+            return { roomId, ...reply.payload };
         } catch (error) {
             if (!this.mustKeepReservationUntilExpiry(error)) {
                 await this.redis.compareAndDelete(this.keys.userActiveRoom(actor.id), claim);
@@ -227,7 +229,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
-    async quickJoin(principal: ActorId | RoomPrincipal, clientIp?: string): Promise<SeatGrant | { alreadyAssigned: true; roomId?: string }> {
+    async quickJoin(principal: ActorId | RoomPrincipal, clientIp?: string): Promise<ClientSeatGrant | { alreadyAssigned: true; roomId?: string }> {
         const actor = await this.requireActor(principal);
         await this.enforceActorRate(actor.id, 'room-join-rate');
         await this.enforceGuestIpRate(actor, clientIp, 'room-join-rate');
@@ -261,7 +263,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                 });
                 if (reply.ok && reply.payload) {
                     await this.assignActiveRoom(actor.id, claim, requestId, reply.serverId, candidate.roomId);
-                    return reply.payload;
+                    return { roomId: candidate.roomId, ...reply.payload };
                 }
                 await this.results.removeAssignment(assignedMatchId, actor.id);
                 if (reply.code === ControlErrorCode.RoomNotFound || reply.code === ControlErrorCode.BadPassword) {
@@ -278,7 +280,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
-    async resume(principal: ActorId | RoomPrincipal, roomId: string): Promise<SeatGrant> {
+    async resume(principal: ActorId | RoomPrincipal, roomId: string): Promise<ClientSeatGrant> {
         const actor = await this.requireActor(principal);
         const activeKey = this.keys.userActiveRoom(actor.id);
         const rawClaim = await this.redis.get(activeKey);
@@ -316,7 +318,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
             rawClaim,
             ACTIVE_ROOM_RESERVATION_TTL_SECONDS,
         );
-        return reply.payload;
+        return { roomId, ...reply.payload };
     }
 
     /** Called by the result/room-event bridge when a confirmed departure arrives. */

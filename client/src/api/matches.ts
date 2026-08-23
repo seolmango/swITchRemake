@@ -1,6 +1,6 @@
 import { apiRequest } from './http.ts';
 
-export type LobbyMap = 'random' | 'openField' | 'forest' | 'stadium' | 'house';
+export type LobbyMap = string;
 export type PlayerControl = 'keyboard' | 'touch' | 'gamepad';
 export type PlayerSkill = 'dash' | 'flash' | 'exhaust';
 export type LobbyRole = 'player' | 'waiting' | 'spectator';

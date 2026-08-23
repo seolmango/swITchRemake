@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageLayout } from '../../components/layout/PageLayout.tsx';
+import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
 import { Icon } from '../../components/common/Icon.tsx';
 import { LobbyPlayerCard } from '../../components/match/LobbyPlayerCard.tsx';
@@ -14,6 +15,9 @@ import { DEMO_LOBBY } from '../../data/demoMatch.ts';
 import { useAuthStore } from '../../stores/useAuthStore.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { themeColors } from '../../theme/color.ts';
+import { gameSession } from '../../game/GameSession.ts';
+import { useGameSession } from '../../game/useGameSession.ts';
+import { resumeRoom, roomApiEnabled } from '../../api/rooms.ts';
 import dashIcon from '../../assets/images/skill_dash.webp';
 import flashIcon from '../../assets/images/skill_flash.webp';
 import exhaustIcon from '../../assets/images/skill_exhaust.webp';
@@ -34,24 +38,76 @@ export const LobbyPage: React.FC = () => {
     const nickname = useAuthStore((state) => state.nickname);
     const theme = useSettingsStore((state) => state.theme);
     const colors = themeColors(theme);
-    const [room, setRoom] = useState<LobbySnapshot>(() => ({
+    const session = useGameSession();
+    const live = roomApiEnabled && session.roomId === roomId;
+    const resumeAttempted = useRef(false);
+    const [resumeFailed, setResumeFailed] = useState(false);
+    const [demoRoom, setDemoRoom] = useState<LobbySnapshot>(() => ({
         ...DEMO_LOBBY,
-        roomId: roomId.toUpperCase(),
+        roomId: roomApiEnabled ? roomId : roomId.toUpperCase(),
         roomName: searchParams.get('name')?.trim() || DEMO_LOBBY.roomName,
         players: DEMO_LOBBY.players.map((player) => player.isSelf && nickname ? { ...player, nickname } : { ...player }),
     }));
     const [message, setMessage] = useState('');
+    const [liveLockElapsedMs, setLiveLockElapsedMs] = useState(0);
     const [hostAction, setHostAction] = useState<HostAction | null>(null);
     const [skillPickerOpen, setSkillPickerOpen] = useState(false);
+    const liveRoom = useMemo<LobbySnapshot | null>(() => {
+        const lobby = session.lobby;
+        if (!live || !lobby) return null;
+        return {
+            roomId,
+            roomName: session.roomName ?? roomId,
+            map: lobby.mapId,
+            isPrivate: session.isPrivate,
+            isLocked: lobby.locked,
+            minPlayers: DEMO_LOBBY.minPlayers,
+            capacity: lobby.capacity,
+            startLockMs: Math.max(0, lobby.startLockMs - liveLockElapsedMs),
+            players: lobby.players.map((player) => ({
+                playerId: String(player.playerId),
+                slot: player.playerId,
+                colorIndex: player.colorIndex,
+                nickname: player.nickname,
+                isHost: player.playerId === lobby.hostId,
+                isSelf: player.playerId === session.selfId,
+                guest: player.guest,
+                role: player.role,
+                control: 'keyboard',
+                skill: 'dash',
+            })),
+        };
+    }, [live, liveLockElapsedMs, roomId, session.isPrivate, session.lobby, session.roomName, session.selfId]);
+    const room = liveRoom ?? demoRoom;
     const isStartLocked = room.startLockMs > 0;
 
     useEffect(() => {
-        if (!isStartLocked) return;
+        if (!roomApiEnabled || live || resumeAttempted.current) return;
+        resumeAttempted.current = true;
+        void resumeRoom(roomId)
+            .then((grant) => gameSession.connect(grant))
+            .catch(() => setResumeFailed(true));
+    }, [live, roomId]);
+
+    useEffect(() => {
+        if (live && session.started) navigate(`/game?room_id=${encodeURIComponent(roomId)}`, { replace: true });
+    }, [live, navigate, roomId, session.started]);
+
+    useEffect(() => {
+        if (live || !isStartLocked) return;
         const timer = window.setInterval(() => {
-            setRoom((current) => ({ ...current, startLockMs: Math.max(0, current.startLockMs - 250) }));
+            setDemoRoom((current) => ({ ...current, startLockMs: Math.max(0, current.startLockMs - 250) }));
         }, 250);
         return () => window.clearInterval(timer);
-    }, [isStartLocked]);
+    }, [isStartLocked, live]);
+
+    useEffect(() => {
+        if (!live || !session.lobby || session.lobby.startLockMs <= 0) return;
+        const timer = window.setInterval(() => {
+            setLiveLockElapsedMs(Math.max(0, Date.now() - session.lobbyReceivedAt));
+        }, 250);
+        return () => window.clearInterval(timer);
+    }, [live, session.lobby, session.lobbyReceivedAt]);
 
     const slots = useMemo(() => Array.from({ length: room.capacity }, (_, index) => ({
         slot: index + 1,
@@ -62,7 +118,7 @@ export const LobbyPage: React.FC = () => {
     const startLockSeconds = Math.ceil(room.startLockMs / 1000);
     const hasEnoughPlayers = room.players.filter((player) => player.role === 'player').length >= room.minPlayers;
     const canStart = isOwner && hasEnoughPlayers && room.startLockMs <= 0;
-    const statusText = message
+    const statusText = (live && session.errorCode ? t('lobby.commandFailed', { code: session.errorCode }) : message)
         || (room.startLockMs > 0
             ? t('lobby.startLocked', { seconds: startLockSeconds })
             : !hasEnoughPlayers
@@ -82,25 +138,41 @@ export const LobbyPage: React.FC = () => {
         if (!isOwner) return;
         const currentIndex = MAPS.indexOf(room.map);
         const nextMap = MAPS[(currentIndex + direction + MAPS.length) % MAPS.length]!;
-        setRoom((current) => ({ ...current, map: nextMap, startLockMs: 10_000 }));
+        if (live) {
+            gameSession.send({ type: 'lobby.setMap', payload: { mapId: nextMap } });
+            setMessage('');
+            return;
+        }
+        setDemoRoom((current) => ({ ...current, map: nextMap, startLockMs: 10_000 }));
         setMessage('');
     };
 
     const toggleRoomLock = () => {
         if (!isOwner) return;
-        setRoom((current) => ({ ...current, isLocked: !current.isLocked }));
+        if (live) {
+            gameSession.send({ type: 'lobby.setLocked', payload: { locked: !room.isLocked } });
+            setMessage('');
+            return;
+        }
+        setDemoRoom((current) => ({ ...current, isLocked: !current.isLocked }));
         setMessage(t(room.isLocked ? 'lobby.roomUnlocked' : 'lobby.roomLocked'));
     };
 
-    const exitRoom = () => navigate('/rooms');
+    const exitRoom = () => {
+        if (live) gameSession.send({ type: 'lobby.leave', payload: {} });
+        gameSession.disconnect();
+        navigate('/rooms');
+    };
 
     const startMatch = () => {
-        if (canStart) navigate(`/game?room_id=${encodeURIComponent(room.roomId)}&match_id=demo-001`);
+        if (!canStart) return;
+        if (live) gameSession.send({ type: 'lobby.start', payload: {} });
+        else navigate(`/game?room_id=${encodeURIComponent(room.roomId)}&match_id=demo-001`);
     };
 
     const changeOwnSlot = (nextSlot: number) => {
         if (!self || room.players.some((player) => player.slot === nextSlot)) return;
-        setRoom((current) => ({
+        setDemoRoom((current) => ({
             ...current,
             players: current.players.map((player) => player.isSelf ? { ...player, slot: nextSlot, colorIndex: nextSlot - 1 } : player),
         }));
@@ -109,7 +181,7 @@ export const LobbyPage: React.FC = () => {
 
     const changeSkill = (skill: PlayerSkill) => {
         if (!self) return;
-        setRoom((current) => ({
+        setDemoRoom((current) => ({
             ...current,
             players: current.players.map((player) => player.isSelf ? { ...player, skill } : player),
         }));
@@ -121,11 +193,18 @@ export const LobbyPage: React.FC = () => {
         if (!hostAction || !isOwner) return;
         const target = room.players.find((player) => player.playerId === hostAction.playerId);
         if (!target) return;
+        if (live) {
+            const playerId = Number(target.playerId);
+            if (hostAction.type === 'kick') gameSession.send({ type: 'lobby.kick', payload: { playerId } });
+            else gameSession.send({ type: 'lobby.passHost', payload: { playerId } });
+            setHostAction(null);
+            return;
+        }
         if (hostAction.type === 'kick') {
-            setRoom((current) => ({ ...current, players: current.players.filter((player) => player.playerId !== target.playerId) }));
+            setDemoRoom((current) => ({ ...current, players: current.players.filter((player) => player.playerId !== target.playerId) }));
             setMessage(t('lobby.kickedMessage', { nickname: target.nickname }));
         } else {
-            setRoom((current) => ({
+            setDemoRoom((current) => ({
                 ...current,
                 players: current.players.map((player) => ({ ...player, isHost: player.playerId === target.playerId })),
             }));
@@ -135,6 +214,18 @@ export const LobbyPage: React.FC = () => {
     };
 
     const actionTarget = hostAction ? room.players.find((player) => player.playerId === hostAction.playerId) : undefined;
+
+    if (roomApiEnabled && !live) {
+        return (
+            <PageLayout title={t('rooms.title')} backTo="/rooms">
+                <RoundBox x={960} y={535} width={1050} height={480} type={1}/>
+                <div style={{ position: 'absolute', left: 960, top: 530, width: 800, transform: 'translate(-50%,-50%)', textAlign: 'center', display: 'grid', gap: 36, justifyItems: 'center', color: colors.text }}>
+                    <p style={{ fontSize: 34, margin: 0 }}>{resumeFailed ? t('lobby.resumeFailed') : t('lobby.reconnecting')}</p>
+                    {resumeFailed && <RoundButton width={360} height={88} type={2} content={t('nav.back')} onClick={() => navigate('/rooms', { replace: true })}/>}
+                </div>
+            </PageLayout>
+        );
+    }
 
     return (
         <PageLayout title={room.roomName} backTo="/rooms">
@@ -158,7 +249,7 @@ export const LobbyPage: React.FC = () => {
                         <RoundButton width={76} height={76} type={2} content={<Icon name="back"/>} disabled={!isOwner} ariaLabel={t('lobby.previousMap')} onClick={() => void changeMap(-1)}/>
                         <div>
                             <span>{t('lobby.map')}</span>
-                            <strong>{t(`lobby.maps.${room.map}`)}</strong>
+                            <strong>{t(`lobby.maps.${room.map}`, { defaultValue: room.map })}</strong>
                         </div>
                         <RoundButton width={76} height={76} type={2} content={<Icon name="next"/>} disabled={!isOwner} ariaLabel={t('lobby.nextMap')} onClick={() => void changeMap(1)}/>
                     </div>
@@ -183,7 +274,8 @@ export const LobbyPage: React.FC = () => {
                             slot={slot}
                             player={player}
                             viewerIsHost={isOwner}
-                            canSelectEmptySlot={Boolean(self)}
+                            canSelectEmptySlot={!live && Boolean(self)}
+                            canChangeSkill={!live}
                             onSelectEmptySlot={() => changeOwnSlot(slot)}
                             onChangeSkill={() => setSkillPickerOpen(true)}
                             onPassHost={() => player && setHostAction({ type: 'passHost', playerId: player.playerId })}
@@ -194,12 +286,12 @@ export const LobbyPage: React.FC = () => {
 
                 <footer className="lobby-footer">
                     <div className="lobby-footer-status">
-                        <span className="demo-badge">{t('common.demoData')}</span>
+                        <span className="demo-badge">{t(live ? 'lobby.liveData' : 'common.demoData')}</span>
                         <span role="status" aria-live="polite">{statusText}</span>
                     </div>
                     <div className="lobby-footer-actions">
                         <RoundButton width={220} height={88} type={2} content={t('lobby.leave')} onClick={exitRoom}/>
-                        <RoundButton width={310} height={88} type={2} content={t('lobby.previewResult')} onClick={() => navigate(`/matches/demo-001/result?room_id=${encodeURIComponent(room.roomId)}`)}/>
+                        {!live && <RoundButton width={310} height={88} type={2} content={t('lobby.previewResult')} onClick={() => navigate(`/matches/demo-001/result?room_id=${encodeURIComponent(room.roomId)}`)}/>}
                         {isOwner && <RoundButton width={300} height={88} type={1} content={room.startLockMs > 0 ? t('lobby.startCountdown', { seconds: startLockSeconds }) : t('lobby.start')} disabled={!canStart} onClick={startMatch}/>} 
                     </div>
                 </footer>

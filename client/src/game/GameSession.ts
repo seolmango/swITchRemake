@@ -1,0 +1,234 @@
+import { JSON_MESSAGE_VERSION, RoomState, encodeInput, type ClientMessage, type InputState, type ServerMessage } from 'shared';
+import type { RoomSeatGrant } from '../api/rooms.ts';
+
+type AuthOkMessage = Extract<ServerMessage, { type: 'auth.ok' }>;
+type LobbyStateMessage = Extract<ServerMessage, { type: 'lobby.state' }>;
+type GameStartingMessage = Extract<ServerMessage, { type: 'game.starting' }>;
+type GameStartedMessage = Extract<ServerMessage, { type: 'game.started' }>;
+type GameEndedMessage = Extract<ServerMessage, { type: 'game.ended' }>;
+type ErrorMessage = Extract<ServerMessage, { type: 'error' }>;
+type ClientMessageBody = ClientMessage extends infer Message
+    ? Message extends ClientMessage ? Omit<Message, 'v' | 'requestId'> : never
+    : never;
+
+export interface GameSessionMetadata {
+    roomName?: string;
+    isPrivate?: boolean;
+}
+
+export interface GameSessionState {
+    status: 'idle' | 'connecting' | 'connected' | 'disconnected';
+    roomId: string | null;
+    roomName: string | null;
+    isPrivate: boolean;
+    selfId: number | null;
+    roomState: AuthOkMessage['payload']['roomState'] | null;
+    role: AuthOkMessage['payload']['role'] | null;
+    lobby: LobbyStateMessage['payload'] | null;
+    lobbyReceivedAt: number;
+    starting: GameStartingMessage['payload'] | null;
+    started: GameStartedMessage['payload'] | null;
+    ended: GameEndedMessage['payload'] | null;
+    errorCode: ErrorMessage['payload']['code'] | null;
+}
+
+const INITIAL_STATE: GameSessionState = {
+    status: 'idle',
+    roomId: null,
+    roomName: null,
+    isPrivate: false,
+    selfId: null,
+    roomState: null,
+    role: null,
+    lobby: null,
+    lobbyReceivedAt: 0,
+    starting: null,
+    started: null,
+    ended: null,
+    errorCode: null,
+};
+
+function websocketUrl(path: string): string {
+    if (/^wss?:\/\//iu.test(path)) return path;
+    const configuredOrigin = (import.meta.env.VITE_GAME_WS_ORIGIN as string | undefined)?.trim();
+    const url = new URL(path, configuredOrigin || window.location.origin);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    return url.toString();
+}
+
+function isServerMessage(value: unknown): value is ServerMessage {
+    if (value === null || typeof value !== 'object') return false;
+    const message = value as Partial<ServerMessage>;
+    return message.v === JSON_MESSAGE_VERSION
+        && typeof message.type === 'string'
+        && typeof message.eventId === 'number'
+        && typeof message.serverTick === 'number'
+        && message.payload !== null
+        && typeof message.payload === 'object';
+}
+
+class GameSession {
+    private state: GameSessionState = INITIAL_STATE;
+    private socket: WebSocket | null = null;
+    private requestId = 0;
+    private latestSnapshot: ArrayBuffer | null = null;
+    private readonly listeners = new Set<() => void>();
+    private readonly snapshotListeners = new Set<(frame: ArrayBuffer) => void>();
+
+    getSnapshot = (): GameSessionState => this.state;
+
+    subscribe = (listener: () => void): (() => void) => {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    };
+
+    subscribeSnapshots = (listener: (frame: ArrayBuffer) => void): (() => void) => {
+        this.snapshotListeners.add(listener);
+        return () => this.snapshotListeners.delete(listener);
+    };
+
+    getLatestSnapshot = (): ArrayBuffer | null => this.latestSnapshot;
+
+    async connect(grant: RoomSeatGrant, metadata: GameSessionMetadata = {}): Promise<void> {
+        this.closeSocket();
+        this.requestId = 0;
+        this.latestSnapshot = null;
+        this.setState({
+            ...INITIAL_STATE,
+            status: 'connecting',
+            roomId: grant.roomId,
+            roomName: metadata.roomName?.trim() || grant.roomId,
+            isPrivate: metadata.isPrivate ?? false,
+        });
+
+        if (grant.expiresAt <= Date.now()) {
+            this.setState({ status: 'disconnected' });
+            throw new Error('The game-server ticket has expired');
+        }
+
+        const socket = new WebSocket(websocketUrl(grant.wsPath));
+        socket.binaryType = 'arraybuffer';
+        this.socket = socket;
+
+        await new Promise<void>((resolve, reject) => {
+            let settled = false;
+            const settleError = (error: Error) => {
+                if (settled) return;
+                settled = true;
+                reject(error);
+            };
+            const expiryTimer = window.setTimeout(() => {
+                socket.close();
+                settleError(new Error('The game-server ticket expired before authentication'));
+            }, Math.max(1, grant.expiresAt - Date.now()));
+
+            socket.addEventListener('open', () => {
+                socket.send(JSON.stringify({
+                    v: JSON_MESSAGE_VERSION,
+                    type: 'auth',
+                    requestId: ++this.requestId,
+                    payload: { ticket: grant.ticket },
+                } satisfies Extract<ClientMessage, { type: 'auth' }>));
+            });
+            socket.addEventListener('message', (event) => {
+                if (socket !== this.socket) return;
+                if (event.data instanceof ArrayBuffer) {
+                    this.latestSnapshot = event.data;
+                    for (const listener of this.snapshotListeners) listener(event.data);
+                    return;
+                }
+                if (typeof event.data !== 'string') return;
+                let parsed: unknown;
+                try { parsed = JSON.parse(event.data) as unknown; } catch { return; }
+                if (!isServerMessage(parsed)) return;
+                this.handleMessage(parsed);
+                if (parsed.type === 'auth.ok' && !settled) {
+                    settled = true;
+                    window.clearTimeout(expiryTimer);
+                    resolve();
+                } else if (parsed.type === 'error' && this.state.status === 'connecting') {
+                    window.clearTimeout(expiryTimer);
+                    settleError(new Error(parsed.payload.code));
+                }
+            });
+            socket.addEventListener('error', () => settleError(new Error('Could not connect to the game server')));
+            socket.addEventListener('close', () => {
+                window.clearTimeout(expiryTimer);
+                if (socket !== this.socket) return;
+                this.socket = null;
+                this.setState({ status: 'disconnected' });
+                settleError(new Error('The game-server connection closed before authentication'));
+            });
+        });
+    }
+
+    send(message: ClientMessageBody): boolean {
+        if (this.socket?.readyState !== WebSocket.OPEN || this.state.status !== 'connected') return false;
+        this.socket.send(JSON.stringify({ ...message, v: JSON_MESSAGE_VERSION, requestId: ++this.requestId }));
+        return true;
+    }
+
+    sendInput(input: InputState): boolean {
+        if (this.socket?.readyState !== WebSocket.OPEN || this.state.roomState !== RoomState.Playing) return false;
+        this.socket.send(encodeInput(input));
+        return true;
+    }
+
+    disconnect(): void {
+        this.closeSocket();
+        this.latestSnapshot = null;
+        this.setState(INITIAL_STATE);
+    }
+
+    private handleMessage(message: ServerMessage): void {
+        switch (message.type) {
+            case 'auth.ok':
+                this.setState({
+                    status: 'connected',
+                    roomId: message.payload.roomId,
+                    selfId: message.payload.playerId,
+                    roomState: message.payload.roomState,
+                    role: message.payload.role,
+                    errorCode: null,
+                });
+                break;
+            case 'lobby.state':
+                this.setState({ lobby: message.payload, lobbyReceivedAt: Date.now() });
+                break;
+            case 'game.starting':
+                this.setState({ roomState: RoomState.Countdown, starting: message.payload, ended: null });
+                break;
+            case 'game.started':
+                this.setState({ roomState: RoomState.Playing, started: message.payload });
+                break;
+            case 'game.ended':
+                this.setState({ roomState: RoomState.PostGame, starting: null, started: null, ended: message.payload });
+                break;
+            case 'error':
+                this.setState({ errorCode: message.payload.code });
+                break;
+            case 'spectate.changed':
+                if (message.payload.playerId === this.state.selfId) {
+                    this.setState({ role: message.payload.spectating ? 'spectator' : 'waiting' });
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    private closeSocket(): void {
+        const socket = this.socket;
+        this.socket = null;
+        if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+            socket.close(1000, 'client navigation');
+        }
+    }
+
+    private setState(patch: Partial<GameSessionState>): void {
+        this.state = { ...this.state, ...patch };
+        for (const listener of this.listeners) listener();
+    }
+}
+
+export const gameSession = new GameSession();

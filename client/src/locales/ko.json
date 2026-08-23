@@ -28,7 +28,7 @@
     "hostActions": "{{nickname}} 방장 관리", "passHost": "방장 넘기기", "passHostTo": "{{nickname}}에게 방장 권한 넘기기", "kick": "강퇴", "kickPlayer": "{{nickname}} 강퇴하기",
     "passHostConfirmTitle": "방장 권한을 넘길까요?", "passHostConfirmBody": "{{nickname}}님이 즉시 새로운 방장이 됩니다.", "kickConfirmTitle": "플레이어를 강퇴할까요?", "kickConfirmBody": "{{nickname}}님은 이 방이 유지되는 동안 다시 참가할 수 없습니다.",
     "hostPassedMessage": "{{nickname}}님에게 방장 권한을 넘겼습니다.", "kickedMessage": "{{nickname}}님을 방에서 내보냈습니다.",
-    "leave": "방 나가기", "previewResult": "결과 화면 미리보기", "start": "게임 시작", "startCountdown": "{{seconds}}초 뒤 시작"
+    "leave": "방 나가기", "previewResult": "결과 화면 미리보기", "start": "게임 시작", "startCountdown": "{{seconds}}초 뒤 시작", "liveData": "게임 서버 연결됨", "commandFailed": "요청을 처리하지 못했습니다. ({{code}})", "reconnecting": "게임 서버에 다시 연결하는 중입니다…", "resumeFailed": "이 방의 연결을 복구할 수 없습니다."
   },
   "result": {
     "title": "게임 결과", "winner": "WINNERS", "victory": "공동 승리", "winnerDetail": "태그 {{tags}}회 · swITch {{success}}/{{tries}}", "details": "핵심 기록",
@@ -53,7 +53,10 @@
   },
   "profile": {
     "title": "프로필", "guestTitle": "아직 로그인하지 않았어요", "guestBody": "로그인하면 전적과 게임 설정을 한곳에서 관리할 수 있습니다.",
-    "loggedBody": "인증 서버와 연결된 세션입니다.", "changePassword": "비밀번호 변경", "statsPending": "전적 API가 추가되면 이 영역에 게임 수, 승리, 스위치 성공률을 표시합니다."
+    "loggedBody": "인증 서버와 연결된 세션입니다.", "changePassword": "비밀번호 변경", "statsPending": "전적 API가 추가되면 이 영역에 게임 수, 승리, 스위치 성공률을 표시합니다.",
+    "securityKicker": "ACCOUNT SECURITY", "loginDevices": "로그인한 기기", "loginDevicesHelp": "현재 계정으로 로그인된 기기를 확인하고 필요 없는 세션을 종료할 수 있습니다.",
+    "lastActive": "최근 사용 {{date}}", "currentDevice": "현재 기기", "revokeSession": "로그아웃", "revokeOthers": "다른 기기 모두 로그아웃", "noSessions": "활성 로그인 세션이 없습니다.",
+    "sessionsLoadFailed": "로그인 기기 목록을 불러오지 못했습니다.", "sessionRevoked": "선택한 기기에서 로그아웃했습니다.", "sessionActionFailed": "세션을 변경하지 못했습니다.", "otherSessionsRevoked": "다른 기기 {{count}}개에서 로그아웃했습니다."
   },
   "settings": {
     "title": "설정", "sectionLabel": "SETTINGS", "savedAutomatically": "변경 사항은 자동으로 저장돼요.", "resetSection": "이 창 초기화",

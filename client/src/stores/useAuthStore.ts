@@ -46,6 +46,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     },
 }));
 
-setApiAccessTokenListener((accessToken) => {
-    useAuthStore.setState({ accessToken, status: accessToken ? 'authenticated' : 'anonymous' });
+setApiAccessTokenListener((accessToken, nickname) => {
+    if (nickname) sessionStorage.setItem('switch-nickname', nickname);
+    useAuthStore.setState({
+        accessToken,
+        status: accessToken ? 'authenticated' : 'anonymous',
+        ...(nickname ? { nickname } : {}),
+    });
 });

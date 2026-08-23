@@ -6,7 +6,8 @@ import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
 import { Icon } from '../../components/common/Icon.tsx';
 import { RoomCard } from '../../components/room/RoomCard.tsx';
-import { getRooms, quickJoin, roomApiEnabled, type RoomSummary } from '../../api/rooms.ts';
+import { getRooms, quickJoin, resolveRoomAssignment, roomApiEnabled, type RoomSummary } from '../../api/rooms.ts';
+import { gameSession } from '../../game/GameSession.ts';
 import { themeColors } from '../../theme/color.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 
@@ -23,7 +24,7 @@ export const RoomListPage: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const theme = useSettingsStore((state) => state.theme);
-    const [rooms, setRooms] = useState(PREVIEW_ROOMS);
+    const [rooms, setRooms] = useState<RoomSummary[]>(roomApiEnabled ? [] : PREVIEW_ROOMS);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [message, setMessage] = useState(roomApiEnabled ? '' : t('rooms.previewNotice'));
@@ -58,7 +59,12 @@ export const RoomListPage: React.FC = () => {
 
     const handleQuickJoin = async () => {
         if (!roomApiEnabled) { navigate('/rooms/654321/lobby'); return; }
-        try { const result = await quickJoin(); navigate(`/rooms/${encodeURIComponent(result.roomId)}/lobby`); } catch { setMessage(t('auth.serverError')); }
+        try {
+            const result = await resolveRoomAssignment(await quickJoin());
+            const room = rooms.find((candidate) => candidate.id === result.roomId);
+            await gameSession.connect(result, { roomName: room?.name, isPrivate: false });
+            navigate(`/rooms/${encodeURIComponent(result.roomId)}/lobby`);
+        } catch { setMessage(t('auth.serverError')); }
     };
 
     return (

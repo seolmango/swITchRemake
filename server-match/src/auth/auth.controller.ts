@@ -26,14 +26,14 @@ export class AuthController {
         @Req() req: FastifyRequest,
         @Res({ passthrough: true }) res: FastifyReply,
     ) {
-        const { accessToken, refreshToken } = await this.authService.login(loginDto, {
+        const { accessToken, refreshToken, nickname } = await this.authService.login(loginDto, {
             ip: req.ip,
             userAgent: this.userAgent(req),
         });
 
         res.setCookie('refreshToken', refreshToken, this.cookieOptions());
 
-        return { accessToken };
+        return { accessToken, nickname };
     }
 
     @Post('refresh')
@@ -65,7 +65,7 @@ export class AuthController {
 
         res.setCookie('refreshToken', tokens.refreshToken, this.cookieOptions());
 
-        return { accessToken: tokens.accessToken };
+        return { accessToken: tokens.accessToken, nickname: tokens.nickname };
     }
 
     @Post('guest')

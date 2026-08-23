@@ -614,6 +614,61 @@ html[data-motion='reduced'] .room-card {
 .profile-panel > p { font-size: 28px; margin: 0 0 10px; }
 .profile-actions { display: flex; gap: 28px; margin-top: 16px; }
 
+.profile-panel.is-authenticated {
+  top: 185px;
+  width: 1420px;
+  height: 730px;
+  grid-template-columns: 440px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 42px;
+  text-align: left;
+}
+
+.profile-summary { display: grid; justify-items: center; align-content: center; gap: 16px; text-align: center; }
+.profile-summary .profile-avatar { width: 150px; height: 150px; }
+.profile-summary h2 { font-size: 42px; }
+.profile-summary > p { font-size: 22px; margin: 0; }
+.profile-actions.is-compact { gap: 18px; margin-top: 4px; }
+
+.session-panel {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 13px;
+  padding: 26px 30px;
+  border: 6px solid var(--session-border);
+  border-radius: 28px;
+  box-sizing: border-box;
+}
+
+.session-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.session-panel > header span { font-size: 17px; letter-spacing: .13em; color: var(--session-muted); }
+.session-panel > header h2 { margin: 3px 0 0; font-size: 34px; }
+.session-panel > header button {
+  width: 52px; height: 52px; border: 4px solid var(--session-border); border-radius: 15px;
+  background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer;
+}
+.session-panel > p { margin: 0; color: var(--session-muted); font-size: 20px; line-height: 1.4; }
+.session-list { min-height: 0; overflow: auto; display: grid; align-content: start; gap: 10px; padding-right: 5px; }
+.session-list article {
+  min-height: 82px; padding: 12px 16px; border: 4px solid var(--session-border); border-radius: 18px;
+  background: var(--session-field); display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center; gap: 14px; box-sizing: border-box;
+}
+.session-list article.is-current { border-color: var(--color-blue-2, #3b82b6); }
+.session-list article > div { display: grid; min-width: 0; gap: 4px; }
+.session-list article strong { font-size: 21px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-list article div span { font-size: 16px; color: var(--session-muted); }
+.session-current-badge { padding: 5px 10px; border: 3px solid currentColor; border-radius: 99px; font-size: 15px; white-space: nowrap; }
+.session-revoke, .session-panel > footer button {
+  border: 3px solid currentColor; border-radius: 12px; background: transparent; color: inherit;
+  padding: 8px 13px; font: inherit; font-size: 16px; cursor: pointer;
+}
+.session-revoke:disabled, .session-panel button:disabled { opacity: .5; cursor: not-allowed; }
+.session-empty { min-height: 120px; display: grid; place-items: center; color: var(--session-muted); font-size: 20px; }
+.session-panel > footer { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.session-panel > footer span { color: var(--session-muted); font-size: 16px; }
+
 .lobby-shell,
 .result-shell {
   position: absolute;

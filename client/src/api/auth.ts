@@ -9,10 +9,10 @@ export const registerUser = (input: { email: string; password: string; nickname:
     apiRequest<{ nickname: string }>('/users/register', { method: 'POST', auth: false, retryAuth: false, body: input });
 
 export const loginUser = async (email: string, password: string) => {
-    const result = await apiRequest<{ accessToken: string }>('/auth/login', {
+    const result = await apiRequest<{ accessToken: string; nickname: string }>('/auth/login', {
         method: 'POST', auth: false, retryAuth: false, body: { email, password },
     });
-    setApiAccessToken(result.accessToken);
+    setApiAccessToken(result.accessToken, result.nickname);
     return result;
 };
 

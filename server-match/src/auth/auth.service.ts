@@ -37,7 +37,7 @@ interface RefreshPayload {
 }
 
 type RefreshResult =
-    | { kind: 'ok'; accessToken: string; refreshToken: string }
+    | { kind: 'ok'; accessToken: string; refreshToken: string; nickname: string }
     | { kind: 'invalid' }
     | { kind: 'reuse' };
 
@@ -96,7 +96,7 @@ export class AuthService {
         }
 
         await this.sessionService.purgeExpiredEncryptedIps();
-        return this.createSession(user.id, user.email, metadata);
+        return this.createSession(user.id, user.email, user.nickname, metadata);
     }
 
     async createGuest(ip: string) {
@@ -154,6 +154,7 @@ export class AuthService {
             const [user] = await tx.select({
                 id: schema.users.id,
                 email: schema.users.email,
+                nickname: schema.users.nickname,
                 accountStatus: schema.users.accountStatus,
             }).from(schema.users).where(eq(schema.users.id, payload.sub)).for('update');
             if (!user || user.accountStatus !== 'ACTIVE') {
@@ -213,6 +214,7 @@ export class AuthService {
                 kind: 'ok',
                 accessToken: tokens.accessToken,
                 refreshToken: tokens.refreshToken,
+                nickname: user.nickname,
             };
         });
 
@@ -224,7 +226,7 @@ export class AuthService {
         return result;
     }
 
-    private async createSession(userId: number, email: string, metadata: RequestSessionMetadata) {
+    private async createSession(userId: number, email: string, nickname: string, metadata: RequestSessionMetadata) {
         const tokens = this.buildTokens(userId, email);
         const ip = this.sessionSecurity.protectIp(metadata.ip);
         const now = new Date();
@@ -253,6 +255,7 @@ export class AuthService {
         return {
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken,
+            nickname,
         };
     }
 

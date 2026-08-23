@@ -21,14 +21,14 @@ const configuredBase = (import.meta.env.VITE_MATCH_API_URL as string | undefined
 const API_BASE = configuredBase ? configuredBase.replace(/\/$/, '') : '/api';
 
 let accessToken: string | null = null;
-let tokenListener: ((token: string | null) => void) | null = null;
+let tokenListener: ((token: string | null, nickname?: string) => void) | null = null;
 
-export const setApiAccessToken = (token: string | null) => {
+export const setApiAccessToken = (token: string | null, nickname?: string) => {
     accessToken = token;
-    tokenListener?.(token);
+    tokenListener?.(token, nickname);
 };
 
-export const setApiAccessTokenListener = (listener: (token: string | null) => void) => {
+export const setApiAccessTokenListener = (listener: (token: string | null, nickname?: string) => void) => {
     tokenListener = listener;
 };
 
@@ -61,12 +61,12 @@ const rawRequest = async <T>(path: string, options: RequestOptions): Promise<T> 
 };
 
 const refreshAccessToken = async (): Promise<string> => {
-    const result = await rawRequest<{ accessToken: string }>('/auth/refresh', {
+    const result = await rawRequest<{ accessToken: string; nickname: string }>('/auth/refresh', {
         method: 'POST',
         auth: false,
         retryAuth: false,
     });
-    setApiAccessToken(result.accessToken);
+    setApiAccessToken(result.accessToken, result.nickname);
     return result.accessToken;
 };
 

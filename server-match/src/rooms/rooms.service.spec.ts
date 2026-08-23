@@ -144,7 +144,7 @@ test('quick join skips cooldown and kick-marked rooms before issuing a command',
 
     const result = await service.quickJoin(1);
 
-    assert.deepEqual(result, { wsPath: '/game/game-a', ticket: 'ticket', expiresAt: 1 });
+    assert.deepEqual(result, { roomId: 'open', wsPath: '/game/game-a', ticket: 'ticket', expiresAt: 1 });
     assert.equal(commands.length, 1);
     assert.equal(commands[0].type, CommandType.ReserveJoin);
     assert.equal((commands[0].payload as { roomId: string }).roomId, 'open');

@@ -25,13 +25,14 @@ interface LobbyPlayerCardProps {
     slot: number;
     viewerIsHost?: boolean;
     canSelectEmptySlot?: boolean;
+    canChangeSkill?: boolean;
     onSelectEmptySlot?: () => void;
     onChangeSkill?: () => void;
     onPassHost?: () => void;
     onKick?: () => void;
 }
 
-export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, viewerIsHost = false, canSelectEmptySlot = false, onSelectEmptySlot, onChangeSkill, onPassHost, onKick }) => {
+export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, viewerIsHost = false, canSelectEmptySlot = false, canChangeSkill = true, onSelectEmptySlot, onChangeSkill, onPassHost, onKick }) => {
     const { t } = useTranslation();
     const theme = useSettingsStore((state) => state.theme);
     const ramp = Color.user[(player?.colorIndex ?? slot - 1) % Color.user.length]!;
@@ -110,7 +111,7 @@ export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, 
                     <small>{t(`lobby.controls.${player.control}`)}</small>
                 </span>
                 {player.isSelf ? (
-                    <button type="button" className="lobby-skill-button" title={t('lobby.changeSkill')} aria-label={t('lobby.changeSkillLabel', { skill: t(`lobby.skills.${player.skill}`) })} onClick={onChangeSkill}>
+                    <button type="button" className="lobby-skill-button" disabled={!canChangeSkill} title={t('lobby.changeSkill')} aria-label={t('lobby.changeSkillLabel', { skill: t(`lobby.skills.${player.skill}`) })} onClick={onChangeSkill}>
                         <img src={skillIcons[player.skill]} alt=""/>
                         <small>{t(`lobby.skills.${player.skill}`)}</small>
                         <Icon name="swap" size={15}/>
@@ -129,7 +130,7 @@ export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, 
                         <span><strong>{Math.round(player.stats.wins / Math.max(1, player.stats.games) * 100)}%</strong><small>{t('lobby.winRate')}</small></span>
                         <span><strong>{player.stats.switchSuccessRate}%</strong><small>{t('lobby.switchRate')}</small></span>
                     </>
-                ) : <span className="lobby-no-stats">{t('lobby.guestStats')}</span>}
+                ) : <span className="lobby-no-stats">{player.guest ? t('lobby.guestStats') : '—'}</span>}
             </div>
         </article>
     );

@@ -5,7 +5,8 @@ import { PageLayout } from '../../components/layout/PageLayout.tsx';
 import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { TextField } from '../../components/common/TextField.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
-import { joinRoom, roomApiEnabled } from '../../api/rooms.ts';
+import { joinRoom, resolveRoomAssignment, roomApiEnabled } from '../../api/rooms.ts';
+import { gameSession } from '../../game/GameSession.ts';
 import { isRoomId, isRoomPassword } from '../../utils/validation.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { themeColors } from '../../theme/color.ts';
@@ -29,7 +30,11 @@ export const JoinRoomPage: React.FC = () => {
         }
         setLoading(true);
         try {
-            const result = await joinRoom(roomId, passwordNeeded ? password : undefined);
+            const result = await resolveRoomAssignment(
+                await joinRoom(roomId, passwordNeeded ? password : undefined),
+                roomId,
+            );
+            await gameSession.connect(result, { isPrivate: passwordNeeded });
             navigate(`/rooms/${encodeURIComponent(result.roomId)}/lobby`);
         } catch { setMessage(t('auth.serverError')); } finally { setLoading(false); }
     };
