@@ -17,22 +17,25 @@ export const TitleLogo = React.memo<TitleLogoProps>(({
                                                            style,
                                                            className
                                                        }) => {
-    const { theme } = useSettingsStore();
+    const theme = useSettingsStore((state) => state.theme);
 
     const colors = useMemo(() => {
         const isLight = theme === 0;
         return {
             sw: {
-                fill: isLight ? Color.blue[1] : "transparent",
-                stroke: Color.blue[2]
+                start: isLight ? Color.blue[0] : Color.blue[2],
+                end: Color.blue[1],
+                stroke: isLight ? Color.blue[2] : Color.blue[0]
             },
             arrowIT: {
-                fill: isLight ? Color.gray[1] : "transparent",
-                stroke: Color.gray[2]
+                start: isLight ? Color.gray[0] : Color.gray[2],
+                end: Color.gray[1],
+                stroke: isLight ? Color.gray[2] : Color.gray[0]
             },
             ch: {
-                fill: isLight ? Color.red[1] : "transparent",
-                stroke: Color.red[2]
+                start: isLight ? Color.red[0] : Color.red[2],
+                end: Color.red[1],
+                stroke: isLight ? Color.red[2] : Color.red[0]
             }
         };
     }, [theme]);
@@ -56,10 +59,26 @@ export const TitleLogo = React.memo<TitleLogoProps>(({
             xmlns="http://www.w3.org/2000/svg"
             style={logoStyle}
             className={className}
+            aria-hidden="true"
+            focusable="false"
         >
+            <defs>
+                <linearGradient id="switch-logo-blue" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stopColor={colors.sw.start}/>
+                    <stop offset="1" stopColor={colors.sw.end}/>
+                </linearGradient>
+                <linearGradient id="switch-logo-gray" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stopColor={colors.arrowIT.start}/>
+                    <stop offset="1" stopColor={colors.arrowIT.end}/>
+                </linearGradient>
+                <linearGradient id="switch-logo-red" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stopColor={colors.ch.start}/>
+                    <stop offset="1" stopColor={colors.ch.end}/>
+                </linearGradient>
+            </defs>
             <g transform="translate(199.7987,-5.953123)">
                 <path
-                    fill={colors.sw.fill}
+                    fill="url(#switch-logo-blue)"
                     stroke={colors.sw.stroke}
                     strokeWidth="8"
                     strokeLinejoin="round"
@@ -69,7 +88,7 @@ export const TitleLogo = React.memo<TitleLogoProps>(({
                 />
 
                 <path
-                    fill={colors.arrowIT.fill}
+                    fill="url(#switch-logo-gray)"
                     stroke={colors.arrowIT.stroke}
                     strokeWidth="8"
                     strokeLinejoin="round"
@@ -79,7 +98,7 @@ export const TitleLogo = React.memo<TitleLogoProps>(({
                 />
 
                 <path
-                    fill={colors.ch.fill}
+                    fill="url(#switch-logo-red)"
                     stroke={colors.ch.stroke}
                     strokeWidth="8"
                     strokeLinejoin="round"

@@ -31,7 +31,7 @@ export class AuthController {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
-            maxAge: Number(this.configService.get('JWT_REFRESH_EXPIRATION')) * 1000,
+            maxAge: Number(this.configService.get('JWT_REFRESH_EXPIRATION')),
             path: '/',
             signed: true,
         });
@@ -61,7 +61,7 @@ export class AuthController {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
-            maxAge: Number(this.configService.get('JWT_REFRESH_EXPIRATION')) * 1000,
+            maxAge: Number(this.configService.get('JWT_REFRESH_EXPIRATION')),
             path: '/',
             signed: true,
         });

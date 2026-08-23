@@ -1,34 +1,42 @@
-import React from "react";
-import { GameContainer } from "../components/layout/GameContainer.tsx";
+import React, { useEffect } from "react";
 import { RoundButton } from "../components/common/RoundButton.tsx";
 import { useTranslation } from "react-i18next";
 import { TitleLogo } from "../components/common/logo.tsx";
+import { useNavigate } from "react-router-dom";
+import { SettingsDock } from "../components/layout/SettingsDock.tsx";
+import { ServerStatusIndicator } from '../components/status/ServerStatusIndicator.tsx';
 
 export const TitlePage: React.FC = () => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
+    useEffect(() => { document.title = 'swITch'; }, []);
     return (
-        <GameContainer>
+        <main className="page-screen">
+            <h1 className="visually-hidden">swITch</h1>
             <TitleLogo x={960} y={300} width={1080}/>
 
             <RoundButton
                 x={960}
-                y={680}
+                y={650}
                 width={600}
                 height={120}
                 type={0}
                 content={t('titlePage.button.gameStart')}
-                onClick={() => {}}
+                onClick={() => navigate('/rooms')}
             />
 
             <RoundButton
                 x={960}
-                y={850}
+                y={810}
                 width={600}
                 height={120}
                 type={1}
                 content={t('titlePage.button.gameGuide')}
-                onClick={() => {}}
+                onClick={() => navigate('/how-to-play')}
             />
-        </GameContainer>
+
+            <SettingsDock showProfile/>
+            <ServerStatusIndicator/>
+        </main>
     )
 }

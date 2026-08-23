@@ -1,0 +1,167 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { PageLayout } from '../../components/layout/PageLayout.tsx';
+import { RoundButton } from '../../components/common/RoundButton.tsx';
+import { Icon } from '../../components/common/Icon.tsx';
+import { MatchResultTable } from '../../components/match/MatchResultTable.tsx';
+import { getMatchResult, matchApiEnabled, type MatchResultSnapshot } from '../../api/matches.ts';
+import { DEMO_RESULT } from '../../data/demoMatch.ts';
+import { useSettingsStore } from '../../stores/useSettingsStore.ts';
+import { Color, themeColors } from '../../theme/color.ts';
+import { isInAppBrowser, openInExternalBrowser } from '../../utils/inAppBrowser.ts';
+import { createResultImage, shareOrSaveResultImage } from '../../utils/resultImage.ts';
+
+const IN_APP_BROWSER = typeof navigator !== 'undefined' && isInAppBrowser();
+
+const formatDuration = (durationMs: number) => {
+    const totalSeconds = Math.floor(durationMs / 1000);
+    return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+};
+
+export const MatchResultPage: React.FC = () => {
+    const { t } = useTranslation();
+    const navigate = useNavigate();
+    const { matchId = DEMO_RESULT.matchId } = useParams();
+    const [searchParams] = useSearchParams();
+    const theme = useSettingsStore((state) => state.theme);
+    const colors = themeColors(theme);
+    const [result, setResult] = useState<MatchResultSnapshot>({ ...DEMO_RESULT, matchId });
+    const [message, setMessage] = useState('');
+    const [remainingSeconds, setRemainingSeconds] = useState(30);
+    const [sharing, setSharing] = useState(false);
+
+    useEffect(() => {
+        if (!matchApiEnabled) return;
+        let active = true;
+        void getMatchResult(matchId).then((snapshot) => {
+            if (active) setResult({ ...snapshot, returnsAt: snapshot.returnsAt ?? Date.now() + 30_000 });
+        }).catch(() => {
+            if (active) setMessage(t('auth.serverError'));
+        });
+        return () => { active = false; };
+    }, [matchId, t]);
+
+    const winners = useMemo(() => result.winners
+        .map((winnerId) => result.players.find((player) => player.playerId === winnerId))
+        .filter((player): player is NonNullable<typeof player> => Boolean(player)), [result]);
+    const roomId = searchParams.get('room_id') || result.roomId;
+
+    useEffect(() => {
+        const returnsAt = result.returnsAt ?? Date.now() + 30_000;
+        const updateCountdown = () => {
+            const nextSeconds = Math.max(0, Math.ceil((returnsAt - Date.now()) / 1000));
+            setRemainingSeconds(nextSeconds);
+            if (nextSeconds === 0) navigate(`/rooms/${encodeURIComponent(roomId)}/lobby`, { replace: true });
+        };
+        updateCountdown();
+        const timer = window.setInterval(updateCountdown, 250);
+        return () => window.clearInterval(timer);
+    }, [navigate, result.returnsAt, roomId]);
+
+    const getShareSummary = () => {
+        const winnerNames = winners.map((winner) => winner.nickname).join(', ');
+        return t('result.shareSummary', { winners: winnerNames });
+    };
+
+    const shareResultImage = async () => {
+        if (IN_APP_BROWSER || sharing) return;
+        setSharing(true);
+        try {
+            const image = await createResultImage(result, {
+                title: t('result.title'),
+                winner: t('result.winner'),
+                victory: t('result.victory'),
+                map: t(`lobby.maps.${result.map}`),
+                duration: formatDuration(result.durationMs),
+                player: t('result.player'),
+                switchRate: t('result.switchShort'),
+                tags: t('result.tagsShort'),
+                you: t('lobby.you'),
+            });
+            const action = await shareOrSaveResultImage(image, result.matchId, getShareSummary());
+            setMessage(t(action === 'shared' ? 'result.imageShared' : 'result.imageSaved'));
+        } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') setMessage(t('result.shareCancelled'));
+            else setMessage(t('result.imageFailed'));
+        } finally {
+            setSharing(false);
+        }
+    };
+
+    const openExternal = async () => {
+        const outcome = await openInExternalBrowser();
+        if (outcome === 'copied') setMessage(t('result.externalCopied'));
+        if (outcome === 'unavailable') setMessage(t('result.externalUnavailable'));
+    };
+
+    return (
+        <PageLayout title={t('result.title')} backTo={`/rooms/${encodeURIComponent(roomId)}/lobby`}>
+            <section
+                className="result-shell"
+                style={{
+                    '--surface': colors.panel,
+                    '--surface-border': colors.panelBorder,
+                    '--surface-field': colors.field,
+                    '--surface-muted': colors.muted,
+                } as React.CSSProperties}
+            >
+                <div className="result-main">
+                    <aside className="result-winner-panel">
+                        <span className="result-kicker">{t('result.winner')}</span>
+                        <div className="result-winners">
+                            {winners.slice(0, 2).map((winner) => (
+                                <article key={winner.playerId}>
+                                    <div
+                                        className="result-winner-avatar"
+                                        style={{
+                                            background: Color.user[(winner.slot - 1) % Color.user.length]![0],
+                                            borderColor: Color.user[(winner.slot - 1) % Color.user.length]![1],
+                                        }}
+                                    >
+                                        <span>{winner.slot}</span>
+                                        <i aria-hidden="true">★</i>
+                                    </div>
+                                    <h2>{winner.nickname}</h2>
+                                    <p>{t('result.winnerDetail', { tags: winner.tagCount, success: winner.switchSuccess, tries: winner.switchTry })}</p>
+                                </article>
+                            ))}
+                        </div>
+                        <div className="result-summary-grid">
+                            <div><span>{t('lobby.map')}</span><strong>{t(`lobby.maps.${result.map}`)}</strong></div>
+                            <div><span>{t('result.duration')}</span><strong>{formatDuration(result.durationMs)}</strong></div>
+                            <div><span>{t('result.players')}</span><strong>{result.players.length}</strong></div>
+                        </div>
+                    </aside>
+                    <section className="result-stats-panel" aria-labelledby="result-stats-title">
+                        <header>
+                            <div>
+                                <span className="result-kicker">MATCH STATS</span>
+                                <h2 id="result-stats-title">{t('result.details')}</h2>
+                            </div>
+                            {!matchApiEnabled && <span className="demo-badge">{t('common.demoData')}</span>}
+                        </header>
+                        <MatchResultTable players={result.players} winnerIds={result.winners} />
+                    </section>
+                </div>
+                <footer className="result-footer">
+                    <div className="result-return-timer">
+                        <Icon name="timer" size={31}/>
+                    <div>
+                            <strong>{t('result.returnCountdown', { seconds: remainingSeconds })}</strong>
+                            <span role="status" aria-live="polite" style={{ color: colors.muted }}>{message || t('result.returnNotice')}</span>
+                        </div>
+                        <div className="result-timer-track" role="progressbar" aria-label={t('result.returnTimerLabel')} aria-valuemin={0} aria-valuemax={30} aria-valuenow={remainingSeconds}>
+                            <i style={{ width: `${Math.min(100, remainingSeconds / 30 * 100)}%` }}/>
+                        </div>
+                    </div>
+                        <div>
+                        <RoundButton width={300} height={88} type={2} content={IN_APP_BROWSER ? t('result.shareUnavailable') : t('result.shareImage')} disabled={IN_APP_BROWSER} isLoading={sharing} onClick={() => void shareResultImage()}/>
+                        {IN_APP_BROWSER && <button type="button" className="result-external-button" onClick={() => void openExternal()}><Icon name="external" size={24}/>{t('result.openExternal')}</button>}
+                        <RoundButton width={350} height={88} type={1} content={t('result.backToLobby')} onClick={() => navigate(`/rooms/${encodeURIComponent(roomId)}/lobby`)}/>
+                    </div>
+                </footer>
+            </section>
+        </PageLayout>
+    );
+};

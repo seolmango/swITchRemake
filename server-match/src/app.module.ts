@@ -10,6 +10,7 @@ import { ThrottlerModule } from "@nestjs/throttler";
 import { APP_GUARD } from "@nestjs/core";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 import { RateLimiterGuard } from "./ratelimiter.guard";
+import { HealthModule } from './health/health.module';
 
 @Module({
     imports: [
@@ -23,6 +24,7 @@ import { RateLimiterGuard } from "./ratelimiter.guard";
         EmailModule,
         AuthModule,
         UserModule,
+        HealthModule,
     ],
     controllers: [],
     providers: [

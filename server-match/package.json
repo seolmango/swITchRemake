@@ -14,6 +14,7 @@
   "type": "commonjs",
   "description": "",
   "dependencies": {
+    "@fastify/cookie": "^11.0.2",
     "@nestjs-modules/mailer": "^2.3.4",
     "@nestjs/config": "^4.0.4",
     "@nestjs/jwt": "^11.0.2",

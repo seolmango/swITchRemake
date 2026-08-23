@@ -42,3 +42,17 @@ export const Color = {
         ['#E8D4BE', '#C7B39D']
     ]
 }
+
+export type ThemeTone = 'red' | 'blue' | 'gray';
+
+export const toneColors = (tone: ThemeTone) => Color[tone];
+
+export const themeColors = (theme: 0 | 1) => ({
+    canvas: theme === 0 ? Color.white : Color.black,
+    text: theme === 0 ? Color.black : Color.white,
+    muted: theme === 0 ? '#625F5C' : '#CFD1D2',
+    panel: theme === 0 ? Color.smoke[0] : 'transparent',
+    panelBorder: theme === 0 ? Color.smoke[1] : Color.smoke[2],
+    field: theme === 0 ? 'rgba(250,250,248,0.72)' : 'transparent',
+    backdrop: theme === 0 ? 'rgba(59,59,59,0.16)' : 'rgba(0,0,0,0.42)',
+});

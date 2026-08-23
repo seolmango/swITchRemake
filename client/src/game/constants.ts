@@ -1,4 +1,4 @@
-import { EffectType } from './types.ts';
+import { EffectType, type DisplayOptions, type MotionLevel, type QualityLevel } from './types.ts';
 
 /** Real world tile size in px — matches tools/MapBuilder (256x256 tile assets, start_pos formula tileIndex*256+128). */
 export const TILE_SIZE = 256;
@@ -210,3 +210,64 @@ export const EFFECT_DEFS: Record<EffectType, EffectVisualDef> = {
 
 /** Draw order (bottom of the stack up) for the stacked effect bars above a player's head. */
 export const EFFECT_BAR_ORDER: EffectType[] = [EffectType.Dash, EffectType.Frenzy, EffectType.Exhaust];
+
+/**
+ * 모션 정도(설정 → `motion`). 접근성 항목이므로 `reduced`는 "조금 줄인다"가 아니라 장식용 움직임을
+ * 아예 멈춘다 — 정보는 그대로 남고(술래 링, 유체화 링, 지속시간 바) 흔들리거나 도는 것만 정지한다.
+ * 애니메이션 시계와 수명 시계를 분리해서 구현한다: 이모지·점멸 궤적의 *수명*은 실제 시계로 계속 흐르고,
+ * sin/rot 같은 진동만 `animSpeed`가 곱해진 시계를 쓴다. 그래서 0이어도 화면에 뭔가 영구히 남지 않는다.
+ */
+export interface MotionPreset {
+    /** 장식용(진동/회전/드리프트) 시계 배속. 0 = 정지. */
+    animSpeed: number;
+    /** 카메라 연출(줌 배율, 흔들림, 점멸 펀치) 강도 배율. 0 = 카메라 연출 없음. */
+    cameraFx: number;
+    /** 이모지 팝 곡선. false면 오버슈트 없이 고정 크기로 떴다 사라진다. */
+    emojiPop: boolean;
+}
+
+export const MOTION_PRESETS: Record<MotionLevel, MotionPreset> = {
+    reduced: { animSpeed: 0, cameraFx: 0, emojiPop: false },
+    standard: { animSpeed: 1, cameraFx: 1, emojiPop: true },
+    full: { animSpeed: 1, cameraFx: 1.35, emojiPop: true },
+};
+
+/**
+ * 그래픽 품질(설정 → `quality`). 줄이는 건 전부 *밀도*지 정보가 아니다 — 낮음에서도 수풀 덩어리,
+ * 연막 덩어리와 잔여시간 게이지, 자기장 경계, 술래 링, 이펙트 링은 전부 남는다. 사라지는 건
+ * 풀잎 가닥, 연막 점무늬, 다크모드 사선 해칭처럼 같은 사실을 반복해서 말하는 장식뿐이다.
+ */
+export interface QualityPreset {
+    /** 수풀 타일 하나당 풀잎 개수. 0이면 덩어리 실루엣만. */
+    grassBlades: number;
+    /** 연막 점무늬 간격 배율(클수록 성김). 0이면 점무늬 생략. */
+    smokeDotScale: number;
+    /** 다크 모드 자기장 사선 패턴. 끄면 단색 위험지대 + 테두리만 남는다. */
+    stormHatch: boolean;
+    /** 수풀/연막 재드로우 주기(프레임). 모양이 매 프레임 바뀌지 않으므로 건너뛰어도 티가 안 난다. */
+    ambientFrameSkip: number;
+    dashRings: number;
+    /** 광란 톱니 개수. `%2`로 안팎을 번갈아 찍으므로 반드시 짝수. */
+    frenzyTeeth: number;
+    exhaustDrops: number;
+    /** 점선(자기 선택 링, 점멸 궤적). false면 실선으로 대체 — 세그먼트 수가 훨씬 적다. */
+    dashedLines: boolean;
+}
+
+export const QUALITY_PRESETS: Record<QualityLevel, QualityPreset> = {
+    low: { grassBlades: 0, smokeDotScale: 0, stormHatch: false, ambientFrameSkip: 6, dashRings: 1, frenzyTeeth: 8, exhaustDrops: 1, dashedLines: false },
+    medium: { grassBlades: 3, smokeDotScale: 1.6, stormHatch: true, ambientFrameSkip: 4, dashRings: 2, frenzyTeeth: 12, exhaustDrops: 2, dashedLines: true },
+    high: { grassBlades: GRASS.blades, smokeDotScale: 1, stormHatch: true, ambientFrameSkip: 3, dashRings: DASH_FX.rings, frenzyTeeth: FRENZY_FX.teeth, exhaustDrops: EXHAUST_FX.drops, dashedLines: true },
+};
+
+/**
+ * WorldScene가 매 프레임 MapLayer/PlayerSprite에 넘기는 "이번 프레임을 어떻게 그릴지" 묶음.
+ * 원본 설정(`EngineSettings`)이 아니라 이미 프리셋으로 풀어놓은 형태를 넘기는 이유는, 그리는 쪽이
+ * 'low'/'reduced' 같은 문자열을 다시 해석하지 않게 하려는 것 — 렌더러는 숫자만 읽는다.
+ */
+export interface RenderOptions {
+    motion: MotionPreset;
+    quality: QualityPreset;
+    reduceFlash: boolean;
+    display: DisplayOptions;
+}

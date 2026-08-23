@@ -39,6 +39,9 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
     onEmoji,
 }) => {
     const theme = useSettingsStore((s) => s.theme);
+    // 월드 쪽 설정은 GameCanvas가 엔진에 직접 밀어넣는다. 여기서 읽는 둘은 HUD(DOM)에만 걸리는 값이다.
+    const colorVision = useSettingsStore((s) => s.colorVisionMode);
+    const showControlHints = useSettingsStore((s) => s.showControlHints);
     const [engine, setEngine] = useState<SwitchEngine | null>(null);
 
     const handleEngine = useCallback((next: SwitchEngine | null) => {
@@ -63,6 +66,8 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
                 theme={theme}
                 mode={mode}
                 hud={hud}
+                colorVision={colorVision}
+                showControlHints={showControlHints}
                 onUseMovementSkill={() => onUseMovementSkill?.()}
                 onSwitchTarget={(id) => onSwitchTarget?.(id)}
                 onSpectate={handleSpectate}

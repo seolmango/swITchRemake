@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { Color } from '../../theme/color.ts';
+import { userColorsFor, type ColorVisionMode } from '../../theme/cvd.ts';
 import type { Theme } from '../types.ts';
 
 /**
@@ -41,8 +42,13 @@ export const panel = (theme: Theme): CSSProperties => ({
 export const bodyText = (theme: Theme): string => (theme === 1 ? Color.white : Color.black);
 export const mutedText = (theme: Theme): string => (theme === 1 ? '#9BA0A3' : '#8A8A8A');
 
-/** Both halves of a player's palette slot: [fill, stroke]. */
-export const userColors = (colorIndex: number): readonly [string, string] =>
-    (Color.user[colorIndex] ?? Color.user[0]!) as [string, string];
+/**
+ * Both halves of a player's palette slot: [fill, stroke].
+ *
+ * 색각 보조 모드를 인자로 받는 이유는 HUD가 월드와 반드시 같은 색을 써야 하기 때문이다 —
+ * 명단의 색 점과 화면 속 본체 색이 어긋나면 "몇 번이 누구인지"라는 이 UI의 존재 이유가 사라진다.
+ */
+export const userColors = (colorIndex: number, colorVision: ColorVisionMode = 'off'): readonly [string, string] =>
+    userColorsFor(colorIndex, colorVision);
 
 export const HUD_FONT = 'ui-sans-serif, system-ui, sans-serif';

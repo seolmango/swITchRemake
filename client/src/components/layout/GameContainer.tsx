@@ -47,7 +47,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({
             backgroundColor: isPopup ? 'transparent' : '#000',
             zIndex: zIndex,
             pointerEvents: isPopup ? 'none' : 'auto',
-            overflow: 'hidden'
+            overflow: 'clip'
         }}>
             <div style={{
                 width: `${DESIGN_WIDTH}px`,
@@ -57,6 +57,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({
                 flexShrink: 0,
                 position: 'relative',
                 backgroundColor: isPopup ? 'transparent' : canvasBgColor,
+                color: theme === 0 ? Color.black : Color.white,
                 pointerEvents: 'auto',
                 transition: 'background-color 0.3s ease'
             }}>

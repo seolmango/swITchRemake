@@ -3,9 +3,12 @@ import type { Theme } from '../types.ts';
 import type { HudPlayer } from './hudTypes.ts';
 import { Color } from '../../theme/color.ts';
 import { HUD_FONT, bodyText, mutedText, panel, userColors } from './hudTheme.ts';
+import type { ColorVisionMode } from '../../theme/cvd.ts';
 
 interface Props {
     theme: Theme;
+    /** 월드와 같은 팔레트를 쓰기 위해 그대로 받아 넘긴다 — 색 점과 본체 색이 어긋나면 명단이 무의미해진다. */
+    colorVision: ColorVisionMode;
     compact: boolean;
     players: readonly HudPlayer[];
     selfId: number | null;
@@ -36,7 +39,7 @@ interface Props {
  * place greyed out instead of being removed — a roster that reflows mid-match is hard to track.
  */
 export const PlayerList: React.FC<Props> = ({
-    theme, compact, players, selfId, switchTargets, onSwitchTarget, spectating, spectatingId, onSpectate,
+    theme, colorVision, compact, players, selfId, switchTargets, onSwitchTarget, spectating, spectatingId, onSpectate,
 }) => {
     const aliveCount = players.filter((p) => p.alive).length;
     const targetable = new Set(switchTargets);
@@ -65,7 +68,7 @@ export const PlayerList: React.FC<Props> = ({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5, overflowY: 'auto', minHeight: 0 }}>
                 {players.map((p) => {
-                    const [fill, stroke] = userColors(p.colorIndex);
+                    const [fill, stroke] = userColors(p.colorIndex, colorVision);
                     const isSelf = p.id === selfId;
                     // Spectating repurposes the row: picking a player means "watch them", which is the
                     // primary spectator action and has nowhere else to live.

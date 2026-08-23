@@ -9,11 +9,16 @@ import { StatusBar } from './StatusBar.tsx';
 import { ControlsGuide } from './ControlsGuide.tsx';
 import { AlertStack } from './AlertStack.tsx';
 import { HUD_FONT } from './hudTheme.ts';
+import type { ColorVisionMode } from '../../theme/cvd.ts';
 
 interface Props {
     theme: Theme;
     mode: EngineMode;
     hud: HudState;
+    /** 월드와 같은 플레이어 색을 쓰기 위해 명단으로 내려보낸다. */
+    colorVision: ColorVisionMode;
+    /** 설정의 '조작 힌트 표시'. 끄면 좌하단 키 안내 패널이 사라진다. */
+    showControlHints: boolean;
     onUseMovementSkill: () => void;
     onSwitchTarget: (playerId: number) => void;
     onSpectate: (playerId: number) => void;
@@ -37,7 +42,7 @@ const COMPACT_HEIGHT = 560;
  * the controls reference, play is the full set.
  */
 export const GameHud: React.FC<Props> = ({
-    theme, mode, hud, onUseMovementSkill, onSwitchTarget, onSpectate, onEmoji,
+    theme, mode, hud, colorVision, showControlHints, onUseMovementSkill, onSwitchTarget, onSpectate, onEmoji,
 }) => {
     const [shiftHeld, setShiftHeld] = useState(false);
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -119,6 +124,7 @@ export const GameHud: React.FC<Props> = ({
             <div style={{ pointerEvents: 'auto' }}>
                 <PlayerList
                     theme={theme}
+                    colorVision={colorVision}
                     compact={compact}
                     players={hud.players}
                     selfId={hud.selfId}
@@ -134,7 +140,9 @@ export const GameHud: React.FC<Props> = ({
                 player can never be outside it in the first place. */}
             <AlertStack theme={theme} alerts={hud.alerts} offsetTop={24} />
 
-            {mode === EngineMode.Help && !compact && (
+            {/* 도움말 모드에서만 띄우던 것을 설정으로 옮겼다 — 문구가 "경기 중"을 약속하므로 인게임에서도 뜬다.
+                좁은 화면에서는 여전히 접는다(좌하단이 다른 패널과 겹친다). */}
+            {showControlHints && !compact && (
                 <ControlsGuide theme={theme} movementSkillLabel={hud.movementSkill?.label ?? null} />
             )}
 

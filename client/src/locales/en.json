@@ -1,8 +1,107 @@
 {
-  "titlePage" : {
-    "button" : {
-      "gameStart" : "Start Game",
-      "gameGuide" : "How to Play"
+  "common": { "toggleTheme": "Toggle theme", "loading": "Loading…", "save": "Save", "cancel": "Cancel", "comingSoon": "Server feature coming soon", "demoData": "Preview data" },
+  "nav": { "home": "Home", "back": "Back", "previousPage": "Previous page", "nextPage": "Next page", "profile": "Profile", "settings": "Settings" },
+  "serverStatus": { "checking": "Connecting to server…", "online": "Server connected", "connected": "Server connected · {{latency}}ms", "offline": "Server offline", "retry": "Click to check again" },
+  "titlePage": { "button": { "gameStart": "Start Game", "gameGuide": "How to Play" } },
+  "rooms": {
+    "title": "Rooms", "create": "Create Room", "join": "Join by Code", "quick": "Quick Join", "refresh": "Refresh", "pagination": "Room list pages", "currentPage": "Page {{page}} of {{totalPages}}",
+    "players": "{{count}} / {{capacity}} players", "waiting": "Waiting", "playing": "Playing", "empty": "No rooms are available.",
+    "previewNotice": "Showing preview rooms until the room server API is available.", "createTitle": "Create Room", "joinTitle": "Join Room",
+    "roomName": "Room name", "roomNamePlaceholder": "A name your friends can find", "usePassword": "Make this room private", "password": "Room password",
+    "passwordPlaceholder": "Up to 12 characters", "roomId": "Room code", "roomIdPlaceholder": "6 letters or numbers",
+    "createUnavailable": "The room creation API is not on the server yet. The form and API boundary are ready.",
+    "joinUnavailable": "The room join API is not on the server yet. The form and API boundary are ready.", "quickUnavailable": "The quick join API is not on the server yet.",
+    "private": "Private room", "public": "Public room", "roomAccessibleLabel": "{{name}}, host {{owner}}, {{count}} of {{capacity}} players, {{privacy}}, {{status}}"
+  },
+  "lobby": {
+    "roomAccessible": "{{name}} lobby, room code {{code}}", "roomCode": "Room code", "copyCode": "Copy", "codeCopied": "Room code copied.", "copyFailed": "Could not copy the room code.",
+    "map": "Map", "previousMap": "Previous map", "nextMap": "Next map", "maps": { "random": "Random", "openField": "Open Field", "forest": "Forest", "stadium": "Stadium", "house": "House" },
+    "players": "Player slots", "emptySlot": "Open slot", "waitingForPlayer": "Waiting for a player", "emptySlotAccessible": "Slot {{slot}}, open",
+    "playerAccessible": "Slot {{slot}}, {{nickname}}, {{role}}, {{control}}, {{skill}}", "owner": "Host", "member": "Player", "you": "You", "guest": "Guest",
+    "roles": { "player": "Playing next match", "waiting": "Waiting", "spectator": "Spectating" },
+    "games": "Games", "winRate": "Win rate", "switchRate": "Switch", "guestStats": "Guest matches are not recorded",
+    "controls": { "keyboard": "Keyboard", "touch": "Touch", "gamepad": "Gamepad" }, "skills": { "dash": "Dash", "flash": "Flash", "exhaust": "Exhaust" },
+    "startRequirement": "At least {{count}} players are needed to start.", "startLocked": "Time to adjust your choices · starts unlock in {{seconds}}s", "canStart": "Everyone is in. The host can start the match.", "waitingForHost": "Waiting for the host to start the match.",
+    "locked": "Entry locked", "unlocked": "Entry open", "roomLocked": "New players can no longer enter.", "roomUnlocked": "New players can enter again.",
+    "moveToNumber": "Move to number {{slot}}", "moveToNumberLabel": "Move to open player number {{slot}}", "selectEmptySlot": "Select to change your number", "numberChanged": "Your player number is now {{slot}}.",
+    "changeSkill": "Change movement skill", "changeSkillLabel": "Current skill: {{skill}}. Change movement skill", "changeSkillHelp": "Choose the movement skill to use in the next match.", "skillChanged": "Movement skill changed to {{skill}}.",
+    "hostActions": "Host controls for {{nickname}}", "passHost": "Pass host", "passHostTo": "Pass host to {{nickname}}", "kick": "Kick", "kickPlayer": "Kick {{nickname}}",
+    "passHostConfirmTitle": "Pass host privileges?", "passHostConfirmBody": "{{nickname}} will immediately become the new host.", "kickConfirmTitle": "Kick this player?", "kickConfirmBody": "{{nickname}} cannot rejoin while this room exists.",
+    "hostPassedMessage": "Host privileges passed to {{nickname}}.", "kickedMessage": "{{nickname}} was removed from the room.",
+    "leave": "Leave Room", "previewResult": "Preview Results", "start": "Start Game", "startCountdown": "Start in {{seconds}}s"
+  },
+  "result": {
+    "title": "Match Results", "winner": "WINNERS", "victory": "CO-WINNER", "winnerDetail": "{{tags}} tags · swITch {{success}}/{{tries}}", "details": "Key results",
+    "player": "Player", "tags": "Successful tags", "switches": "swITch success", "times": "times",
+    "duration": "Duration", "players": "Players", "tableScrollLabel": "Player key match results table",
+    "switchShort": "swITch", "tagsShort": "Tags", "shareImage": "Share Result Image", "shareUnavailable": "Sharing unavailable", "backToLobby": "Back to Lobby",
+    "imageShared": "Opened the image share sheet.", "imageSaved": "Saved the result image.", "imageFailed": "Could not create the result image.", "shareCancelled": "Image sharing was cancelled.",
+    "openExternal": "Open in external browser", "externalCopied": "Address copied. Paste it into Safari to continue.", "externalUnavailable": "Could not open an external browser automatically.",
+    "shareSummary": "swITch result: {{winners}} won together", "returnCountdown": "Returning to the lobby in {{seconds}}s", "returnNotice": "You will return to the same room when the server's result period ends.", "returnTimerLabel": "Time remaining before automatic lobby return"
+  },
+  "auth": {
+    "login": "Log In", "signup": "Sign Up", "email": "Email", "emailPlaceholder": "name@example.com", "password": "Password",
+    "passwordPlaceholder": "8–20 letters, numbers, or symbols", "nickname": "Nickname", "nicknamePlaceholder": "2–12 letters or numbers",
+    "code": "Verification code", "codePlaceholder": "6 digits from your email", "sendCode": "Send Code", "sending": "Sending…",
+    "codeSent": "We sent a verification code. Enter it within 5 minutes.", "goSignup": "Need an account? Sign up", "goLogin": "Already have an account? Log in",
+    "forgot": "Forgot your password?", "loginSuccess": "You are logged in.", "signupSuccess": "Your account is ready. You can now log in.",
+    "resetTitle": "Reset Password", "resetAction": "Set New Password", "resetUnavailable": "Email delivery is connected, but the password reset API is not on the server yet.",
+    "changeTitle": "Change Password", "currentPassword": "Current password", "newPassword": "New password", "changeUnavailable": "The password change API is not on the server yet.",
+    "invalidEmail": "Enter a valid email address.", "invalidPassword": "Use 8–20 letters, numbers, or !@#$%^&*.",
+    "invalidNickname": "Use 2–12 Korean letters, letters, or numbers.", "invalidCode": "Enter the 6-digit code.",
+    "invalidCredentials": "Check your email and password.", "invalidCodeServer": "The verification code is invalid or expired.", "duplicateAccount": "That email or nickname is already in use.", "serverError": "Could not reach the server. Try again in a moment.", "logout": "Log Out"
+  },
+  "profile": {
+    "title": "Profile", "guestTitle": "You are not logged in yet", "guestBody": "Log in to keep your match history and game settings together.",
+    "loggedBody": "This session is connected to the authentication server.", "changePassword": "Change Password", "statsPending": "Games, wins, and switch success rate will appear here when the profile API is added."
+  },
+  "settings": {
+    "title": "Settings", "sectionLabel": "SETTINGS", "savedAutomatically": "Changes are saved automatically.", "resetSection": "Reset this tab",
+    "tabs": { "label": "Settings categories", "general": "General", "sound": "Sound", "game": "In-game", "keymap": "Key Mapping" },
+    "general": {
+      "theme": "Theme", "themeDescription": "Choose the screen brightness that feels comfortable.", "light": "Light", "dark": "Dark",
+      "language": "Language", "languageDescription": "Used for menus and guidance.",
+      "deviceInfo": "Device information", "mobile": "Mobile device", "desktop": "Computer", "detectedDevice": "Detected as {{device}}.",
+      "unknownPlatform": "Unknown platform", "touchAvailable": "Touch input available", "keyboardPointer": "Keyboard and pointer input",
+      "privacy": "Privacy Policy", "privacyTitle": "How is my data used?", "privacyDummy": "Account and match-data policies will be explained here. (Coming soon)",
+      "credits": "Credits", "creditsDummy": "This space will list the team behind game design, UI, client, and server development."
+    },
+    "sound": {
+      "master": "Master volume", "masterDescription": "Controls every sound played by the game.",
+      "bgm": "Background music", "bgmDescription": "Controls lobby and match music.", "sfx": "Sound effects", "sfxDescription": "Controls skills, alerts, and collision sounds.",
+      "bgmInfo": "Now playing", "trackTitle": "Crossing Colors", "trackArtist": "swITch Original Soundtrack", "trackDummy": "Track metadata and playback status will appear here."
+    },
+    "game": {
+      "frameRate": "Frame rate", "frameRateDescription": "Screen refresh target. Higher values use more power.", "unlimited": "Unlimited",
+      "motion": "Motion", "motionDescription": "Intensity of transitions and character effects.", "reduced": "Reduced", "standard": "Standard", "full": "Full",
+      "quality": "Graphics quality", "qualityDescription": "Level of effects and object detail.", "low": "Low", "medium": "Medium", "high": "High",
+      "resolution": "Render resolution", "resolutionDescription": "Internal resolution used to draw the game.",
+      "nickname": "Show nicknames", "nicknameDescription": "Display nicknames above players.", "playerNumber": "Show player numbers", "playerNumberDescription": "Display target numbers 1–8.",
+      "colorVision": "Color vision aid", "colorVisionDescription": "Adjust colors so territories and players are easier to distinguish.", "off": "Off", "protanopia": "Protan", "deuteranopia": "Deutan", "tritanopia": "Tritan",
+      "screenShake": "Screen shake", "screenShakeDescription": "Shake the screen on impacts and skills.",
+      "cameraSmoothing": "Camera smoothing", "cameraSmoothingDescription": "Smooth the camera as it follows the player.",
+      "reduceFlash": "Reduce flashes", "reduceFlashDescription": "Reduce rapid, bright screen flashes.",
+      "showControlHints": "Show control hints", "showControlHintsDescription": "Show contextual key hints during a match."
+    },
+    "keymap": {
+      "helpTitle": "Up to two keys per action", "helpBody": "Select a slot, then press a key. Press Delete to clear it or Escape to cancel.",
+      "primary": "Primary key", "secondary": "Secondary key", "listening": "Press a key…", "listeningAnnouncement": "Press a key to assign to {{action}}. Press Tab to cancel and move to the next control.", "add": "+ Add", "unassigned": "Unassigned", "bindingLabel": "{{action}} · {{slot}} · currently {{key}}", "conflict": "{{key}} is already assigned to another action.",
+      "movementGroup": "Movement and movement skill", "switchGroup": "swITch skill · target player", "emojiGroup": "Emoji slots",
+      "actions": {
+        "moveUp": "Move up", "moveDown": "Move down", "moveLeft": "Move left", "moveRight": "Move right", "movementSkill": "Use movement skill",
+        "switch1": "Target player 1", "switch2": "Target player 2", "switch3": "Target player 3", "switch4": "Target player 4",
+        "switch5": "Target player 5", "switch6": "Target player 6", "switch7": "Target player 7", "switch8": "Target player 8",
+        "emoji1": "Emoji slot 1", "emoji2": "Emoji slot 2", "emoji3": "Emoji slot 3", "emoji4": "Emoji slot 4",
+        "emoji5": "Emoji slot 5", "emoji6": "Emoji slot 6", "emoji7": "Emoji slot 7", "emoji8": "Emoji slot 8"
+      }
     }
+  },
+  "game": { "serverPending": "The game renderer is ready for server snapshots, but the room and game server connection is still in progress." },
+  "guide": {
+    "title": "How to Play", "intro": "Grow your territory and switch places with another player at the right moment.",
+    "moveTitle": "Move", "moveBody": "Move with WASD or the arrow keys. Claim territory as you cross the floor.",
+    "switchTitle": "Switch", "switchBody": "Press 1–8 to switch places with that player. Timing is everything.",
+    "skillTitle": "Movement Skill", "skillBody": "Press Space to use your selected movement skill. Watch its cooldown.",
+    "taggerTitle": "Tagger & Survival", "taggerBody": "Avoid the tagger and stay inside the shrinking boundary. Keep an eye on the HUD.", "openSandbox": "Open Engine Practice"
   }
 }

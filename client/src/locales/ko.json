@@ -1,8 +1,107 @@
 {
-  "titlePage" : {
-    "button" : {
-      "gameStart" : "게임 시작",
-      "gameGuide" : "도움말"
+  "common": { "toggleTheme": "테마 전환", "loading": "불러오는 중…", "save": "저장", "cancel": "취소", "comingSoon": "서버 기능 준비 중", "demoData": "미리보기 데이터" },
+  "nav": { "home": "홈", "back": "뒤로", "previousPage": "이전 페이지", "nextPage": "다음 페이지", "profile": "프로필", "settings": "설정" },
+  "serverStatus": { "checking": "서버 연결 중…", "online": "서버 연결됨", "connected": "서버 연결됨 · {{latency}}ms", "offline": "서버 연결 끊김", "retry": "눌러서 다시 확인" },
+  "titlePage": { "button": { "gameStart": "게임 시작", "gameGuide": "게임 방법" } },
+  "rooms": {
+    "title": "방 목록", "create": "방 만들기", "join": "코드로 참가", "quick": "빠른 참가", "refresh": "새로고침", "pagination": "방 목록 페이지", "currentPage": "{{totalPages}}페이지 중 {{page}}페이지",
+    "players": "{{count}} / {{capacity}}명", "waiting": "대기 중", "playing": "게임 중", "empty": "참가할 수 있는 방이 없습니다.",
+    "previewNotice": "방 서버 API가 추가되기 전까지 예시 목록을 보여주고 있습니다.", "createTitle": "방 만들기", "joinTitle": "방 참가",
+    "roomName": "방 이름", "roomNamePlaceholder": "함께 찾기 쉬운 이름", "usePassword": "비공개 방으로 만들기", "password": "방 비밀번호",
+    "passwordPlaceholder": "12자 이내 비밀번호", "roomId": "방 코드", "roomIdPlaceholder": "6자리 영문·숫자 코드",
+    "createUnavailable": "방 생성 API가 아직 서버에 없습니다. 입력 화면과 연결 계층만 준비했습니다.",
+    "joinUnavailable": "방 참가 API가 아직 서버에 없습니다. 입력 화면과 연결 계층만 준비했습니다.", "quickUnavailable": "빠른 참가 API가 아직 서버에 없습니다.",
+    "private": "비공개 방", "public": "공개 방", "roomAccessibleLabel": "{{name}}, 방장 {{owner}}, {{count}} / {{capacity}}명, {{privacy}}, {{status}}"
+  },
+  "lobby": {
+    "roomAccessible": "{{name}} 대기실, 방 코드 {{code}}", "roomCode": "방 코드", "copyCode": "복사", "codeCopied": "방 코드를 복사했습니다.", "copyFailed": "방 코드를 복사하지 못했습니다.",
+    "map": "맵", "previousMap": "이전 맵", "nextMap": "다음 맵", "maps": { "random": "랜덤", "openField": "공터", "forest": "숲", "stadium": "경기장", "house": "집" },
+    "players": "플레이어 슬롯", "emptySlot": "빈 자리", "waitingForPlayer": "플레이어를 기다리는 중", "emptySlotAccessible": "{{slot}}번, 빈 자리",
+    "playerAccessible": "{{slot}}번 {{nickname}}, {{role}}, {{control}}, {{skill}}", "owner": "방장", "member": "참가자", "you": "나", "guest": "게스트",
+    "roles": { "player": "다음 경기 참가", "waiting": "대기 중", "spectator": "관전 중" },
+    "games": "게임", "winRate": "승률", "switchRate": "스위치", "guestStats": "게스트 전적은 저장되지 않아요",
+    "controls": { "keyboard": "키보드", "touch": "터치", "gamepad": "게임패드" }, "skills": { "dash": "대시", "flash": "순간 이동", "exhaust": "탈진" },
+    "startRequirement": "게임을 시작하려면 {{count}}명 이상 필요해요.", "startLocked": "선택을 바꿀 시간이에요 · {{seconds}}초 뒤 시작 가능", "canStart": "모두 입장했습니다. 방장이 게임을 시작할 수 있어요.", "waitingForHost": "방장이 게임을 시작하기를 기다리고 있어요.",
+    "locked": "입장 잠김", "unlocked": "입장 열림", "roomLocked": "새로운 참가자의 입장을 잠갔습니다.", "roomUnlocked": "새로운 참가자가 들어올 수 있습니다.",
+    "moveToNumber": "{{slot}}번으로 이동", "moveToNumberLabel": "빈 {{slot}}번 자리로 이동", "selectEmptySlot": "눌러서 플레이어 번호 변경", "numberChanged": "플레이어 번호를 {{slot}}번으로 변경했습니다.",
+    "changeSkill": "이동 스킬 변경", "changeSkillLabel": "현재 {{skill}}, 이동 스킬 변경", "changeSkillHelp": "다음 경기에서 사용할 이동 스킬을 선택하세요.", "skillChanged": "이동 스킬을 {{skill}}으로 변경했습니다.",
+    "hostActions": "{{nickname}} 방장 관리", "passHost": "방장 넘기기", "passHostTo": "{{nickname}}에게 방장 권한 넘기기", "kick": "강퇴", "kickPlayer": "{{nickname}} 강퇴하기",
+    "passHostConfirmTitle": "방장 권한을 넘길까요?", "passHostConfirmBody": "{{nickname}}님이 즉시 새로운 방장이 됩니다.", "kickConfirmTitle": "플레이어를 강퇴할까요?", "kickConfirmBody": "{{nickname}}님은 이 방이 유지되는 동안 다시 참가할 수 없습니다.",
+    "hostPassedMessage": "{{nickname}}님에게 방장 권한을 넘겼습니다.", "kickedMessage": "{{nickname}}님을 방에서 내보냈습니다.",
+    "leave": "방 나가기", "previewResult": "결과 화면 미리보기", "start": "게임 시작", "startCountdown": "{{seconds}}초 뒤 시작"
+  },
+  "result": {
+    "title": "게임 결과", "winner": "WINNERS", "victory": "공동 승리", "winnerDetail": "태그 {{tags}}회 · swITch {{success}}/{{tries}}", "details": "핵심 기록",
+    "player": "플레이어", "tags": "태그 성공", "switches": "swITch 성공률", "times": "회",
+    "duration": "경기 시간", "players": "참가자", "tableScrollLabel": "플레이어별 핵심 경기 결과 표",
+    "switchShort": "swITch", "tagsShort": "태그", "shareImage": "결과 이미지 공유", "shareUnavailable": "인앱 공유 불가", "backToLobby": "대기실로 돌아가기",
+    "imageShared": "결과 이미지 공유창을 열었습니다.", "imageSaved": "결과 이미지를 저장했습니다.", "imageFailed": "결과 이미지를 만들지 못했습니다.", "shareCancelled": "이미지 공유를 취소했습니다.",
+    "openExternal": "외부 브라우저에서 열기", "externalCopied": "주소를 복사했습니다. Safari에서 붙여넣어 열어 주세요.", "externalUnavailable": "외부 브라우저를 자동으로 열 수 없습니다.",
+    "shareSummary": "swITch 경기 결과: {{winners}} 공동 승리", "returnCountdown": "{{seconds}}초 뒤 대기실로 돌아갑니다", "returnNotice": "서버의 결과 표시 시간이 끝나면 같은 방으로 자동 복귀합니다.", "returnTimerLabel": "대기실 자동 복귀까지 남은 시간"
+  },
+  "auth": {
+    "login": "로그인", "signup": "회원가입", "email": "이메일", "emailPlaceholder": "name@example.com", "password": "비밀번호",
+    "passwordPlaceholder": "8~20자 영문·숫자·특수문자", "nickname": "닉네임", "nicknamePlaceholder": "2~12자 영문·숫자·한글",
+    "code": "인증 코드", "codePlaceholder": "이메일로 받은 6자리 숫자", "sendCode": "코드 발송", "sending": "발송 중…",
+    "codeSent": "인증 코드를 보냈습니다. 5분 안에 입력해 주세요.", "goSignup": "계정이 없나요? 회원가입", "goLogin": "이미 계정이 있나요? 로그인",
+    "forgot": "비밀번호를 잊으셨나요?", "loginSuccess": "로그인했습니다.", "signupSuccess": "가입이 완료되었습니다. 이제 로그인할 수 있어요.",
+    "resetTitle": "비밀번호 재설정", "resetAction": "새 비밀번호 설정", "resetUnavailable": "메일 발송은 연결되어 있지만 비밀번호 변경 API는 아직 서버에 없습니다.",
+    "changeTitle": "비밀번호 변경", "currentPassword": "현재 비밀번호", "newPassword": "새 비밀번호", "changeUnavailable": "비밀번호 변경 API가 아직 서버에 없습니다.",
+    "invalidEmail": "올바른 이메일 주소를 입력해 주세요.", "invalidPassword": "8~20자, 영문·숫자와 !@#$%^&*만 사용할 수 있습니다.",
+    "invalidNickname": "2~12자 영문·숫자·한글만 사용할 수 있습니다.", "invalidCode": "6자리 숫자를 입력해 주세요.",
+    "invalidCredentials": "이메일 또는 비밀번호를 확인해 주세요.", "invalidCodeServer": "인증 코드가 올바르지 않거나 만료되었습니다.", "duplicateAccount": "이미 사용 중인 이메일 또는 닉네임입니다.", "serverError": "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.", "logout": "로그아웃"
+  },
+  "profile": {
+    "title": "프로필", "guestTitle": "아직 로그인하지 않았어요", "guestBody": "로그인하면 전적과 게임 설정을 한곳에서 관리할 수 있습니다.",
+    "loggedBody": "인증 서버와 연결된 세션입니다.", "changePassword": "비밀번호 변경", "statsPending": "전적 API가 추가되면 이 영역에 게임 수, 승리, 스위치 성공률을 표시합니다."
+  },
+  "settings": {
+    "title": "설정", "sectionLabel": "SETTINGS", "savedAutomatically": "변경 사항은 자동으로 저장돼요.", "resetSection": "이 창 초기화",
+    "tabs": { "label": "설정 종류", "general": "기본 설정", "sound": "사운드 설정", "game": "인게임 설정", "keymap": "키 맵핑" },
+    "general": {
+      "theme": "화면 테마", "themeDescription": "눈에 편한 화면 밝기를 선택합니다.", "light": "라이트", "dark": "다크",
+      "language": "언어", "languageDescription": "메뉴와 안내 문구에 사용할 언어입니다.",
+      "deviceInfo": "기기 정보", "mobile": "모바일 기기", "desktop": "컴퓨터", "detectedDevice": "현재 {{device}}로 인식했어요.",
+      "unknownPlatform": "알 수 없는 운영체제", "touchAvailable": "터치 입력 가능", "keyboardPointer": "키보드·포인터 입력",
+      "privacy": "개인정보 처리방침", "privacyTitle": "내 정보는 어떻게 쓰이나요?", "privacyDummy": "계정과 게임 기록 처리 기준을 이곳에서 안내할 예정입니다. (준비 중)",
+      "credits": "크레딧", "creditsDummy": "게임 기획, 디자인, 클라이언트와 서버 제작에 참여한 팀 정보를 표시할 자리입니다."
+    },
+    "sound": {
+      "master": "마스터 사운드", "masterDescription": "게임에서 재생되는 모든 소리의 크기입니다.",
+      "bgm": "배경음악", "bgmDescription": "로비와 경기 음악의 크기입니다.", "sfx": "효과음", "sfxDescription": "스킬, 알림, 충돌 효과음의 크기입니다.",
+      "bgmInfo": "현재 BGM", "trackTitle": "Crossing Colors", "trackArtist": "swITch Original Soundtrack", "trackDummy": "곡 정보와 재생 상태가 연결될 자리입니다."
+    },
+    "game": {
+      "frameRate": "프레임 설정", "frameRateDescription": "화면 갱신 속도입니다. 높은 값은 전력을 더 사용합니다.", "unlimited": "제한 없음",
+      "motion": "모션 정도", "motionDescription": "화면 전환과 캐릭터 연출의 움직임 강도입니다.", "reduced": "줄임", "standard": "보통", "full": "풍부하게",
+      "quality": "그래픽 품질", "qualityDescription": "효과와 오브젝트 표현 수준입니다.", "low": "낮음", "medium": "보통", "high": "높음",
+      "resolution": "렌더 해상도", "resolutionDescription": "게임 화면을 그리는 내부 해상도 비율입니다.",
+      "nickname": "닉네임 표시", "nicknameDescription": "플레이어 위에 닉네임을 표시합니다.", "playerNumber": "플레이어 번호 표시", "playerNumberDescription": "대상 지정에 쓰는 1~8번을 표시합니다.",
+      "colorVision": "색각 보조", "colorVisionDescription": "영역과 플레이어 색을 더 구분하기 쉽게 조정합니다.", "off": "사용 안 함", "protanopia": "적색 보조", "deuteranopia": "녹색 보조", "tritanopia": "청황색 보조",
+      "screenShake": "화면 흔들림", "screenShakeDescription": "충돌과 스킬 사용 시 화면 흔들림을 표현합니다.",
+      "cameraSmoothing": "카메라 부드럽게", "cameraSmoothingDescription": "플레이어를 따라가는 카메라 이동을 부드럽게 합니다.",
+      "reduceFlash": "섬광 효과 줄이기", "reduceFlashDescription": "빠르고 밝은 화면 점멸을 줄입니다.",
+      "showControlHints": "조작 힌트 표시", "showControlHintsDescription": "경기 중 상황에 맞는 키 안내를 표시합니다."
+    },
+    "keymap": {
+      "helpTitle": "한 동작에 최대 2개", "helpBody": "바꿀 슬롯을 누른 뒤 원하는 키를 입력하세요. Delete로 비우고 Esc로 취소할 수 있습니다.",
+      "primary": "첫 번째 키", "secondary": "두 번째 키", "listening": "키 입력 중…", "listeningAnnouncement": "{{action}}에 지정할 키를 입력하세요. Tab으로 취소하고 다음 항목으로 이동할 수 있습니다.", "add": "+ 추가", "unassigned": "지정 안 됨", "bindingLabel": "{{action}} · {{slot}} · 현재 {{key}}", "conflict": "{{key}} 키는 이미 다른 동작에 사용 중입니다.",
+      "movementGroup": "이동과 이동 스킬", "switchGroup": "swITch 스킬 · 플레이어 지목", "emojiGroup": "이모지 슬롯",
+      "actions": {
+        "moveUp": "위로 이동", "moveDown": "아래로 이동", "moveLeft": "왼쪽 이동", "moveRight": "오른쪽 이동", "movementSkill": "이동 스킬 사용",
+        "switch1": "1번 플레이어 지목", "switch2": "2번 플레이어 지목", "switch3": "3번 플레이어 지목", "switch4": "4번 플레이어 지목",
+        "switch5": "5번 플레이어 지목", "switch6": "6번 플레이어 지목", "switch7": "7번 플레이어 지목", "switch8": "8번 플레이어 지목",
+        "emoji1": "이모지 1번 슬롯", "emoji2": "이모지 2번 슬롯", "emoji3": "이모지 3번 슬롯", "emoji4": "이모지 4번 슬롯",
+        "emoji5": "이모지 5번 슬롯", "emoji6": "이모지 6번 슬롯", "emoji7": "이모지 7번 슬롯", "emoji8": "이모지 8번 슬롯"
+      }
     }
+  },
+  "game": { "serverPending": "게임 렌더러는 서버 스냅샷을 받을 준비가 되었지만, 방·게임 서버 연결은 아직 준비 중입니다." },
+  "guide": {
+    "title": "게임 방법", "intro": "내 영역을 넓히고, 적절한 순간에 다른 플레이어와 위치를 바꾸세요.",
+    "moveTitle": "이동", "moveBody": "WASD 또는 방향키로 움직입니다. 바닥을 지나가며 영역을 확보하세요.",
+    "switchTitle": "스위치", "switchBody": "숫자 1~8을 눌러 해당 플레이어와 위치를 바꿉니다. 타이밍이 핵심입니다.",
+    "skillTitle": "이동 스킬", "skillBody": "Space 키로 선택한 이동 스킬을 사용합니다. 재사용 대기시간을 확인하세요.",
+    "taggerTitle": "술래와 생존", "taggerBody": "술래를 피하고 줄어드는 경계 안에 남으세요. 화면의 상태 표시를 주시하세요.", "openSandbox": "엔진 연습장 열기"
   }
 }

@@ -159,7 +159,7 @@ engine.applySnapshot(arrayBuffer);   // 이게 전부
 | u8 | count |
 | ... × count | 아래 레코드 |
 
-**플레이어 레코드 (기본 9바이트 + 가변)**
+**플레이어 레코드 (기본 10바이트 + 가변)**
 
 | 타입 | 내용 |
 |---|---|
@@ -172,7 +172,7 @@ engine.applySnapshot(arrayBuffer);   // 이게 전부
 | u8 | flags |
 | u8 | effectMask |
 | u8 × (effectMask 켜진 수) | 각 이펙트 잔여 비율 |
-| u8 | emojiId — flags bit3일 때만 |
+| u8 | emojiId — flags bit2(`hasEmoji`)일 때만 |
 
 `flags`: bit0 `obscured` · bit1 `isTagger` · bit2 `hasEmoji`
 
@@ -270,13 +270,75 @@ engine.setDisplayOptions({ showNumber: true, showNickname: false });
 
 ---
 
-## 7. 정리: 엔진 공개 API
+## 7. 유저 설정 (설정 → 인게임)
 
 ```ts
-const engine = new SwitchEngine(container, { theme, mode });
+engine.setSettings({ quality: 'low', motion: 'reduced', colorVision: 'deuteranopia' });
+```
+
+설정 스토어(`useSettingsStore`)에서 `GameCanvas`가 자동으로 밀어넣으므로, 페이지가 따로 배선할 일은 없다.
+문자열→숫자 변환은 `useEngineSettings`가 경계에서 한 번만 한다.
+
+**전부 로컬 표현 설정이다.** 서버로 나가지 않고, 서버가 보내주는 정보의 양도 바꾸지 않는다 —
+안 보여야 할 플레이어는 애초에 전송되지 않으므로 클라이언트가 설정을 조작해 얻을 것이 없다.
+
+| 설정 | 엔진에서 하는 일 |
+|---|---|
+| `frameRate` | Phaser `TimeStep`의 fps 상한. 런타임 변경은 내부 필드 교체 후 `sleep()`/`wake()`로 스텝 함수 재바인딩 (Phaser에 런타임 setter가 없다) |
+| `resolutionScale` | 캔버스 백버퍼 = CSS 크기 × 배율, 표시 크기는 그대로. 카메라 줌에 같은 배율을 곱해 **시야각은 고정** — 해상도로 시야를 넓히는 꼼수가 생기지 않는다 |
+| `motion` | `animSpeed`(장식용 진동/회전 시계 배속) + `cameraFx`(줌·흔들림·펀치 강도). `reduced`는 둘 다 0 |
+| `quality` | 풀잎 개수, 연막 점 간격, 다크모드 자기장 해칭, 수풀/연막 재드로우 주기, 이펙트 링 분할 수, 점선→실선 |
+| `colorVision` | 팔레트 교체 (아래) |
+| `screenShake` | 광란 중 카메라 진동 on/off |
+| `cameraSmoothing` | 끄면 팔로우 lerp = 1 (즉시 추적) |
+| `reduceFlash` | 점멸 화면 플래시, 술래 맥동 링, 자기장 테두리 맥동을 정지 |
+
+품질이 낮춰도 **정보는 안 지운다.** 수풀 덩어리·연막 덩어리와 잔여시간 게이지·자기장 경계·술래
+링·이펙트 링은 `low`에서도 전부 남는다. 빠지는 건 같은 사실을 반복해서 말하는 장식뿐이다.
+
+### 시계가 두 개인 이유
+
+`motion: 'reduced'`에서 시계를 통째로 멈추면 진동은 멎지만 이모지와 점멸 잔상이 화면에 영구히
+박힌다. 그래서 씬은 시계를 둘로 나눈다 — `clock`(실제 경과, 수명 판정)과 `animClock`(`animSpeed`가
+곱해진 dt, sin/rot 진동). 모션을 꺼도 수명은 흐른다.
+
+### 색각 보조
+
+캔버스에 색행렬 필터를 씌우는 흔한 방법은 **색각이상을 시뮬레이션**하는 것이라 정작 당사자에게는
+아무 정보도 주지 않는다. 그래서 여기서는 팔레트 자체를 그 유형이 구분할 수 있는 축으로 다시 고른다
+(`client/src/theme/cvd.ts`). 엔진의 모든 색이 `theme/color.ts` → `game/palette.ts` 한 줄기를 지나므로
+교체 지점이 하나다.
+
+값은 Viénot–Brettel–Mollon(1999) 이색형 시뮬레이션 + CIELAB ΔE로 탐색해서 뽑았다. 플레이어 8색 중
+가장 가까운 두 색의 시뮬레이션 ΔE:
+
+| 유형 | 기존 | 교체 후 |
+|---|---|---|
+| 적색약 | 2.5 | 17.8 |
+| 녹색약 | 3.2 | 17.1 |
+| 청황색약 | 2.7 | 22.3 |
+
+ΔE 2~3은 사실상 같은 색, 10 이상이면 "명확히 다른 색"이다. 즉 기존 파스텔 8색은 이 세 유형에게
+전부 같은 색으로 보인다. 제약조건은 큰 면적(바닥·벽·수풀·연막·자기장)과 ΔE ≥ 12, 얇은 선과 ΔE ≥ 7,
+정상 색각에서도 서로 ΔE ≥ 13(같은 화면을 보는 다른 사람 기준).
+
+술래/자기장의 빨강과 유체화의 파랑은 안 건드린다 — 위험 신호의 관습이고 모양(링·깃발·사선 해칭)으로
+이미 뒷받침된다. 대신 그 빨강과 충돌하는 수풀 초록·광란 주황을 Lab 색상환에서 회전시켜 떼어놓는다
+(녹색약에서 수풀[1] vs 빨강[1]이 ΔE 2.1로 구분 불가였다).
+
+HUD 명단의 색 점도 같은 팔레트를 쓴다(`hudTheme.userColors(index, mode)`) — 명단 색과 본체 색이
+어긋나면 "몇 번이 누구인지"라는 그 UI의 존재 이유가 사라진다.
+
+---
+
+## 8. 정리: 엔진 공개 API
+
+```ts
+const engine = new SwitchEngine(container, { theme, mode, settings });
 
 engine.applySnapshot(buffer);                    // 서버 바이너리 (유일한 상태 입력구)
 engine.setDisplayOptions({ showNumber, showNickname });
+engine.setSettings({ quality, motion, colorVision, ... });   // 유저 설정 (부분 갱신)
 engine.setTheme(theme);
 
 engine.camera.follow(id) / .free() / .setZoom(n) / .fitMap();

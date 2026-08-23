@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { TilePhysics, type FloorVariant, type MapView, type RegionInfo, type StormRect, type Theme } from '../types.ts';
-import { CONCEAL, FLOOR, GRASS, SCALE, SMOKE, STORM, TILE_SIZE, WALL, WORLD_MARGIN_TILES } from '../constants.ts';
+import { CONCEAL, FLOOR, GRASS, MOTION_PRESETS, QUALITY_PRESETS, SCALE, SMOKE, STORM, TILE_SIZE, WALL, WORLD_MARGIN_TILES, type RenderOptions } from '../constants.ts';
 import { Palette } from '../palette.ts';
 import { traceQuadraticCurve } from './shapes.ts';
 import { buildRegions, collectTiles } from './regions.ts';
@@ -61,6 +61,13 @@ export class MapLayer {
     private concealDirty = false;
 
     private frameCounter = 0;
+    /** 유저 설정에서 내려온 렌더 옵션. 매 프레임 읽히므로 참조만 갈아끼운다. */
+    private options: RenderOptions = {
+        motion: MOTION_PRESETS.standard,
+        quality: QUALITY_PRESETS.high,
+        reduceFlash: false,
+        display: { showNumber: true, showNickname: false },
+    };
 
     private readonly staticGfx: Phaser.GameObjects.Graphics;
     private readonly stormFillGfx: Phaser.GameObjects.Graphics;
@@ -143,6 +150,19 @@ export class MapLayer {
         this.redrawStatic();
     }
 
+    /**
+     * 품질/모션/섬광 설정 반영. 여기서는 참조만 바꾼다 — 이 값들이 영향을 주는 건 전부 매 프레임
+     * 다시 그려지는 레이어(수풀·연막·자기장)라서 따로 무효화할 게 없다.
+     */
+    setRenderOptions(options: RenderOptions): void {
+        this.options = options;
+    }
+
+    /** 색각 보조 모드가 바뀌어 팔레트 값 자체가 달라졌을 때. 한 번 구워둔 정적 레이어를 다시 그린다. */
+    refreshColors(): void {
+        this.redrawStatic();
+    }
+
     setFloorVariant(variant: FloorVariant): void {
         this.floorVariant = variant;
         this.redrawStatic();
@@ -219,7 +239,7 @@ export class MapLayer {
      */
     update(t: number, view: ViewBounds): void {
         this.frameCounter++;
-        if (this.frameCounter % 3 === 0 || this.concealDirty) {
+        if (this.frameCounter % this.options.quality.ambientFrameSkip === 0 || this.concealDirty) {
             this.concealDirty = false;
             this.redrawGrass(view);
             this.redrawSmoke(view);
@@ -338,7 +358,7 @@ export class MapLayer {
                 // was the single biggest per-frame cost in the engine.
                 g.fillStyle(Palette.red[2], 0.1);
                 g.fillRect(bx, by, bw, bh);
-                const clip = intersectRect(bx, by, bw, bh, view);
+                const clip = this.options.quality.stormHatch ? intersectRect(bx, by, bw, bh, view) : null;
                 if (clip) drawDiagonalHatch(g, clip[0], clip[1], clip[2], clip[3], driftY);
             }
         }
@@ -349,7 +369,8 @@ export class MapLayer {
         g.clear();
         if (!this.stormRect) return;
         const dark = this.theme === 1;
-        const alpha = 0.75 + Math.sin(t * STORM.pulseSpeed) * 0.25;
+        // 섬광 줄이기: 맥동을 없애고 평균 밝기로 고정한다. 테두리 자체는 그대로라 정보 손실은 없다.
+        const alpha = this.options.reduceFlash ? 0.85 : 0.75 + Math.sin(t * STORM.pulseSpeed) * 0.25;
         g.lineStyle(dark ? STORM.strokeWidthDark : STORM.strokeWidthLight, Palette.red[2], alpha);
         g.strokeRect(this.stormRect.x, this.stormRect.y, this.stormRect.width, this.stormRect.height);
     }
@@ -392,11 +413,13 @@ export class MapLayer {
                 g.fillPath();
             }
 
+            const blades = this.options.quality.grassBlades;
+            if (blades <= 0) continue;
             g.lineStyle(GRASS.lineWidth, Palette.grass[2], (dark ? 0.95 : 0.85) * tileAlpha);
             g.beginPath();
             for (const [cx, cy] of tiles) {
                 const x = cx * TILE_SIZE, y = cy * TILE_SIZE;
-                for (let i = 0; i < GRASS.blades; i++) {
+                for (let i = 0; i < blades; i++) {
                     const bx = x + GRASS.bladeOffsetX + i * GRASS.bladeStepX + (i % 2 ? GRASS.bladeAltOffsetX : 0);
                     const by = y + TILE_SIZE - GRASS.bladeBottomOffset - (i % 3) * GRASS.bladeBottomStep;
                     traceQuadraticCurve(g, bx, by, bx, by - GRASS.bladeControlY, bx, by - GRASS.bladeHeight);
@@ -478,12 +501,15 @@ export class MapLayer {
                     g.fillPath();
                 }
 
-                g.fillStyle(dark ? Palette.smoke[1] : Palette.smoke[2], (dark ? 0.5 : 0.35) * alpha);
-                for (const [cx, cy] of tiles) {
-                    const x0 = cx * TILE_SIZE, y0 = cy * TILE_SIZE;
-                    for (let dy = SMOKE.dotSpacing / 2; dy < TILE_SIZE; dy += SMOKE.dotSpacing) {
-                        for (let dx = SMOKE.dotSpacing / 2; dx < TILE_SIZE; dx += SMOKE.dotSpacing) {
-                            g.fillCircle(x0 + dx, y0 + dy, SMOKE.dotRadius);
+                const dotSpacing = SMOKE.dotSpacing * this.options.quality.smokeDotScale;
+                if (dotSpacing > 0) {
+                    g.fillStyle(dark ? Palette.smoke[1] : Palette.smoke[2], (dark ? 0.5 : 0.35) * alpha);
+                    for (const [cx, cy] of tiles) {
+                        const x0 = cx * TILE_SIZE, y0 = cy * TILE_SIZE;
+                        for (let dy = dotSpacing / 2; dy < TILE_SIZE; dy += dotSpacing) {
+                            for (let dx = dotSpacing / 2; dx < TILE_SIZE; dx += dotSpacing) {
+                                g.fillCircle(x0 + dx, y0 + dy, SMOKE.dotRadius);
+                            }
                         }
                     }
                 }

@@ -3,8 +3,8 @@ import { Color } from "../../theme/color.ts";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 
 interface RoundButtonProps {
-    x: number;
-    y: number;
+    x?: number;
+    y?: number;
     width: number;
     height: number;
     type: 0 | 1 | 2;
@@ -13,6 +13,7 @@ interface RoundButtonProps {
     disabled?: boolean;
     isLoading?: boolean;
     style?: React.CSSProperties;
+    ariaLabel?: string;
 }
 
 export const RoundButton = React.memo<RoundButtonProps>(({
@@ -25,15 +26,17 @@ export const RoundButton = React.memo<RoundButtonProps>(({
                                                              onClick,
                                                              disabled = false,
                                                              isLoading = false,
-                                                             style
+                                                             style,
+                                                             ariaLabel
                                                          }) => {
-    const { theme, textSizeRatio } = useSettingsStore();
+    const theme = useSettingsStore((state) => state.theme);
     const [isHovered, setIsHovered] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
     const [calculatedSize, setCalculatedSize] = useState(0);
     const measureRef = useRef<HTMLSpanElement>(null);
 
     const isActive = (isHovered || isFocused) && !disabled;
+    const focusColor = theme === 0 ? '#185889' : Color.blue[0];
 
     const transformValue = isActive ? 'translate(-50%, -50%) scale(1.05)' : 'translate(-50%, -50%)';
 
@@ -59,8 +62,9 @@ export const RoundButton = React.memo<RoundButtonProps>(({
         const scaleX = innerWidth / currentWidth;
         const scaleY = innerHeight / currentHeight;
 
-        setCalculatedSize(100 * Math.min(scaleX, scaleY) * textSizeRatio);
-    }, [content, width, height, textSizeRatio]);
+        const fittedSize = 100 * Math.min(scaleX, scaleY);
+        setCalculatedSize(Math.min(fittedSize, height * 0.48));
+    }, [content, width, height]);
 
     useLayoutEffect(() => {
         calculateSize();
@@ -78,32 +82,33 @@ export const RoundButton = React.memo<RoundButtonProps>(({
         if (typeof content === 'string') return 0;
         const innerWidth = width - 30;
         const innerHeight = height - 30;
-        return Math.min(innerWidth, innerHeight) * 0.8 * textSizeRatio;
-    }, [width, height, content, textSizeRatio]);
+        return Math.min(innerWidth, innerHeight) * 0.68;
+    }, [width, height, content]);
 
     const buttonStyle: React.CSSProperties = useMemo(() => ({
-        position: 'absolute',
-        left: `${x}px`,
-        top: `${y}px`,
+        position: x !== undefined && y !== undefined ? 'absolute' : 'relative',
+        left: x !== undefined ? `${x}px` : undefined,
+        top: y !== undefined ? `${y}px` : undefined,
         width: `${width}px`,
         height: `${height}px`,
         backgroundColor: currentBg,
-        border: `10px solid ${currentStroke}`,
+        border: `7px solid ${currentStroke}`,
         borderRadius: "25px",
         boxSizing: "border-box",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         cursor: disabled ? 'not-allowed' : (isLoading ? 'wait' : 'pointer'),
-        opacity: (disabled || isLoading) ? 0.5 : 1,
+        opacity: (disabled || isLoading) ? 0.65 : 1,
+        outline: isFocused ? `5px solid ${focusColor}` : '5px solid transparent',
+        outlineOffset: isFocused ? '5px' : '0',
         transition: 'all 0.2s ease-out',
         userSelect: 'none',
-        outline: 'none',
-        transform: transformValue,
+        transform: x !== undefined && y !== undefined ? transformValue : (isActive ? 'scale(1.05)' : 'none'),
         ...style
-    }), [x, y, width, height, currentBg, currentStroke, disabled, isLoading, transformValue, style]);
+    }), [x, y, width, height, currentBg, currentStroke, focusColor, disabled, isLoading, isActive, isFocused, transformValue, style]);
 
-    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLButtonElement>) => {
         if (disabled || isLoading) return;
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -112,7 +117,7 @@ export const RoundButton = React.memo<RoundButtonProps>(({
         }
     }, [disabled, isLoading, onClick]);
 
-    const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const handleClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
         if (disabled || isLoading) return;
         e.stopPropagation();
         e.currentTarget.blur();
@@ -120,7 +125,11 @@ export const RoundButton = React.memo<RoundButtonProps>(({
     }, [disabled, isLoading, onClick]);
 
     return (
-        <div
+        <button
+            type="button"
+            disabled={disabled || isLoading}
+            aria-busy={isLoading || undefined}
+            aria-label={ariaLabel ?? (typeof content === 'string' ? content : undefined)}
             style={buttonStyle}
             onMouseEnter={() => !disabled && setIsHovered(true)}
             onMouseLeave={() => !disabled && setIsHovered(false)}
@@ -139,7 +148,8 @@ export const RoundButton = React.memo<RoundButtonProps>(({
                             visibility: 'hidden',
                             fontSize: '100px',
                             whiteSpace: 'nowrap',
-                            lineHeight: 1
+                            lineHeight: 1,
+                            fontFamily: 'var(--font-display)',
                         }}
                     >
                         {content}
@@ -157,6 +167,7 @@ export const RoundButton = React.memo<RoundButtonProps>(({
                                 dominantBaseline="central"
                                 fill={currentTextColor}
                                 fontSize={`${calculatedSize}px`}
+                                fontFamily="var(--font-display)"
                                 style={{ transition: 'fill 0.2s ease-out' }}
                             >
                                 {content}
@@ -174,6 +185,6 @@ export const RoundButton = React.memo<RoundButtonProps>(({
                     }
                 })
             )}
-        </div>
+        </button>
     );
 });

@@ -2,11 +2,10 @@ import Phaser from 'phaser';
 import { EffectType, type EffectState, type Theme } from '../types.ts';
 import { Palette } from '../palette.ts';
 import { Color } from '../../theme/color.ts';
-import { BAR, CONCEAL, DASH_FX, EFFECT_BAR_ORDER, EMOJI, EXHAUST_FX, FRENZY_FX, PLAYER, TAGGER } from '../constants.ts';
+import { BAR, CONCEAL, DASH_FX, EFFECT_BAR_ORDER, EMOJI, EXHAUST_FX, FRENZY_FX, PLAYER, TAGGER, type RenderOptions } from '../constants.ts';
 import { fillRoundedRect, strokeRoundedRect } from './shapes.ts';
 import { strokeDashedCircle } from './dashed.ts';
 import { emojiTextureKey } from '../emoji.ts';
-import type { DisplayOptions } from '../types.ts';
 
 /** Render depths (higher draws on top). Kept together so the whole stack order is visible at a glance. */
 export const DEPTH = {
@@ -103,8 +102,9 @@ export class PlayerSprite {
      * Visibility is purely viewport culling here. Whether this player should be seen at all is the
      * caller's decision, expressed by sending them or not; `obscured` only picks solid vs. dimmed.
      */
-    update(t: number, theme: Theme, onScreen: boolean, display: DisplayOptions): void {
+    update(now: number, t: number, theme: Theme, onScreen: boolean, opts: RenderOptions): void {
         this.currentTheme = theme;
+        const display = opts.display;
         const s = this.state;
         const alpha = s.obscured ? CONCEAL.playerAlpha : 1;
         this.body.setPosition(s.x, s.y).setVisible(onScreen).setAlpha(alpha);
@@ -119,17 +119,17 @@ export class PlayerSprite {
         this.nameplate.setPosition(s.x, s.y - stack - PLAYER.nameplateGap).setVisible(showName).setAlpha(alpha);
         if (showName) stack += PLAYER.nameplateGap + PLAYER.nameplateFontPx;
 
-        this.updateEmoji(t, onScreen, stack);
+        this.updateEmoji(now, onScreen, stack, opts);
 
         if (!onScreen) return;
 
-        drawBody(this.body, s, theme, t);
+        drawBody(this.body, s, theme, t, opts);
         if (display.showNumber) this.label.setText(s.label);
         if (showName) {
             this.nameplate.setText(s.nickname);
             this.nameplate.setColor(theme === 1 ? Color.white : Color.black);
         }
-        drawBars(this.bars, s, theme, t);
+        drawBars(this.bars, s, theme, t, opts);
     }
 
     /**
@@ -137,13 +137,14 @@ export class PlayerSprite {
      * hold, overshoot out. The engine owns the timer — an emoji changes nothing about the game, so it
      * expires locally rather than costing a server tick, same as the blink trail.
      */
-    private updateEmoji(t: number, onScreen: boolean, stackHeight: number): void {
+    private updateEmoji(now: number, onScreen: boolean, stackHeight: number, opts: RenderOptions): void {
         const e = this.state.emoji;
         if (!e) {
             this.emoji.setVisible(false);
             return;
         }
-        const elapsed = t - e.bornAt;
+        // 수명은 실제 시계(now)로 잰다. 모션을 줄여 애니메이션 시계가 멈춰 있어도 이모지는 제때 사라져야 한다.
+        const elapsed = now - e.bornAt;
         if (elapsed >= EMOJI.lifeSec) {
             this.state.emoji = null;
             this.emoji.setVisible(false);
@@ -156,7 +157,10 @@ export class PlayerSprite {
 
         const countdown = 60 * (1 - elapsed / EMOJI.lifeSec);
         let size: number;
-        if (countdown < 20) size = -0.4 * (countdown - 15) ** 2 + 90;
+        if (!opts.motion.emojiPop) {
+            // 모션 줄임: 오버슈트 곡선 없이 고정 크기. 떴다 사라지는 사실 자체는 그대로 남는다.
+            size = 80;
+        } else if (countdown < 20) size = -0.4 * (countdown - 15) ** 2 + 90;
         else if (countdown > 40) size = -0.4 * (countdown - 45) ** 2 + 90;
         else size = 80;
         if (size <= 0) {
@@ -199,7 +203,7 @@ function barStackHeight(s: PlayerVisualState): number {
     return height;
 }
 
-function drawBody(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: Theme, t: number): void {
+function drawBody(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: Theme, t: number, opts: RenderOptions): void {
     g.clear();
     const [fill, stroke] = Palette.user[s.colorIndex] ?? Palette.user[0]!;
     const x = 0, y = 0;
@@ -208,7 +212,7 @@ function drawBody(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: T
     if (s.effects[EffectType.Dash]) {
         const m = Math.hypot(s.facingX, s.facingY) || 1;
         const ang = Math.atan2(-s.facingY / m, -s.facingX / m);
-        for (let i = 0; i < DASH_FX.rings; i++) {
+        for (let i = 0; i < opts.quality.dashRings; i++) {
             g.lineStyle(DASH_FX.lineWidthBase - i * DASH_FX.lineWidthStep, Palette.blue[2], 0.55 - i * 0.15);
             const rad = r + DASH_FX.baseOffset + i * DASH_FX.ringStep + Math.sin(t * 7 - i) * DASH_FX.pulseAmplitude;
             g.beginPath();
@@ -217,7 +221,7 @@ function drawBody(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: T
         }
     }
     if (s.effects[EffectType.Exhaust]) {
-        for (let i = 0; i < EXHAUST_FX.drops; i++) {
+        for (let i = 0; i < opts.quality.exhaustDrops; i++) {
             const tt = (t * 0.9 + i * 0.5) % 1;
             g.fillStyle(Palette.gray[2], (1 - tt) * 0.8);
             g.fillCircle(x - EXHAUST_FX.spacingX / 2 + i * EXHAUST_FX.spacingX, y + r + EXHAUST_FX.riseY + tt * EXHAUST_FX.fallY, EXHAUST_FX.dropRadius * (1 - tt));
@@ -236,14 +240,15 @@ function drawBody(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: T
         // the tagger visually reads as a bigger circle than everyone else.
         g.lineStyle(TAGGER.ringWidth, Palette.red[2], 1);
         g.strokeCircle(x, y, r - TAGGER.ringWidth / 2);
-        const ph = (t * 1.5) % 1;
+        // 섬광 줄이기: 안쪽으로 수축하는 맥동 링을 고정 링으로 바꾼다(술래 표시 자체는 유지).
+        const ph = opts.reduceFlash ? 0.5 : (t * 1.5) % 1;
         g.lineStyle(TAGGER.pulseLineWidth, Palette.red[2], (1 - ph) * 0.7);
         g.strokeCircle(x, y, Math.max(0, r - TAGGER.pulseInset - ph * TAGGER.pulseRange));
     }
 
     if (s.effects[EffectType.Frenzy]) {
         g.lineStyle(FRENZY_FX.lineWidth, Palette.frenzy[2], 1);
-        const n = FRENZY_FX.teeth, rot = t * FRENZY_FX.rotSpeed;
+        const n = opts.quality.frenzyTeeth, rot = t * FRENZY_FX.rotSpeed;
         g.beginPath();
         for (let i = 0; i <= n; i++) {
             const a = rot + (i / n) * Math.PI * 2;
@@ -262,11 +267,16 @@ function drawBody(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: T
 
     if (s.isSelf) {
         g.lineStyle(PLAYER.selectionRingLineWidth, theme === 1 ? Palette.white : Palette.black, theme === 1 ? 0.6 : 0.4);
-        strokeDashedCircle(g, x, y, r + PLAYER.selectionRingOffset, PLAYER.selectionRingDash[0], PLAYER.selectionRingDash[1], -t * 12);
+        // 낮은 품질에서는 점선 대신 실선 — 세그먼트 수가 확 줄고, "내 캐릭터"라는 정보는 그대로다.
+        if (opts.quality.dashedLines) {
+            strokeDashedCircle(g, x, y, r + PLAYER.selectionRingOffset, PLAYER.selectionRingDash[0], PLAYER.selectionRingDash[1], -t * 12);
+        } else {
+            g.strokeCircle(x, y, r + PLAYER.selectionRingOffset);
+        }
     }
 }
 
-function drawBars(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: Theme, t: number): void {
+function drawBars(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: Theme, t: number, opts: RenderOptions): void {
     g.clear();
     const active = EFFECT_BAR_ORDER.filter((k) => s.effects[k]);
     if (active.length === 0 && !s.isTagger) return;
@@ -295,7 +305,7 @@ function drawBars(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: T
     }
 
     if (s.isTagger) {
-        const bob = Math.sin(t * TAGGER.flagBobSpeed) * TAGGER.flagBob;
+        const bob = Math.sin(t * TAGGER.flagBobSpeed) * TAGGER.flagBob * (opts.motion.animSpeed > 0 ? 1 : 0);
         const ty = by - TAGGER.flagBaseOffsetY + bob;
         g.fillStyle(Palette.red[2], 1);
         g.beginPath();

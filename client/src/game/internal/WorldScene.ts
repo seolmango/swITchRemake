@@ -2,15 +2,16 @@ import Phaser from 'phaser';
 import { MapLayer } from './MapLayer.ts';
 import { PlayerSprite, type PlayerVisualState } from './PlayerSprite.ts';
 import { BlinkFxLayer } from './BlinkFxLayer.ts';
-import { DEFAULT_DISPLAY_OPTIONS, EffectType, type DisplayOptions, type FloorVariant, type MapView, type PlayerInit, type StormRect, type Theme, type TilePhysics } from '../types.ts';
-import { Palette } from '../palette.ts';
-import { CAMERA, CAMERA_FX, CULL_MARGIN } from '../constants.ts';
+import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EffectType, type DisplayOptions, type EngineSettings, type FloorVariant, type MapView, type PlayerInit, type StormRect, type Theme, type TilePhysics } from '../types.ts';
+import { applyColorVision, Palette } from '../palette.ts';
+import { CAMERA, CAMERA_FX, CULL_MARGIN, MOTION_PRESETS, QUALITY_PRESETS, type RenderOptions } from '../constants.ts';
 import { EMOJI_COUNT, emojiDataUri, emojiTextureKey } from '../emoji.ts';
 import { Color } from '../../theme/color.ts';
 import { EFFECT_BITS, EventType, type Snapshot } from '../protocol/types.ts';
 
 export interface WorldSceneInit {
     theme: Theme;
+    settings: EngineSettings;
     onReady: (scene: WorldScene) => void;
 }
 
@@ -22,8 +23,27 @@ const EMOJI_TEXTURE_PX = 256;
  * `SwitchEngine`/`MapController`/`PlayerHandle`, which is the whole point of the facade split.
  */
 export class WorldScene extends Phaser.Scene {
+    /** 실제 경과 시간. 수명(이모지, 점멸 궤적)은 무조건 이걸 쓴다. */
     private clock = 0;
+    /**
+     * 장식용 애니메이션 시계 — clock과 달리 모션 설정의 animSpeed가 곱해진 dt로 흐른다.
+     * 둘을 나눈 이유: "모션 줄임"에서 시계를 통째로 멈추면 진동은 멎지만 이모지와 점멸 궤적이
+     * 화면에 영구히 박혀버린다. 진동만 멈추고 수명은 흐르게 하려면 시계가 두 개여야 한다.
+     */
+    private animClock = 0;
     private theme: Theme = 0;
+    private settings: EngineSettings = { ...DEFAULT_ENGINE_SETTINGS };
+    private renderOptions: RenderOptions = {
+        motion: MOTION_PRESETS[DEFAULT_ENGINE_SETTINGS.motion],
+        quality: QUALITY_PRESETS[DEFAULT_ENGINE_SETTINGS.quality],
+        reduceFlash: DEFAULT_ENGINE_SETTINGS.reduceFlash,
+        display: { ...DEFAULT_DISPLAY_OPTIONS },
+    };
+    /**
+     * 내부 렌더 해상도 배율. 카메라 줌에 곱해져 "게임 픽셀 / 월드 유닛"이 된다 — baseZoom은
+     * CSS 픽셀 기준의 논리 줌으로 남으므로, 해상도를 바꿔도 보이는 월드 범위는 그대로다.
+     */
+    private renderScale = 1;
     private onReadyCb: ((scene: WorldScene) => void) | null = null;
 
     private mapLayer!: MapLayer;
@@ -56,6 +76,10 @@ export class WorldScene extends Phaser.Scene {
     init(data: WorldSceneInit): void {
         this.theme = data.theme;
         this.onReadyCb = data.onReady;
+        this.settings = { ...data.settings };
+        this.renderScale = data.settings.resolutionScale;
+        this.rebuildRenderOptions();
+        applyColorVision(data.settings.colorVision);
     }
 
     preload(): void {
@@ -75,6 +99,7 @@ export class WorldScene extends Phaser.Scene {
         this.cameras.main.setBackgroundColor(this.theme === 1 ? Palette.black : Palette.white);
         this.baseZoom = this.cameras.main.zoom;
         this.mapLayer = new MapLayer(this, this.theme);
+        this.mapLayer.setRenderOptions(this.renderOptions);
         this.blinkFx = new BlinkFxLayer(this);
         this.setupCameraInput();
         this.onReadyCb?.(this);
@@ -83,18 +108,19 @@ export class WorldScene extends Phaser.Scene {
     update(_time: number, delta: number): void {
         const dt = Math.min(delta, 50) / 1000;
         this.clock += dt;
+        this.animClock += dt * this.renderOptions.motion.animSpeed;
 
         const view = this.cameras.main.worldView;
         const minX = view.x - CULL_MARGIN, maxX = view.right + CULL_MARGIN;
         const minY = view.y - CULL_MARGIN, maxY = view.bottom + CULL_MARGIN;
 
-        this.mapLayer.update(this.clock, { minX, minY, maxX, maxY });
-        this.blinkFx.update(this.clock, this.theme);
+        this.mapLayer.update(this.animClock, { minX, minY, maxX, maxY });
+        this.blinkFx.update(this.clock, this.animClock, this.theme, this.renderOptions);
 
         for (const sprite of this.players.values()) {
             const s = sprite.state;
             const onScreen = s.x >= minX && s.x <= maxX && s.y >= minY && s.y <= maxY;
-            sprite.update(this.clock, this.theme, onScreen, this.displayOptions);
+            sprite.update(this.clock, this.animClock, this.theme, onScreen, this.renderOptions);
         }
 
         this.updateCameraFx(dt);
@@ -109,25 +135,32 @@ export class WorldScene extends Phaser.Scene {
         const cam = this.cameras.main;
         const followed = this.followedId !== null ? this.players.get(this.followedId) : undefined;
         const s = followed?.state;
+        // 모션 강도. 0이면 아래 배율이 전부 1로 접히고 흔들림/펀치도 사라진다 — 상수마다 조건문을
+        // 다는 대신 계수 하나로 모으면 "줄임 / 보통 / 풍부하게"가 한 줄로 끝난다.
+        const fx = this.renderOptions.motion.cameraFx;
+        const mult = (m: number) => 1 + (m - 1) * fx;
+        const lerpOf = (l: number) => (this.settings.cameraSmoothing ? l : 1);
 
         let targetMult = 1;
-        let targetLerp = CAMERA.followLerp;
+        let targetLerp = lerpOf(CAMERA.followLerp);
         if (s) {
             if (s.effects[EffectType.Dash]) {
-                targetMult *= CAMERA_FX.dashZoomMult;
-                targetLerp = CAMERA_FX.dashLerp;
+                targetMult *= mult(CAMERA_FX.dashZoomMult);
+                targetLerp = lerpOf(CAMERA_FX.dashLerp);
             }
             if (s.effects[EffectType.Exhaust]) {
-                targetMult *= CAMERA_FX.exhaustZoomMult;
-                targetLerp = CAMERA_FX.exhaustLerp;
+                targetMult *= mult(CAMERA_FX.exhaustZoomMult);
+                targetLerp = lerpOf(CAMERA_FX.exhaustLerp);
             }
             if (s.effects[EffectType.Frenzy]) {
-                targetMult *= CAMERA_FX.frenzyZoomMult;
+                targetMult *= mult(CAMERA_FX.frenzyZoomMult);
                 // `force=false` (default): only actually (re)starts the shake if it isn't already
                 // running, so this re-arms itself just before each short shake ends — continuous tremor
                 // for as long as frenzy stays active, and it decays on its own within one duration of
                 // frenzy ending without us needing to track or cancel anything.
-                cam.shake(CAMERA_FX.frenzyShakeDurationMs, CAMERA_FX.frenzyShakeIntensity);
+                if (this.settings.screenShake && fx > 0) {
+                    cam.shake(CAMERA_FX.frenzyShakeDurationMs, CAMERA_FX.frenzyShakeIntensity * fx);
+                }
             }
         }
 
@@ -136,7 +169,9 @@ export class WorldScene extends Phaser.Scene {
         const punchT = 1 - Math.exp(-CAMERA_FX.blinkPunchDecay * dt);
         this.zoomPunch = Phaser.Math.Linear(this.zoomPunch, 0, punchT);
 
-        cam.zoom = Phaser.Math.Clamp(this.baseZoom * this.fxZoomMult * (1 + this.zoomPunch), CAMERA.minZoom, CAMERA.maxZoom);
+        // 클램프는 논리 줌(=CSS 픽셀 기준)에 걸고 렌더 해상도 배율은 그 뒤에 곱한다. 그래야
+        // 해상도를 올려도 최대/최소 줌이 여전히 같은 시야를 뜻한다.
+        cam.zoom = Phaser.Math.Clamp(this.baseZoom * this.fxZoomMult * (1 + this.zoomPunch), CAMERA.minZoom, CAMERA.maxZoom) * this.renderScale;
         if (!this.freeCamera) cam.setLerp(targetLerp, targetLerp);
     }
 
@@ -201,8 +236,9 @@ export class WorldScene extends Phaser.Scene {
         this.followedId = null;
         this.cameras.main.stopFollow();
         this.cameras.main.centerOn(w / 2, h / 2);
-        const zoomX = this.scale.width / (w + paddingPx * 2);
-        const zoomY = this.scale.height / (h + paddingPx * 2);
+        // scale.width는 렌더 해상도가 곱해진 게임 픽셀이라, 논리 줌을 구하려면 되나눠야 한다.
+        const zoomX = (this.scale.width / this.renderScale) / (w + paddingPx * 2);
+        const zoomY = (this.scale.height / this.renderScale) / (h + paddingPx * 2);
         this.baseZoom = Phaser.Math.Clamp(Math.min(zoomX, zoomY), CAMERA.minZoom, CAMERA.maxZoom);
     }
 
@@ -220,6 +256,37 @@ export class WorldScene extends Phaser.Scene {
         this.theme = theme;
         this.cameras.main.setBackgroundColor(theme === 1 ? Palette.black : Palette.white);
         this.mapLayer.setTheme(theme);
+    }
+
+    // ---- 유저 설정 ----
+
+    /**
+     * 프레임 상한과 캔버스 해상도는 Phaser.Game 레벨 값이라 SwitchEngine이 직접 처리하고, 씬은
+     * 그리기에 영향을 주는 나머지만 받는다(해상도는 줌 보정 때문에 값만 알고 있으면 된다).
+     */
+    setSettings(settings: EngineSettings): void {
+        const prevColorVision = this.settings.colorVision;
+        this.settings = { ...settings };
+        this.renderScale = settings.resolutionScale;
+        this.rebuildRenderOptions();
+        this.mapLayer.setRenderOptions(this.renderOptions);
+        if (settings.colorVision !== prevColorVision && applyColorVision(settings.colorVision)) {
+            // 플레이어/수풀/연막은 매 프레임 다시 그려지지만 바닥과 벽은 한 번 구워두므로 직접 무효화한다.
+            this.mapLayer.refreshColors();
+        }
+    }
+
+    getSettings(): EngineSettings {
+        return { ...this.settings };
+    }
+
+    private rebuildRenderOptions(): void {
+        this.renderOptions = {
+            motion: MOTION_PRESETS[this.settings.motion],
+            quality: QUALITY_PRESETS[this.settings.quality],
+            reduceFlash: this.settings.reduceFlash,
+            display: { ...this.displayOptions },
+        };
     }
 
     // ---- map ----
@@ -398,6 +465,8 @@ export class WorldScene extends Phaser.Scene {
 
     setDisplayOptions(options: Partial<DisplayOptions>): void {
         this.displayOptions = { ...this.displayOptions, ...options };
+        this.rebuildRenderOptions();
+        this.mapLayer.setRenderOptions(this.renderOptions);
     }
 
     getDisplayOptions(): DisplayOptions {
@@ -414,8 +483,11 @@ export class WorldScene extends Phaser.Scene {
         this.blinkFx.play(x0, y0, x1, y1, colorIndex, this.clock);
 
         if (id === this.followedId) {
-            this.zoomPunch = CAMERA_FX.blinkZoomPunch;
-            this.cameras.main.flash(CAMERA_FX.blinkFlashDurationMs, 255, 255, 255);
+            this.zoomPunch = CAMERA_FX.blinkZoomPunch * this.renderOptions.motion.cameraFx;
+            // 이 엔진에서 가장 강한 섬광이 점멸 순간의 흰 플래시라, '섬광 효과 줄이기'의 1순위 대상.
+            if (!this.settings.reduceFlash && this.renderOptions.motion.cameraFx > 0) {
+                this.cameras.main.flash(CAMERA_FX.blinkFlashDurationMs, 255, 255, 255);
+            }
         }
     }
 }

@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@fastify/cookie": "^11.0.2",
     "i18next": "^26.3.0",
     "phaser": "^3.90.0",
     "react": "^19.2.6",

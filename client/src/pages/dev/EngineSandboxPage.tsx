@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { DEFAULT_DISPLAY_OPTIONS, EMOJI_COUNT, EMPTY_HUD, EffectType, EngineMode, SwitchEngine, SwitchGame, TilePhysics, type DisplayOptions, type HudState } from '../../game';
+import { EMOJI_COUNT, EMPTY_HUD, EffectType, EngineMode, SwitchEngine, SwitchGame, TilePhysics, type HudState } from '../../game';
 import iconDash from '../../assets/images/skill_dash.webp';
 import iconFlash from '../../assets/images/skill_flash.webp';
 import iconExhaust from '../../assets/images/skill_exhaust.webp';
@@ -130,7 +130,11 @@ export const EngineSandboxPage: React.FC = () => {
     // frozen so the map stays in a clean, inspectable state until someone explicitly presses 진행.
     const [stormRunning, setStormRunning] = useState(false);
     const [activeEffects, setActiveEffects] = useState<Set<EffectType>>(new Set());
-    const [display, setDisplay] = useState<DisplayOptions>({ ...DEFAULT_DISPLAY_OPTIONS });
+    // 표시 토글은 설정 스토어를 직접 건드린다. GameCanvas가 스토어를 엔진에 밀어넣으므로, 로컬
+    // state를 따로 두면 다음 설정 변경 때 덮여서 버튼 상태와 화면이 어긋난다.
+    const showNumber = useSettingsStore((s) => s.showPlayerNumber);
+    const showNickname = useSettingsStore((s) => s.showNickname);
+    const setGameSetting = useSettingsStore((s) => s.setGameSetting);
     const [hud, setHud] = useState<HudState>(EMPTY_HUD);
     const [equippedSkill, setEquippedSkill] = useState(MOVEMENT_SKILLS[0]!.id);
     const [engineMode, setEngineMode] = useState<EngineMode>(EngineMode.Play);
@@ -652,12 +656,7 @@ export const EngineSandboxPage: React.FC = () => {
         }
     };
 
-    const toggleDisplay = (key: 'showNumber' | 'showNickname') => {
-        if (!engine) return;
-        const next = { ...display, [key]: !display[key] };
-        setDisplay(next);
-        engine.setDisplayOptions(next);
-    };
+
 
     return (
         <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: theme === 1 ? '#232526' : '#FAFAF8' }}>
@@ -723,8 +722,8 @@ export const EngineSandboxPage: React.FC = () => {
                     ))}
                 </Group>
                 <Group label="표시">
-                    <Btn on={display.showNumber} onClick={() => toggleDisplay('showNumber')}>번호</Btn>
-                    <Btn on={display.showNickname} onClick={() => toggleDisplay('showNickname')}>닉네임</Btn>
+                    <Btn on={showNumber} onClick={() => setGameSetting('showPlayerNumber', !showNumber)}>번호</Btn>
+                    <Btn on={showNickname} onClick={() => setGameSetting('showNickname', !showNickname)}>닉네임</Btn>
                 </Group>
                 <Group label="카메라">
                     <Btn on={cameraMode === 'free'} onClick={setFree}>자유시점</Btn>
