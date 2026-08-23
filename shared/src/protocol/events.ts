@@ -100,7 +100,11 @@ export type LobbyStartMessage = ClientEnvelope<'lobby.start', Record<string, nev
 export type LobbyLeaveMessage = ClientEnvelope<'lobby.leave', Record<string, never>>;
 export type LobbySetLoadoutMessage = ClientEnvelope<'lobby.setLoadout', { skills: string[] }>;
 export type LobbySpectateMessage = ClientEnvelope<'lobby.spectate', { spectate: boolean }>;
-export type GameUseSkillMessage = ClientEnvelope<'game.useSkill', { slot: number }>;
+/**
+ * 슬롯 1은 스위치(러너 전용), 슬롯 2는 경기 전에 고른 스킬이다.
+ * `targetPlayerId`는 스위치에만 쓴다 — 지목 대상은 맵 어디에 있어도 되므로 서버가 좌표로 추론할 수 없다.
+ */
+export type GameUseSkillMessage = ClientEnvelope<'game.useSkill', { slot: number; targetPlayerId?: number }>;
 export type GameEmojiMessage = ClientEnvelope<'game.emoji', { emojiId: number }>;
 export type PingMessage = ClientEnvelope<'ping', { clientTime: number }>;
 

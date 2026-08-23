@@ -26,6 +26,16 @@ const exactKeys = (value: Record<string, unknown>, keys: readonly string[]): boo
     const actual = Object.keys(value);
     return actual.length === keys.length && actual.every((key) => keys.includes(key));
 };
+/** 필수 키가 전부 있고, 나머지 키가 허용 목록 안에만 있는가. */
+const optionalKeys = (
+    value: Record<string, unknown>,
+    required: readonly string[],
+    optional: readonly string[],
+): boolean => {
+    const actual = Object.keys(value);
+    return required.every((key) => actual.includes(key))
+        && actual.every((key) => required.includes(key) || optional.includes(key));
+};
 
 function validPayload(type: string, payload: unknown): boolean {
     if (!object(payload)) return false;
@@ -38,7 +48,11 @@ function validPayload(type: string, payload: unknown): boolean {
         case 'lobby.leave': return empty(payload);
         case 'lobby.setLoadout': return exactKeys(payload, ['skills']) && Array.isArray(payload['skills']) && payload['skills'].every(string);
         case 'lobby.spectate': return exactKeys(payload, ['spectate']) && typeof payload['spectate'] === 'boolean';
-        case 'game.useSkill': return exactKeys(payload, ['slot']) && integer(payload['slot']);
+        case 'game.useSkill':
+            // targetPlayerId는 스위치에만 필요해 선택 필드다.
+            return optionalKeys(payload, ['slot'], ['targetPlayerId'])
+                && integer(payload['slot'])
+                && (payload['targetPlayerId'] === undefined || integer(payload['targetPlayerId']));
         case 'game.emoji': return exactKeys(payload, ['emojiId']) && integer(payload['emojiId']);
         case 'ping': return exactKeys(payload, ['clientTime']) && typeof payload['clientTime'] === 'number' && Number.isFinite(payload['clientTime']);
         default: return false;

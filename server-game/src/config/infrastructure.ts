@@ -61,6 +61,12 @@ export const INFRA = Object.freeze({
     /** 경기 결과와 리플레이에 기록된다. 배포 파이프라인이 주입한다. */
     BUILD_ID: optional('BUILD_ID', 'dev'),
 
+    /**
+     * MapBuilder가 만든 서버용 맵 번들. build artifact로 함께 배포한다.
+     * 런타임에 CSV를 다시 읽지 않는다.
+     */
+    MAP_BUNDLE_PATH: optional('GAME_MAP_BUNDLE', './maps/server_maps.json'),
+
     /** 리플레이 blob 저장 위치. 초기에는 로컬 파일 시스템으로 충분하다. */
     REPLAY_STORE: optional('REPLAY_STORE', 'local') as 'local' | 's3',
     REPLAY_LOCAL_DIR: optional('REPLAY_LOCAL_DIR', './replays'),

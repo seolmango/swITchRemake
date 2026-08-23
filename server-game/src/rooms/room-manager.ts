@@ -45,6 +45,8 @@ export interface RoomManagerOptions {
     readonly violationSink: (signal: ViolationSignal) => void;
     /** resume 인증 직후 full snapshot을 보낼 외부 publisher 경계. */
     readonly onResume?: (connection: Connection, access: SnapshotAccess) => void;
+    /** game.useSkill을 시뮬레이션으로 넘기는 경계. 성공 여부는 tick 경계에서 정해진다. */
+    readonly skillSink?: (roomId: string, request: { playerId: number; slot: number; targetPlayerId?: number }) => boolean;
     readonly now?: () => number;
     readonly timing?: Partial<RoomTiming>;
     readonly maxRooms?: number;
@@ -253,9 +255,23 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 const member = room.memberByUser(connection.userId);
                 if (member?.role === PlayerRole.Spectator) {
                     this.#signal(connection, room, ViolationKind.SpectatorInput, 'medium', { kind: 'skill' });
+                    error = ErrorCode.BadState;
+                    break;
                 }
-                // simulation의 skill 요청 계약이 생기기 전까지 rooms가 성공을 판정하지 않는다.
-                error = ErrorCode.BadState;
+                if (room.state !== RoomState.Playing || member === null || !member.inCurrentGame) {
+                    error = ErrorCode.BadState;
+                    break;
+                }
+                // 성공 여부(쿨타임, 사거리)는 rooms가 판정하지 않는다. 요청만 넘기고
+                // tick 경계에서 시뮬레이션이 정한다. 실제 시각 순서로 판정하면 결정론이 깨진다.
+                const queued = this.#options.skillSink?.(room.id, {
+                    playerId: member.playerId,
+                    slot: message.payload.slot,
+                    ...(message.payload.targetPlayerId === undefined
+                        ? {}
+                        : { targetPlayerId: message.payload.targetPlayerId }),
+                });
+                if (queued !== true) error = ErrorCode.BadState;
                 break;
             }
             case 'game.emoji':

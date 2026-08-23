@@ -439,6 +439,39 @@ export class Room {
         return null;
     }
 
+    /**
+     * 이번 tick에 스냅샷을 받을 연결들. 조립 계층(game/)이 여기서만 연결을 얻는다.
+     *
+     * 검열 등급을 함께 준다. 이걸 나눠 주면 호출하는 쪽이 "이 사람 관전자였나?"를 다시 판정하게 되고,
+     * 판정이 두 곳으로 갈리는 순간 한쪽만 고쳐져 시야가 샌다.
+     */
+    public snapshotTargets(): { playerId: number; connection: Connection; access: SnapshotAccess }[] {
+        if (this.state !== RoomState.Playing) return [];
+        const targets: { playerId: number; connection: Connection; access: SnapshotAccess }[] = [];
+        for (const member of this.#roster.members()) {
+            if (member.connection === null) continue;
+            const access = this.snapshotAccess(member.userId);
+            if (access === 'none') continue;
+            targets.push({ playerId: member.playerId, connection: member.connection, access });
+        }
+        return targets;
+    }
+
+    /** ROSTER 섹션에 실을 이름. 클라이언트가 보낸 값이 아니라 티켓에 실려 온 값이다. */
+    public nicknameOf(playerId: number): string | null {
+        return this.#roster.getByPlayerId(playerId)?.nickname ?? null;
+    }
+
+    /** 술래가 바뀌었다. 시뮬레이션이 판정하고 방은 알리기만 한다. */
+    public broadcastTagged(playerId: number, by: number | null): void {
+        this.#broadcast({ type: 'player.tagged', payload: { playerId, by: by ?? playerId } });
+    }
+
+    /** 점멸 연출. 저빈도라 바이너리 섹션이 아니라 JSON으로 나간다. */
+    public broadcastBlinked(playerId: number, fromX: number, fromY: number): void {
+        this.#broadcast({ type: 'player.blinked', payload: { playerId, fromX, fromY } });
+    }
+
     /** 스냅샷 인코딩 직전 이 한 메서드만 보고 검열 등급을 고른다. */
     public snapshotAccess(userId: ActorId): SnapshotAccess {
         if (this.state !== RoomState.Playing) return 'none';
