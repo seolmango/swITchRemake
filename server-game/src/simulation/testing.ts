@@ -8,7 +8,7 @@
 import { TilePhysics } from 'shared';
 import { GAMEPLAY } from '../config/gameplay';
 import { SkillId } from './skills';
-import { createWorld, type MapTimeline, type PlayerState, type World, type WorldMap } from './world';
+import { createWorld, emptyStats, type MapTimeline, type PlayerState, type World, type WorldMap } from './world';
 
 export const TEST_TILE_SIZE = 256;
 
@@ -58,6 +58,7 @@ export function makePlayer(playerId: number, tileX: number, tileY: number, overr
         effects: {},
         cooldowns: {},
         loadout: SkillId.Dash,
+        stats: emptyStats(),
         ...overrides,
     };
 }

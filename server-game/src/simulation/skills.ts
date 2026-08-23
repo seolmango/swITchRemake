@@ -203,6 +203,7 @@ function useSwitch(world: World, caster: PlayerState, targetPlayerId: number | u
 
     // 사거리 밖이거나 지목이 잘못돼도 쿨타임은 소모한다. 실패가 공짜면 계속 눌러보는 게 최적이 된다.
     startCooldown(world, caster, SkillId.Switch, SKILLS.SWITCH.COOLDOWN_MS);
+    caster.stats.switchTry += 1;
 
     if (distance(caster, tagger) > SKILLS.SWITCH.RANGE_PX) return { ok: false, reason: 'OUT_OF_RANGE' };
     if (!targetValid) return { ok: false, reason: 'NO_TARGET' };
@@ -215,6 +216,7 @@ function useSwitch(world: World, caster: PlayerState, targetPlayerId: number | u
     world.taggerChangedAtTick = world.tick;
 
     grantTaggerFrenzy(world, caster);
+    caster.stats.switchSuccess += 1;
 
     events.push({ kind: 'tagged', playerId: target.playerId, by: caster.playerId });
     return { ok: true, skill: SkillId.Switch };

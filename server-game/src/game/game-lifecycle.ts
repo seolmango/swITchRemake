@@ -4,23 +4,25 @@
  * 방은 world를 모르고 시뮬레이션은 방을 모른다. 둘을 아는 유일한 곳이 이 파일이다.
  */
 
-import type { ViolationSignal } from 'shared';
+import type { MatchResultMessage, ViolationSignal } from 'shared';
 import { GAMEPLAY } from '../config/gameplay';
 import { instantiateMap, type ServerMapBundle } from '../maps/map-loader';
 import type { GameStartInfo, Room, RoomLifecyclePort, RoomStartSnapshot } from '../rooms/room';
 import type { Scheduler } from '../simulation/scheduler';
 import { grantTaggerFrenzy, SkillId, type SkillRequest } from '../simulation/skills';
-import { createWorld, type PlayerState } from '../simulation/world';
+import { createWorld, emptyStats, type PlayerState } from '../simulation/world';
 import { GameSession } from './game-session';
 import type { RosterEntry } from './snapshot-view';
 
 export interface GameLifecycleOptions {
     readonly bundle: ServerMapBundle;
+    readonly serverId: string;
+    readonly buildId: string;
     readonly scheduler: Scheduler;
     readonly lookupRoom: (roomId: string) => Room | null;
     readonly violationSink: (signal: ViolationSignal) => void;
     /** 경기가 끝나면 결과를 내보낸다. Redis outbox가 받는다. */
-    readonly onMatchFinished?: (session: GameSession) => void;
+    readonly onMatchFinished?: (session: GameSession, result: MatchResultMessage) => void;
     /** 테스트에서 고정 seed를 넣기 위한 통로. 기본은 시각 기반이다. */
     readonly makeSeed?: (snapshot: RoomStartSnapshot) => number;
 }
@@ -65,10 +67,16 @@ export class GameLifecycle implements RoomLifecyclePort {
             matchId: snapshot.matchId,
             roster,
             violationSink: this.#options.violationSink,
-            onFinished: (finished) => {
+            meta: {
+                serverId: this.#options.serverId,
+                buildId: this.#options.buildId,
+                mapId: snapshot.mapId,
+                mapBundleHash: this.#options.bundle.mapBundleHash,
+            },
+            onFinished: (finished, result) => {
                 this.#sessions.delete(finished.id);
                 this.#options.scheduler.remove(finished.id);
-                this.#options.onMatchFinished?.(finished);
+                this.#options.onMatchFinished?.(finished, result);
             },
         });
 
@@ -156,6 +164,7 @@ export class GameLifecycle implements RoomLifecyclePort {
                 effects: {},
                 cooldowns: {},
                 loadout: SkillId.Dash,
+                stats: emptyStats(),
             } satisfies PlayerState;
         });
     }

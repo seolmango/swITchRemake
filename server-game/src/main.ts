@@ -67,11 +67,22 @@ async function main(): Promise<void> {
     let rooms: RoomManager | null = null;
     const lifecycle = new GameLifecycle({
         bundle,
+        serverId: INFRA.SERVER_ID,
+        buildId: INFRA.BUILD_ID,
         scheduler,
         lookupRoom: (roomId) => rooms?.get(roomId) ?? null,
         violationSink,
-        onMatchFinished: (session) => {
-            log(`경기 종료 room=${session.id} match=${session.matchId} tick=${session.world.tick}`);
+        onMatchFinished: (session, result) => {
+            log(`경기 종료 room=${session.id} match=${session.matchId} tick=${result.durationTicks}`);
+            // outbox가 Redis 장애를 흡수한다. 여기서 await 하지 않는 이유는
+            // 결과 전송이 게임 루프를 막으면 안 되기 때문이다.
+            try {
+                outbox.enqueue(result);
+            } catch (error) {
+                // outbox가 가득 찼다. 던지게 두면 게임 루프 안에서 터진다.
+                // TODO(R): 이 상태에서는 신규 게임 시작도 막아야 한다(outbox.canStartNewGame).
+                console.error('[swITch] 경기 결과 적재 실패. 이 경기의 전적이 유실된다.', error);
+            }
         },
     });
 
@@ -183,6 +194,8 @@ async function main(): Promise<void> {
     }, 100);
 
     scheduler.start();
+    // outbox는 Redis 상태와 무관하게 자기 타이머로 재시도한다. 연결 성공을 기다리지 않는다.
+    outbox.start();
 
     /**
      * Redis 제어 평면은 **없어도 프로세스가 죽지 않는다.**
@@ -197,7 +210,6 @@ async function main(): Promise<void> {
         try {
             await registry.start();
             await consumer.start();
-            await outbox.flush();
             redisReady = true;
             log('Redis 제어 평면 연결됨.');
         } catch (error) {
@@ -221,6 +233,7 @@ async function main(): Promise<void> {
         clearInterval(roomTimer);
         clearInterval(redisRetry);
         scheduler.stop();
+        outbox.stop();
         await consumer.stop().catch(() => undefined);
         registry.stop();
         await transport.close().catch(() => undefined);

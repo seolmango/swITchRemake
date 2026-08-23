@@ -41,6 +41,24 @@ export interface PlayerState {
     cooldowns: Record<string, number>;
     /** 2번 슬롯에 넣은 스킬. 1번 슬롯은 스위치 고정이다. */
     loadout: SkillId;
+    /** 경기 결과에 실릴 누적 수치. 소급해서 만들 수 없으므로 경기 중에 세어 둔다. */
+    stats: MatchStats;
+}
+
+/**
+ * 경기 중 누적되는 개인 수치. 등수는 없으므로 순위 관련 필드도 없다.
+ * 탈락 tick을 남기는 이유는 생존 시간을 경기 종료 후에 계산할 수 없기 때문이다.
+ */
+export interface MatchStats {
+    tagCount: number;
+    taggedCount: number;
+    switchTry: number;
+    switchSuccess: number;
+    eliminatedAtTick: number | null;
+}
+
+export function emptyStats(): MatchStats {
+    return { tagCount: 0, taggedCount: 0, switchTry: 0, switchSuccess: 0, eliminatedAtTick: null };
 }
 
 /** 이번 tick에 확정된 각 플레이어의 입력 의도. 좌표나 속도는 들어 있지 않다. */

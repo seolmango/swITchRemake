@@ -457,6 +457,22 @@ export class Room {
         return targets;
     }
 
+    /**
+     * 경기 결과에 실을 참가자 신원. 게스트도 포함한다.
+     *
+     * 게스트를 빼면 리플레이에 이름 없는 캐릭터가 돌아다니고, 신고 조사도 slot을 계정으로 잇지 못한다.
+     * 전적 집계에서만 제외하는 것이지 기록에서 빼는 게 아니다.
+     */
+    public participants(): { playerId: number; userId: ActorId; nickname: string; colorIndex: number; guest: boolean }[] {
+        return this.#roster.members().map((member) => ({
+            playerId: member.playerId,
+            userId: member.userId,
+            nickname: member.nickname,
+            colorIndex: member.colorIndex,
+            guest: member.guest,
+        }));
+    }
+
     /** ROSTER 섹션에 실을 이름. 클라이언트가 보낸 값이 아니라 티켓에 실려 온 값이다. */
     public nicknameOf(playerId: number): string | null {
         return this.#roster.getByPlayerId(playerId)?.nickname ?? null;

@@ -6,7 +6,15 @@
  * 이 파일의 일이다.
  */
 
-import type { ViolationSignal } from 'shared';
+import {
+    MATCH_RESULT_VERSION,
+    PROTOCOL_VERSION,
+    VISIBILITY_CORE_VERSION,
+    type MatchParticipantResult,
+    type MatchResultMessage,
+    type ViolationSignal,
+} from 'shared';
+import { RULES_VERSION } from '../config/gameplay';
 import { NETWORK } from '../config/network';
 import type { Room } from '../rooms/room';
 import type { SchedulerTarget } from '../simulation/scheduler';
@@ -21,7 +29,14 @@ export interface GameSessionOptions {
     readonly matchId: string;
     readonly roster: readonly RosterEntry[];
     readonly violationSink: (signal: ViolationSignal) => void;
-    readonly onFinished: (session: GameSession) => void;
+    readonly onFinished: (session: GameSession, result: MatchResultMessage) => void;
+    /** 경기 결과에 박히는 값들. 나중에 채울 수 없으므로 시작할 때 받아 둔다. */
+    readonly meta: {
+        readonly serverId: string;
+        readonly buildId: string;
+        readonly mapId: string;
+        readonly mapBundleHash: string;
+    };
 }
 
 export class GameSession implements SchedulerTarget {
@@ -40,6 +55,7 @@ export class GameSession implements SchedulerTarget {
      */
     readonly #needsFullSnapshot = new Set<number>();
     #finished = false;
+    readonly #startedAt = Date.now();
 
     public constructor(options: GameSessionOptions) {
         this.#options = options;
@@ -155,6 +171,55 @@ export class GameSession implements SchedulerTarget {
         // 자리를 억지로 채우지 않고 남은 만큼만 승자로 본다.
         const winners: [number, number] = [survivors[0] ?? 0, survivors[1] ?? survivors[0] ?? 0];
         this.#room.finishGame(winners);
-        this.#options.onFinished(this);
+        this.#options.onFinished(this, this.#buildResult(winners));
+    }
+
+    /**
+     * 경기 결과 메시지. 버전 스탬프와 당시 닉네임은 **나중에 채울 수 없는 값**이라 여기서 전부 넣는다.
+     * 컬럼을 나중에 추가할 수는 있어도 추가 이전 경기의 값은 영원히 빈다.
+     */
+    #buildResult(winners: [number, number]): MatchResultMessage {
+        const endedAt = Date.now();
+        const msPerTick = 1000 / this.world.simulationHz;
+        const identities = new Map(this.#room.participants().map((p) => [p.playerId, p]));
+
+        const players: MatchParticipantResult[] = this.world.players.map((player) => {
+            const identity = identities.get(player.playerId);
+            const endTick = player.stats.eliminatedAtTick ?? this.world.tick;
+            const guest = identity?.guest ?? true;
+            return {
+                // 게스트는 null이지만 행 자체는 남긴다. 리플레이가 전원의 slot과 이름을 필요로 한다.
+                userId: guest || typeof identity?.userId !== 'number' ? null : identity.userId,
+                playerId: player.playerId,
+                nickname: identity?.nickname ?? `P${player.playerId}`,
+                colorIndex: player.colorIndex,
+                isGuest: guest,
+                tagCount: player.stats.tagCount,
+                taggedCount: player.stats.taggedCount,
+                switchTry: player.stats.switchTry,
+                switchSuccess: player.stats.switchSuccess,
+                survivedMs: Math.round(endTick * msPerTick),
+            };
+        });
+
+        return {
+            v: MATCH_RESULT_VERSION,
+            matchId: this.matchId,
+            roomId: this.id,
+            serverId: this.#options.meta.serverId,
+            mapId: this.#options.meta.mapId,
+            startedAt: this.#startedAt,
+            endedAt,
+            durationTicks: this.world.tick,
+            buildId: this.#options.meta.buildId,
+            protocolVersion: PROTOCOL_VERSION,
+            rulesVersion: RULES_VERSION,
+            mapBundleHash: this.#options.meta.mapBundleHash,
+            visibilityCoreVersion: VISIBILITY_CORE_VERSION,
+            winnerPlayerIds: winners,
+            // 리플레이는 아직 기록하지 않는다. 기록 실패와 미구현이 같은 null인 것은 의도적이다.
+            replay: null,
+            players,
+        };
     }
 }

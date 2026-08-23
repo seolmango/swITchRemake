@@ -49,6 +49,9 @@ function resolveTagging(world: World, pairs: readonly CollisionPair[], events: W
         if (!victim || !victim.alive) continue;
 
         victim.alive = false;
+        victim.stats.taggedCount += 1;
+        victim.stats.eliminatedAtTick = world.tick;
+        tagger.stats.tagCount += 1;
         world.taggerChangedAtTick = world.tick;
         events.push({ kind: 'eliminated', playerId: victim.playerId, by: tagger.playerId });
     }
