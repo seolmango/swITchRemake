@@ -16,6 +16,21 @@ export const Color = {
         "#C6C6C6",
         "#ADADAD"
     ],
+    grass: [
+        "#CFE8C2",
+        "#A8CF9C",
+        "#7BAF6E"
+    ],
+    smoke: [
+        "#ECECE9",
+        "#C6C6C6",
+        "#8F8F8F"
+    ],
+    frenzy: [
+        "#FFD1A8",
+        "#FF9A52",
+        "#E8721E"
+    ],
     user: [
         ['#FFD5B8', '#E0B598'],
         ['#FCE6A9', '#DCC486'],

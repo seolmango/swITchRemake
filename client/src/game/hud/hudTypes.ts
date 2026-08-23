@@ -1,0 +1,75 @@
+/**
+ * What the HUD needs to render, kept deliberately separate from the engine's own per-tick state.
+ *
+ * These values change at human speed (someone dies, a cooldown ticks over) rather than at frame speed,
+ * so they're safe to hold in React state. Player *positions* deliberately never appear here — those
+ * change every frame and belong inside the engine, where they cost no re-renders.
+ */
+
+export interface HudPlayer {
+    id: number;
+    nickname: string;
+    /** Index into the shared 8-slot user palette. */
+    colorIndex: number;
+    isTagger: boolean;
+    alive: boolean;
+}
+
+/**
+ * A one-off notification. The caller appends to a running feed with monotonically increasing ids and
+ * never removes anything — the HUD tracks which ids it has already shown and expires them on its own,
+ * because how long a message stays up is presentation, not game state.
+ */
+export interface HudAlert {
+    id: number;
+    text: string;
+    tone?: 'info' | 'danger';
+}
+
+export interface HudSkill {
+    id: string;
+    label: string;
+    iconUrl: string;
+    /** Keybind shown on the button. Without it a player has no way to learn the binding mid-match. */
+    key: string;
+    /** Seconds left; 0 means ready. */
+    cooldown: number;
+    /** Full cooldown length, for the sweep overlay. Ignored when `cooldown` is 0. */
+    cooldownTotal: number;
+}
+
+/**
+ * Two slots, matching the real loadout (legacy `main.js:271` and `:283-292`): one movement skill on
+ * Space, and switch — which isn't a button at all but a *target pick*, triggered by pressing the number
+ * of the player you want. That's why the roster's number chips are the switch UI rather than decoration.
+ */
+export interface HudState {
+    players: readonly HudPlayer[];
+    /** The viewer's own id, or null when spectating. */
+    selfId: number | null;
+    /** The one equipped movement skill. Null while spectating. */
+    movementSkill: HudSkill | null;
+    switchSkill: HudSkill | null;
+    /**
+     * Player ids that switch may legally target right now. Computed by the caller, never by the HUD —
+     * the eligibility rules (alive, not you, neither of you is the tagger) are game logic.
+     */
+    switchTargets: readonly number[];
+    /** Seconds since the match started, or null before it does. */
+    elapsedSec: number | null;
+    /** In spectate mode, the player the camera is currently following. */
+    spectatingId: number | null;
+    /** Running feed, newest last. The HUD expires entries itself — see `HudAlert`. */
+    alerts: readonly HudAlert[];
+}
+
+export const EMPTY_HUD: HudState = {
+    players: [],
+    selfId: null,
+    movementSkill: null,
+    switchSkill: null,
+    switchTargets: [],
+    elapsedSec: null,
+    spectatingId: null,
+    alerts: [],
+};

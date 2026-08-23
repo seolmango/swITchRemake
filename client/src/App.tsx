@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { TitlePage } from "./pages/TitlePage.tsx";
+import { EngineSandboxPage } from "./pages/dev/EngineSandboxPage.tsx";
 import './i18n.ts';
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "./stores/useSettingsStore.ts";
@@ -20,6 +21,7 @@ function App() {
             <BrowserRouter>
                 <Routes>
                     <Route path="/" element={<TitlePage />} />
+                    <Route path="/sandbox" element={<EngineSandboxPage />} />
                 </Routes>
             </BrowserRouter>
         </div>
