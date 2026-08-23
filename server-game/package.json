@@ -12,6 +12,7 @@
     "test": "tsc -p tsconfig.test.json && node --test \"dist-test/**/*.test.js\""
   },
   "dependencies": {
+    "ioredis": "^5.10.1",
     "shared": "*",
     "ws": "^8.18.0"
   },
