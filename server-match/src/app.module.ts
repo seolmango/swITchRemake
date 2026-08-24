@@ -20,6 +20,9 @@ import { ResultsModule } from './results/results.module';
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
+            // The DI smoke test assembles this module without loading the
+            // repository's secret-bearing .env file.
+            ignoreEnvFile: process.env.SWITCH_SKIP_ENV_FILE === 'true',
             envFilePath: path.resolve(__dirname, '../../.env'),
         }),
         ThrottlerModule.forRoot([{ttl: 60000, limit: 0}]),

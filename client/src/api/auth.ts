@@ -15,3 +15,6 @@ export const loginUser = async (email: string, password: string) => {
     replaceGuestWithAccount(result.accessToken, result.nickname);
     return result;
 };
+
+export const changePassword = (input: { currentPassword: string; newPassword: string }) =>
+    apiRequest<{ revokedCount: number }>('/users/me/password', { method: 'POST', body: input });

@@ -16,7 +16,7 @@ export const LoginPage: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const login = useAuthStore((state) => state.login);
-    const status = useAuthStore((state) => state.status);
+    const pending = useAuthStore((state) => state.pending);
     const theme = useSettingsStore((state) => state.theme);
     const emailRef = useRef<HTMLInputElement>(null);
     const [email, setEmail] = useState('');
@@ -33,7 +33,7 @@ export const LoginPage: React.FC = () => {
         setMessage('');
         try {
             await login(email, password);
-            navigate('/profile', { replace: true });
+            navigate('/', { replace: true });
         } catch (error) {
             setMessage(error instanceof ApiError && error.status === 401 ? t('auth.invalidCredentials') : t('auth.serverError'));
         }
@@ -48,7 +48,7 @@ export const LoginPage: React.FC = () => {
                 <TextField label={t('auth.password')} placeholder={t('auth.passwordPlaceholder')} autoComplete="current-password" type="password" value={password} error={touched && !isPassword(password) ? t('auth.invalidPassword') : undefined} onChange={setPassword}/>
                 <InlineLink onClick={() => navigate('/reset-password')} style={{ justifySelf: 'center' }}>{t('auth.forgot')}</InlineLink>
                 <div className="status-message" role="status" style={{ color: message ? Color.red[2] : themeColors(theme).muted }}>{message}</div>
-                <RoundButton width={460} height={104} type={1} content={t('auth.login')} disabled={!valid} isLoading={status === 'booting'} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
+                <RoundButton width={460} height={104} type={1} content={t('auth.login')} disabled={!valid || pending} isLoading={pending} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
             </div>
         </PageLayout>
     );

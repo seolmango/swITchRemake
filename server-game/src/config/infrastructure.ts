@@ -6,6 +6,10 @@
  * 배포할 때 무엇을 주입해야 하는지 아무도 모르게 된다.
  */
 
+import { loadRootEnvFile } from './load-env';
+
+loadRootEnvFile();
+
 function required(name: string): string {
     const value = process.env[name];
     if (value === undefined || value === '') {

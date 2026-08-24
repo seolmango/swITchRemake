@@ -1,12 +1,11 @@
 import { IsEmail, IsString, Length, Matches } from "class-validator";
+import { IsValidPassword } from './password.validator';
 
 export class CreateUserDto {
     @IsEmail()
     email!: string;
 
-    @IsString()
-    @Length(8, 20)
-    @Matches(/^[A-Za-z0-9!@#$%^&*]+$/)
+    @IsValidPassword()
     password!: string;
 
     @IsString()

@@ -14,6 +14,8 @@ interface AuthState {
     nickname: string | null;
     identity: ApiIdentityKind;
     status: AuthStatus;
+    bootstrapped: boolean;
+    pending: boolean;
     bootstrap: () => Promise<void>;
     login: (email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
@@ -24,9 +26,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     nickname: null,
     identity: 'anonymous',
     status: 'idle',
+    bootstrapped: false,
+    pending: false,
     bootstrap: async () => {
         if (get().status !== 'idle' && get().status !== 'error') return;
-        set({ status: 'booting' });
+        set({ status: 'booting', pending: false });
         try {
             const next = await bootstrapApiIdentity();
             set({
@@ -34,31 +38,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 nickname: next.nickname,
                 identity: next.kind,
                 status: next.kind === 'anonymous' ? 'error' : next.kind,
+                bootstrapped: true,
             });
         } catch {
-            set({ accessToken: null, identity: 'anonymous', status: 'error' });
+            set({ accessToken: null, identity: 'anonymous', status: 'error', bootstrapped: true });
         }
     },
     login: async (email, password) => {
         if (sessionStorage.getItem('switch-active-room')) throw new Error('Leave the active room before logging in');
         const previous = get();
-        set({ status: 'booting' });
+        set({ pending: true });
         try {
             const result = await loginUser(email, password);
-            set({ accessToken: result.accessToken, nickname: result.nickname, identity: 'account', status: 'account' });
+            set({ accessToken: result.accessToken, nickname: result.nickname, identity: 'account', status: 'account', pending: false });
         } catch (error) {
-            set(previous);
+            set({ ...previous, pending: false });
             throw error;
         }
     },
     logout: async () => {
         if (sessionStorage.getItem('switch-active-room')) throw new Error('Leave the active room before logging out');
-        set({ status: 'booting' });
+        set({ pending: true });
         try {
             const next = await logoutAndCreateGuest();
-            set({ accessToken: next.accessToken, nickname: next.nickname, identity: 'guest', status: 'guest' });
+            set({ accessToken: next.accessToken, nickname: next.nickname, identity: 'guest', status: 'guest', pending: false });
         } catch {
-            set({ accessToken: null, nickname: null, identity: 'anonymous', status: 'error' });
+            set({ accessToken: null, nickname: null, identity: 'anonymous', status: 'error', pending: false });
         }
     },
 }));
@@ -69,5 +74,6 @@ setApiAccessTokenListener((next) => {
         nickname: next.nickname,
         identity: next.kind,
         status: next.kind === 'anonymous' ? 'error' : next.kind,
+        pending: false,
     });
 });

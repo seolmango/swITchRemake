@@ -46,7 +46,7 @@
     "codeSent": "인증 코드를 보냈습니다. 5분 안에 입력해 주세요.", "goSignup": "계정이 없나요? 회원가입", "goLogin": "이미 계정이 있나요? 로그인",
     "forgot": "비밀번호를 잊으셨나요?", "loginSuccess": "로그인했습니다.", "signupSuccess": "가입이 완료되었습니다. 이제 로그인할 수 있어요.",
     "resetTitle": "비밀번호 재설정", "resetAction": "새 비밀번호 설정", "resetUnavailable": "메일 발송은 연결되어 있지만 비밀번호 변경 API는 아직 서버에 없습니다.",
-    "changeTitle": "비밀번호 변경", "currentPassword": "현재 비밀번호", "newPassword": "새 비밀번호", "changeUnavailable": "비밀번호 변경 API가 아직 서버에 없습니다.",
+    "changeTitle": "비밀번호 변경", "currentPassword": "현재 비밀번호", "newPassword": "새 비밀번호", "confirmNewPassword": "새 비밀번호 확인", "passwordMismatch": "새 비밀번호가 일치하지 않습니다.", "currentPasswordIncorrect": "현재 비밀번호가 올바르지 않습니다.", "changeInvalid": "현재 비밀번호와 다른 올바른 새 비밀번호를 입력해 주세요.", "changeFailed": "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.", "changeSuccess": "비밀번호를 변경했습니다. 다른 기기 {{count}}대를 로그아웃했습니다.",
     "invalidEmail": "올바른 이메일 주소를 입력해 주세요.", "invalidPassword": "8~20자, 영문·숫자와 !@#$%^&*만 사용할 수 있습니다.",
     "invalidNickname": "2~12자 영문·숫자·한글만 사용할 수 있습니다.", "invalidCode": "6자리 숫자를 입력해 주세요.",
     "invalidCredentials": "이메일 또는 비밀번호를 확인해 주세요.", "invalidCodeServer": "인증 코드가 올바르지 않거나 만료되었습니다.", "duplicateAccount": "이미 사용 중인 이메일 또는 닉네임입니다.", "serverError": "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.", "logout": "로그아웃"

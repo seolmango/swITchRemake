@@ -32,6 +32,7 @@ function App() {
     const motionLevel = useSettingsStore((state) => state.motionLevel);
     const bootstrapAuth = useAuthStore((state) => state.bootstrap);
     const authStatus = useAuthStore((state) => state.status);
+    const bootstrapped = useAuthStore((state) => state.bootstrapped);
 
     useEffect(() => {
         if (i18n.language !== savedLanguage) {
@@ -48,10 +49,10 @@ function App() {
 
     useEffect(() => { void bootstrapAuth(); }, [bootstrapAuth]);
 
-    if (authStatus === 'idle' || authStatus === 'booting') {
+    if (!bootstrapped) {
         return <div style={{ width: '100vw', height: '100vh' }} aria-busy="true"/>;
     }
-    if (authStatus === 'error') {
+    if (authStatus === 'error' && !bootstrapped) {
         return (
             <div style={{ width: '100vw', height: '100vh', display: 'grid', placeItems: 'center' }}>
                 <div style={{ display: 'grid', gap: 20, textAlign: 'center' }}>

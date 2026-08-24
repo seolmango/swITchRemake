@@ -13,6 +13,7 @@ import { makeKeys, PROTOCOL_VERSION, type ViolationSignal } from 'shared';
 import { readFile } from 'node:fs/promises';
 import { RULES_VERSION } from './config/gameplay';
 import { INFRA } from './config/infrastructure';
+import { assertGameStartupConfig } from './config/startup-config';
 import { NETWORK, SNAPSHOT_INTERVAL_TICKS } from './config/network';
 import { GameLifecycle } from './game/game-lifecycle';
 import { ConnectionManager } from './gateway/connection-manager';
@@ -42,6 +43,8 @@ function violationSink(signal: ViolationSignal): void {
 }
 
 async function main(): Promise<void> {
+    assertGameStartupConfig(INFRA);
+
     log('인게임 서버 시작');
     log(`  serverId       ${INFRA.SERVER_ID}`);
     log(`  env            ${INFRA.ENV}`);
@@ -158,9 +161,6 @@ async function main(): Promise<void> {
         violationSink,
     });
 
-    await transport.listen(rooms);
-    log(`  WebSocket      listening (${transport.boundPort()})`);
-
     // ── Redis 제어 평면 ──
     const keys = makeKeys(INFRA.ENV);
     const redis = new RedisClient({
@@ -205,6 +205,23 @@ async function main(): Promise<void> {
     });
 
     let draining = false;
+
+    // A newly started server is not useful until Redis authentication, the
+    // command group, and the first registry heartbeat have all succeeded.
+    try {
+        await redis.connect();
+        await consumer.start();
+        await registry.start();
+        if (!registry.healthy) throw new Error('initial registry heartbeat was not written');
+    } catch (error) {
+        await consumer.stop().catch(() => undefined);
+        await redis.close().catch(() => undefined);
+        throw new Error(`Redis control plane is required at startup: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    log('Redis control plane connected and initial heartbeat published');
+
+    await transport.listen(rooms);
+    log(`  WebSocket      listening (${transport.boundPort()})`);
 
     // ── 시계 ──
     // 방 상태 전이(카운트다운, POST_GAME, 재접속 유예)는 시뮬레이션 tick이 아니라 실제 시각으로 돈다.

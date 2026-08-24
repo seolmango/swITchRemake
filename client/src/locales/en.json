@@ -46,7 +46,7 @@
     "codeSent": "We sent a verification code. Enter it within 5 minutes.", "goSignup": "Need an account? Sign up", "goLogin": "Already have an account? Log in",
     "forgot": "Forgot your password?", "loginSuccess": "You are logged in.", "signupSuccess": "Your account is ready. You can now log in.",
     "resetTitle": "Reset Password", "resetAction": "Set New Password", "resetUnavailable": "Email delivery is connected, but the password reset API is not on the server yet.",
-    "changeTitle": "Change Password", "currentPassword": "Current password", "newPassword": "New password", "changeUnavailable": "The password change API is not on the server yet.",
+    "changeTitle": "Change Password", "currentPassword": "Current password", "newPassword": "New password", "confirmNewPassword": "Confirm new password", "passwordMismatch": "The new passwords do not match.", "currentPasswordIncorrect": "Your current password is incorrect.", "changeInvalid": "Use a different valid new password.", "changeFailed": "Could not change your password. Try again in a moment.", "changeSuccess": "Password changed. Signed out {{count}} other device(s).",
     "invalidEmail": "Enter a valid email address.", "invalidPassword": "Use 8–20 letters, numbers, or !@#$%^&*.",
     "invalidNickname": "Use 2–12 Korean letters, letters, or numbers.", "invalidCode": "Enter the 6-digit code.",
     "invalidCredentials": "Check your email and password.", "invalidCodeServer": "The verification code is invalid or expired.", "duplicateAccount": "That email or nickname is already in use.", "serverError": "Could not reach the server. Try again in a moment.", "logout": "Log Out"

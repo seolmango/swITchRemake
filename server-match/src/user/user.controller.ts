@@ -5,6 +5,7 @@ import { RateLimiter } from "../ratelimiter.decorator";
 import { NeedAccount } from '../auth/need-account.decorator';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('users')
 export class UserController {
@@ -16,6 +17,16 @@ export class UserController {
     @RateLimiter({ anon: 5, guest: 5, account: 7, ttl: 60000 })
     async register(@Body() createUserDto: CreateUserDto) {
         return this.userService.createUser(createUserDto);
+    }
+
+    @Post('me/password')
+    @NeedAccount()
+    @RateLimiter({ anon: 0, guest: 5, account: 5, ttl: 60000 })
+    async changePassword(
+        @Body() dto: ChangePasswordDto,
+        @Req() req: FastifyRequest & { user: { id: number; sessionId: string } },
+    ) {
+        return this.userService.changePassword(req.user.id, req.user.sessionId, dto);
     }
 
     @Delete('me')

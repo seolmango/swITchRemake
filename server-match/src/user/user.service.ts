@@ -1,4 +1,4 @@
-import { Injectable, Inject, ConflictException, InternalServerErrorException, BadRequestException, NotFoundException} from "@nestjs/common";
+import { Injectable, Inject, ConflictException, InternalServerErrorException, BadRequestException, NotFoundException, UnauthorizedException} from "@nestjs/common";
 import { DRIZZLE } from "../database/database.module";
 import { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from '../database/schema';
@@ -7,6 +7,8 @@ import { CreateUserDto } from "./dto/create-user.dto";
 import { RedisService } from "../redis/redis.service";
 import { eq } from 'drizzle-orm';
 import { SanctionService } from '../sanction/sanction.service';
+import { SessionService } from '../session/session.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class UserService {
@@ -14,6 +16,9 @@ export class UserService {
         @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
         private readonly redisService: RedisService,
         private readonly sanctionService: SanctionService,
+        // Password changes must revoke every other authenticated session, so
+        // this application service intentionally owns the SessionService dependency.
+        private readonly sessionService: SessionService,
     ) {}
 
     async createUser(dto: CreateUserDto) {
@@ -81,5 +86,25 @@ export class UserService {
             requestMeta,
         );
         await this.redisService.del(redisKey);
+    }
+
+    async changePassword(userId: number, currentSessionId: string, dto: ChangePasswordDto) {
+        await this.sessionService.assertOwnedActiveSession(userId, currentSessionId);
+        const [user] = await this.db.select({ passwordHash: schema.users.passwordHash })
+            .from(schema.users)
+            .where(eq(schema.users.id, userId));
+        if (!user) throw new NotFoundException('User not found');
+
+        if (!await bcrypt.compare(dto.currentPassword, user.passwordHash)) {
+            throw new UnauthorizedException('Current password is incorrect');
+        }
+        if (await bcrypt.compare(dto.newPassword, user.passwordHash)) {
+            throw new BadRequestException('New password must differ from the current password');
+        }
+
+        const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+        await this.db.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, userId));
+        const revokedCount = await this.sessionService.revokeOthers(userId, currentSessionId);
+        return { revokedCount };
     }
 }
