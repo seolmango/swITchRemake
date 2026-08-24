@@ -5,6 +5,7 @@ import { MapController } from './MapController.ts';
 import { PlayerHandle } from './PlayerHandle.ts';
 import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EngineMode, type DisplayOptions, type EngineSettings, type PlayerInit, type Theme } from './types.ts';
 import { decodeSnapshot, type Snapshot } from 'shared';
+import { phaserFpsLimit } from './internal/frameRateLimit.ts';
 
 export interface SwitchEngineOptions {
     theme?: Theme;
@@ -49,13 +50,17 @@ export class SwitchEngine {
     private readonly _accessor: SceneAccessor;
     private scene: WorldScene | null = null;
     private pendingOps: Array<() => void> = [];
+    private pendingSnapshot: { snapshot: Snapshot; simulationHz?: number } | null = null;
     private readonly playerHandles = new Map<number, PlayerHandle>();
     private settings: EngineSettings;
+    private readonly readyPromise: Promise<void>;
+    private resolveReady!: () => void;
     /** 마지막으로 요청받은 CSS 픽셀 크기. 해상도 배율만 바뀌었을 때 다시 계산하려면 필요하다. */
     private cssWidth: number;
     private cssHeight: number;
 
     constructor(container: HTMLElement, options: SwitchEngineOptions = {}) {
+        this.readyPromise = new Promise<void>((resolve) => { this.resolveReady = resolve; });
         const accessor: SceneAccessor = {
             withScene: (fn) => {
                 if (this.scene) fn(this.scene);
@@ -104,7 +109,7 @@ export class SwitchEngine {
                 height: scaled.height,
                 zoom: scaled.zoom,
             },
-            fps: { target: 60, limit: this.settings.frameRate },
+            fps: { target: 60, limit: phaserFpsLimit(this.settings.frameRate) },
         });
 
         const init: WorldSceneInit = {
@@ -116,6 +121,10 @@ export class SwitchEngine {
                 const ops = this.pendingOps;
                 this.pendingOps = [];
                 for (const op of ops) op();
+                const pendingSnapshot = this.pendingSnapshot;
+                this.pendingSnapshot = null;
+                if (pendingSnapshot) scene.applySnapshot(pendingSnapshot.snapshot, pendingSnapshot.simulationHz);
+                this.resolveReady();
             },
         };
         this.game.scene.add('world', WorldScene, true, init);
@@ -143,9 +152,19 @@ export class SwitchEngine {
         return { ...this.settings };
     }
 
+    /** Resolves after Phaser created the world scene and all boot-time operations were applied. */
+    whenReady(): Promise<void> {
+        return this.readyPromise;
+    }
+
+    /** Low-frequency HUD sampling only; callers should not poll this into React every frame. */
+    getActualFps(): number {
+        return this.game.loop.actualFps;
+    }
+
     private applyFrameRate(frameRate: number): void {
         const loop = this.game.loop as unknown as TimeStepInternals;
-        const limit = frameRate > 0 ? frameRate : 0;
+        const limit = phaserFpsLimit(frameRate);
         if (loop.fpsLimit === limit) return;
         loop.fpsLimit = limit;
         loop.hasFpsLimit = limit > 0;
@@ -174,7 +193,8 @@ export class SwitchEngine {
      */
     applySnapshot(buffer: ArrayBuffer, simulationHz?: number): Snapshot {
         const snapshot = decodeSnapshot(buffer);
-        this._accessor.withScene((s) => s.applySnapshot(snapshot, simulationHz));
+        if (this.scene) this.scene.applySnapshot(snapshot, simulationHz);
+        else this.pendingSnapshot = simulationHz === undefined ? { snapshot } : { snapshot, simulationHz };
         return snapshot;
     }
 
@@ -240,6 +260,8 @@ export class SwitchEngine {
         this.game.destroy(true);
         this.scene = null;
         this.pendingOps = [];
+        this.pendingSnapshot = null;
+        this.resolveReady();
         this.playerHandles.clear();
     }
 }

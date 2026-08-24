@@ -86,7 +86,10 @@
       "screenShake": "화면 흔들림", "screenShakeDescription": "충돌과 스킬 사용 시 화면 흔들림을 표현합니다.",
       "cameraSmoothing": "카메라 부드럽게", "cameraSmoothingDescription": "플레이어를 따라가는 카메라 이동을 부드럽게 합니다.",
       "reduceFlash": "섬광 효과 줄이기", "reduceFlashDescription": "빠르고 밝은 화면 점멸을 줄입니다.",
-      "showControlHints": "조작 힌트 표시", "showControlHintsDescription": "경기 중 상황에 맞는 키 안내를 표시합니다."
+      "showControlHints": "조작 힌트 항상 표시", "showControlHintsDescription": "시작 안내가 사라진 뒤에도 조작키 안내를 계속 표시합니다.",
+      "showLatency": "지연시간 표시", "showLatencyDescription": "서버와의 실제 왕복 지연시간(RTT)을 경기 화면에 표시합니다.",
+      "showFps": "FPS 표시", "showFpsDescription": "클라이언트 렌더링 프레임 속도를 선택적으로 표시합니다.",
+      "showTps": "추정 TPS 표시", "showTpsDescription": "스냅샷 틱으로 추정한 서버 처리 속도를 개발 진단용으로 표시합니다."
     },
     "keymap": {
       "helpTitle": "한 동작에 최대 2개", "helpBody": "바꿀 슬롯을 누른 뒤 원하는 키를 입력하세요. Delete로 비우고 Esc로 취소할 수 있습니다.",
@@ -102,6 +105,8 @@
     }
   },
   "game": {
+    "loadingTitle": "경기 준비 중", "loadingFailed": "경기를 준비하지 못했습니다", "loadingTimedOut": "준비 시간이 너무 길어지고 있습니다.", "mapLoadFailed": "맵 로드 실패:",
+    "waitingRenderer": "게임 렌더러를 준비하고 있습니다.", "waitingMap": "맵을 불러오고 있습니다.", "waitingStart": "서버의 경기 시작 신호를 기다리고 있습니다.", "waitingSnapshot": "첫 경기 상태를 기다리고 있습니다.", "connectionLost": "게임 서버 연결이 끊겼습니다. 화면이 멈춘 것이 아니라 연결이 종료되었습니다.",
     "serverPending": "게임 렌더러는 서버 스냅샷을 받을 준비가 되었지만, 방·게임 서버 연결은 아직 준비 중입니다.",
     "noKeyBinding": "미지정",
     "skillRejected": {

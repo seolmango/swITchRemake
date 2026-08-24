@@ -228,6 +228,12 @@ export type PlayerBlinkedMessage = ServerEnvelope<'player.blinked', {
 }>;
 
 export type GameEndedMessage = ServerEnvelope<'game.ended', {
+    /**
+     * 방금 끝난 경기의 식별자. 결과 화면(`/matches/{matchId}/result`)으로 가려면 이 값이 필요하다.
+     *
+     * 방 id로는 안 된다 — 한 방에서 여러 경기가 이어지므로 어느 경기의 결과인지 가려지지 않는다.
+     */
+    matchId: string;
     /** 최후까지 남은 두 명. 공동 승리자이며 등수는 없다. */
     winnerIds: [number, number];
     /** 대기실로 돌아가는 시각(epoch ms). */

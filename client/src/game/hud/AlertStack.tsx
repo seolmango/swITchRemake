@@ -15,8 +15,8 @@ const LIFETIME_MS = 3400;
 const MAX_VISIBLE = 3;
 
 /**
- * Transient notifications. The caller keeps appending to one feed and never prunes it; this component
- * remembers which ids it has already shown and drops each after `LIFETIME_MS`.
+ * Transient notifications. The caller provides a bounded recent feed; this component remembers ids that
+ * are still in that feed and drops each visible notification after `LIFETIME_MS`.
  *
  * Doing expiry here rather than in the caller means a message can't be cut short by an unrelated state
  * push, and the caller never has to run timers just to make text disappear.
@@ -24,9 +24,13 @@ const MAX_VISIBLE = 3;
 export const AlertStack: React.FC<Props> = ({ theme, alerts, offsetTop }) => {
     const [visible, setVisible] = useState<HudAlert[]>([]);
     const seenRef = useRef(new Set<number>());
-    const timersRef = useRef<number[]>([]);
+    const timersRef = useRef(new Map<number, number>());
 
     useEffect(() => {
+        const currentIds = new Set(alerts.map((alert) => alert.id));
+        for (const id of seenRef.current) {
+            if (!currentIds.has(id)) seenRef.current.delete(id);
+        }
         const fresh = alerts.filter((a) => !seenRef.current.has(a.id));
         if (fresh.length === 0) return;
         for (const a of fresh) seenRef.current.add(a.id);
@@ -36,13 +40,15 @@ export const AlertStack: React.FC<Props> = ({ theme, alerts, offsetTop }) => {
         for (const a of fresh) {
             const timer = window.setTimeout(() => {
                 setVisible((prev) => prev.filter((v) => v.id !== a.id));
+                timersRef.current.delete(a.id);
             }, LIFETIME_MS);
-            timersRef.current.push(timer);
+            timersRef.current.set(a.id, timer);
         }
     }, [alerts]);
 
     useEffect(() => () => {
-        for (const t of timersRef.current) window.clearTimeout(t);
+        for (const timer of timersRef.current.values()) window.clearTimeout(timer);
+        timersRef.current.clear();
     }, []);
 
     if (visible.length === 0) return null;

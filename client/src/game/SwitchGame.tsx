@@ -5,6 +5,7 @@ import { EMPTY_HUD, type HudState } from './hud/hudTypes.ts';
 import { EngineMode } from './types.ts';
 import type { SwitchEngine } from './SwitchEngine.ts';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
+import { PerformanceStats } from './hud/PerformanceStats.tsx';
 
 export interface SwitchGameProps {
     mode?: EngineMode;
@@ -19,6 +20,10 @@ export interface SwitchGameProps {
     /** Spectate target picked. The camera is already moved for you; this is for anything else that cares. */
     onSpectate?: (playerId: number) => void;
     onEmoji?: (emojiId: number) => void;
+    /** Opens the brief first-match control hint only after the covered renderer is ready. */
+    matchReady?: boolean;
+    latencyMs?: number | null;
+    estimatedTps?: number | null;
 }
 
 /**
@@ -37,6 +42,9 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
     onSwitchTarget,
     onSpectate,
     onEmoji,
+    matchReady = false,
+    latencyMs = null,
+    estimatedTps = null,
 }) => {
     const theme = useSettingsStore((s) => s.theme);
     // 월드 쪽 설정은 GameCanvas가 엔진에 직접 밀어넣는다. 여기서 읽는 둘은 HUD(DOM)에만 걸리는 값이다.
@@ -63,16 +71,19 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
         <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0 }}>
             <GameCanvas onEngine={handleEngine} mode={mode} />
             <GameHud
+                key={matchReady ? 'match-ready' : 'match-loading'}
                 theme={theme}
                 mode={mode}
                 hud={hud}
                 colorVision={colorVision}
                 showControlHints={showControlHints}
+                matchReady={matchReady}
                 onUseMovementSkill={() => onUseMovementSkill?.()}
                 onSwitchTarget={(id) => onSwitchTarget?.(id)}
                 onSpectate={handleSpectate}
                 onEmoji={(id) => onEmoji?.(id)}
             />
+            <PerformanceStats theme={theme} engine={engine} latencyMs={latencyMs} estimatedTps={estimatedTps} />
         </div>
     );
 };

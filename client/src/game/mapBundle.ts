@@ -10,6 +10,7 @@ export interface RuntimeMapBundle {
 }
 
 const bundleCache = new Map<string, Promise<RuntimeMapBundle>>();
+const MAX_CACHED_BUNDLES = 4;
 
 const hex = (buffer: ArrayBuffer) => [...new Uint8Array(buffer)].map((value) => value.toString(16).padStart(2, '0')).join('');
 
@@ -32,12 +33,21 @@ async function fetchVerifiedMapBundle(expectedHash: string, gameOrigin: string):
 /** Loads each content-addressed bundle once, regardless of whether lobby or game requested it first. */
 export function verifiedMapBundle(expectedHash: string, gameOrigin: string): Promise<RuntimeMapBundle> {
     const cached = bundleCache.get(expectedHash);
-    if (cached !== undefined) return cached;
-    const request = fetchVerifiedMapBundle(expectedHash, gameOrigin).catch((error: unknown) => {
+    if (cached !== undefined) {
         bundleCache.delete(expectedHash);
+        bundleCache.set(expectedHash, cached);
+        return cached;
+    }
+    const request = fetchVerifiedMapBundle(expectedHash, gameOrigin).catch((error: unknown) => {
+        if (bundleCache.get(expectedHash) === request) bundleCache.delete(expectedHash);
         throw error;
     });
     bundleCache.set(expectedHash, request);
+    while (bundleCache.size > MAX_CACHED_BUNDLES) {
+        const oldestHash = bundleCache.keys().next().value as string | undefined;
+        if (oldestHash === undefined) break;
+        bundleCache.delete(oldestHash);
+    }
     return request;
 }
 

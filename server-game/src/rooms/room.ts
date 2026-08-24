@@ -444,7 +444,7 @@ export class Room {
         this.#directoryChanged();
         this.#broadcast({
             type: 'game.ended',
-            payload: { winnerIds: [winnerIds[0], winnerIds[1]], returnsAt: this.#postGameEndsAt },
+            payload: { matchId: this.matchId, winnerIds: [winnerIds[0], winnerIds[1]], returnsAt: this.#postGameEndsAt },
         });
         return true;
     }

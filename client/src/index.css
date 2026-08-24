@@ -1036,3 +1036,7 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: #FFBDBD; }
   font-size: 16px;
   font-weight: 700;
 }
+@keyframes switch-loading-slide {
+  from { transform: translateX(-10%); }
+  to { transform: translateX(135%); }
+}

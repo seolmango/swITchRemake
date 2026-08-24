@@ -86,7 +86,10 @@
       "screenShake": "Screen shake", "screenShakeDescription": "Shake the screen on impacts and skills.",
       "cameraSmoothing": "Camera smoothing", "cameraSmoothingDescription": "Smooth the camera as it follows the player.",
       "reduceFlash": "Reduce flashes", "reduceFlashDescription": "Reduce rapid, bright screen flashes.",
-      "showControlHints": "Show control hints", "showControlHintsDescription": "Show contextual key hints during a match."
+      "showControlHints": "Always show control hints", "showControlHintsDescription": "Keep the controls guide visible after the brief start hint disappears.",
+      "showLatency": "Show latency", "showLatencyDescription": "Show the measured server round-trip time (RTT) during a match.",
+      "showFps": "Show FPS", "showFpsDescription": "Optionally show the client rendering frame rate.",
+      "showTps": "Show estimated TPS", "showTpsDescription": "Show a developer-oriented server tick-rate estimate derived from snapshots."
     },
     "keymap": {
       "helpTitle": "Up to two keys per action", "helpBody": "Select a slot, then press a key. Press Delete to clear it or Escape to cancel.",
@@ -102,6 +105,8 @@
     }
   },
   "game": {
+    "loadingTitle": "Preparing match", "loadingFailed": "The match could not be prepared", "loadingTimedOut": "Preparation is taking unusually long.", "mapLoadFailed": "Map load failed:",
+    "waitingRenderer": "Preparing the game renderer.", "waitingMap": "Loading the map.", "waitingStart": "Waiting for the server's game-start signal.", "waitingSnapshot": "Waiting for the first game state.", "connectionLost": "The game-server connection closed. The screen is not frozen; the connection ended.",
     "serverPending": "The game renderer is ready for server snapshots, but the room and game server connection is still in progress.",
     "noKeyBinding": "Unassigned",
     "skillRejected": {

@@ -92,10 +92,10 @@ export const LobbyPage: React.FC = () => {
     }, [currentRoomId, live]);
 
     useEffect(() => {
-        if (!live || !session.started) return;
+        if (!live || !session.starting) return;
         transitioningToGame.current = true;
         navigate(`/game?room_id=${encodeURIComponent(currentRoomId)}`, { replace: true });
-    }, [currentRoomId, live, navigate, session.started]);
+    }, [currentRoomId, live, navigate, session.starting]);
 
     useEffect(() => {
         if (!live || !session.lobby || session.lobby.startLockMs <= 0) return;

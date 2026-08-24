@@ -258,6 +258,9 @@ export const SettingsPage: React.FC = () => {
                 ['cameraSmoothing', 'cameraSmoothingDescription'],
                 ['reduceFlash', 'reduceFlashDescription'],
                 ['showControlHints', 'showControlHintsDescription'],
+                ['showLatency', 'showLatencyDescription'],
+                ['showFps', 'showFpsDescription'],
+                ['showTps', 'showTpsDescription'],
             ] as const).map(([key, descriptionKey]) => (
                 <SettingRow key={key} title={t(`settings.game.${key}`)} description={t(`settings.game.${descriptionKey}`)}>
                     <Toggle checked={settings[key]} label={t(`settings.game.${key}`)} onChange={(value) => settings.setGameSetting(key, value)} />

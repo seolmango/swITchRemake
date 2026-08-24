@@ -40,6 +40,10 @@ export interface GameSessionState {
     cooldowns: ReadonlyArray<{ slot: number; remainingMs: number }> | null;
     /** Private skill failures, surfaced by GamePage through the HUD alert feed. */
     skillRejections: ReadonlyArray<{ id: number; reason: SkillRejectedMessage['payload']['reason'] }>;
+    /** Round-trip time from the existing ping/pong exchange. */
+    latencyMs: number | null;
+    /** Client-side estimate from authoritative snapshot tick progress over arrival time. */
+    estimatedTps: number | null;
 }
 
 const INITIAL_STATE: GameSessionState = {
@@ -62,6 +66,8 @@ const INITIAL_STATE: GameSessionState = {
     errorEventId: 0,
     cooldowns: null,
     skillRejections: [],
+    latencyMs: null,
+    estimatedTps: null,
 };
 
 const ACTIVE_ROOM_KEY = 'switch-active-room';
@@ -101,6 +107,9 @@ class GameSession {
     private readonly snapshotListeners = new Set<(frame: ArrayBuffer) => void>();
     private readonly blinkListeners = new Set<(payload: PlayerBlinkedMessage['payload']) => void>();
     private pageUnloading = false;
+    private pingTimer: number | null = null;
+    private tpsWindowStart: { tick: number; at: number } | null = null;
+    private smoothedTps: number | null = null;
 
     constructor() {
         window.addEventListener('beforeunload', () => { this.pageUnloading = true; });
@@ -144,14 +153,16 @@ class GameSession {
         );
         const snapshotTaggerId = snapshot.players?.find((player) => player.isTagger)?.id;
         const taggerId = snapshotTaggerId ?? this.state.taggerId;
-        if (!cooldownsChanged && taggerId === this.state.taggerId) return;
-        this.setState({ cooldowns: nextCooldowns, taggerId });
+        const estimatedTps = this.sampleTps(snapshot.tick);
+        if (!cooldownsChanged && taggerId === this.state.taggerId && estimatedTps === this.state.estimatedTps) return;
+        this.setState({ cooldowns: nextCooldowns, taggerId, estimatedTps });
     }
 
     async connect(grant: RoomSeatGrant, metadata: GameSessionMetadata = {}): Promise<void> {
         this.closeSocket();
         this.requestId = 0;
         this.latestSnapshot = null;
+        this.resetTelemetry();
         this.setState({
             ...INITIAL_STATE,
             status: 'connecting',
@@ -215,8 +226,9 @@ class GameSession {
             socket.addEventListener('close', () => {
                 window.clearTimeout(expiryTimer);
                 if (socket !== this.socket) return;
+                this.stopPingLoop();
                 this.socket = null;
-                this.setState({ status: 'disconnected' });
+                this.setState({ status: 'disconnected', latencyMs: null });
                 if (!this.pageUnloading) sessionStorage.removeItem(ACTIVE_ROOM_KEY);
                 settleError(new Error('The game-server connection closed before authentication'));
             });
@@ -255,6 +267,7 @@ class GameSession {
                     mapBundleHash: message.payload.mapBundleHash,
                     errorCode: null,
                 });
+                this.startPingLoop();
                 break;
             case 'lobby.state':
                 this.setState({ lobby: message.payload, lobbyReceivedAt: Date.now() });
@@ -268,6 +281,11 @@ class GameSession {
             case 'game.ended':
                 this.setState({ roomState: RoomState.PostGame, starting: null, started: null, taggerId: null, ended: message.payload });
                 break;
+            case 'pong': {
+                const elapsed = Date.now() - message.payload.clientTime;
+                if (elapsed >= 0 && elapsed < 60_000) this.setState({ latencyMs: Math.round(elapsed) });
+                break;
+            }
             case 'skill.rejected':
                 this.setState({
                     skillRejections: [...this.state.skillRejections, { id: message.eventId, reason: message.payload.reason }].slice(-20),
@@ -296,11 +314,49 @@ class GameSession {
     }
 
     private closeSocket(): void {
+        this.stopPingLoop();
         const socket = this.socket;
         this.socket = null;
         if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
             socket.close(1000, 'client navigation');
         }
+    }
+
+    private startPingLoop(): void {
+        this.stopPingLoop();
+        const ping = () => {
+            this.send({ type: 'ping', payload: { clientTime: Date.now() } });
+        };
+        ping();
+        this.pingTimer = window.setInterval(ping, 3_000);
+    }
+
+    private stopPingLoop(): void {
+        if (this.pingTimer === null) return;
+        window.clearInterval(this.pingTimer);
+        this.pingTimer = null;
+    }
+
+    private resetTelemetry(): void {
+        this.tpsWindowStart = null;
+        this.smoothedTps = null;
+    }
+
+    private sampleTps(tick: number): number | null {
+        const now = performance.now();
+        const start = this.tpsWindowStart;
+        if (start === null || tick <= start.tick) {
+            this.tpsWindowStart = { tick, at: now };
+            return this.state.estimatedTps;
+        }
+        const elapsedMs = now - start.at;
+        if (elapsedMs < 750) return this.state.estimatedTps;
+
+        const sample = (tick - start.tick) * 1_000 / elapsedMs;
+        this.tpsWindowStart = { tick, at: now };
+        if (!Number.isFinite(sample) || sample <= 0 || sample > 1_000) return this.state.estimatedTps;
+        this.smoothedTps = this.smoothedTps === null ? sample : this.smoothedTps * 0.65 + sample * 0.35;
+        return Math.round(this.smoothedTps * 10) / 10;
     }
 
     private setState(patch: Partial<GameSessionState>): void {

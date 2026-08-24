@@ -33,6 +33,9 @@ interface GameSettings {
     cameraSmoothing: boolean;
     reduceFlash: boolean;
     showControlHints: boolean;
+    showLatency: boolean;
+    showFps: boolean;
+    showTps: boolean;
 }
 
 interface SettingsState extends GameSettings {
@@ -77,7 +80,10 @@ const GAME_DEFAULTS: GameSettings = {
     screenShake: true,
     cameraSmoothing: true,
     reduceFlash: false,
-    showControlHints: true,
+    showControlHints: false,
+    showLatency: true,
+    showFps: false,
+    showTps: false,
 };
 
 const createDefaults = () => ({

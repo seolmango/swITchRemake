@@ -34,6 +34,9 @@ export interface ViewerContext {
     full: boolean;
 }
 
+/** 전송 계층이 publish 사이에 모은 맵 변경. simulation의 이번-tick 배열과는 별개다. */
+export type SnapshotTileChange = { x: number; y: number; physics: World['tileChanges'][number]['physics'] };
+
 function effectRatios(player: PlayerState, tick: number, simulationHz: number): SnapshotPlayer['effects'] {
     const effects: SnapshotPlayer['effects'] = {};
     for (const key of EFFECT_BITS) {
@@ -69,7 +72,12 @@ function toSnapshotPlayer(player: PlayerState, obscured: boolean, tick: number, 
  * `unfiltered`는 관전자와 리플레이 전지적 모드다. 시야 코어를 아예 호출하지 않고 전원을 담는다.
  * "검열하지 않는다"는 판단은 호출하는 쪽(방 상태)이 하고 시야 코어는 스스로 정하지 않는다.
  */
-export function buildSnapshot(frame: AuthoritativeFrame, viewer: ViewerContext, roster: readonly RosterEntry[]): Snapshot {
+export function buildSnapshot(
+    frame: AuthoritativeFrame,
+    viewer: ViewerContext,
+    roster: readonly RosterEntry[],
+    tileChanges: readonly SnapshotTileChange[] = frame.world.tileChanges,
+): Snapshot {
     const world = frame.world;
     const snapshot: Snapshot = {
         version: PROTOCOL_VERSION,
@@ -81,8 +89,8 @@ export function buildSnapshot(frame: AuthoritativeFrame, viewer: ViewerContext, 
     if (viewer.full) {
         snapshot.map = { cols: world.map.cols, rows: world.map.rows, tiles: world.map.tiles.map((row) => [...row]) };
         snapshot.roster = roster.map((entry) => ({ id: entry.playerId, nickname: entry.nickname }));
-    } else if (world.tileChanges.length > 0) {
-        snapshot.tileChanges = world.tileChanges.map((change) => ({ ...change }));
+    } else if (tileChanges.length > 0) {
+        snapshot.tileChanges = tileChanges.map((change) => ({ ...change }));
     }
 
     if (viewer.access === 'unfiltered' || viewer.playerId === null) {
@@ -121,8 +129,9 @@ export function encodeForViewer(
     frame: AuthoritativeFrame,
     viewer: ViewerContext,
     roster: readonly RosterEntry[],
+    tileChanges?: readonly SnapshotTileChange[],
 ): ArrayBuffer {
-    return encodeSnapshot(buildSnapshot(frame, viewer, roster));
+    return encodeSnapshot(buildSnapshot(frame, viewer, roster, tileChanges));
 }
 
 /** 연막 잔여시간. 아직 연막 스킬이 없어 항상 비어 있지만 형태를 미리 맞춰 둔다. */

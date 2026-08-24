@@ -15,6 +15,7 @@ import { SessionModule } from './session/session.module';
 import { SanctionModule } from './sanction/sanction.module';
 import { RoomsModule } from './rooms/rooms.module';
 import { ResultsModule } from './results/results.module';
+import { MatchesModule } from './matches/matches.module';
 
 @Module({
     imports: [
@@ -35,6 +36,7 @@ import { ResultsModule } from './results/results.module';
         SanctionModule,
         RoomsModule,
         ResultsModule,
+        MatchesModule,
         HealthModule,
     ],
     controllers: [],

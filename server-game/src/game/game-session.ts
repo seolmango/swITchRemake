@@ -24,7 +24,7 @@ import { isFinished, stepWorld, type EmojiRequest } from '../simulation/step';
 import type { SkillRequest } from '../simulation/skills';
 import type { AuthoritativeFrame, World, WorldEvent } from '../simulation/world';
 import { SessionReplayRecorder } from './session-recorder';
-import { encodeForViewer, type RosterEntry } from './snapshot-view';
+import { encodeForViewer, type RosterEntry, type SnapshotTileChange } from './snapshot-view';
 
 export interface GameSessionOptions {
     readonly room: Room;
@@ -61,6 +61,8 @@ export class GameSession implements SchedulerTarget {
      * 연결 id가 아니라 playerId로 잡는 이유는 재접속하면 연결 id가 바뀌기 때문이다.
      */
     readonly #needsFullSnapshot = new Set<number>();
+    /** simulation의 이번-tick 신호를 네트워크 publish 경계까지 보존한다. */
+    #pendingTileChanges: SnapshotTileChange[] = [];
     readonly #replay: SessionReplayRecorder;
     #finished = false;
     readonly #startedAt = Date.now();
@@ -159,6 +161,7 @@ export class GameSession implements SchedulerTarget {
         const emojis = [...this.#pendingEmojis.values()];
         this.#pendingEmojis.clear();
         const frame = stepWorld(this.world, inputs, skills, emojis);
+        this.#pendingTileChanges.push(...frame.world.tileChanges);
 
         for (const rejection of frame.skillRejections) {
             this.#room.sendSkillRejected(rejection.playerId, rejection.slot, rejection.reason);
@@ -178,27 +181,33 @@ export class GameSession implements SchedulerTarget {
     }
 
     public publish(frame: AuthoritativeFrame): void {
-        for (const target of this.#room.snapshotTargets()) {
-            if (target.access === 'none') continue;
+        const tileChanges = this.#pendingTileChanges;
+        try {
+            for (const target of this.#room.snapshotTargets()) {
+                if (target.access === 'none') continue;
 
-            const full = this.#needsFullSnapshot.delete(target.playerId) || frame.tick <= 1;
-            const payload = encodeForViewer(frame, {
-                playerId: target.access === 'unfiltered' ? null : target.playerId,
-                access: target.access,
-                full,
-            }, this.#roster);
+                const full = this.#needsFullSnapshot.delete(target.playerId) || frame.tick <= 1;
+                const payload = encodeForViewer(frame, {
+                    playerId: target.access === 'unfiltered' ? null : target.playerId,
+                    access: target.access,
+                    full,
+                }, this.#roster, tileChanges);
 
-            // backpressure: 밀린 연결에는 교체 가능한 위치 스냅샷을 건너뛴다. 타일 변경처럼 누적돼야
-            // 하는 것은 full 스냅샷으로 따라잡게 만든다.
-            if (!full && target.connection.bufferedBytes() > NETWORK.SOCKET_BUFFER_SOFT_LIMIT_BYTES) {
-                this.#needsFullSnapshot.add(target.playerId);
-                continue;
+                // backpressure: 밀린 연결에는 교체 가능한 위치 스냅샷을 건너뛴다. 타일 변경처럼 누적돼야
+                // 하는 것은 full 스냅샷으로 따라잡게 만든다.
+                if (!full && target.connection.bufferedBytes() > NETWORK.SOCKET_BUFFER_SOFT_LIMIT_BYTES) {
+                    this.#needsFullSnapshot.add(target.playerId);
+                    continue;
+                }
+                target.connection.sendBinary(payload);
             }
-            target.connection.sendBinary(payload);
-        }
 
-        // #finish()가 이미 이번 tick의 마지막 프레임을 기록했다. 여기서 다시 쓰면 중복이다.
-        if (!this.#finished) this.#replay.recordSnapshotTick(frame);
+            // #finish()가 이미 이번 tick의 마지막 프레임을 기록했다. 여기서 다시 쓰면 중복이다.
+            if (!this.#finished) this.#replay.recordSnapshotTick(frame, tileChanges);
+        } finally {
+            // full 뷰어와 delta 뷰어, 리플레이가 모두 같은 누적분을 소비한 뒤에만 비운다.
+            this.#pendingTileChanges = [];
+        }
     }
 
     public stop(): void {

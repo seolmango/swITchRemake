@@ -9,7 +9,7 @@ import { computeVisibility, packVisibleMask, type ReplayHandleInfo } from 'share
 import { FRAMES_PER_CHUNK } from '../replay/format';
 import type { ReplayEvent, ReplayMeta, ReplayOutcome, ReplayRecorder } from '../replay/recorder';
 import { toVisibilityWorld, type AuthoritativeFrame, type WorldEvent } from '../simulation/world';
-import { encodeForViewer, type RosterEntry } from './snapshot-view';
+import { encodeForViewer, type RosterEntry, type SnapshotTileChange } from './snapshot-view';
 
 export interface SessionReplayRecorderOptions {
     readonly recorder: ReplayRecorder;
@@ -31,13 +31,13 @@ export class SessionReplayRecorder {
     }
 
     /** 스냅샷 tick마다. 뷰어에게 보내는 것과 별개로 검열 없는 원본을 기록한다. */
-    recordSnapshotTick(frame: AuthoritativeFrame): void {
-        this.#writeFrame(frame, this.#recordedFrames % FRAMES_PER_CHUNK === 0);
+    recordSnapshotTick(frame: AuthoritativeFrame, tileChanges?: readonly SnapshotTileChange[]): void {
+        this.#writeFrame(frame, this.#recordedFrames % FRAMES_PER_CHUNK === 0, tileChanges);
     }
 
     /** 경기 종료 tick. 스냅샷 주기와 정렬되지 않아도 항상 keyframe으로 남긴다. */
-    recordFinalFrame(frame: AuthoritativeFrame): void {
-        this.#writeFrame(frame, true);
+    recordFinalFrame(frame: AuthoritativeFrame, tileChanges?: readonly SnapshotTileChange[]): void {
+        this.#writeFrame(frame, true, tileChanges);
     }
 
     /** 이벤트는 시뮬레이션 tick마다. 태그 같은 순간은 스냅샷 주기보다 정밀해야 한다. */
@@ -60,8 +60,13 @@ export class SessionReplayRecorder {
         this.#recorder.abort(reason);
     }
 
-    #writeFrame(frame: AuthoritativeFrame, full: boolean): void {
-        const bytes = new Uint8Array(encodeForViewer(frame, { playerId: null, access: 'unfiltered', full }, this.#roster));
+    #writeFrame(frame: AuthoritativeFrame, full: boolean, tileChanges?: readonly SnapshotTileChange[]): void {
+        const bytes = new Uint8Array(encodeForViewer(
+            frame,
+            { playerId: null, access: 'unfiltered', full },
+            this.#roster,
+            tileChanges,
+        ));
         this.#recorder.writeFrame(frame.tick, bytes, full);
         this.#recordedFrames += 1;
         this.#writeVisibility(frame);

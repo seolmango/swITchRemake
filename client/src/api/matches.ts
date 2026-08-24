@@ -44,6 +44,7 @@ export interface LobbySnapshot {
 
 /** Direct payload of game.ended; returnsAt controls the POST_GAME deadline. */
 export interface GameEndedEventPayload {
+    matchId: string;
     winnerIds: [number, number];
     returnsAt: number;
 }
@@ -73,7 +74,12 @@ export interface MatchResultSnapshot {
     players: MatchPlayerResult[];
 }
 
-export const matchApiEnabled = import.meta.env.VITE_ENABLE_MATCH_API === 'true';
+export interface PendingMatchResult {
+    status: 'pending';
+    retryAfterMs: number;
+}
+
+export type MatchResultResponse = MatchResultSnapshot | PendingMatchResult;
 
 export const getMatchResult = (matchId: string) =>
-    apiRequest<MatchResultSnapshot>(`/matches/${encodeURIComponent(matchId)}/result`, { method: 'GET' });
+    apiRequest<MatchResultResponse>(`/matches/${encodeURIComponent(matchId)}/result`, { method: 'GET' });

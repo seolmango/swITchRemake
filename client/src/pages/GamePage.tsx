@@ -19,6 +19,7 @@ import switchIcon from '../assets/images/skill_switch.webp';
 import { formatKeyBindings, matchesKeyBinding } from '../utils/keyBinding.ts';
 import { cooldownTotalMs, getSwitchTargets, skillRejectionMessageKey, toCooldownDisplay } from '../utils/skillHud.ts';
 import { switchTargetPlayerIdForMatch } from '../utils/switchTarget.ts';
+import { GameLoadingOverlay } from '../game/hud/GameLoadingOverlay.tsx';
 
 const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { iconUrl: string; labelKey: string }> = {
     [SkillId.Dash]: { iconUrl: dashIcon, labelKey: 'lobby.skills.dash' },
@@ -29,6 +30,18 @@ const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { iconUrl: string; 
 const SWITCH_ACTIONS: readonly KeyAction[] = ['switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8'];
 const EMOJI_ACTIONS: readonly KeyAction[] = ['emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8'];
 
+function usePrefersReducedMotion(): boolean {
+    const [reduced, setReduced] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+    useEffect(() => {
+        const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+        if (!media) return;
+        const update = () => setReduced(media.matches);
+        media.addEventListener('change', update);
+        return () => media.removeEventListener('change', update);
+    }, []);
+    return reduced;
+}
+
 export const GamePage: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
@@ -36,22 +49,30 @@ export const GamePage: React.FC = () => {
     const session = useGameSession();
     const theme = useSettingsStore((state) => state.theme);
     const keyBindings = useSettingsStore((state) => state.keyBindings);
+    const motionLevel = useSettingsStore((state) => state.motionLevel);
+    const prefersReducedMotion = usePrefersReducedMotion();
     const engineRef = useRef<SwitchEngine | null>(null);
     const loadedMapId = useRef<string | null>(null);
     const mapReady = useRef(false);
     const pendingSnapshot = useRef<ArrayBuffer | null>(null);
     const [mapError, setMapError] = useState<string | null>(null);
     const [mapRetry, setMapRetry] = useState(0);
+    const [engineReady, setEngineReady] = useState(false);
+    const [mapLoaded, setMapLoaded] = useState(false);
+    const [firstSnapshotApplied, setFirstSnapshotApplied] = useState(false);
+    const [loadingTimedOut, setLoadingTimedOut] = useState(false);
     const recoveryAttempted = useRef(false);
     const requestedRoomId = searchParams.get('room_id');
     const live = session.status === 'connected' && session.roomId !== null;
-    const mapId = session.lobby?.mapId ?? null;
+    const mapId = session.starting?.mapId ?? session.lobby?.mapId ?? null;
     const mapBundleHash = session.mapBundleHash;
 
     const applySnapshot = useCallback((engine: SwitchEngine, frame: ArrayBuffer) => {
         const simulationHz = gameSession.getSnapshot().starting?.gameplay.simulationHz;
         const snapshot = engine.applySnapshot(frame, simulationHz);
         gameSession.updateHudSnapshot(snapshot);
+        const started = gameSession.getSnapshot().started;
+        if (started && snapshot.tick >= started.startTick) setFirstSnapshotApplied(true);
     }, []);
 
     useEffect(() => {
@@ -77,8 +98,11 @@ export const GamePage: React.FC = () => {
             const view = await verifiedMapView(id, hash, gameOrigin);
             if (engineRef.current !== engine) return;
             engine.map.load(view);
+            await engine.whenReady();
+            if (engineRef.current !== engine) return;
             loadedMapId.current = key;
             mapReady.current = true;
+            setMapLoaded(true);
             const latest = pendingSnapshot.current ?? gameSession.getLatestSnapshot();
             pendingSnapshot.current = null;
             if (latest) applySnapshot(engine, latest);
@@ -92,7 +116,13 @@ export const GamePage: React.FC = () => {
         engineRef.current = engine;
         loadedMapId.current = null;
         mapReady.current = false;
+        setEngineReady(false);
+        setMapLoaded(false);
+        setFirstSnapshotApplied(false);
         if (!engine) return;
+        void engine.whenReady().then(() => {
+            if (engineRef.current === engine) setEngineReady(true);
+        });
         if (mapId && mapBundleHash && session.gameHttpOrigin) {
             void loadMap(engine, mapId, mapBundleHash, session.gameHttpOrigin);
         }
@@ -128,18 +158,38 @@ export const GamePage: React.FC = () => {
 
     useEffect(() => {
         if (!session.ended || !session.roomId) return;
-        const roomId = session.roomId;
-        const timer = window.setTimeout(() => {
-            navigate(`/rooms/${encodeURIComponent(roomId)}/lobby`, { replace: true });
-        }, Math.max(0, session.ended.returnsAt - Date.now()));
-        return () => window.clearTimeout(timer);
+        const query = new URLSearchParams({
+            room_id: session.roomId,
+            returns_at: String(session.ended.returnsAt),
+        });
+        navigate(`/matches/${encodeURIComponent(session.ended.matchId)}/result?${query.toString()}`, { replace: true });
     }, [navigate, session.ended, session.roomId]);
 
-    const useMovementSkill = useCallback(() => gameSession.send({ type: 'game.useSkill', payload: { slot: SkillSlot.Movement } }), []);
-    const useSwitchTarget = useCallback((targetPlayerId: number) => gameSession.send({
+    const matchReady = engineReady && mapLoaded && session.started !== null && firstSnapshotApplied;
+    useEffect(() => {
+        if (matchReady) return;
+        const timer = window.setTimeout(() => setLoadingTimedOut(true), 12_000);
+        return () => window.clearTimeout(timer);
+    }, [mapRetry, matchReady]);
+
+    const waitingFor = !engineReady
+        ? t('game.waitingRenderer')
+        : !mapLoaded
+            ? t('game.waitingMap')
+            : session.started === null
+                ? t('game.waitingStart')
+                : t('game.waitingSnapshot');
+
+    const exitGame = useCallback(() => {
+        gameSession.disconnect();
+        navigate('/rooms', { replace: true });
+    }, [navigate]);
+
+    const handleMovementSkill = useCallback(() => gameSession.send({ type: 'game.useSkill', payload: { slot: SkillSlot.Movement } }), []);
+    const handleSwitchTarget = useCallback((targetPlayerId: number) => gameSession.send({
         type: 'game.useSkill', payload: { slot: SkillSlot.Switch, targetPlayerId },
     }), []);
-    const useEmoji = useCallback((emojiId: number) => gameSession.send({ type: 'game.emoji', payload: { emojiId } }), []);
+    const handleEmoji = useCallback((emojiId: number) => gameSession.send({ type: 'game.emoji', payload: { emojiId } }), []);
 
     useEffect(() => {
         if (!live || session.roomState !== RoomState.Playing || session.role !== 'player') return;
@@ -153,16 +203,16 @@ export const GamePage: React.FC = () => {
             if (event.repeat || alreadyPressed) return;
 
             if (matches('movementSkill')) {
-                useMovementSkill();
+                handleMovementSkill();
                 return;
             }
             const switchTargetPlayerId = switchTargetPlayerIdForMatch(matches);
             if (switchTargetPlayerId !== null) {
-                useSwitchTarget(switchTargetPlayerId);
+                handleSwitchTarget(switchTargetPlayerId);
                 return;
             }
             const emojiIndex = EMOJI_ACTIONS.findIndex(matches);
-            if (emojiIndex >= 0) useEmoji(emojiIndex);
+            if (emojiIndex >= 0) handleEmoji(emojiIndex);
         };
         const onKeyUp = (event: KeyboardEvent) => pressed.delete(event.code);
         const onBlur = () => pressed.clear();
@@ -185,7 +235,7 @@ export const GamePage: React.FC = () => {
             window.removeEventListener('keyup', onKeyUp);
             window.removeEventListener('blur', onBlur);
         };
-    }, [live, session.role, session.roomState, useEmoji, useMovementSkill, useSwitchTarget]);
+    }, [handleEmoji, handleMovementSkill, handleSwitchTarget, live, session.role, session.roomState]);
 
     const hud = useMemo<HudState>(() => ({
         players: (session.lobby?.players ?? []).map((player) => ({
@@ -241,19 +291,27 @@ export const GamePage: React.FC = () => {
                     mode={session.role === 'spectator' ? EngineMode.Spectate : EngineMode.Play}
                     hud={hud}
                     onEngine={handleEngine}
-                    onUseMovementSkill={useMovementSkill}
-                    onSwitchTarget={useSwitchTarget}
-                    onEmoji={useEmoji}
+                    onUseMovementSkill={handleMovementSkill}
+                    onSwitchTarget={handleSwitchTarget}
+                    onEmoji={handleEmoji}
+                    matchReady={matchReady}
+                    latencyMs={session.latencyMs}
+                    estimatedTps={session.estimatedTps}
                 />
-                {mapError && (
-                    <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.65)', color: 'white', zIndex: 20 }}>
-                        <div style={{ display: 'grid', gap: 20, justifyItems: 'center' }}>
-                            <p>맵을 불러오지 못했습니다: {mapError}</p>
-                            <RoundButton width={300} height={80} type={1} content={t('rooms.refresh')} onClick={() => setMapRetry((value) => value + 1)}/>
-                            <RoundButton width={300} height={80} type={2} content={t('lobby.leave')} onClick={() => { gameSession.disconnect(); navigate('/rooms'); }}/>
-                        </div>
-                    </div>
-                )}
+                <GameLoadingOverlay
+                    theme={theme}
+                    ready={matchReady}
+                    reducedMotion={motionLevel === 'reduced' || prefersReducedMotion}
+                    waitingFor={waitingFor}
+                    mapError={mapError}
+                    timedOut={loadingTimedOut}
+                    onRetry={() => {
+                        setLoadingTimedOut(false);
+                        if (mapError) setMapRetry((value) => value + 1);
+                        else window.location.reload();
+                    }}
+                    onExit={exitGame}
+                />
             </div>
         );
     }
@@ -262,9 +320,9 @@ export const GamePage: React.FC = () => {
         <PageLayout title="swITch" backTo="/rooms">
             <RoundBox x={960} y={535} width={1250} height={650} type={1}/>
             <div style={{ position: 'absolute', left: 960, top: 520, width: 900, transform: 'translate(-50%,-50%)', textAlign: 'center', display: 'grid', gap: 45, justifyItems: 'center' }}>
-                <p style={{ color: themeColors(theme).text, fontSize: 43, lineHeight: 1.5, margin: 0 }}>{t('lobby.resumeFailed')}</p>
+                <p style={{ color: themeColors(theme).text, fontSize: 43, lineHeight: 1.5, margin: 0 }}>{session.status === 'disconnected' ? t('game.connectionLost') : t('lobby.resumeFailed')}</p>
                 <p style={{ color: themeColors(theme).muted, fontSize: 27, lineHeight: 1.45, margin: 0 }}>{t('game.serverPending')}</p>
-                <RoundButton width={600} height={108} type={1} content={t('guide.openSandbox')} onClick={() => navigate('/sandbox')}/>
+                <RoundButton width={600} height={108} type={1} content={t('lobby.leave')} onClick={exitGame}/>
             </div>
         </PageLayout>
     );

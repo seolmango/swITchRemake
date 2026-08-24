@@ -5,8 +5,7 @@ import { PageLayout } from '../../components/layout/PageLayout.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
 import { Icon } from '../../components/common/Icon.tsx';
 import { MatchResultTable } from '../../components/match/MatchResultTable.tsx';
-import { getMatchResult, matchApiEnabled, type MatchResultSnapshot } from '../../api/matches.ts';
-import { DEMO_RESULT } from '../../data/demoMatch.ts';
+import { getMatchResult, type MatchResultSnapshot } from '../../api/matches.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../../theme/color.ts';
 import { isInAppBrowser, openInExternalBrowser } from '../../utils/inAppBrowser.ts';
@@ -22,42 +21,83 @@ const formatDuration = (durationMs: number) => {
 export const MatchResultPage: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { matchId = DEMO_RESULT.matchId } = useParams();
+    const { matchId } = useParams();
     const [searchParams] = useSearchParams();
     const theme = useSettingsStore((state) => state.theme);
     const colors = themeColors(theme);
-    const [result, setResult] = useState<MatchResultSnapshot>({ ...DEMO_RESULT, matchId });
+    const [result, setResult] = useState<MatchResultSnapshot | null>(null);
     const [message, setMessage] = useState('');
+    const [loadFailed, setLoadFailed] = useState(false);
+    const [retryToken, setRetryToken] = useState(0);
     const [remainingSeconds, setRemainingSeconds] = useState(30);
     const [sharing, setSharing] = useState(false);
+    const eventReturnsAtValue = Number(searchParams.get('returns_at'));
+    const eventReturnsAt = Number.isFinite(eventReturnsAtValue) && eventReturnsAtValue > 0 ? eventReturnsAtValue : null;
 
     useEffect(() => {
-        if (!matchApiEnabled) return;
         let active = true;
-        void getMatchResult(matchId).then((snapshot) => {
-            if (active) setResult({ ...snapshot, returnsAt: snapshot.returnsAt ?? Date.now() + 30_000 });
-        }).catch(() => {
-            if (active) setMessage(t('auth.serverError'));
-        });
-        return () => { active = false; };
-    }, [matchId, t]);
+        let retryTimer: number | null = null;
+        const load = async () => {
+            if (!matchId) {
+                setLoadFailed(true);
+                setMessage('Match id is missing.');
+                return;
+            }
+            setLoadFailed(false);
+            try {
+                const response = await getMatchResult(matchId);
+                if (!active) return;
+                if ('status' in response) {
+                    setMessage(t('common.loading'));
+                    retryTimer = window.setTimeout(() => { void load(); }, response.retryAfterMs);
+                    return;
+                }
+                setResult({ ...response, returnsAt: eventReturnsAt ?? response.returnsAt ?? Date.now() + 30_000 });
+                setMessage('');
+            } catch (error) {
+                if (!active) return;
+                setLoadFailed(true);
+                setMessage(error instanceof Error ? error.message : t('auth.serverError'));
+            }
+        };
+        void load();
+        return () => {
+            active = false;
+            if (retryTimer !== null) window.clearTimeout(retryTimer);
+        };
+    }, [eventReturnsAt, matchId, retryToken, t]);
 
-    const winners = useMemo(() => result.winners
+    const roomId = searchParams.get('room_id') || result?.roomId || '';
+    const lobbyPath = roomId ? `/rooms/${encodeURIComponent(roomId)}/lobby` : '/rooms';
+
+    const winners = useMemo(() => result === null ? [] : result.winners
         .map((winnerId) => result.players.find((player) => player.playerId === winnerId))
         .filter((player): player is NonNullable<typeof player> => Boolean(player)), [result]);
-    const roomId = searchParams.get('room_id') || result.roomId;
-
     useEffect(() => {
-        const returnsAt = result.returnsAt ?? Date.now() + 30_000;
+        const returnsAt = result?.returnsAt ?? eventReturnsAt;
+        if (returnsAt === null) return;
         const updateCountdown = () => {
             const nextSeconds = Math.max(0, Math.ceil((returnsAt - Date.now()) / 1000));
             setRemainingSeconds(nextSeconds);
-            if (nextSeconds === 0) navigate(`/rooms/${encodeURIComponent(roomId)}/lobby`, { replace: true });
+            if (nextSeconds === 0) navigate(lobbyPath, { replace: true });
         };
         updateCountdown();
         const timer = window.setInterval(updateCountdown, 250);
         return () => window.clearInterval(timer);
-    }, [navigate, result.returnsAt, roomId]);
+    }, [eventReturnsAt, lobbyPath, navigate, result]);
+
+    if (!result) {
+        return (
+            <PageLayout title={t('result.title')} backTo={lobbyPath}>
+                <section className="result-shell" style={{ display: 'grid', placeItems: 'center', minHeight: 500 }}>
+                    <div role="status" aria-live="polite" style={{ display: 'grid', gap: 20, justifyItems: 'center' }}>
+                        <strong>{message || t('common.loading')}</strong>
+                        {loadFailed && <RoundButton width={280} height={72} type={1} content={t('rooms.refresh')} onClick={() => setRetryToken((value) => value + 1)}/>}
+                    </div>
+                </section>
+            </PageLayout>
+        );
+    }
 
     const getShareSummary = () => {
         const winnerNames = winners.map((winner) => winner.nickname).join(', ');
@@ -96,7 +136,7 @@ export const MatchResultPage: React.FC = () => {
     };
 
     return (
-        <PageLayout title={t('result.title')} backTo={`/rooms/${encodeURIComponent(roomId)}/lobby`}>
+        <PageLayout title={t('result.title')} backTo={lobbyPath}>
             <section
                 className="result-shell"
                 style={{
@@ -139,7 +179,6 @@ export const MatchResultPage: React.FC = () => {
                                 <span className="result-kicker">MATCH STATS</span>
                                 <h2 id="result-stats-title">{t('result.details')}</h2>
                             </div>
-                            {!matchApiEnabled && <span className="demo-badge">{t('common.demoData')}</span>}
                         </header>
                         <MatchResultTable players={result.players} winnerIds={result.winners} />
                     </section>
@@ -158,7 +197,7 @@ export const MatchResultPage: React.FC = () => {
                         <div>
                         <RoundButton width={300} height={88} type={2} content={IN_APP_BROWSER ? t('result.shareUnavailable') : t('result.shareImage')} disabled={IN_APP_BROWSER} isLoading={sharing} onClick={() => void shareResultImage()}/>
                         {IN_APP_BROWSER && <button type="button" className="result-external-button" onClick={() => void openExternal()}><Icon name="external" size={24}/>{t('result.openExternal')}</button>}
-                        <RoundButton width={350} height={88} type={1} content={t('result.backToLobby')} onClick={() => navigate(`/rooms/${encodeURIComponent(roomId)}/lobby`)}/>
+                        <RoundButton width={350} height={88} type={1} content={t('result.backToLobby')} onClick={() => navigate(lobbyPath)}/>
                     </div>
                 </footer>
             </section>

@@ -14,6 +14,7 @@ import {
     interpolateEntityPosition,
     type EntityPositionBuffers,
 } from './entityInterpolation.ts';
+import { cameraFollowLerp } from './cameraSmoothing.ts';
 
 export interface WorldSceneInit {
     theme: Theme;
@@ -86,6 +87,8 @@ export class WorldScene extends Phaser.Scene {
     /** One-shot decaying zoom "punch" from the followed player's own blink — separate from `fxZoomMult`
      * since it decays back to 0 (additive), not toward a per-state target. */
     private zoomPunch = 0;
+    private lastUpdateErrorLogAt = Number.NEGATIVE_INFINITY;
+    private suppressedUpdateErrors = 0;
 
     constructor() {
         super({ key: 'world' });
@@ -125,6 +128,14 @@ export class WorldScene extends Phaser.Scene {
     }
 
     update(_time: number, delta: number): void {
+        try {
+            this.updateFrame(delta);
+        } catch (error) {
+            this.reportUpdateError(error);
+        }
+    }
+
+    private updateFrame(delta: number): void {
         const dt = Math.min(delta, 50) / 1000;
         this.clock += dt;
         this.animClock += dt * this.renderOptions.motion.animSpeed;
@@ -143,7 +154,21 @@ export class WorldScene extends Phaser.Scene {
             sprite.update(this.clock, this.animClock, this.theme, onScreen, this.renderOptions);
         }
 
-        this.updateCameraFx(dt);
+        this.updateCameraFx(dt, delta);
+    }
+
+    private reportUpdateError(error: unknown): void {
+        const now = performance.now();
+        if (now - this.lastUpdateErrorLogAt < 10_000) {
+            this.suppressedUpdateErrors += 1;
+            return;
+        }
+        console.error('[swITch] Phaser world update failed; continuing on the next frame', {
+            suppressedSinceLastLog: this.suppressedUpdateErrors,
+            error,
+        });
+        this.lastUpdateErrorLogAt = now;
+        this.suppressedUpdateErrors = 0;
     }
 
     /**
@@ -151,7 +176,7 @@ export class WorldScene extends Phaser.Scene {
      * and turns it into camera zoom/lerp/shake. Derives nothing about the world itself (no tile lookups,
      * no concealment), same "dumb renderer" rule as everywhere else in this engine.
      */
-    private updateCameraFx(dt: number): void {
+    private updateCameraFx(dt: number, deltaMs: number): void {
         const cam = this.cameras.main;
         const followed = this.followedId !== null ? this.players.get(this.followedId) : undefined;
         const s = followed?.state;
@@ -159,18 +184,20 @@ export class WorldScene extends Phaser.Scene {
         // 다는 대신 계수 하나로 모으면 "줄임 / 보통 / 풍부하게"가 한 줄로 끝난다.
         const fx = this.renderOptions.motion.cameraFx;
         const mult = (m: number) => 1 + (m - 1) * fx;
-        const lerpOf = (l: number) => (this.settings.cameraSmoothing ? l : 1);
+        const lerpOf = (halfLifeMs: number) => this.settings.cameraSmoothing
+            ? cameraFollowLerp(deltaMs, halfLifeMs)
+            : 1;
 
         let targetMult = 1;
-        let targetLerp = lerpOf(CAMERA.followLerp);
+        let targetLerp = lerpOf(CAMERA.followHalfLifeMs);
         if (s) {
             if (s.effects[EffectType.Dash]) {
                 targetMult *= mult(CAMERA_FX.dashZoomMult);
-                targetLerp = lerpOf(CAMERA_FX.dashLerp);
+                targetLerp = lerpOf(CAMERA_FX.dashFollowHalfLifeMs);
             }
             if (s.effects[EffectType.Exhaust]) {
                 targetMult *= mult(CAMERA_FX.exhaustZoomMult);
-                targetLerp = lerpOf(CAMERA_FX.exhaustLerp);
+                targetLerp = lerpOf(CAMERA_FX.exhaustFollowHalfLifeMs);
             }
             if (s.effects[EffectType.Frenzy]) {
                 targetMult *= mult(CAMERA_FX.frenzyZoomMult);
@@ -222,7 +249,7 @@ export class WorldScene extends Phaser.Scene {
         this.freeCamera = false;
         this.cameraInitialized = true;
         this.followedId = id;
-        this.cameras.main.startFollow(sprite.followTarget, true, CAMERA.followLerp, CAMERA.followLerp);
+        this.startFollowing(sprite);
     }
 
     cameraFree(): void {
@@ -423,7 +450,16 @@ export class WorldScene extends Phaser.Scene {
         this.freeCamera = false;
         this.followedId = this.selfId;
         this.cameraInitialized = true;
-        this.cameras.main.startFollow(sprite.followTarget, true, CAMERA.followLerp, CAMERA.followLerp);
+        this.startFollowing(sprite);
+    }
+
+    private startFollowing(sprite: PlayerSprite): void {
+        const initialLerp = this.settings.cameraSmoothing
+            ? cameraFollowLerp(1_000 / 60, CAMERA.followHalfLifeMs)
+            : 1;
+        // Vector artwork needs sub-pixel camera movement. Integer snapping here turns smooth player
+        // interpolation into whole-screen 1 px steps (and CSS scaling makes those steps fractional again).
+        this.cameras.main.startFollow(sprite.followTarget, false, initialLerp, initialLerp);
     }
 
     /**

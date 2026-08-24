@@ -158,7 +158,11 @@ export const FLOOR = {
 export const CAMERA = {
     minZoom: 0.05,
     maxZoom: 4,
-    followLerp: 0.15,
+    /**
+     * 40 ms half-life is ~0.25 lerp at 60 Hz: substantially more responsive than the old 0.15
+     * per-frame value (~71 ms half-life), while retaining a short, soft follow instead of rigid 1:1 tracking.
+     */
+    followHalfLifeMs: 40,
     wheelZoomStep: 0.1,
 };
 
@@ -179,9 +183,9 @@ export const CAMERA_FX = {
     /** Exponential-decay rate (per second) the combined zoom multiplier eases toward its target at. */
     zoomLerpSpeed: 6,
     /** Follow smoothing while dashing — snappier than the default so the camera "keeps up". */
-    dashLerp: 0.28,
+    dashFollowHalfLifeMs: 28,
     /** Follow smoothing while exhausted — heavier/slower, reads as sluggish. */
-    exhaustLerp: 0.06,
+    exhaustFollowHalfLifeMs: 140,
     frenzyShakeIntensity: 0.006,
     frenzyShakeDurationMs: 180,
     /** One-shot zoom "punch" applied on the followed player's own blink (negative = brief zoom-out snap). */
