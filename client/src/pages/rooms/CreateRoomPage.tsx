@@ -5,7 +5,7 @@ import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { TextField } from '../../components/common/TextField.tsx';
 import { Checkbox } from '../../components/common/Checkbox.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
-import { createRoom, resolveRoomAssignment, roomApiEnabled } from '../../api/rooms.ts';
+import { createRoom, getAlreadyAssignedLobbyPath, isAlreadyAssigned, roomApiEnabled } from '../../api/rooms.ts';
 import { gameSession } from '../../game/GameSession.ts';
 import { isRoomName, isRoomPassword } from '../../utils/validation.ts';
 import { useNavigate } from 'react-router-dom';
@@ -30,10 +30,14 @@ export const CreateRoomPage: React.FC = () => {
         }
         setLoading(true);
         try {
-            const result = await resolveRoomAssignment(await createRoom({ name: name.trim(), password: privateRoom ? password : undefined }));
-            await gameSession.connect(result, { roomName: name.trim(), isPrivate: privateRoom });
+            const result = await createRoom({ name: name.trim(), password: privateRoom ? password : undefined });
+            if (isAlreadyAssigned(result)) {
+                navigate(getAlreadyAssignedLobbyPath(result));
+                return;
+            }
+            await gameSession.connect(result, { isPrivate: privateRoom });
             navigate(`/rooms/${encodeURIComponent(result.roomId)}/lobby`);
-        } catch { setMessage(t('auth.serverError')); } finally { setLoading(false); }
+        } catch (error) { setMessage(error instanceof Error && error.message === 'ACTIVE_ROOM_MISSING' ? t('lobby.resumeFailed') : t('auth.serverError')); } finally { setLoading(false); }
     };
 
     return (

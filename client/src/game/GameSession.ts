@@ -13,7 +13,6 @@ type ClientMessageBody = ClientMessage extends infer Message
     : never;
 
 export interface GameSessionMetadata {
-    roomName?: string;
     isPrivate?: boolean;
 }
 
@@ -23,7 +22,6 @@ export interface GameSessionState {
     roomCode: string | null;
     mapBundleHash: string | null;
     gameHttpOrigin: string | null;
-    roomName: string | null;
     isPrivate: boolean;
     selfId: number | null;
     roomState: AuthOkMessage['payload']['roomState'] | null;
@@ -49,7 +47,6 @@ const INITIAL_STATE: GameSessionState = {
     roomCode: null,
     mapBundleHash: null,
     gameHttpOrigin: null,
-    roomName: null,
     isPrivate: false,
     selfId: null,
     roomState: null,
@@ -147,7 +144,6 @@ class GameSession {
             roomId: grant.roomId,
             roomCode: grant.roomCode,
             gameHttpOrigin: gameHttpOrigin(grant.wsPath),
-            roomName: metadata.roomName?.trim() || grant.roomId,
             isPrivate: metadata.isPrivate ?? false,
         });
 

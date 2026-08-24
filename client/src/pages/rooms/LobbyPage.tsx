@@ -59,7 +59,7 @@ export const LobbyPage: React.FC = () => {
         if (!live || !lobby) return null;
         return {
             roomId,
-            roomName: session.roomName ?? roomId,
+            roomName: lobby.roomName,
             map: lobby.mapId,
             isPrivate: session.isPrivate,
             isLocked: lobby.locked,
@@ -82,7 +82,7 @@ export const LobbyPage: React.FC = () => {
                 ) ?? SkillId.Dash,
             })),
         };
-    }, [live, liveLockElapsedMs, roomId, session.isPrivate, session.lobby, session.roomName, session.selfId]);
+    }, [live, liveLockElapsedMs, roomId, session.isPrivate, session.lobby, session.selfId]);
     const room = liveRoom ?? demoRoom;
     const displayCode = live ? (session.roomCode ?? room.roomId) : room.roomId;
     const isStartLocked = room.startLockMs > 0;
@@ -251,7 +251,7 @@ export const LobbyPage: React.FC = () => {
 
     const actionTarget = hostAction ? room.players.find((player) => player.playerId === hostAction.playerId) : undefined;
 
-    if (roomApiEnabled && !live) {
+    if (roomApiEnabled && (!live || !session.lobby)) {
         return (
             <PageLayout title={t('rooms.title')} backTo="/rooms">
                 <RoundBox x={960} y={535} width={1050} height={480} type={1}/>

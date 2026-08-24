@@ -166,6 +166,14 @@ export type AuthOkMessage = ServerEnvelope<'auth.ok', {
 
 export type LobbyStateMessage = ServerEnvelope<'lobby.state', {
     hostId: number;
+    /**
+     * 방을 만든 사람이 붙인 이름.
+     *
+     * **서버가 알려줘야 한다.** 예전에는 클라이언트가 방을 만들 때 입력한 값이나 방 목록에서 본 값을
+     * 들고 다녔는데, 그러면 코드로 참가하거나 로비에서 새로고침한 사람은 넘겨받을 게 없어서 화면에
+     * 방 이름 대신 36자 roomId가 그대로 떴다. 이름은 방의 상태이므로 상태 이벤트에 실린다.
+     */
+    roomName: string;
     mapId: string;
     capacity: number;
     locked: boolean;

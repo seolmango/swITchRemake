@@ -576,6 +576,7 @@ export class Room {
             type: 'lobby.state',
             payload: {
                 hostId: this.#roster.hostId,
+                roomName: this.name,
                 mapId: this.#mapId,
                 capacity: this.#roster.capacity,
                 locked: this.#locked,

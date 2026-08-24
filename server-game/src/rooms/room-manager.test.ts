@@ -127,7 +127,10 @@ test('lobby.setLoadout accepts one loadout skill and broadcasts it', () => {
     assert.equal(fixture.manager.get('room')?.memberByUser(1)?.loadout, SkillId.Flash);
     const state = fixture.owner.messages.at(-1);
     assert.equal(state?.type, 'lobby.state');
-    if (state?.type === 'lobby.state') assert.deepEqual(state.payload.players[0]?.skills, [SkillId.Flash]);
+    if (state?.type === 'lobby.state') {
+        assert.equal(state.payload.roomName, 'name');
+        assert.deepEqual(state.payload.players[0]?.skills, [SkillId.Flash]);
+    }
 });
 
 test('lobby.setLoadout rejects an unknown skill', () => {

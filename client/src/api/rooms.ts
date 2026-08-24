@@ -38,9 +38,9 @@ export const joinRoom = (roomCode: string, password?: string) => apiRequest<Room
 export const quickJoin = () => apiRequest<RoomAssignment>('/rooms/quick-join', { method: 'POST' });
 export const resumeRoom = (roomId: string) => apiRequest<RoomSeatGrant>(`/rooms/${encodeURIComponent(roomId)}/resume`, { method: 'POST' });
 
-export const resolveRoomAssignment = async (assignment: RoomAssignment): Promise<RoomSeatGrant> => {
-    if (!('alreadyAssigned' in assignment)) return assignment;
-    const roomId = assignment.roomId;
-    if (!roomId) throw new Error('The active room assignment did not include a room id');
-    return resumeRoom(roomId);
+export const isAlreadyAssigned = (assignment: RoomAssignment): assignment is ExistingRoomAssignment => 'alreadyAssigned' in assignment;
+
+export const getAlreadyAssignedLobbyPath = (assignment: ExistingRoomAssignment): string => {
+    if (!assignment.roomId) throw new Error('ACTIVE_ROOM_MISSING');
+    return `/rooms/${encodeURIComponent(assignment.roomId)}/lobby`;
 };

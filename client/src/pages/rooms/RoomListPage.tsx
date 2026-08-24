@@ -6,7 +6,7 @@ import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
 import { Icon } from '../../components/common/Icon.tsx';
 import { RoomCard } from '../../components/room/RoomCard.tsx';
-import { getRooms, quickJoin, resolveRoomAssignment, roomApiEnabled, type RoomSummary } from '../../api/rooms.ts';
+import { getAlreadyAssignedLobbyPath, getRooms, isAlreadyAssigned, quickJoin, roomApiEnabled, type RoomSummary } from '../../api/rooms.ts';
 import { gameSession } from '../../game/GameSession.ts';
 import { themeColors } from '../../theme/color.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
@@ -60,11 +60,14 @@ export const RoomListPage: React.FC = () => {
     const handleQuickJoin = async () => {
         if (!roomApiEnabled) { navigate('/rooms/654321/lobby'); return; }
         try {
-            const result = await resolveRoomAssignment(await quickJoin());
-            const room = rooms.find((candidate) => candidate.id === result.roomId);
-            await gameSession.connect(result, { roomName: room?.name, isPrivate: false });
+            const result = await quickJoin();
+            if (isAlreadyAssigned(result)) {
+                navigate(getAlreadyAssignedLobbyPath(result));
+                return;
+            }
+            await gameSession.connect(result, { isPrivate: false });
             navigate(`/rooms/${encodeURIComponent(result.roomId)}/lobby`);
-        } catch { setMessage(t('auth.serverError')); }
+        } catch (error) { setMessage(error instanceof Error && error.message === 'ACTIVE_ROOM_MISSING' ? t('lobby.resumeFailed') : t('auth.serverError')); }
     };
 
     return (
