@@ -14,6 +14,11 @@ import { EmailService } from './email.service';
                     secure: true,
                     pool: true,
                     maxConnections: 5,
+                    // nodemailer 기본값(connection 2분, greeting 30초)은 인증 코드 메일에 너무 길다.
+                    // 사용자는 그 사이 화면 앞에서 기다린다. 못 보내면 빨리 실패하는 편이 낫다.
+                    connectionTimeout: 10_000,
+                    greetingTimeout: 10_000,
+                    socketTimeout: 20_000,
                     auth: {
                         user: configService.get<string>('SMTP_USER'),
                         pass: configService.get<string>('SMTP_PASSWORD'),
