@@ -81,7 +81,21 @@ fetch, `/game` F5 복구, 카메라 자동 추적, 리플레이 기록·CLI까�
 
 ---
 
-## T0. 스킬 입력 배선 — 지금 게임이 성립하지 않는다
+## T0. 스킬 입력 배선 — 서버 완료(d429b21, 0b6eb1b), 클라이언트 진행 중
+
+**끝난 것**
+
+- shared 계약: `SkillId`/`SkillSlot`/`LOADOUT_SKILLS`/`SkillRejection`, 스냅샷 SELF 섹션의 본인 쿨타임,
+  `LobbyPlayer.skills`, `skill.rejected` 이벤트. `heldActions`는 예약 필드로 문서화했다(스킬은 JSON 경로).
+- 서버: `lobby.setLoadout` 검증·저장·방송, 고른 로드아웃이 실제 `PlayerState`로, 뷰어별 스냅샷의 쿨타임,
+  요청자에게만 가는 `skill.rejected`, 스냅샷 `emojiId`로 나가는 이모지(tick 경계 큐).
+
+**남은 것**: 클라이언트 배선 — 키보드에서 스킬 발동, `switchTargets` 계산과 `onSwitchTarget` 연결,
+서버 쿨타임 표시, 실패 사유 알림, 로비의 스킬 선택을 `lobby.setLoadout`으로 전송.
+
+<details><summary>원래 진단</summary>
+
+### 원래 진단 (2026-08-24)
 
 **왜**: 2026-08-24 점검에서 확인했다. **스위치를 쓸 방법이 저장소 어디에도 없다.** 게임 이름이 swITch인데
 핵심 메커니즘이 클라이언트에서 끊겨 있다. 경로를 끝까지 따라간 결과다.
@@ -136,6 +150,8 @@ X 라운드에서 "3인 경기가 끝까지 돌았다"고 확인한 것은 **아
 이모지가 상대 화면에 보인다. 설정에서 키를 바꾸면 그 키로 된다.
 
 > **T5·T6의 선행이다.** 도움말이 키를 설명하고 훈련장이 스킬을 연습시키는데, 그 스킬이 안 나가면 둘 다 의미가 없다.
+
+</details>
 
 ---
 
@@ -481,7 +497,13 @@ T0~T11이 끝나고 코드가 더 안 움직일 때. 찾을 것이 "스펙 위�
 - 티켓 검증의 원자적 소비와 실패 응답의 타이밍 차이
 - Redis ACL 사용자 분리. 지금은 단일 비밀번호로 전부 접근 가능하다
 - 세션 테이블 원본 IP의 보관 기간과 파기(`SESSION_IP_RETENTION_DAYS`가 실제로 도는지)
-- 위반 신호(`ViolationSignal`)의 실제 소비자 연결
+- 위반 신호(`ViolationSignal`)의 실제 소비자 연결. **소비자를 붙이기 전에 반드시 볼 것**:
+  `GameSession.queueSkill`/`queueEmoji`가 `userId` 자리에 **방 범위 `playerId`를 넣고 있다**
+  (`game-session.ts`). 계약상 `userId`는 계정 정수이거나 `g:{uuid}`다. 지금은 로그뿐이라 무해하지만,
+  제재 소비자가 이 값을 그대로 쓰면 **엉뚱한 계정이 제재된다.** `GameSession`은 신원을 모르므로
+  방을 거쳐 해석하거나 이 신호를 아예 방 계층으로 올려야 한다
+- `game.emoji`의 `emojiId`가 JSON 계약상 범위 제한이 없는데 스냅샷에서는 u8이다. 지금은 서버가
+  `0..255`로 막고 있지만 범위는 shared 계약에 있어야 한다
 - 결정론 테스트와 가짜 클라이언트 부하 테스트
 - 8인 풀방 tick 측정 후 프로세스당 방 수 상한 확정. `draining` 임계값과 연결 상한 확정
 - outbox가 가득 찼을 때 신규 게임 시작 차단(`outbox.canStartNewGame`). 지금은 로그만 남기고 그 경기 전적이 유실된다
