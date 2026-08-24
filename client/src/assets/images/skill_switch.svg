@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="스위치">
+  <!--
+    스위치. 게임 이름이자 핵심이라 넷 중 가장 강해야 한다.
+    유일하게 주체가 둘이다 — 그 자체가 나머지와 구분되는 지점이라 하나로 줄이면 안 된다.
+    빨간 쪽이 술래다. 두 화살표가 "자리를 맞바꾼다"를 말한다.
+  -->
+  <g fill="none" stroke="#8F8F8F" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M34 44 Q64 16 94 44"/>
+    <path d="M82 34 L96 45 L88 60"/>
+    <path d="M94 84 Q64 112 34 84"/>
+    <path d="M46 94 L32 83 L40 68"/>
+  </g>
+  <circle cx="26" cy="64" r="14" fill="#FFA4A4" stroke="#FF7171" stroke-width="9"/>
+  <circle cx="102" cy="64" r="14" fill="#ECECE9" stroke="#8F8F8F" stroke-width="9"/>
+</svg>

@@ -39,7 +39,7 @@ test('guest issuance creates a tab-scoped refresh session and never creates an a
 });
 
 test('guest issuance rate is enforced by request IP', async () => {
-    const redis = { incrementWithTtl: async () => 6, ttlMilliseconds: async () => 12_000 };
+    const redis = { incrementWithTtl: async () => 31, ttlMilliseconds: async () => 12_000 };
     const service = new AuthService(
         {} as never, redis as never, {} as never, {} as never,
         { get: () => 'secret' } as never, { hmacIp: () => 'ip-hmac' } as never, {} as never, {} as never,

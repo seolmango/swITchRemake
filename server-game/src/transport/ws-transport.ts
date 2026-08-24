@@ -14,6 +14,7 @@ import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import type { ConnectionManager, OpenConnection } from '../gateway/connection-manager';
 import type { AuthenticatedPrincipal, TicketAuthenticator } from '../gateway/ticket-auth';
 import { AbuseRateLimiter, type RateSubject } from '../gateway/rate-limit';
+import { RateLimitViolationAggregator } from '../gateway/rate-limit-violations';
 import { parseAuthMessage, parseClientMessage, type ViolationSink } from '../gateway/message-router';
 import type { Connection, GameTransport, TransportHandlers } from './game-transport';
 
@@ -56,6 +57,11 @@ export interface WsTransportOptions {
 type MessageBody = ServerMessage extends infer Message
     ? Message extends ServerMessage ? Omit<Message, 'v' | 'eventId' | 'serverTick'> : never
     : never;
+
+const RATE_LIMIT_SCOPES = ['connection', 'user'] as const;
+const ABUSIVE_RATE_MULTIPLIER = 5;
+const ABUSIVE_RATE_WINDOWS = 5;
+const RATE_LIMIT_LOG_INTERVAL_MS = 5_000;
 
 function normalizeIp(ip: string | undefined): string {
     if (ip === undefined || ip === '') return 'unknown';
@@ -190,6 +196,8 @@ export class WsTransport implements GameTransport {
     readonly #webSockets: WebSocketServer;
     readonly #allowedOrigins: ReadonlySet<string>;
     readonly #rateLimiter: AbuseRateLimiter;
+    readonly #rateLimitViolations: RateLimitViolationAggregator;
+    readonly #rateLimitLogTimer: NodeJS.Timeout;
     readonly #sockets = new Set<WebSocket>();
     #handlers: TransportHandlers | null = null;
     #accepting = true;
@@ -217,6 +225,9 @@ export class WsTransport implements GameTransport {
         this.#webSockets = new WebSocketServer({ noServer: true, maxPayload: Math.max(options.limits.maxJsonFrameBytes, options.limits.maxBinaryFrameBytes) });
         this.#allowedOrigins = new Set(options.allowedOrigins.map(canonicalOrigin).filter((origin): origin is string => origin !== null));
         this.#rateLimiter = options.rateLimiter ?? new AbuseRateLimiter();
+        this.#rateLimitViolations = new RateLimitViolationAggregator(options.violationSink);
+        this.#rateLimitLogTimer = setInterval(() => this.#rateLimitViolations.flushReady(RATE_LIMIT_LOG_INTERVAL_MS), RATE_LIMIT_LOG_INTERVAL_MS);
+        this.#rateLimitLogTimer.unref();
     }
 
     public async listen(handlers: TransportHandlers): Promise<void> {
@@ -250,11 +261,15 @@ export class WsTransport implements GameTransport {
 
     public async close(): Promise<void> {
         this.#accepting = false;
+        clearInterval(this.#rateLimitLogTimer);
         this.#server.off('upgrade', this.#onUpgrade);
         for (const socket of this.#sockets) socket.close(CloseCode.Normal, 'server shutdown');
         await new Promise<void>((resolve, reject) => {
             this.#webSockets.close(() => {
-                this.#server.close((error) => error === undefined ? resolve() : reject(error));
+                this.#server.close((error) => {
+                    this.#rateLimitViolations.flushAll();
+                    return error === undefined ? resolve() : reject(error);
+                });
             });
         });
     }
@@ -344,6 +359,7 @@ export class WsTransport implements GameTransport {
             authenticated?.clearTimers();
             this.#sockets.delete(socket);
             this.#options.connections.close(open.id);
+            this.#rateLimitViolations.flushConnection(open.id);
             this.#rateLimiter.releaseConnection(open.id);
             if (authenticated !== null) this.#handlers?.onDisconnect(authenticated, reason.toString('utf8'));
         });
@@ -360,10 +376,17 @@ export class WsTransport implements GameTransport {
             this.#signal(open, connection, ViolationKind.BadLength, 'medium', { bytes: buffer.byteLength });
             return;
         }
-        const decision = this.#rateLimiter.check('input', this.#subject(open, connection), this.#options.limits.maxInputPacketsPerSec, 1_000);
+        const decision = this.#rateLimiter.check('input', this.#subject(open, connection), this.#options.limits.maxInputPacketsPerSec, 1_000, {
+            scopes: RATE_LIMIT_SCOPES,
+            abusiveMultiplier: ABUSIVE_RATE_MULTIPLIER,
+            abusiveWindows: ABUSIVE_RATE_WINDOWS,
+        });
         if (!decision.allowed) {
-            this.#signal(open, connection, ViolationKind.RateLimit, decision.persistent ? 'high' : 'medium');
-            if (decision.persistent) this.#sendErrorAndCloseSocket(connection, ErrorCode.RateLimited, CloseCode.PolicyViolation);
+            this.#signalRateLimit(open, connection, 'input', decision.abusive ? 'high' : 'medium');
+            // A browser can legitimately burst after timer throttling. Only close a connection that
+            // sustains >5x the limit for five whole windows; ordinary excess input is safely dropped
+            // because the room keeps that player's latest accepted input state.
+            if (decision.abusive) this.#sendErrorAndCloseSocket(connection, ErrorCode.RateLimited, CloseCode.PolicyViolation);
             return;
         }
         const frame = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
@@ -378,11 +401,17 @@ export class WsTransport implements GameTransport {
         }
         const text = buffer.toString('utf8');
         const parsed = parseClientMessage(text, { userId: connection.userId, roomId: connection.roomId, tick: this.#options.getServerTick() }, this.#options.violationSink);
-        const decision = this.#rateLimiter.check('json', this.#subject(open, connection), this.#options.limits.maxJsonCommandsPerSec, 1_000);
+        const decision = this.#rateLimiter.check('json', this.#subject(open, connection), this.#options.limits.maxJsonCommandsPerSec, 1_000, {
+            scopes: RATE_LIMIT_SCOPES,
+            abusiveMultiplier: ABUSIVE_RATE_MULTIPLIER,
+            abusiveWindows: ABUSIVE_RATE_WINDOWS,
+        });
         if (!decision.allowed) {
             connection.sendJson({ type: 'error', payload: { requestId: parsed.requestId, code: ErrorCode.RateLimited, retryable: isRetryable(ErrorCode.RateLimited) } });
-            this.#signal(open, connection, ViolationKind.RateLimit, decision.persistent ? 'high' : 'medium');
-            if (decision.persistent) connection.close(CloseCode.PolicyViolation, 'rate limit');
+            this.#signalRateLimit(open, connection, 'json', decision.abusive ? 'high' : 'medium');
+            // JSON commands use the same deliberate-abuse threshold as input. This keeps command
+            // floods bounded without disconnecting a client for a short UI/timer burst.
+            if (decision.abusive) connection.close(CloseCode.PolicyViolation, 'rate limit');
             return;
         }
         if (parsed.message === null) {
@@ -390,7 +419,7 @@ export class WsTransport implements GameTransport {
             return;
         }
         if (parsed.message.type === 'game.emoji') {
-            const emoji = this.#rateLimiter.cooldown('emoji', this.#subject(open, connection), this.#options.limits.emojiCooldownMs);
+            const emoji = this.#rateLimiter.cooldown('emoji', this.#subject(open, connection), this.#options.limits.emojiCooldownMs, ['user']);
             if (!emoji.allowed) {
                 connection.sendJson({ type: 'error', payload: { requestId: parsed.requestId, code: ErrorCode.RateLimited, retryable: true } });
                 return;
@@ -412,6 +441,17 @@ export class WsTransport implements GameTransport {
             severity,
             ruleVersion: 1,
             ...(detail === undefined ? {} : { detail }),
+        });
+    }
+
+    #signalRateLimit(open: OpenConnection, connection: WsConnection, rule: 'input' | 'json', severity: 'medium' | 'high'): void {
+        this.#rateLimitViolations.record(open.id, open.ip, rule, {
+            kind: ViolationKind.RateLimit,
+            userId: connection.userId,
+            roomId: connection.roomId,
+            tick: this.#options.getServerTick(),
+            severity,
+            ruleVersion: 1,
         });
     }
 

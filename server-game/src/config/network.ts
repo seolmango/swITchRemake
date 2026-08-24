@@ -18,7 +18,8 @@ export const NETWORK = Object.freeze({
     /** 접속 후 이 시간 안에 `auth` 메시지가 오지 않으면 끊는다. */
     AUTH_TIMEOUT_MS: 5_000,
     /** 인증 전 연결의 IP당 개수 상한. */
-    MAX_UNAUTHENTICATED_PER_IP: 5,
+    // NAT 뒤 여러 탭이 인증을 병렬로 시작할 수 있어, 정상 최악 10명과 재시도를 수용한다.
+    MAX_UNAUTHENTICATED_PER_IP: 15,
     /** 프로세스 전체 동시 연결 상한. 부하 측정 뒤 확정한다. */
     MAX_CONNECTIONS: 2_000,
 

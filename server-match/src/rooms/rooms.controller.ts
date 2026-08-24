@@ -23,19 +23,22 @@ export class RoomsController {
     }
 
     @Post()
-    @RateLimiter({ anon: 0, guest: 3, account: 6, ttl: 60_000 })
+    // Creating allocates a room and game-server capacity, so keep it below joins but allow NAT retries.
+    @RateLimiter({ anon: 0, guest: 5, account: 10, ttl: 60_000 })
     async create(@Req() req: AuthenticatedRequest, @Body() dto: CreateRoomDto) {
         return this.rooms.create(req.user, dto, req.ip);
     }
 
     @Post('quick-join')
-    @RateLimiter({ anon: 0, guest: 3, account: 6, ttl: 60_000 })
+    // Joining is a normal retryable path; ten NAT guests need 10/min without raising create capacity.
+    @RateLimiter({ anon: 0, guest: 10, account: 20, ttl: 60_000 })
     async quickJoin(@Req() req: AuthenticatedRequest) {
         return this.rooms.quickJoin(req.user, req.ip);
     }
 
     @Post('code/:roomCode/join')
-    @RateLimiter({ anon: 0, guest: 3, account: 6, ttl: 60_000 })
+    // Joining is a normal retryable path; ten NAT guests need 10/min without raising create capacity.
+    @RateLimiter({ anon: 0, guest: 10, account: 20, ttl: 60_000 })
     async joinByCode(
         @Req() req: AuthenticatedRequest,
         @Param('roomCode') roomCode: string,
@@ -50,7 +53,8 @@ export class RoomsController {
     }
 
     @Post(':roomId/join')
-    @RateLimiter({ anon: 0, guest: 3, account: 6, ttl: 60_000 })
+    // Joining is a normal retryable path; ten NAT guests need 10/min without raising create capacity.
+    @RateLimiter({ anon: 0, guest: 10, account: 20, ttl: 60_000 })
     async join(
         @Req() req: AuthenticatedRequest,
         @Param('roomId') roomId: string,

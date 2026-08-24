@@ -14,7 +14,9 @@ export class ApiError extends Error {
 
     constructor(status: number, body: ApiErrorBody | null) {
         const details = Array.isArray(body?.message) ? body.message : body?.message ? [body.message] : [];
-        super(details[0] ?? body?.error ?? `HTTP ${status}`);
+        // Response text belongs in diagnostics, never in user-facing Error.message. Reverse-proxy and
+        // framework 404 bodies can otherwise leak raw HTML or "Cannot GET ..." into the UI.
+        super(`HTTP ${status}`);
         this.name = 'ApiError';
         this.status = status;
         this.details = details;
@@ -71,7 +73,7 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 const parseBody = async (response: Response): Promise<unknown> => {
     const text = await response.text();
     if (!text) return null;
-    try { return JSON.parse(text); } catch { return { message: text }; }
+    try { return JSON.parse(text); } catch { return null; }
 };
 
 const rawRequest = async <T>(path: string, options: RequestOptions): Promise<T> => {

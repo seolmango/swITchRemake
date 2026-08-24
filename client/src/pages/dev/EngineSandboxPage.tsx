@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { EMOJI_COUNT, EMPTY_HUD, EffectType, EngineMode, SwitchEngine, SwitchGame, TilePhysics, type HudState } from '../../game';
-import iconDash from '../../assets/images/skill_dash.webp';
-import iconFlash from '../../assets/images/skill_flash.webp';
-import iconExhaust from '../../assets/images/skill_exhaust.webp';
-import iconSwitch from '../../assets/images/skill_switch.webp';
+import iconDash from '../../assets/images/skill_dash.svg';
+import iconFlash from '../../assets/images/skill_flash.svg';
+import iconExhaust from '../../assets/images/skill_exhaust.svg';
+import iconSwitch from '../../assets/images/skill_switch.svg';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { MAP_NAMES, getServerMap, getStartPositions, toMapView, type ServerMapEntry } from './fixtures/serverMaps.ts';
 

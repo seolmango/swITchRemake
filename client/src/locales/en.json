@@ -39,7 +39,7 @@
     "switchShort": "swITch", "tagsShort": "Tags", "shareImage": "Share Result Image", "shareUnavailable": "Sharing unavailable", "backToLobby": "Back to Lobby",
     "imageShared": "Opened the image share sheet.", "imageSaved": "Saved the result image.", "imageFailed": "Could not create the result image.", "shareCancelled": "Image sharing was cancelled.",
     "openExternal": "Open in external browser", "externalCopied": "Address copied. Paste it into Safari to continue.", "externalUnavailable": "Could not open an external browser automatically.",
-    "shareSummary": "swITch result: {{winners}} won together", "returnCountdown": "Returning to the lobby in {{seconds}}s", "returnNotice": "You will return to the same room when the server's result period ends.", "returnTimerLabel": "Time remaining before automatic lobby return"
+    "shareSummary": "swITch result: {{winners}} won together", "returnCountdown": "Returning to the lobby in {{seconds}}s", "returnNotice": "You will return to the same room when the server's result period ends.", "returnTimerLabel": "Time remaining before automatic lobby return", "invalidMatch": "The match result cannot be loaded because its identifier is invalid."
   },
   "auth": {
     "login": "Log In", "signup": "Sign Up", "email": "Email", "emailPlaceholder": "name@example.com", "password": "Password",
@@ -107,7 +107,7 @@
   "game": {
     "loadingTitle": "Preparing match", "loadingFailed": "The match could not be prepared", "loadingTimedOut": "Preparation is taking unusually long.", "mapLoadFailed": "Map load failed:",
     "waitingRenderer": "Preparing the game renderer.", "waitingMap": "Loading the map.", "waitingStart": "Waiting for the server's game-start signal.", "waitingSnapshot": "Waiting for the first game state.", "connectionLost": "The game-server connection closed. The screen is not frozen; the connection ended.",
-    "serverPending": "The game renderer is ready for server snapshots, but the room and game server connection is still in progress.",
+    "serverPending": "The game renderer is ready for server snapshots, but the room and game server connection is still in progress.", "reconnecting": "Restoring the connection… The match will resume shortly.",
     "noKeyBinding": "Unassigned",
     "skillRejected": {
       "notAlive": "You cannot use skills after elimination.",

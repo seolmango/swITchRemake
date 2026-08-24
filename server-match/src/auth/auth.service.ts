@@ -61,6 +61,9 @@ type RefreshResult =
     | { kind: 'invalid' }
     | { kind: 'reuse' };
 
+// One NAT may issue identities for ten players and retry failed startup requests in one minute.
+const GUEST_AUTH_RATE_LIMIT_PER_MINUTE = 30;
+
 @Injectable()
 export class AuthService {
     private readonly keys = makeKeys(process.env.APP_ENV ?? 'dev');
@@ -130,7 +133,7 @@ export class AuthService {
         const ipKey = this.sessionSecurity.hmacIp(ip);
         const rateKey = this.keys.operation(`guest-auth-rate:${ipKey}`);
         const count = await this.redisService.incrementWithTtl(rateKey, 60);
-        if (count > 5) {
+        if (count > GUEST_AUTH_RATE_LIMIT_PER_MINUTE) {
             throw new HttpException({
                 code: 'GUEST_AUTH_RATE_LIMITED',
                 retryAfterMs: Math.max(0, await this.redisService.ttlMilliseconds(rateKey)),

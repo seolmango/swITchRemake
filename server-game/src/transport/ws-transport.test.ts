@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { describe, it } from 'node:test';
-import { ErrorCode, PlayerRole, PROTOCOL_VERSION, RoomState } from 'shared';
+import { ErrorCode, INPUT_PACKET_BYTES, PlayerRole, PROTOCOL_VERSION, RoomState } from 'shared';
 import { WebSocket } from 'ws';
 import { ConnectionManager } from '../gateway/connection-manager';
 import { TicketAuthenticator } from '../gateway/ticket-auth';
 import { InMemoryTicketStore } from '../gateway/ticket-store';
+import { AbuseRateLimiter } from '../gateway/rate-limit';
 import { WsTransport } from './ws-transport';
 
-async function fixture(authTimeoutMs = 200) {
-    const connections = new ConnectionManager({ maxConnections: 10, maxUnauthenticatedPerIp: 2 });
+async function fixture(authTimeoutMs = 200, rateLimiter?: AbuseRateLimiter) {
+    // Three tabs can open their handshakes at once behind one NAT before any has authenticated.
+    const connections = new ConnectionManager({ maxConnections: 10, maxUnauthenticatedPerIp: 3 });
     const tickets = new InMemoryTicketStore();
     const authenticator = new TicketAuthenticator({
         serverId: 'game-test',
@@ -30,6 +32,7 @@ async function fixture(authTimeoutMs = 200) {
         mapBundleBody: '{"ok":true}',
         getServerTick: () => 11,
         violationSink: () => undefined,
+        ...(rateLimiter === undefined ? {} : { rateLimiter }),
         limits: {
             authTimeoutMs,
             maxBinaryFrameBytes: 64,
@@ -44,17 +47,25 @@ async function fixture(authTimeoutMs = 200) {
     });
     const connected: number[] = [];
     const jsonTypes: string[] = [];
+    const inputUsers: Array<number | string> = [];
+    const inputWaiters: Array<{ target: number; resolve: () => void }> = [];
     let resolveJson!: (type: string) => void;
     const jsonReceived = new Promise<string>((resolve) => { resolveJson = resolve; });
     await transport.listen({
         onConnect: (connection) => connected.push(connection.playerId),
-        onInput: () => undefined,
+        onInput: (connection) => {
+            inputUsers.push(connection.userId);
+            for (const waiter of inputWaiters.splice(0)) {
+                if (inputUsers.length >= waiter.target) waiter.resolve();
+                else inputWaiters.push(waiter);
+            }
+        },
         onJson: (_connection, message) => { jsonTypes.push(message.type); resolveJson(message.type); },
         onDisconnect: () => undefined,
     });
-    const issue = () => tickets.issue({
-        userId: 9,
-        nickname: 'nine',
+    const issue = (userId = 9) => tickets.issue({
+        userId,
+        nickname: `user-${userId}`,
         lobbyStats: null,
         roomId: 'room-1',
         serverId: 'game-test',
@@ -63,7 +74,10 @@ async function fixture(authTimeoutMs = 200) {
         resume: true,
     });
     return {
-        transport, connected, jsonTypes, jsonReceived, issue,
+        transport, connected, jsonTypes, jsonReceived, inputUsers, issue,
+        waitForInputCount: (target: number) => inputUsers.length >= target
+            ? Promise.resolve()
+            : new Promise<void>((resolve) => inputWaiters.push({ target, resolve })),
         url: `ws://127.0.0.1:${transport.boundPort()}/game/game-test`,
         bundleUrl: `http://127.0.0.1:${transport.boundPort()}/map-bundles/${'a'.repeat(64)}.json`,
     };
@@ -71,6 +85,24 @@ async function fixture(authTimeoutMs = 200) {
 
 function connect(url: string, origin = 'https://switch.example.com'): WebSocket {
     return new WebSocket(url, { origin });
+}
+
+async function authenticate(url: string, ticket: string): Promise<WebSocket> {
+    const socket = connect(url);
+    await once(socket, 'open');
+    socket.send(JSON.stringify({ v: 1, type: 'auth', payload: { ticket } }));
+    await once(socket, 'message');
+    return socket;
+}
+
+async function closeSockets(sockets: readonly WebSocket[]): Promise<void> {
+    await Promise.all(sockets.map(async (socket) => {
+        if (socket.readyState === WebSocket.CLOSED) return;
+        const closed = once(socket, 'close');
+        if (socket.readyState === WebSocket.OPEN) socket.close();
+        else socket.terminate();
+        await closed;
+    }));
 }
 
 describe('ws transport', () => {
@@ -165,6 +197,48 @@ describe('ws transport', () => {
                 socket.close();
                 await once(socket, 'close');
             }
+            await f.transport.close();
+        }
+    });
+
+    it('accepts 30 input packets from each of three connections sharing an IP', async () => {
+        const f = await fixture();
+        const sockets = [connect(f.url), connect(f.url), connect(f.url)];
+        try {
+            await Promise.all(sockets.map(async (socket, index) => {
+                await once(socket, 'open');
+                socket.send(JSON.stringify({ v: 1, type: 'auth', payload: { ticket: f.issue(index + 1).ticket } }));
+                await once(socket, 'message');
+            }));
+            for (let packet = 0; packet < 30; packet += 1) {
+                for (const socket of sockets) socket.send(Buffer.alloc(INPUT_PACKET_BYTES));
+            }
+            await f.waitForInputCount(90);
+            assert.deepEqual(f.inputUsers.reduce<Record<string, number>>((counts, userId) => {
+                counts[String(userId)] = (counts[String(userId)] ?? 0) + 1;
+                return counts;
+            }, {}), { 1: 30, 2: 30, 3: 30 });
+            assert.ok(sockets.every((socket) => socket.readyState === WebSocket.OPEN));
+        } finally {
+            await closeSockets(sockets);
+            await f.transport.close();
+        }
+    });
+
+    it('drops ordinary persistent input excess without closing the socket', async () => {
+        let now = 0;
+        const f = await fixture(200, new AbuseRateLimiter(() => now));
+        const socket = await authenticate(f.url, f.issue(1).ticket);
+        try {
+            for (let window = 0; window < 3; window += 1) {
+                for (let packet = 0; packet < 91; packet += 1) socket.send(Buffer.alloc(INPUT_PACKET_BYTES));
+                await f.waitForInputCount((window + 1) * 90);
+                now += 1_000;
+            }
+            assert.equal(f.inputUsers.length, 270);
+            assert.equal(socket.readyState, WebSocket.OPEN);
+        } finally {
+            await closeSockets([socket]);
             await f.transport.close();
         }
     });

@@ -4,9 +4,9 @@ import type { LobbyViewPlayer, PlayerSkill } from '../../api/matches.ts';
 import { Icon, type IconName } from '../common/Icon.tsx';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color } from '../../theme/color.ts';
-import dashIcon from '../../assets/images/skill_dash.webp';
-import flashIcon from '../../assets/images/skill_flash.webp';
-import exhaustIcon from '../../assets/images/skill_exhaust.webp';
+import dashIcon from '../../assets/images/skill_dash.svg';
+import flashIcon from '../../assets/images/skill_flash.svg';
+import exhaustIcon from '../../assets/images/skill_exhaust.svg';
 
 const skillIcons: Record<PlayerSkill, string> = {
     dash: dashIcon,

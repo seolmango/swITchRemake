@@ -1,5 +1,6 @@
 import { JSON_MESSAGE_VERSION, RoomState, encodeInput, type ClientMessage, type InputState, type ServerMessage, type Snapshot } from 'shared';
-import type { RoomSeatGrant } from '../api/rooms.ts';
+import { resumeRoom, type RoomSeatGrant } from '../api/rooms.ts';
+import { reconnectDelayMs } from './reconnectPolicy.ts';
 
 type AuthOkMessage = Extract<ServerMessage, { type: 'auth.ok' }>;
 type LobbyStateMessage = Extract<ServerMessage, { type: 'lobby.state' }>;
@@ -18,7 +19,7 @@ export interface GameSessionMetadata {
 }
 
 export interface GameSessionState {
-    status: 'idle' | 'connecting' | 'connected' | 'disconnected';
+    status: 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
     roomId: string | null;
     roomCode: string | null;
     mapBundleHash: string | null;
@@ -108,6 +109,10 @@ class GameSession {
     private readonly blinkListeners = new Set<(payload: PlayerBlinkedMessage['payload']) => void>();
     private pageUnloading = false;
     private pingTimer: number | null = null;
+    private reconnectTimer: number | null = null;
+    private reconnectAttempt = 0;
+    private reconnectStartedAt: number | null = null;
+    private connectionGeneration = 0;
     private tpsWindowStart: { tick: number; at: number } | null = null;
     private smoothedTps: number | null = null;
 
@@ -159,6 +164,7 @@ class GameSession {
     }
 
     async connect(grant: RoomSeatGrant, metadata: GameSessionMetadata = {}): Promise<void> {
+        this.cancelReconnect();
         this.closeSocket();
         this.requestId = 0;
         this.latestSnapshot = null;
@@ -176,13 +182,23 @@ class GameSession {
             this.setState({ status: 'disconnected' });
             throw new Error('The game-server ticket has expired');
         }
+        await this.openSocket(grant);
+    }
 
+    private async openSocket(grant: RoomSeatGrant): Promise<void> {
+        if (grant.expiresAt <= Date.now()) {
+            throw new Error('The game-server ticket has expired');
+        }
+
+        const generation = this.connectionGeneration;
         const socket = new WebSocket(websocketUrl(grant.wsPath));
         socket.binaryType = 'arraybuffer';
         this.socket = socket;
 
         await new Promise<void>((resolve, reject) => {
             let settled = false;
+            let authenticated = false;
+            let retryable = true;
             const settleError = (error: Error) => {
                 if (settled) return;
                 settled = true;
@@ -214,10 +230,14 @@ class GameSession {
                 if (!isServerMessage(parsed)) return;
                 this.handleMessage(parsed);
                 if (parsed.type === 'auth.ok' && !settled) {
+                    authenticated = true;
                     settled = true;
                     window.clearTimeout(expiryTimer);
                     resolve();
-                } else if (parsed.type === 'error' && this.state.status === 'connecting') {
+                } else if (parsed.type === 'error') {
+                    retryable = parsed.payload.retryable;
+                    if (!retryable) this.finishDisconnected();
+                    if (settled) return;
                     window.clearTimeout(expiryTimer);
                     settleError(new Error(parsed.payload.code));
                 }
@@ -228,9 +248,12 @@ class GameSession {
                 if (socket !== this.socket) return;
                 this.stopPingLoop();
                 this.socket = null;
-                this.setState({ status: 'disconnected', latencyMs: null });
-                if (!this.pageUnloading) sessionStorage.removeItem(ACTIVE_ROOM_KEY);
-                settleError(new Error('The game-server connection closed before authentication'));
+                if (authenticated && retryable && !this.pageUnloading && generation === this.connectionGeneration) {
+                    this.scheduleReconnect();
+                } else if (authenticated || !retryable) {
+                    this.finishDisconnected();
+                }
+                if (!authenticated) settleError(new Error('The game-server connection closed before authentication'));
             });
         });
     }
@@ -248,6 +271,8 @@ class GameSession {
     }
 
     disconnect(): void {
+        this.connectionGeneration += 1;
+        this.cancelReconnect();
         this.closeSocket();
         this.latestSnapshot = null;
         this.setState(INITIAL_STATE);
@@ -320,6 +345,47 @@ class GameSession {
         if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
             socket.close(1000, 'client navigation');
         }
+    }
+
+    private scheduleReconnect(): void {
+        if (this.reconnectTimer !== null || this.pageUnloading) return;
+        const roomId = this.state.roomId;
+        if (!roomId) return this.finishDisconnected();
+        if (this.reconnectStartedAt === null) this.reconnectStartedAt = Date.now();
+        const delay = reconnectDelayMs(this.reconnectAttempt, Date.now() - this.reconnectStartedAt);
+        if (delay === null) return this.finishDisconnected();
+        const generation = this.connectionGeneration;
+        this.setState({ status: 'reconnecting', latencyMs: null });
+        this.reconnectTimer = window.setTimeout(() => {
+            this.reconnectTimer = null;
+            this.reconnectAttempt += 1;
+            void resumeRoom(roomId, true)
+                .then((grant) => {
+                    if (generation !== this.connectionGeneration || this.state.status !== 'reconnecting') return;
+                    return this.openSocket(grant);
+                })
+                .then(() => {
+                    if (generation !== this.connectionGeneration || this.state.status !== 'connected') return;
+                    this.reconnectAttempt = 0;
+                    this.reconnectStartedAt = null;
+                })
+                .catch(() => {
+                    if (generation === this.connectionGeneration && this.state.status === 'reconnecting') this.scheduleReconnect();
+                });
+        }, delay);
+    }
+
+    private cancelReconnect(): void {
+        if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+        this.reconnectAttempt = 0;
+        this.reconnectStartedAt = null;
+    }
+
+    private finishDisconnected(): void {
+        this.cancelReconnect();
+        this.setState({ status: 'disconnected', latencyMs: null });
+        if (!this.pageUnloading) sessionStorage.removeItem(ACTIVE_ROOM_KEY);
     }
 
     private startPingLoop(): void {

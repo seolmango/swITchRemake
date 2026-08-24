@@ -34,12 +34,12 @@ export const getRooms = (page: number) => apiRequest<RoomPageResponse>(`/rooms?p
 export const createRoom = (body: { name: string; password?: string }) => apiRequest<RoomAssignment>('/rooms', { method: 'POST', body });
 export const joinRoom = (roomCode: string, password?: string) => apiRequest<RoomAssignment>(`/rooms/code/${encodeURIComponent(roomCode)}/join`, { method: 'POST', body: { password } });
 export const quickJoin = () => apiRequest<RoomAssignment>('/rooms/quick-join', { method: 'POST' });
-export const resumeRoom = async (roomId: string) => {
+export const resumeRoom = async (roomId: string, preserveActiveRoomOnFailure = false) => {
     try {
         return await apiRequest<RoomSeatGrant>(`/rooms/${encodeURIComponent(roomId)}/resume`, { method: 'POST' });
     } catch (error) {
         // A failed resume is authoritative proof that this tab is no longer in the saved room.
-        sessionStorage.removeItem('switch-active-room');
+        if (!preserveActiveRoomOnFailure) sessionStorage.removeItem('switch-active-room');
         throw error;
     }
 };

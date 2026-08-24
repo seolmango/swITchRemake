@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="유체화">
+  <!--
+    유체화. 진행 방향(오른쪽)으로 늘어난 물방울 + 뒤로 흐르는 잔상.
+    "빨라진다"가 아니라 "몸이 흘러간다"를 그린다.
+    잔상은 이 아이콘에만 있다 — 점멸과 구분되는 유일한 지점이라 빼면 안 된다.
+  -->
+  <g fill="none" stroke="#71B9FF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M42 64 Q60 38 80 40 A24 24 0 1 1 80 88 Q60 90 42 64 Z" fill="#BEDFFF" stroke="#71B9FF"/>
+    <path d="M12 46 H28"/>
+    <path d="M6 64 H24"/>
+    <path d="M12 82 H28"/>
+  </g>
+</svg>

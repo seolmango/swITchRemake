@@ -40,7 +40,8 @@ import { SessionSecurityService } from '../session/session-security.service';
 const COMMAND_RETRY_INTERVAL_MS = 2_000;
 const COMMAND_DEADLINE_MS = 6_000;
 const ACTIVE_ROOM_RESERVATION_TTL_SECONDS = 30;
-const JOIN_RATE_LIMIT = 6;
+// A shared NAT can have ten guests create/join or retry a room request within a minute.
+const JOIN_RATE_LIMIT = 30;
 const JOIN_RATE_WINDOW_SECONDS = 60;
 const REJOIN_COOLDOWN_SECONDS = 60;
 const ROOM_LIST_PAGE_SIZE = 20;

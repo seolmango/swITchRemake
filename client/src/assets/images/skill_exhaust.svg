@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="탈진">
+  <!--
+    탈진. 남에게 거는 유일한 스킬이라 혼자 성격이 다르다.
+    나머지 셋이 전부 수평·전진 방향이므로 이것만 수직 하강으로 그려 실루엣만으로 갈린다.
+    채도를 낮춰 "약화"를 전달한다.
+  -->
+  <g fill="none" stroke="#8A9A82" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M64 16 V56"/>
+    <path d="M46 42 L64 62 L82 42"/>
+    <circle cx="64" cy="90" r="15" fill="#CFE8C2"/>
+    <path d="M38 114 H90" opacity="0.6"/>
+  </g>
+</svg>

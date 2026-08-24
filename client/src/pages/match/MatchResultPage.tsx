@@ -10,6 +10,7 @@ import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../../theme/color.ts';
 import { isInAppBrowser, openInExternalBrowser } from '../../utils/inAppBrowser.ts';
 import { createResultImage, shareOrSaveResultImage } from '../../utils/resultImage.ts';
+import { isValidMatchId } from '../../utils/matchId.ts';
 
 const IN_APP_BROWSER = typeof navigator !== 'undefined' && isInAppBrowser();
 
@@ -38,9 +39,9 @@ export const MatchResultPage: React.FC = () => {
         let active = true;
         let retryTimer: number | null = null;
         const load = async () => {
-            if (!matchId) {
+            if (!isValidMatchId(matchId)) {
                 setLoadFailed(true);
-                setMessage('Match id is missing.');
+                setMessage(t('result.invalidMatch'));
                 return;
             }
             setLoadFailed(false);
@@ -54,10 +55,10 @@ export const MatchResultPage: React.FC = () => {
                 }
                 setResult({ ...response, returnsAt: eventReturnsAt ?? response.returnsAt ?? Date.now() + 30_000 });
                 setMessage('');
-            } catch (error) {
+            } catch {
                 if (!active) return;
                 setLoadFailed(true);
-                setMessage(error instanceof Error ? error.message : t('auth.serverError'));
+                setMessage(t('auth.serverError'));
             }
         };
         void load();

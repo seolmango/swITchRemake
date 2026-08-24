@@ -12,14 +12,15 @@ import { useGameSession } from '../game/useGameSession.ts';
 import { type KeyAction, useSettingsStore } from '../stores/useSettingsStore.ts';
 import { themeColors } from '../theme/color.ts';
 import { resumeRoom } from '../api/rooms.ts';
-import dashIcon from '../assets/images/skill_dash.webp';
-import flashIcon from '../assets/images/skill_flash.webp';
-import exhaustIcon from '../assets/images/skill_exhaust.webp';
-import switchIcon from '../assets/images/skill_switch.webp';
+import dashIcon from '../assets/images/skill_dash.svg';
+import flashIcon from '../assets/images/skill_flash.svg';
+import exhaustIcon from '../assets/images/skill_exhaust.svg';
+import switchIcon from '../assets/images/skill_switch.svg';
 import { formatKeyBindings, matchesKeyBinding } from '../utils/keyBinding.ts';
 import { cooldownTotalMs, getSwitchTargets, skillRejectionMessageKey, toCooldownDisplay } from '../utils/skillHud.ts';
 import { switchTargetPlayerIdForMatch } from '../utils/switchTarget.ts';
 import { GameLoadingOverlay } from '../game/hud/GameLoadingOverlay.tsx';
+import { isValidMatchId } from '../utils/matchId.ts';
 
 const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { iconUrl: string; labelKey: string }> = {
     [SkillId.Dash]: { iconUrl: dashIcon, labelKey: 'lobby.skills.dash' },
@@ -64,6 +65,7 @@ export const GamePage: React.FC = () => {
     const recoveryAttempted = useRef(false);
     const requestedRoomId = searchParams.get('room_id');
     const live = session.status === 'connected' && session.roomId !== null;
+    const gameVisible = live || (session.status === 'reconnecting' && session.roomId !== null && session.started !== null);
     const mapId = session.starting?.mapId ?? session.lobby?.mapId ?? null;
     const mapBundleHash = session.mapBundleHash;
 
@@ -76,7 +78,7 @@ export const GamePage: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (live || recoveryAttempted.current || !requestedRoomId || !/^[0-9a-f-]{36}$/i.test(requestedRoomId)) return;
+        if (live || session.status === 'reconnecting' || session.roomId !== null || recoveryAttempted.current || !requestedRoomId || !/^[0-9a-f-]{36}$/i.test(requestedRoomId)) return;
         recoveryAttempted.current = true;
         void resumeRoom(requestedRoomId)
             .then((grant) => gameSession.connect(grant))
@@ -87,7 +89,7 @@ export const GamePage: React.FC = () => {
                 }
             })
             .catch((error) => console.error('[swITch] game recovery failed', { roomId: requestedRoomId, error }));
-    }, [live, navigate, requestedRoomId]);
+    }, [live, navigate, requestedRoomId, session.roomId, session.status]);
 
     const loadMap = useCallback(async (engine: SwitchEngine, id: string, hash: string, gameOrigin: string) => {
         const key = `${hash}:${id}`;
@@ -158,6 +160,10 @@ export const GamePage: React.FC = () => {
 
     useEffect(() => {
         if (!session.ended || !session.roomId) return;
+        if (!isValidMatchId(session.ended.matchId)) {
+            navigate(`/rooms/${encodeURIComponent(session.roomId)}/lobby`, { replace: true });
+            return;
+        }
         const query = new URLSearchParams({
             room_id: session.roomId,
             returns_at: String(session.ended.returnsAt),
@@ -284,7 +290,7 @@ export const GamePage: React.FC = () => {
         })),
     }), [keyBindings, session.cooldowns, session.lobby, session.role, session.selfId, session.skillRejections, session.starting, session.taggerId, t]);
 
-    if (live) {
+    if (gameVisible) {
         return (
             <div style={{ position: 'absolute', inset: 0 }}>
                 <SwitchGame
@@ -312,6 +318,20 @@ export const GamePage: React.FC = () => {
                     }}
                     onExit={exitGame}
                 />
+                {session.status === 'reconnecting' && (
+                    <div
+                        role="status"
+                        aria-live="polite"
+                        style={{
+                            position: 'absolute', top: 24, left: '50%', zIndex: 40, transform: 'translateX(-50%)',
+                            padding: '14px 24px', borderRadius: 999, color: themeColors(theme).text,
+                            background: themeColors(theme).panel, border: `2px solid ${themeColors(theme).panelBorder}`,
+                            fontSize: 22, fontWeight: 800,
+                        }}
+                    >
+                        {t('game.reconnecting')}
+                    </div>
+                )}
             </div>
         );
     }

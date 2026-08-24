@@ -15,9 +15,9 @@ import { useGameSession } from '../../game/useGameSession.ts';
 import { resumeRoom } from '../../api/rooms.ts';
 import { verifiedMapBundle } from '../../game/mapBundle.ts';
 import { cancelScheduledLobbyLeave, scheduleLobbyLeave } from './lobbyLeave.ts';
-import dashIcon from '../../assets/images/skill_dash.webp';
-import flashIcon from '../../assets/images/skill_flash.webp';
-import exhaustIcon from '../../assets/images/skill_exhaust.webp';
+import dashIcon from '../../assets/images/skill_dash.svg';
+import flashIcon from '../../assets/images/skill_flash.svg';
+import exhaustIcon from '../../assets/images/skill_exhaust.svg';
 
 const MIN_PLAYERS_TO_START = 3;
 const SKILLS: Array<{ id: PlayerSkill; icon: string }> = [

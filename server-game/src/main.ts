@@ -39,7 +39,8 @@ const log = (message: string): void => console.log(`[swITch] ${message}`);
  * 여기에 소비자를 더하면 되고, 흩어진 로그를 찾아다니지 않아도 된다.
  */
 function violationSink(signal: ViolationSignal): void {
-    console.warn(`[violation] ${signal.kind} user=${signal.userId} room=${signal.roomId ?? '-'} sev=${signal.severity}`);
+    const detail = signal.detail === undefined ? '' : ` detail=${JSON.stringify(signal.detail)}`;
+    console.warn(`[violation] ${signal.kind} user=${signal.userId} room=${signal.roomId ?? '-'} sev=${signal.severity}${detail}`);
 }
 
 async function main(): Promise<void> {
