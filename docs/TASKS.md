@@ -49,7 +49,7 @@ fetch, `/game` F5 복구, 카메라 자동 추적, 리플레이 기록·CLI까�
 | 게스트/복구 | 게스트 JWT 세션, `NeedActor`/`NeedAccount` 분리, 3등급 rate limit, roomCode, 맵 번들 fetch, F5 복구, 카메라 follow | de2dea6 |
 | G | 리플레이 recorder·컨테이너 형식·local store·CLI | f20f354 |
 
-**남은 것**: 아래 T0~T11과 마지막 R. T1은 완료(a870c1f).
+**남은 것**: 아래 T0~T11과 마지막 R. T1(a870c1f)·T2(3cda80d) 완료.
 
 ---
 
@@ -59,7 +59,7 @@ fetch, `/game` F5 복구, 카메라 자동 추적, 리플레이 기록·CLI까�
   T0 스킬 입력 배선 ────┬─> T5 도움말 리뉴얼 ──> T6 훈련장
    (게임이 성립하는 조건) │
                         │
-  T1 테스트 러너 [완료] ─┼─> T2 이메일 테스트 모드 ─┬─> T8 E2E 자동화 ──> T10 테스트 정리
+  T1 테스트 러너 [완료] ─┼─> T2 이메일 모드 [완료] ─┬─> T8 E2E 자동화 ──> T10 테스트 정리
                         │                          │
                         │                          └─> T3 통계 연결
                         │
@@ -168,7 +168,19 @@ shared 34 / server-game 119 / server-match 25 통과, 1 skip은 DB opt-in 통합
 
 ---
 
-## T2. 이메일 테스트 모드
+## T2. 이메일 테스트 모드 — 완료 (3cda80d)
+
+`EMAIL_TRANSPORT=smtp|sink`. sink는 `test:mail:{to}`에 `{kind, subject, code, sentAt}`을 TTL 600초로 넣고
+아무것도 보내지 않는다. `GET /health`의 `email`이 `ok | checking | unconfigured | unreachable`을 보고한다.
+`APP_ENV=prod` + sink는 기동 거부. `.env.example` 기본값은 sink다.
+
+**검토에서 고친 것**: `onModuleInit`이 `verify()`를 await 해 Nest 부팅을 막고 있었다. transport에 타임아웃이
+없어 nodemailer 기본값(connection 2분)까지 매달리므로, 네트워크 없는 CI나 방화벽 뒤에서 서버가 몇 분씩 안 뜬다.
+await를 걷고 `checking` 상태를 추가했으며 SMTP 타임아웃을 10/10/20초로 명시했다. 회귀 테스트 2개를 붙였다.
+
+**T8이 읽을 것**: 인증 코드는 Redis `test:mail:{to}`의 JSON `code` 필드다. 조회용 HTTP 엔드포인트는 없다.
+
+<details><summary>원래 지시 내용</summary>
 
 **왜**: 지금 SMTP가 실제 Gmail로 뚫려 있어서, 가입/탈퇴 흐름을 테스트할 때마다 존재하지 않는 주소로 메일이
 나가고 반송이 사용자에게 온다. T8(E2E)이 인증 코드를 읽어야 하는데 지금은 Redis를 직접 뒤지는 수밖에 없다.
@@ -188,6 +200,8 @@ shared 34 / server-game 119 / server-match 25 통과, 1 skip은 DB opt-in 통합
 
 **완료 조건**: sink 모드에서 가입 → 코드 수신(Redis) → 인증 완료가 되고, 실제 메일함에는 아무것도 안 온다.
 `GET /health`가 SMTP 연결 상태를 정확히 보고한다.
+
+</details>
 
 ---
 
