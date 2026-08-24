@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import Redis, { type RedisOptions } from 'ioredis';
 
 export interface StreamEntry {
     readonly id: string;
@@ -31,6 +31,8 @@ export interface RedisClientOptions {
     readonly port: number;
     readonly password: string;
     readonly logger?: (level: 'info' | 'error', message: string, error?: unknown) => void;
+    /** Test seam; production clients are created by ioredis directly. */
+    readonly createClient?: (options: RedisOptions) => Redis;
 }
 
 function fields(raw: readonly string[]): Record<string, string> {
@@ -59,19 +61,21 @@ function streamEntries(response: unknown): StreamEntry[] {
 /** ioredis 연결 생명주기. offline queue를 끄므로 장애 중 명령이 무한히 쌓이지 않는다. */
 export class RedisClient implements RedisPort {
     readonly #client: Redis;
+    readonly #blockingClients = new Map<string, Redis>();
     readonly #logger: NonNullable<RedisClientOptions['logger']>;
     #ready = false;
 
     public constructor(options: RedisClientOptions) {
         this.#logger = options.logger ?? (() => undefined);
-        this.#client = new Redis({
+        const clientOptions = {
             host: options.host,
             port: options.port,
             ...(options.password === '' ? {} : { password: options.password }),
             lazyConnect: true,
             enableOfflineQueue: false,
             maxRetriesPerRequest: 1,
-        });
+        };
+        this.#client = options.createClient?.(clientOptions) ?? new Redis(clientOptions);
         this.#client.on('ready', () => {
             this.#ready = true;
             this.#logger('info', 'Redis connection ready');
@@ -94,6 +98,8 @@ export class RedisClient implements RedisPort {
 
     public async close(): Promise<void> {
         this.#ready = false;
+        for (const client of this.#blockingClients.values()) client.disconnect();
+        this.#blockingClients.clear();
         if (this.#client.status === 'end') return;
         try {
             await this.#client.quit();
@@ -162,13 +168,26 @@ export class RedisClient implements RedisPort {
         blockMs: number,
         count: number,
     ): Promise<StreamEntry[]> {
-        const response = await this.#client.xreadgroup(
+        const response = await this.#blockingClient(stream, group, consumer).xreadgroup(
             'GROUP', group, consumer,
             'COUNT', count,
             'BLOCK', blockMs,
             'STREAMS', stream, '>',
         );
         return streamEntries(response);
+    }
+
+    #blockingClient(stream: string, group: string, consumer: string): Redis {
+        const key = `${stream}\u0000${group}\u0000${consumer}`;
+        let client = this.#blockingClients.get(key);
+        if (client === undefined) {
+            client = this.#client.duplicate();
+            client.on('error', (error: unknown) => {
+                this.#logger('error', 'Redis blocking connection error', error);
+            });
+            this.#blockingClients.set(key, client);
+        }
+        return client;
     }
 
     public async xAutoClaim(

@@ -10,6 +10,9 @@ export interface StreamEntry {
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
     private client!: Redis;
+    // XREADGROUP with BLOCK must never share a socket with regular commands,
+    // or with another blocking reader. The key identifies one reader loop.
+    private readonly blockingClients = new Map<string, Redis>();
     private readonly logger = new Logger(RedisService.name);
 
     constructor(private configService: ConfigService) {}
@@ -31,6 +34,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
 
     onModuleDestroy() {
+        for (const client of this.blockingClients.values()) {
+            client.disconnect();
+        }
+        this.blockingClients.clear();
         this.client.disconnect();
     }
 
@@ -130,7 +137,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         blockMilliseconds: number,
         count = 10,
     ): Promise<StreamEntry[]> {
-        const response = await this.client.xreadgroup(
+        const response = await this.getBlockingClient(stream, group, consumer).xreadgroup(
             'GROUP', group, consumer,
             'COUNT', count,
             'BLOCK', blockMilliseconds,
@@ -151,6 +158,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
             }
         }
         return entries;
+    }
+
+    private getBlockingClient(stream: string, group: string, consumer: string): Redis {
+        const key = `${stream}\u0000${group}\u0000${consumer}`;
+        let client = this.blockingClients.get(key);
+        if (client === undefined) {
+            client = this.client.duplicate();
+            client.on('error', (err) => {
+                this.logger.error('Redis Blocking Connection Failed', err);
+            });
+            this.blockingClients.set(key, client);
+        }
+        return client;
     }
 
     async autoClaim(
