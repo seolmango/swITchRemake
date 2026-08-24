@@ -51,14 +51,14 @@
     "changeTitle": "Change Password", "currentPassword": "Current password", "newPassword": "New password", "confirmNewPassword": "Confirm new password", "passwordMismatch": "The new passwords do not match.", "currentPasswordIncorrect": "Your current password is incorrect.", "changeInvalid": "Use a different valid new password.", "changeFailed": "Could not change your password. Try again in a moment.", "changeSuccess": "Password changed. Signed out {{count}} other device(s).",
     "invalidEmail": "Enter a valid email address.", "invalidPassword": "Use 8–20 letters, numbers, or !@#$%^&*.",
     "invalidNickname": "Use 2–12 Korean letters, letters, or numbers.", "invalidCode": "Enter the 6-digit code.",
-    "invalidCredentials": "Check your email and password.", "invalidCodeServer": "The verification code is invalid or expired.", "duplicateAccount": "That email or nickname is already in use.", "serverError": "Could not reach the server. Try again in a moment.", "logout": "Log Out"
+    "invalidCredentials": "Check your email and password.", "invalidCodeServer": "The verification code is invalid or expired.", "duplicateAccount": "That email or nickname is already in use.", "serverError": "Could not reach the server. Try again in a moment.", "identitySwitchDuringRoom": "Leave the active room before logging in.", "logout": "Log Out"
   },
   "profile": {
     "title": "Profile", "guestTitle": "You are not logged in yet", "guestBody": "Log in to keep your match history and game settings together.",
     "loggedBody": "This session is connected to the authentication server.", "changePassword": "Change Password", "statsPending": "Games, wins, and switch success rate will appear here when the profile API is added.",
     "securityKicker": "ACCOUNT SECURITY", "loginDevices": "Signed-in devices", "loginDevicesHelp": "Review the devices signed in to this account and end sessions you no longer need.",
     "lastActive": "Last active {{date}}", "currentDevice": "This device", "revokeSession": "Sign out", "revokeOthers": "Sign out all other devices", "noSessions": "There are no active login sessions.",
-    "sessionsLoadFailed": "Could not load signed-in devices.", "sessionRevoked": "That device has been signed out.", "sessionActionFailed": "Could not update the session.", "otherSessionsRevoked": "Signed out {{count}} other devices."
+    "sessionsLoadFailed": "Could not load signed-in devices.", "sessionRevoked": "That device has been signed out.", "sessionActionFailed": "Could not update the session.", "otherSessionsRevoked": "Signed out {{count}} other devices.", "sessionScrollHint": "Drag or scroll to see more devices."
   },
   "settings": {
     "title": "Settings", "sectionLabel": "SETTINGS", "savedAutomatically": "Changes are saved automatically.", "resetSection": "Reset this tab",

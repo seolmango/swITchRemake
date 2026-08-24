@@ -100,6 +100,13 @@ class GameSession {
     private readonly listeners = new Set<() => void>();
     private readonly snapshotListeners = new Set<(frame: ArrayBuffer) => void>();
     private readonly blinkListeners = new Set<(payload: PlayerBlinkedMessage['payload']) => void>();
+    private pageUnloading = false;
+
+    constructor() {
+        window.addEventListener('beforeunload', () => { this.pageUnloading = true; });
+        window.addEventListener('pagehide', () => { this.pageUnloading = true; });
+        window.addEventListener('pageshow', () => { this.pageUnloading = false; });
+    }
 
     getSnapshot = (): GameSessionState => this.state;
 
@@ -210,6 +217,7 @@ class GameSession {
                 if (socket !== this.socket) return;
                 this.socket = null;
                 this.setState({ status: 'disconnected' });
+                if (!this.pageUnloading) sessionStorage.removeItem(ACTIVE_ROOM_KEY);
                 settleError(new Error('The game-server connection closed before authentication'));
             });
         });
@@ -268,7 +276,13 @@ class GameSession {
             case 'player.blinked':
                 for (const listener of this.blinkListeners) listener(message.payload);
                 break;
+            case 'player.left':
+                if (message.payload.playerId === this.state.selfId) sessionStorage.removeItem(ACTIVE_ROOM_KEY);
+                break;
             case 'error':
+                if (message.payload.code === 'ROOM_CLOSED' || message.payload.code === 'KICKED') {
+                    sessionStorage.removeItem(ACTIVE_ROOM_KEY);
+                }
                 this.setState({ errorCode: message.payload.code, errorEventId: message.eventId });
                 break;
             case 'spectate.changed':

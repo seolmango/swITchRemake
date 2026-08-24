@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageLayout } from '../components/layout/PageLayout.tsx';
@@ -9,6 +9,7 @@ import { getLoginSessions, revokeLoginSession, revokeOtherLoginSessions, type Lo
 import { useAuthStore } from '../stores/useAuthStore.ts';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../theme/color.ts';
+import { loginErrorMessage } from './auth/authErrorMessage.ts';
 
 export const ProfilePage: React.FC = () => {
     const { t, i18n } = useTranslation();
@@ -21,6 +22,9 @@ export const ProfilePage: React.FC = () => {
     const [loadingSessions, setLoadingSessions] = useState(true);
     const [sessionAction, setSessionAction] = useState<string | null>(null);
     const [sessionMessage, setSessionMessage] = useState('');
+    const sessionListRef = useRef<HTMLDivElement>(null);
+    const drag = useRef<{ pointerId: number; lastY: number; scale: number } | null>(null);
+    const [hasSessionOverflow, setHasSessionOverflow] = useState(false);
 
     const loadSessions = useCallback(async () => {
         if (!authenticated) return;
@@ -86,6 +90,37 @@ export const ProfilePage: React.FC = () => {
         dateStyle: 'medium', timeStyle: 'short',
     }).format(new Date(value));
 
+    useEffect(() => {
+        const list = sessionListRef.current;
+        if (!list) return;
+        const updateOverflow = () => setHasSessionOverflow(list.scrollHeight > list.clientHeight + 1);
+        updateOverflow();
+        const observer = new ResizeObserver(updateOverflow);
+        observer.observe(list);
+        return () => observer.disconnect();
+    }, [loadingSessions, sessions]);
+
+    const beginSessionDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+        if (event.button !== 0 || (event.target as Element).closest('button')) return;
+        const list = event.currentTarget;
+        const scale = list.offsetHeight === 0 ? 1 : list.getBoundingClientRect().height / list.offsetHeight;
+        drag.current = { pointerId: event.pointerId, lastY: event.clientY, scale: scale || 1 };
+        list.setPointerCapture(event.pointerId);
+    };
+
+    const dragSessionList = (event: React.PointerEvent<HTMLDivElement>) => {
+        const current = drag.current;
+        if (current?.pointerId !== event.pointerId) return;
+        event.currentTarget.scrollTop += (current.lastY - event.clientY) / current.scale;
+        current.lastY = event.clientY;
+    };
+
+    const endSessionDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+        if (drag.current?.pointerId !== event.pointerId) return;
+        drag.current = null;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    };
+
     if (!authenticated) {
         return (
             <PageLayout title={t('profile.title')} home>
@@ -122,7 +157,7 @@ export const ProfilePage: React.FC = () => {
                         <RoundButton width={170} height={76} type={0} content={t('auth.logout')} onClick={() => {
                             void logout()
                                 .then(() => navigate('/', { replace: true }))
-                                .catch(() => setSessionMessage(t('profile.sessionActionFailed')));
+                                .catch((error: unknown) => setSessionMessage(loginErrorMessage(error, t)));
                         }}/>
                     </div>
                 </div>
@@ -136,7 +171,17 @@ export const ProfilePage: React.FC = () => {
                         <button type="button" onClick={() => void loadSessions()} disabled={loadingSessions} aria-label={t('rooms.refresh')}><Icon name="refresh" size={28}/></button>
                     </header>
                     <p>{t('profile.loginDevicesHelp')}</p>
-                    <div className="session-list" aria-busy={loadingSessions}>
+                    <div
+                        ref={sessionListRef}
+                        className={`session-list ${hasSessionOverflow ? 'has-overflow' : ''}`}
+                        aria-busy={loadingSessions}
+                        aria-label={t('profile.loginDevices')}
+                        tabIndex={0}
+                        onPointerDown={beginSessionDrag}
+                        onPointerMove={dragSessionList}
+                        onPointerUp={endSessionDrag}
+                        onPointerCancel={endSessionDrag}
+                    >
                         {sessions.map((session) => (
                             <article key={session.id} className={session.current ? 'is-current' : ''}>
                                 <Icon name="person" size={34}/>
@@ -152,6 +197,7 @@ export const ProfilePage: React.FC = () => {
                         ))}
                         {!loadingSessions && sessions.length === 0 && <div className="session-empty">{t('profile.noSessions')}</div>}
                     </div>
+                    {hasSessionOverflow && <span className="session-scroll-hint">{t('profile.sessionScrollHint')}</span>}
                     <footer>
                         <span role="status" aria-live="polite">{sessionMessage}</span>
                         <button type="button" disabled={sessionAction !== null || sessions.every((session) => session.current)} onClick={() => void revokeOthers()}>

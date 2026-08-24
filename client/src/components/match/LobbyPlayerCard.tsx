@@ -117,9 +117,10 @@ export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, 
                         <Icon name="swap" size={15}/>
                     </button>
                 ) : (
-                    <span title={t(`lobby.skills.${player.skill}`)}>
+                    <span className="lobby-skill-display" title={t(`lobby.skills.${player.skill}`)}>
                         <img src={skillIcons[player.skill]} alt=""/>
                         <small>{t(`lobby.skills.${player.skill}`)}</small>
+                        <span className="lobby-skill-icon-spacer" aria-hidden="true"/>
                     </span>
                 )}
             </div>

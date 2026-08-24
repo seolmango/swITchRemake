@@ -50,6 +50,15 @@ describe('auth action progress', () => {
         });
     });
 
+    it('sends the login request even when a stale active-room key remains', async () => {
+        vi.stubGlobal('sessionStorage', { getItem: vi.fn((key: string) => key === 'switch-active-room' ? 'stale-room' : null) });
+        loginUser.mockResolvedValueOnce({ accessToken: 'new-token', nickname: 'Alice' });
+
+        await useAuthStore.getState().login('alice@example.com', 'Password1');
+
+        expect(loginUser).toHaveBeenCalledWith('alice@example.com', 'Password1');
+    });
+
     it('keeps the boot status stable while logout is pending', async () => {
         const request = deferred<{ accessToken: string; nickname: string }>();
         logoutAndCreateGuest.mockReturnValueOnce(request.promise);

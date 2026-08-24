@@ -631,9 +631,9 @@ html[data-motion='reduced'] .room-card {
 .profile-actions.is-compact { gap: 18px; margin-top: 4px; }
 
 .session-panel {
-  min-width: 0;
+  min-width: 0; min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   gap: 13px;
   padding: 26px 30px;
   border: 6px solid var(--session-border);
@@ -649,7 +649,16 @@ html[data-motion='reduced'] .room-card {
   background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer;
 }
 .session-panel > p { margin: 0; color: var(--session-muted); font-size: 20px; line-height: 1.4; }
-.session-list { min-height: 0; overflow: auto; display: grid; align-content: start; gap: 10px; padding-right: 5px; }
+.session-list {
+  min-height: 0; overflow: auto; display: grid; align-content: start; gap: 10px; padding-right: 9px;
+  scrollbar-width: auto; scrollbar-color: var(--session-border) var(--session-field);
+}
+.session-list.has-overflow { cursor: grab; }
+.session-list.has-overflow:active { cursor: grabbing; }
+.session-list::-webkit-scrollbar { width: 14px; }
+.session-list::-webkit-scrollbar-track { background: var(--session-field); border-radius: 999px; }
+.session-list::-webkit-scrollbar-thumb { background: var(--session-border); border: 3px solid var(--session-field); border-radius: 999px; }
+.session-scroll-hint { align-self: end; color: var(--session-muted); font-size: 15px; }
 .session-list article {
   min-height: 82px; padding: 12px 16px; border: 4px solid var(--session-border); border-radius: 18px;
   background: var(--session-field); display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -837,6 +846,9 @@ html[data-motion='reduced'] .room-card {
 .lobby-player-loadout img { width: 32px; height: 32px; object-fit: contain; border-radius: 8px; }
 .lobby-player-loadout small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .lobby-skill-button > svg { margin-left: auto; flex: 0 0 auto; }
+.lobby-skill-display,
+.lobby-skill-button { position: relative; }
+.lobby-skill-icon-spacer { width: 15px; height: 15px; margin-left: auto; flex: 0 0 auto; }
 .lobby-player-stats {
   align-self: end;
   min-height: 54px;

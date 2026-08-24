@@ -14,6 +14,7 @@ import { gameSession } from '../../game/GameSession.ts';
 import { useGameSession } from '../../game/useGameSession.ts';
 import { resumeRoom } from '../../api/rooms.ts';
 import { verifiedMapBundle } from '../../game/mapBundle.ts';
+import { cancelScheduledLobbyLeave, scheduleLobbyLeave } from './lobbyLeave.ts';
 import dashIcon from '../../assets/images/skill_dash.webp';
 import flashIcon from '../../assets/images/skill_flash.webp';
 import exhaustIcon from '../../assets/images/skill_exhaust.webp';
@@ -79,6 +80,10 @@ export const LobbyPage: React.FC = () => {
     const displayCode = session.roomCode ?? currentRoomId;
 
     useEffect(() => {
+        cancelScheduledLobbyLeave(currentRoomId);
+    }, [currentRoomId]);
+
+    useEffect(() => {
         if (!currentRoomId || live || resumeAttempted.current) return;
         resumeAttempted.current = true;
         void resumeRoom(currentRoomId)
@@ -125,8 +130,12 @@ export const LobbyPage: React.FC = () => {
             window.removeEventListener('pagehide', markPageUnloading);
             if (leavingRoom.current || transitioningToGame.current || pageUnloading.current
                 || gameSession.getSnapshot().roomId !== currentRoomId) return;
-            gameSession.send({ type: 'lobby.leave', payload: {} });
-            gameSession.disconnect();
+            scheduleLobbyLeave(currentRoomId, () => {
+                // A new connection may have superseded this lobby while the leave was pending.
+                if (gameSession.getSnapshot().roomId !== currentRoomId) return;
+                gameSession.send({ type: 'lobby.leave', payload: {} });
+                gameSession.disconnect();
+            });
         };
     }, [currentRoomId]);
 

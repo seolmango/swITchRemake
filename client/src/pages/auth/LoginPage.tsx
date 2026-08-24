@@ -8,7 +8,7 @@ import { InlineLink } from '../../components/common/InlineLink.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
 import { useAuthStore } from '../../stores/useAuthStore.ts';
 import { isEmail, isPassword } from '../../utils/validation.ts';
-import { ApiError } from '../../api/http.ts';
+import { loginErrorMessage } from './authErrorMessage.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../../theme/color.ts';
 
@@ -35,7 +35,7 @@ export const LoginPage: React.FC = () => {
             await login(email, password);
             navigate('/', { replace: true });
         } catch (error) {
-            setMessage(error instanceof ApiError && error.status === 401 ? t('auth.invalidCredentials') : t('auth.serverError'));
+            setMessage(loginErrorMessage(error, t));
         }
     };
 

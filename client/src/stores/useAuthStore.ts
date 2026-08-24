@@ -45,7 +45,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
     },
     login: async (email, password) => {
-        if (sessionStorage.getItem('switch-active-room')) throw new Error('Leave the active room before logging in');
         const previous = get();
         set({ pending: true });
         try {
@@ -57,7 +56,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
     },
     logout: async () => {
-        if (sessionStorage.getItem('switch-active-room')) throw new Error('Leave the active room before logging out');
         set({ pending: true });
         try {
             const next = await logoutAndCreateGuest();
