@@ -49,7 +49,8 @@ export const GamePage: React.FC = () => {
     const mapBundleHash = session.mapBundleHash;
 
     const applySnapshot = useCallback((engine: SwitchEngine, frame: ArrayBuffer) => {
-        const snapshot = engine.applySnapshot(frame);
+        const simulationHz = gameSession.getSnapshot().starting?.gameplay.simulationHz;
+        const snapshot = engine.applySnapshot(frame, simulationHz);
         gameSession.updateHudSnapshot(snapshot);
     }, []);
 
@@ -120,6 +121,10 @@ export const GamePage: React.FC = () => {
             });
         }
     }), [applySnapshot]);
+
+    useEffect(() => gameSession.subscribeBlinks(({ playerId, fromX, fromY }) => {
+        engineRef.current?.applyPlayerBlinked(playerId, fromX, fromY);
+    }), []);
 
     useEffect(() => {
         if (!session.ended || !session.roomId) return;

@@ -1,3 +1,5 @@
+import { NETWORK } from './network';
+
 /**
  * 밸런스 수치. 환경 변수가 아니라 버전 관리되는 타입 안전한 파일에 둔다.
  *
@@ -171,6 +173,7 @@ export const SKILLS = Object.freeze({
  */
 export function hudGameplayPayload(): Record<string, number> {
     return {
+        simulationHz: NETWORK.SIMULATION_HZ,
         taggerChangeCooldownMs: GAMEPLAY.TAGGER_CHANGE_COOLDOWN_MS,
         playerRadiusPx: GAMEPLAY.PLAYER_RADIUS_PX,
         dashDurationMs: SKILLS.DASH.DURATION_MS,

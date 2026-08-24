@@ -4,10 +4,16 @@ import { PlayerSprite, type PlayerVisualState } from './PlayerSprite.ts';
 import { BlinkFxLayer } from './BlinkFxLayer.ts';
 import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EffectType, EngineMode, type DisplayOptions, type EngineSettings, type FloorVariant, type MapView, type PlayerInit, type StormRect, type Theme, type TilePhysics } from '../types.ts';
 import { applyColorVision, Palette } from '../palette.ts';
-import { CAMERA, CAMERA_FX, CULL_MARGIN, MOTION_PRESETS, QUALITY_PRESETS, type RenderOptions } from '../constants.ts';
+import { CAMERA, CAMERA_FX, CULL_MARGIN, MOTION_PRESETS, QUALITY_PRESETS, TILE_SIZE, type RenderOptions } from '../constants.ts';
 import { EMOJI_COUNT, emojiDataUri, emojiTextureKey } from '../emoji.ts';
 import { Color } from '../../theme/color.ts';
 import { EFFECT_BITS, type Snapshot } from 'shared';
+import {
+    advanceRenderTick,
+    bufferEntityPositions,
+    interpolateEntityPosition,
+    type EntityPositionBuffers,
+} from './entityInterpolation.ts';
 
 export interface WorldSceneInit {
     theme: Theme;
@@ -18,6 +24,8 @@ export interface WorldSceneInit {
 
 /** Emoji SVGs are rasterised once at this size; the pop animation scales the sprite down from here. */
 const EMOJI_TEXTURE_PX = 256;
+/** Three tiles is far beyond legal movement between snapshots; corrections this large must not glide. */
+const MAX_INTERPOLATION_DISTANCE_PX = 3 * TILE_SIZE;
 
 /**
  * The actual Phaser.Scene. Never imported/constructed by consumer code — reached only through
@@ -59,6 +67,12 @@ export class WorldScene extends Phaser.Scene {
     private displayOptions: DisplayOptions = { ...DEFAULT_DISPLAY_OPTIONS };
     /** Roster names that arrived before the player was visible — applied when they're first spawned. */
     private readonly pendingNicknames = new Map<number, string>();
+    private entityPositionBuffers: EntityPositionBuffers = new Map();
+    private latestSnapshotTick: number | null = null;
+    private renderTick: number | null = null;
+    private simulationHz: number | null = null;
+    /** A blink event is authoritative intent to teleport; the following snapshot is snapped, never lerped. */
+    private readonly pendingBlinks = new Map<number, { fromX: number; fromY: number }>();
 
     // ---- camera fx state ----
     /** The user/caller-controlled zoom (wheel, `setCameraZoom`) — camera FX multiplies on top of this,
@@ -114,6 +128,7 @@ export class WorldScene extends Phaser.Scene {
         const dt = Math.min(delta, 50) / 1000;
         this.clock += dt;
         this.animClock += dt * this.renderOptions.motion.animSpeed;
+        this.updateInterpolatedPositions(delta);
 
         const view = this.cameras.main.worldView;
         const minX = view.x - CULL_MARGIN, maxX = view.right + CULL_MARGIN;
@@ -360,6 +375,10 @@ export class WorldScene extends Phaser.Scene {
         if (!sprite) return;
         sprite.destroy();
         this.players.delete(id);
+        const nextBuffers = new Map(this.entityPositionBuffers);
+        nextBuffers.delete(id);
+        this.entityPositionBuffers = nextBuffers;
+        this.pendingBlinks.delete(id);
         if (this.taggerId === id) this.taggerId = null;
         // Keep the authoritative self id while a visibility frame temporarily omits the sprite.
     }
@@ -415,7 +434,24 @@ export class WorldScene extends Phaser.Scene {
      * server didn't send them" is exactly how invisibility is expressed. Sections that are absent
      * entirely mean "unchanged" and are left alone.
      */
-    applySnapshot(snapshot: Snapshot): void {
+    applySnapshot(snapshot: Snapshot, simulationHz?: number): void {
+        if (simulationHz !== undefined && Number.isFinite(simulationHz) && simulationHz > 0
+            && simulationHz !== this.simulationHz) {
+            this.simulationHz = simulationHz;
+            this.entityPositionBuffers = new Map();
+            this.latestSnapshotTick = null;
+            this.renderTick = null;
+        }
+        if (this.latestSnapshotTick !== null && snapshot.tick < this.latestSnapshotTick) {
+            // A lower tick means a new authoritative timeline (for example, a new match in this scene).
+            this.entityPositionBuffers = new Map();
+            this.renderTick = null;
+        }
+        this.latestSnapshotTick = snapshot.tick;
+        if (this.simulationHz !== null && this.renderTick === null) {
+            this.renderTick = advanceRenderTick(null, snapshot.tick, 0, this.simulationHz);
+        }
+
         if (snapshot.map) {
             this.loadMap({ cols: snapshot.map.cols, rows: snapshot.map.rows, tiles: snapshot.map.tiles });
         }
@@ -439,6 +475,16 @@ export class WorldScene extends Phaser.Scene {
         if (snapshot.players) {
             const seen = new Set<number>();
             let tagger: number | null = null;
+            const buffered = this.simulationHz === null ? null : bufferEntityPositions(
+                this.entityPositionBuffers,
+                snapshot.tick,
+                snapshot.players,
+                {
+                    forceSnapIds: new Set(this.pendingBlinks.keys()),
+                    maxInterpolationDistance: MAX_INTERPOLATION_DISTANCE_PX,
+                },
+            );
+            if (buffered !== null) this.entityPositionBuffers = buffered.buffers;
 
             for (const p of snapshot.players) {
                 seen.add(p.id);
@@ -450,8 +496,10 @@ export class WorldScene extends Phaser.Scene {
                     this.pendingNicknames.delete(p.id);
                 }
                 const s = this.players.get(p.id)!.state;
-                s.x = p.x;
-                s.y = p.y;
+                if (buffered === null || buffered.snappedIds.has(p.id)) {
+                    s.x = p.x;
+                    s.y = p.y;
+                }
                 s.facingX = p.facingX;
                 s.facingY = p.facingY;
                 s.colorIndex = p.colorIndex;
@@ -466,16 +514,46 @@ export class WorldScene extends Phaser.Scene {
                 }
 
                 if (p.emojiId) this.showEmoji(p.id, p.emojiId);
+                const blink = this.pendingBlinks.get(p.id);
+                if (blink !== undefined) {
+                    this.pendingBlinks.delete(p.id);
+                    this.playBlink(p.id, blink.fromX, blink.fromY, p.x, p.y);
+                }
             }
 
             for (const id of [...this.players.keys()]) {
                 if (!seen.has(id)) this.removePlayer(id);
             }
+            for (const id of [...this.pendingBlinks.keys()]) {
+                if (!seen.has(id)) this.pendingBlinks.delete(id);
+            }
             this.setTagger(tagger);
         }
 
-        // 점멸 같은 저빈도 연출은 더 이상 스냅샷 섹션이 아니라 JSON 이벤트(`player.blinked`)로 온다.
-        // 전송 계층이 그 메시지를 받아 `PlayerHandle.playBlink`를 부른다.
+        // 점멸 같은 저빈도 연출은 JSON 이벤트(`player.blinked`)가 다음 위치 샘플을 snap으로 표시한다.
+    }
+
+    private updateInterpolatedPositions(deltaMs: number): void {
+        if (this.simulationHz === null || this.latestSnapshotTick === null) return;
+        this.renderTick = advanceRenderTick(
+            this.renderTick,
+            this.latestSnapshotTick,
+            deltaMs,
+            this.simulationHz,
+        );
+        for (const [id, samples] of this.entityPositionBuffers) {
+            const position = interpolateEntityPosition(samples, this.renderTick);
+            const state = this.players.get(id)?.state;
+            if (position === null || state === undefined) continue;
+            state.x = position.x;
+            state.y = position.y;
+        }
+    }
+
+    markPlayerBlinked(id: number, fromX: number, fromY: number): void {
+        // The event is the semantic distinction from ordinary movement. Its next visible snapshot resets
+        // this player's buffer and is applied immediately, even if the travelled distance is small.
+        this.pendingBlinks.set(id, { fromX, fromY });
     }
 
     setDisplayOptions(options: Partial<DisplayOptions>): void {

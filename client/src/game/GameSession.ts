@@ -8,6 +8,7 @@ type GameStartedMessage = Extract<ServerMessage, { type: 'game.started' }>;
 type GameEndedMessage = Extract<ServerMessage, { type: 'game.ended' }>;
 type ErrorMessage = Extract<ServerMessage, { type: 'error' }>;
 type SkillRejectedMessage = Extract<ServerMessage, { type: 'skill.rejected' }>;
+type PlayerBlinkedMessage = Extract<ServerMessage, { type: 'player.blinked' }>;
 type ClientMessageBody = ClientMessage extends infer Message
     ? Message extends ClientMessage ? Omit<Message, 'v' | 'requestId'> : never
     : never;
@@ -98,6 +99,7 @@ class GameSession {
     private latestSnapshot: ArrayBuffer | null = null;
     private readonly listeners = new Set<() => void>();
     private readonly snapshotListeners = new Set<(frame: ArrayBuffer) => void>();
+    private readonly blinkListeners = new Set<(payload: PlayerBlinkedMessage['payload']) => void>();
 
     getSnapshot = (): GameSessionState => this.state;
 
@@ -112,6 +114,11 @@ class GameSession {
     };
 
     getLatestSnapshot = (): ArrayBuffer | null => this.latestSnapshot;
+
+    subscribeBlinks = (listener: (payload: PlayerBlinkedMessage['payload']) => void): (() => void) => {
+        this.blinkListeners.add(listener);
+        return () => this.blinkListeners.delete(listener);
+    };
 
     /**
      * Receives the Snapshot already decoded by SwitchEngine.  Network frames arrive at 30 Hz, but the
@@ -257,6 +264,9 @@ class GameSession {
                 this.setState({
                     skillRejections: [...this.state.skillRejections, { id: message.eventId, reason: message.payload.reason }].slice(-20),
                 });
+                break;
+            case 'player.blinked':
+                for (const listener of this.blinkListeners) listener(message.payload);
                 break;
             case 'error':
                 this.setState({ errorCode: message.payload.code, errorEventId: message.eventId });

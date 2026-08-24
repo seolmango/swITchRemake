@@ -172,10 +172,15 @@ export class SwitchEngine {
      * Feeds one server frame straight in — the engine decodes the binary itself so callers never have to
      * translate the wire format into engine calls. This is the only state input a real match needs.
      */
-    applySnapshot(buffer: ArrayBuffer): Snapshot {
+    applySnapshot(buffer: ArrayBuffer, simulationHz?: number): Snapshot {
         const snapshot = decodeSnapshot(buffer);
-        this._accessor.withScene((s) => s.applySnapshot(snapshot));
+        this._accessor.withScene((s) => s.applySnapshot(snapshot, simulationHz));
         return snapshot;
+    }
+
+    /** Marks the next authoritative position for this player as an intentional teleport. */
+    applyPlayerBlinked(playerId: number, fromX: number, fromY: number): void {
+        this._accessor.withScene((s) => s.markPlayerBlinked(playerId, fromX, fromY));
     }
 
     /** Local view preferences (in-body number, nickname above head). Never leaves the client. */
