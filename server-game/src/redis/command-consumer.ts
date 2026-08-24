@@ -32,6 +32,8 @@ export interface CommandConsumerOptions {
     readonly tickets: TicketStore;
     readonly registry: GameRegistry;
     readonly isDraining: () => boolean;
+    /** 'random' sentinel을 실제 맵 id로 바꾼다. 없으면 그대로 통과시킨다(테스트 기본값). */
+    readonly resolveMapId?: (mapId: string) => string;
     readonly now?: () => number;
     readonly roomIdFactory?: () => string;
     readonly logger?: (message: string, error?: unknown) => void;
@@ -284,13 +286,15 @@ export class CommandConsumer {
     #createRoom(command: ControlCommand, payload: CreateRoomPayload): ControlReply<CreateRoomResult> {
         const roomId = this.#roomIdFactory();
         const reservation = this.#reservation(payload.ownerUserId, payload.ownerNickname, roomId, false);
+        const mapId = this.#options.resolveMapId ? this.#options.resolveMapId(payload.mapId) : payload.mapId;
         const created = this.#options.rooms.createRoom({
             id: roomId,
+            roomCode: payload.roomCode,
             matchId: payload.matchId,
             name: payload.roomName,
             password: payload.password,
             capacity: payload.capacity,
-            mapId: payload.mapId,
+            mapId,
             ownerReservation: reservation,
         });
         if (!created.ok) return failure(this.#options.serverId, command, created.code);
@@ -299,6 +303,8 @@ export class CommandConsumer {
             this.#options.registry.trackSeat(roomId, payload.ownerUserId, command.requestId);
             return success(this.#options.serverId, command, {
                 roomId,
+                roomCode: payload.roomCode,
+                mapId,
                 wsPath: this.#options.wsPath,
                 ticket: issued.ticket,
                 expiresAt: issued.expiresAt,

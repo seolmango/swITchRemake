@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import {
     CommandType,
     ConsumerGroup,
@@ -37,7 +37,8 @@ import { CreateRoomDto } from './dto/create-room.dto';
 import { ResultService } from '../results/result.service';
 import { SessionSecurityService } from '../session/session-security.service';
 
-const COMMAND_TIMEOUT_MS = 2_000;
+const COMMAND_RETRY_INTERVAL_MS = 2_000;
+const COMMAND_DEADLINE_MS = 6_000;
 const ACTIVE_ROOM_RESERVATION_TTL_SECONDS = 30;
 const JOIN_RATE_LIMIT = 6;
 const JOIN_RATE_WINDOW_SECONDS = 60;
@@ -69,6 +70,7 @@ interface RoomDirectoryEntry {
     serverId: string;
     name?: string;
     roomName?: string;
+    roomCode?: string;
     ownerName?: string;
     playerCount?: number;
     capacity?: number;
@@ -83,7 +85,7 @@ interface PendingReply {
     timer: NodeJS.Timeout;
 }
 
-type ClientSeatGrant = SeatGrant & { roomId: string };
+type ClientSeatGrant = SeatGrant & { roomId: string; roomCode: string };
 
 @Injectable()
 export class RoomsService implements OnModuleInit, OnModuleDestroy {
@@ -149,8 +151,10 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         }
 
         let issuedMatchId: string | null = null;
+        let roomCodeReservation: { code: string; value: string } | null = null;
         try {
             const server = await this.selectServer();
+            roomCodeReservation = await this.reserveRoomCode(requestId);
             issuedMatchId = randomUUID();
             await this.results.issueMatch(issuedMatchId, server.serverId, dto.mapId ?? 'random', actor);
             const reply = await this.sendCommand<CreateRoomResult>(server.serverId, {
@@ -158,9 +162,10 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                 requestId,
                 type: CommandType.CreateRoom,
                 issuedAt: Date.now(),
-                deadlineAt: Date.now() + COMMAND_TIMEOUT_MS,
+                deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
                 payload: {
                     matchId: issuedMatchId,
+                    roomCode: roomCodeReservation.code,
                     roomName,
                     password: dto.password?.length ? dto.password : null,
                     ownerUserId: actor.id,
@@ -172,15 +177,19 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
             if (!reply.ok || !reply.payload) {
                 await this.redis.compareAndDelete(this.keys.userActiveRoom(actor.id), claim);
                 await this.results.discardIssuedMatch(issuedMatchId);
+                issuedMatchId = null;
                 this.throwControlError(reply.code);
             }
 
-            await this.results.confirmRoom(issuedMatchId, reply.payload.roomId);
+            await this.results.confirmRoom(issuedMatchId, reply.payload.roomId, reply.payload.mapId);
+            await this.redis.set(this.keys.roomCode(reply.payload.roomCode), reply.payload.roomId, ACTIVE_ROOM_RESERVATION_TTL_SECONDS);
             await this.assignActiveRoom(actor.id, claim, requestId, reply.serverId, reply.payload.roomId);
             return reply.payload;
         } catch (error) {
-            if (!this.mustKeepReservationUntilExpiry(error)) {
-                await this.redis.compareAndDelete(this.keys.userActiveRoom(actor.id), claim);
+            await this.redis.compareAndDelete(this.keys.userActiveRoom(actor.id), claim);
+            if (issuedMatchId) await this.results.discardIssuedMatch(issuedMatchId).catch(() => undefined);
+            if (roomCodeReservation) {
+                await this.redis.compareAndDelete(this.keys.roomCode(roomCodeReservation.code), roomCodeReservation.value);
             }
             throw error;
         }
@@ -211,22 +220,30 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                 requestId,
                 type: CommandType.ReserveJoin,
                 issuedAt: Date.now(),
-                deadlineAt: Date.now() + COMMAND_TIMEOUT_MS,
+                deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
                 payload: { roomId, userId: actor.id, nickname: actor.nickname, password: password?.length ? password : null },
             });
             if (!reply.ok || !reply.payload) {
                 await this.redis.compareAndDelete(this.keys.userActiveRoom(actor.id), claim);
                 await this.results.removeAssignment(assignedMatchId, actor.id);
+                assignedMatchId = null;
                 this.throwControlError(reply.code);
             }
             await this.assignActiveRoom(actor.id, claim, requestId, reply.serverId, roomId);
-            return { roomId, ...reply.payload };
+            return { roomId, roomCode: room.roomCode ?? '', ...reply.payload };
         } catch (error) {
-            if (!this.mustKeepReservationUntilExpiry(error)) {
-                await this.redis.compareAndDelete(this.keys.userActiveRoom(actor.id), claim);
-            }
+            await this.redis.compareAndDelete(this.keys.userActiveRoom(actor.id), claim);
+            if (assignedMatchId) await this.results.removeAssignment(assignedMatchId, actor.id).catch(() => undefined);
             throw error;
         }
+    }
+
+    async joinByCode(principal: ActorId | RoomPrincipal, roomCode: string, password?: string, clientIp?: string) {
+        const normalized = roomCode.trim().toUpperCase();
+        if (!/^[A-HJ-NP-Z2-9]{6}$/.test(normalized)) this.throwMaskedRoomError();
+        const roomId = await this.redis.get(this.keys.roomCode(normalized));
+        if (!roomId || !/^[0-9a-f-]{36}$/i.test(roomId)) this.throwMaskedRoomError();
+        return this.join(principal, roomId, password, clientIp);
     }
 
     async quickJoin(principal: ActorId | RoomPrincipal, clientIp?: string): Promise<ClientSeatGrant | { alreadyAssigned: true; roomId?: string }> {
@@ -242,6 +259,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
             return this.existingRoomResponse(actor.id);
         }
 
+        let pendingAssignment: string | null = null;
         try {
             for (const candidate of candidates) {
                 const room = await this.readLiveRoom(candidate.roomId);
@@ -253,19 +271,22 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                 }
                 const assignedMatchId = await this.results.addAssignmentByRoom(candidate.roomId, actor);
                 if (!assignedMatchId) continue;
+                pendingAssignment = assignedMatchId;
                 const reply = await this.sendCommand<SeatGrant>(room.serverId, {
                     v: CONTROL_VERSION,
                     requestId: randomUUID(),
                     type: CommandType.ReserveJoin,
                     issuedAt: Date.now(),
-                    deadlineAt: Date.now() + COMMAND_TIMEOUT_MS,
+                    deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
                     payload: { roomId: candidate.roomId, userId: actor.id, nickname: actor.nickname, password: null },
                 });
                 if (reply.ok && reply.payload) {
                     await this.assignActiveRoom(actor.id, claim, requestId, reply.serverId, candidate.roomId);
-                    return { roomId: candidate.roomId, ...reply.payload };
+                    pendingAssignment = null;
+                    return { roomId: candidate.roomId, roomCode: room.roomCode ?? '', ...reply.payload };
                 }
                 await this.results.removeAssignment(assignedMatchId, actor.id);
+                pendingAssignment = null;
                 if (reply.code === ControlErrorCode.RoomNotFound || reply.code === ControlErrorCode.BadPassword) {
                     continue;
                 }
@@ -273,9 +294,8 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
             await this.redis.compareAndDelete(this.keys.userActiveRoom(actor.id), claim);
             throw new ConflictException({ code: 'NO_JOINABLE_ROOM', message: 'No joinable room is available' });
         } catch (error) {
-            if (!this.mustKeepReservationUntilExpiry(error)) {
-                await this.redis.compareAndDelete(this.keys.userActiveRoom(actor.id), claim);
-            }
+            if (pendingAssignment) await this.results.removeAssignment(pendingAssignment, actor.id).catch(() => undefined);
+            await this.redis.compareAndDelete(this.keys.userActiveRoom(actor.id), claim);
             throw error;
         }
     }
@@ -306,7 +326,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
             requestId: randomUUID(),
             type: CommandType.ReserveResume,
             issuedAt: Date.now(),
-            deadlineAt: Date.now() + COMMAND_TIMEOUT_MS,
+            deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
             payload: { roomId, userId: actor.id },
         });
         if (!reply.ok || !reply.payload) {
@@ -318,7 +338,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
             rawClaim,
             ACTIVE_ROOM_RESERVATION_TTL_SECONDS,
         );
-        return { roomId, ...reply.payload };
+        return { roomId, roomCode: room.roomCode ?? '', ...reply.payload };
     }
 
     /** Called by the result/room-event bridge when a confirmed departure arrives. */
@@ -428,6 +448,18 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         )) ? claim : null;
     }
 
+    private async reserveRoomCode(requestId: string): Promise<{ code: string; value: string }> {
+        const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        const value = `reservation:${requestId}`;
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+            const code = Array.from({ length: 6 }, () => alphabet[randomInt(alphabet.length)]).join('');
+            if (await this.redis.setIfAbsent(this.keys.roomCode(code), value, ACTIVE_ROOM_RESERVATION_TTL_SECONDS)) {
+                return { code, value };
+            }
+        }
+        throw new ServiceUnavailableException({ code: 'ROOM_CODE_EXHAUSTED', retryable: true });
+    }
+
     private async existingRoomResponse(userId: ActorId): Promise<{ alreadyAssigned: true; roomId?: string }> {
         const raw = await this.redis.get(this.keys.userActiveRoom(userId));
         if (!raw) {
@@ -436,11 +468,12 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         }
         try {
             const claim = JSON.parse(raw) as ActiveRoomClaim;
-            return claim.state === 'assigned'
-                ? { alreadyAssigned: true, roomId: claim.roomId }
-                : { alreadyAssigned: true };
+            if (claim.state === 'assigned' && claim.roomId) {
+                return { alreadyAssigned: true, roomId: claim.roomId };
+            }
+            throw new ServiceUnavailableException({ code: 'ACTIVE_ROOM_PENDING', retryable: true });
         } catch {
-            return { alreadyAssigned: true };
+            throw new ServiceUnavailableException({ code: 'ACTIVE_ROOM_PENDING', retryable: true });
         }
     }
 
@@ -511,6 +544,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     private toSummary(room: RoomDirectoryEntry) {
         return {
             id: room.roomId ?? room.id,
+            roomCode: room.roomCode ?? '',
             name: room.name ?? room.roomName ?? '',
             ownerName: room.ownerName ?? '',
             playerCount: room.playerCount ?? 0,
@@ -537,22 +571,66 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     }
 
     private async sendCommand<T>(serverId: string, command: ControlCommand): Promise<ControlReply<T>> {
+        const startedAt = performance.now();
         const reply = await new Promise<ControlReply>((resolve, reject) => {
-            const timer = setTimeout(() => {
-                this.pending.delete(command.requestId);
-                reject(new ServiceUnavailableException({ code: 'COMMAND_TIMEOUT', retryable: true }));
-            }, COMMAND_TIMEOUT_MS);
-            this.pending.set(command.requestId, { expectedServerId: serverId, resolve, reject, timer });
-            void this.redis.addStreamEntry(
-                this.keys.commands(serverId),
-                CONTROL_STREAM_FIELDS.command,
-                encodeCommand(command),
-            ).catch((error: Error) => {
-                clearTimeout(timer);
+            let attempts = 0;
+            let settled = false;
+            const complete = (value: ControlReply) => {
+                if (settled) return;
+                settled = true;
+                resolve(value);
+            };
+            const finishError = (error: Error) => {
+                if (settled) return;
+                settled = true;
+                const pending = this.pending.get(command.requestId);
+                if (pending) clearTimeout(pending.timer);
                 this.pending.delete(command.requestId);
                 reject(error);
-            });
+            };
+            const recoverOrRetry = async (): Promise<void> => {
+                if (settled) return;
+                try {
+                    const stored = await this.redis.get(this.keys.operation(command.requestId));
+                    if (settled) return;
+                    if (stored) {
+                        const recovered = decodeReply(stored);
+                        if (recovered.requestId === command.requestId && recovered.serverId === serverId) {
+                            this.resolvePendingReply(recovered);
+                            return;
+                        }
+                    }
+                } catch { /* Re-enqueueing is safe because requestId is the game server's idempotency key. */ }
+                if (Date.now() >= command.deadlineAt || attempts >= 3) {
+                    this.logger.warn(`Control command timed out requestId=${command.requestId} serverId=${serverId} attempts=${attempts} elapsedMs=${Math.round(performance.now() - startedAt)}`);
+                    finishError(new ServiceUnavailableException({ code: 'COMMAND_TIMEOUT', retryable: true, outcome: 'unknown' }));
+                    return;
+                }
+                await enqueue();
+            };
+            const enqueue = async (): Promise<void> => {
+                if (settled) return;
+                attempts += 1;
+                try {
+                    await this.redis.addStreamEntry(
+                        this.keys.commands(serverId),
+                        CONTROL_STREAM_FIELDS.command,
+                        encodeCommand(command),
+                    );
+                } catch (error) {
+                    finishError(error as Error);
+                    return;
+                }
+                const timer = setTimeout(() => void recoverOrRetry(), COMMAND_RETRY_INTERVAL_MS);
+                if (settled) {
+                    clearTimeout(timer);
+                    return;
+                }
+                this.pending.set(command.requestId, { expectedServerId: serverId, resolve: complete, reject, timer });
+            };
+            void enqueue();
         });
+        this.logger.debug(`Control command completed requestId=${command.requestId} serverId=${serverId} elapsedMs=${Math.round(performance.now() - startedAt)}`);
         return reply as ControlReply<T>;
     }
 
@@ -618,13 +696,4 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         throw new ConflictException({ code: 'ROOM_UNAVAILABLE', message: 'Room not found or password is invalid' });
     }
 
-    private mustKeepReservationUntilExpiry(error: unknown): boolean {
-        if (!(error instanceof ServiceUnavailableException)) {
-            return false;
-        }
-        const response = error.getResponse();
-        return typeof response === 'object'
-            && response !== null
-            && (response as { code?: string }).code === 'COMMAND_TIMEOUT';
-    }
 }

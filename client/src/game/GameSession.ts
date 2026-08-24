@@ -19,6 +19,9 @@ export interface GameSessionMetadata {
 export interface GameSessionState {
     status: 'idle' | 'connecting' | 'connected' | 'disconnected';
     roomId: string | null;
+    roomCode: string | null;
+    mapBundleHash: string | null;
+    gameHttpOrigin: string | null;
     roomName: string | null;
     isPrivate: boolean;
     selfId: number | null;
@@ -35,6 +38,9 @@ export interface GameSessionState {
 const INITIAL_STATE: GameSessionState = {
     status: 'idle',
     roomId: null,
+    roomCode: null,
+    mapBundleHash: null,
+    gameHttpOrigin: null,
     roomName: null,
     isPrivate: false,
     selfId: null,
@@ -48,12 +54,21 @@ const INITIAL_STATE: GameSessionState = {
     errorCode: null,
 };
 
+const ACTIVE_ROOM_KEY = 'switch-active-room';
+
 function websocketUrl(path: string): string {
     if (/^wss?:\/\//iu.test(path)) return path;
     const configuredOrigin = (import.meta.env.VITE_GAME_WS_ORIGIN as string | undefined)?.trim();
     const url = new URL(path, configuredOrigin || window.location.origin);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     return url.toString();
+}
+
+function gameHttpOrigin(path: string): string {
+    const configuredOrigin = (import.meta.env.VITE_GAME_WS_ORIGIN as string | undefined)?.trim();
+    const url = new URL(path, configuredOrigin || window.location.origin);
+    url.protocol = url.protocol === 'wss:' ? 'https:' : url.protocol === 'ws:' ? 'http:' : url.protocol;
+    return url.origin;
 }
 
 function isServerMessage(value: unknown): value is ServerMessage {
@@ -97,6 +112,8 @@ class GameSession {
             ...INITIAL_STATE,
             status: 'connecting',
             roomId: grant.roomId,
+            roomCode: grant.roomCode,
+            gameHttpOrigin: gameHttpOrigin(grant.wsPath),
             roomName: metadata.roomName?.trim() || grant.roomId,
             isPrivate: metadata.isPrivate ?? false,
         });
@@ -178,17 +195,20 @@ class GameSession {
         this.closeSocket();
         this.latestSnapshot = null;
         this.setState(INITIAL_STATE);
+        sessionStorage.removeItem(ACTIVE_ROOM_KEY);
     }
 
     private handleMessage(message: ServerMessage): void {
         switch (message.type) {
             case 'auth.ok':
+                sessionStorage.setItem(ACTIVE_ROOM_KEY, message.payload.roomId);
                 this.setState({
                     status: 'connected',
                     roomId: message.payload.roomId,
                     selfId: message.payload.playerId,
                     roomState: message.payload.roomState,
                     role: message.payload.role,
+                    mapBundleHash: message.payload.mapBundleHash,
                     errorCode: null,
                 });
                 break;

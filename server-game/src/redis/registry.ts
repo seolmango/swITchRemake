@@ -71,6 +71,7 @@ export class GameRegistry {
     readonly #pendingReleases = new Map<string, PendingRelease>();
     readonly #kickedByRoom = new Map<string, Set<ActorId>>();
     #lastProjectedRooms = new Set<string>();
+    #lastProjectedRoomCodes = new Map<string, string>();
     #healthy = false;
     #timer: NodeJS.Timeout | null = null;
     #publishing: Promise<boolean> | null = null;
@@ -186,6 +187,8 @@ export class GameRegistry {
             for (const oldRoomId of this.#lastProjectedRooms) {
                 if (currentRoomIds.has(oldRoomId)) continue;
                 await this.#options.redis.delete(this.#options.keys.room(oldRoomId));
+                const oldCode = this.#lastProjectedRoomCodes.get(oldRoomId);
+                if (oldCode) await this.#options.redis.delete(this.#options.keys.roomCode(oldCode));
                 await this.#options.redis.zRemove(this.#options.keys.roomsWaiting(), oldRoomId);
             }
             await this.#options.redis.zRemoveByScore(
@@ -195,6 +198,7 @@ export class GameRegistry {
             );
             await this.#publishKickMarkers();
             this.#lastProjectedRooms = currentRoomIds;
+            this.#lastProjectedRoomCodes = new Map(projections.map((projection) => [projection.roomId, projection.roomCode]));
             this.#healthy = true;
             return true;
         } catch (error: unknown) {
@@ -212,6 +216,7 @@ export class GameRegistry {
             updatedAt: now,
         };
         await this.#options.redis.setPx(this.#options.keys.room(projection.roomId), JSON.stringify(value), HEARTBEAT_TTL_MS);
+        await this.#options.redis.setPx(this.#options.keys.roomCode(projection.roomCode), projection.roomId, HEARTBEAT_TTL_MS);
         if (projection.state === RoomState.Waiting && !projection.locked) {
             await this.#options.redis.zAdd(this.#options.keys.roomsWaiting(), now, projection.roomId);
         } else {

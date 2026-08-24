@@ -9,7 +9,7 @@
     "dev": "tsc -p tsconfig.json --watch",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test \"dist-test/**/*.test.js\""
+    "test": "tsc -p tsconfig.test.json && node scripts/run-tests.cjs"
   },
   "dependencies": {
     "ioredis": "^5.10.1",

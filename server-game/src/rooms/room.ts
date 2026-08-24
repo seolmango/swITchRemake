@@ -58,6 +58,7 @@ export interface RoomTiming {
 
 export interface RoomOptions {
     readonly id: string;
+    readonly roomCode: string;
     readonly matchId: string;
     readonly name: string;
     readonly password: string | null;
@@ -85,6 +86,7 @@ export interface Admission {
 
 export interface RoomProjection {
     readonly roomId: string;
+    readonly roomCode: string;
     readonly matchId: string;
     readonly name: string;
     readonly ownerName: string;
@@ -105,6 +107,7 @@ function passwordMatches(expected: string, supplied: string): boolean {
 /** 단일 방의 권위 상태. 소켓 구현과 Redis를 직접 알지 않는다. */
 export class Room {
     readonly id: string;
+    readonly roomCode: string;
     readonly matchId: string;
     readonly name: string;
     readonly #password: string | null;
@@ -126,6 +129,7 @@ export class Room {
         }
         if (!options.isKnownMap(options.mapId)) throw new Error(`unknown map: ${options.mapId}`);
         this.id = options.id;
+        this.roomCode = options.roomCode;
         this.matchId = options.matchId;
         this.name = options.name;
         this.#password = options.password;
@@ -176,6 +180,7 @@ export class Room {
         const hostId = this.#roster.hostId;
         return {
             roomId: this.id,
+            roomCode: this.roomCode,
             matchId: this.matchId,
             name: this.name,
             ownerName: hostId === null ? '' : (this.#roster.getByPlayerId(hostId)?.nickname ?? ''),

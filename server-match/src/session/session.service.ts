@@ -79,6 +79,14 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
+    async revokeCurrent(userId: number, sessionId: string): Promise<void> {
+        await this.db.update(schema.sessions).set({ revokedAt: new Date() }).where(and(
+            eq(schema.sessions.id, sessionId),
+            eq(schema.sessions.userId, userId),
+            isNull(schema.sessions.revokedAt),
+        ));
+    }
+
     async revokeOthers(userId: number, currentSessionId: string): Promise<number> {
         const revoked = await this.db.update(schema.sessions).set({
             revokedAt: new Date(),

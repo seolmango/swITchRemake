@@ -31,6 +31,7 @@ function App() {
     const theme = useSettingsStore((state) => state.theme);
     const motionLevel = useSettingsStore((state) => state.motionLevel);
     const bootstrapAuth = useAuthStore((state) => state.bootstrap);
+    const authStatus = useAuthStore((state) => state.status);
 
     useEffect(() => {
         if (i18n.language !== savedLanguage) {
@@ -46,6 +47,25 @@ function App() {
     }, [theme, motionLevel]);
 
     useEffect(() => { void bootstrapAuth(); }, [bootstrapAuth]);
+
+    if (authStatus === 'idle' || authStatus === 'booting') {
+        return <div style={{ width: '100vw', height: '100vh' }} aria-busy="true"/>;
+    }
+    if (authStatus === 'error') {
+        return (
+            <div style={{ width: '100vw', height: '100vh', display: 'grid', placeItems: 'center' }}>
+                <div style={{ display: 'grid', gap: 20, textAlign: 'center' }}>
+                    <p>세션을 복구하지 못했습니다. 진행 중이던 방을 나간 뒤 새 게스트 세션으로 시작할 수 있습니다.</p>
+                    <button type="button" onClick={() => {
+                        sessionStorage.removeItem('switch-active-room');
+                        sessionStorage.removeItem('switch-guest-refresh');
+                        window.history.replaceState(null, '', '/rooms');
+                        void bootstrapAuth();
+                    }}>방 목록으로 돌아가기</button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div style={{ position: "relative", width: "100vw", height: "100vh" }}>

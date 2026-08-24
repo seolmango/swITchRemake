@@ -9,14 +9,12 @@ import { RoundButton } from '../../components/common/RoundButton.tsx';
 import { registerUser, sendVerification } from '../../api/auth.ts';
 import { ApiError } from '../../api/http.ts';
 import { isEmail, isNickname, isPassword, isVerificationCode } from '../../utils/validation.ts';
-import { useAuthStore } from '../../stores/useAuthStore.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../../theme/color.ts';
 
 export const SignUpPage: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const setNickname = useAuthStore((state) => state.setNickname);
     const theme = useSettingsStore((state) => state.theme);
     const emailRef = useRef<HTMLInputElement>(null);
     const [email, setEmail] = useState('');
@@ -44,8 +42,7 @@ export const SignUpPage: React.FC = () => {
         if (!valid) return;
         setLoading(true); setMessage(''); setError(false);
         try {
-            const result = await registerUser({ email, password, nickname, code });
-            setNickname(result.nickname);
+            await registerUser({ email, password, nickname, code });
             navigate('/login', { replace: true, state: { message: t('auth.signupSuccess') } });
         } catch (requestError) {
             setError(true);

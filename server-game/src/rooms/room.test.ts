@@ -67,6 +67,7 @@ function setup() {
     const owner = seat(1, now);
     const options: RoomOptions = {
         id: 'room-1',
+        roomCode: 'ABC234',
         matchId: 'match-1',
         name: 'test',
         password: 'secret',

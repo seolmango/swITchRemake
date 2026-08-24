@@ -27,6 +27,7 @@ async function fixture(authTimeoutMs = 200) {
         connections,
         authenticator,
         metadata: { protocolVersion: PROTOCOL_VERSION, rulesVersion: 'test', mapBundleHash: 'a'.repeat(64) },
+        mapBundleBody: '{"ok":true}',
         getServerTick: () => 11,
         violationSink: () => undefined,
         limits: {
@@ -61,7 +62,11 @@ async function fixture(authTimeoutMs = 200) {
         expiresAt: Date.now() + 15_000,
         resume: true,
     });
-    return { transport, connected, jsonTypes, jsonReceived, issue, url: `ws://127.0.0.1:${transport.boundPort()}/game/game-test` };
+    return {
+        transport, connected, jsonTypes, jsonReceived, issue,
+        url: `ws://127.0.0.1:${transport.boundPort()}/game/game-test`,
+        bundleUrl: `http://127.0.0.1:${transport.boundPort()}/map-bundles/${'a'.repeat(64)}.json`,
+    };
 }
 
 function connect(url: string, origin = 'https://switch.example.com'): WebSocket {
@@ -69,6 +74,19 @@ function connect(url: string, origin = 'https://switch.example.com'): WebSocket 
 }
 
 describe('ws transport', () => {
+    it('serves the immutable map bundle only at its advertised hash', async () => {
+        const f = await fixture();
+        try {
+            const response = await fetch(f.bundleUrl, { headers: { Origin: 'https://switch.example.com' } });
+            assert.equal(response.status, 200);
+            assert.equal(response.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+            assert.equal(response.headers.get('access-control-allow-origin'), 'https://switch.example.com');
+            assert.deepEqual(await response.json(), { ok: true });
+        } finally {
+            await f.transport.close();
+        }
+    });
+
     it('rejects an unapproved Origin during upgrade', async () => {
         const f = await fixture();
         const socket = connect(f.url, 'https://evil.example');

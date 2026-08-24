@@ -79,6 +79,7 @@ export function isGuestActor(id: ActorId): boolean {
 
 export interface CreateRoomPayload {
     matchId: string;
+    roomCode: string;
     roomName: string;
     /** 없으면 공개 방. 원문은 방 소유 인게임 서버 메모리에만 머문다. */
     password: string | null;
@@ -121,6 +122,9 @@ export interface SeatGrant {
 
 export interface CreateRoomResult extends SeatGrant {
     roomId: string;
+    roomCode: string;
+    /** The actual map the room was created with — the 'random' sentinel is already resolved by here. */
+    mapId: string;
 }
 
 export interface ControlCommandMap {
@@ -163,8 +167,10 @@ export function makeKeys(env: string) {
         gameServer: (serverId: string) => p(`game-server:${serverId}`),
         gameServersAlive: () => p('game-servers:alive'),
         room: (roomId: string) => p(`room:${roomId}`),
+        roomCode: (roomCode: string) => p(`room-code:${roomCode}`),
         roomsWaiting: () => p('rooms:waiting'),
         userActiveRoom: (userId: ActorId) => p(`user:${userId}:active-room`),
+        guestSession: (sessionId: string) => p(`guest-session:${sessionId}`),
         roomRejoin: (roomId: string, userId: ActorId) => p(`room-rejoin:${roomId}:${userId}`),
         commands: (serverId: string) => p(`game-server:${serverId}:commands`),
         replies: () => p('matching-server:replies'),

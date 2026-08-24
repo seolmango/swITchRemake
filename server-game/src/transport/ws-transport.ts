@@ -45,6 +45,8 @@ export interface WsTransportOptions {
     connections: ConnectionManager;
     authenticator: TicketAuthenticator;
     metadata: WsServerMetadata;
+    /** Exact validated JSON bundle, served immutably by its advertised hash. */
+    mapBundleBody?: string;
     getServerTick: () => number;
     violationSink: ViolationSink;
     rateLimiter?: AbuseRateLimiter;
@@ -194,7 +196,22 @@ export class WsTransport implements GameTransport {
 
     public constructor(options: WsTransportOptions) {
         this.#options = options;
-        this.#server = options.server ?? createServer((_request, response) => {
+        this.#server = options.server ?? createServer((request, response) => {
+            const bundlePath = `/map-bundles/${options.metadata.mapBundleHash}.json`;
+            if (request.method === 'GET' && request.url === bundlePath && options.mapBundleBody) {
+                const requestOrigin = typeof request.headers.origin === 'string' ? canonicalOrigin(request.headers.origin) : null;
+                const corsOrigin = requestOrigin && options.allowedOrigins.some((origin) => canonicalOrigin(origin) === requestOrigin)
+                    ? requestOrigin
+                    : null;
+                response.writeHead(200, {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'Cache-Control': 'public, max-age=31536000, immutable',
+                    'Content-Length': Buffer.byteLength(options.mapBundleBody),
+                    ETag: `"${options.metadata.mapBundleHash}"`,
+                    ...(corsOrigin ? { 'Access-Control-Allow-Origin': corsOrigin, Vary: 'Origin' } : {}),
+                }).end(options.mapBundleBody);
+                return;
+            }
             response.writeHead(404).end();
         });
         this.#webSockets = new WebSocketServer({ noServer: true, maxPayload: Math.max(options.limits.maxJsonFrameBytes, options.limits.maxBinaryFrameBytes) });

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { MapLayer } from './MapLayer.ts';
 import { PlayerSprite, type PlayerVisualState } from './PlayerSprite.ts';
 import { BlinkFxLayer } from './BlinkFxLayer.ts';
-import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EffectType, type DisplayOptions, type EngineSettings, type FloorVariant, type MapView, type PlayerInit, type StormRect, type Theme, type TilePhysics } from '../types.ts';
+import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EffectType, EngineMode, type DisplayOptions, type EngineSettings, type FloorVariant, type MapView, type PlayerInit, type StormRect, type Theme, type TilePhysics } from '../types.ts';
 import { applyColorVision, Palette } from '../palette.ts';
 import { CAMERA, CAMERA_FX, CULL_MARGIN, MOTION_PRESETS, QUALITY_PRESETS, type RenderOptions } from '../constants.ts';
 import { EMOJI_COUNT, emojiDataUri, emojiTextureKey } from '../emoji.ts';
@@ -11,6 +11,7 @@ import { EFFECT_BITS, type Snapshot } from 'shared';
 
 export interface WorldSceneInit {
     theme: Theme;
+    mode: EngineMode;
     settings: EngineSettings;
     onReady: (scene: WorldScene) => void;
 }
@@ -51,6 +52,9 @@ export class WorldScene extends Phaser.Scene {
     private readonly players = new Map<number, PlayerSprite>();
     private taggerId: number | null = null;
     private selfId: number | null = null;
+    private mode: EngineMode = EngineMode.Play;
+    /** Play mode follows self once, after the self sprite actually exists. Explicit camera actions own it afterwards. */
+    private cameraInitialized = false;
     private freeCamera = true;
     private displayOptions: DisplayOptions = { ...DEFAULT_DISPLAY_OPTIONS };
     /** Roster names that arrived before the player was visible — applied when they're first spawned. */
@@ -75,6 +79,7 @@ export class WorldScene extends Phaser.Scene {
 
     init(data: WorldSceneInit): void {
         this.theme = data.theme;
+        this.mode = data.mode;
         this.onReadyCb = data.onReady;
         this.settings = { ...data.settings };
         this.renderScale = data.settings.resolutionScale;
@@ -200,12 +205,14 @@ export class WorldScene extends Phaser.Scene {
         const sprite = this.players.get(id);
         if (!sprite) return;
         this.freeCamera = false;
+        this.cameraInitialized = true;
         this.followedId = id;
         this.cameras.main.startFollow(sprite.followTarget, true, CAMERA.followLerp, CAMERA.followLerp);
     }
 
     cameraFree(): void {
         this.freeCamera = true;
+        this.cameraInitialized = true;
         this.followedId = null;
         this.cameras.main.stopFollow();
     }
@@ -224,6 +231,7 @@ export class WorldScene extends Phaser.Scene {
 
     cameraCenterOn(x: number, y: number): void {
         this.freeCamera = true;
+        this.cameraInitialized = true;
         this.followedId = null;
         this.cameras.main.stopFollow();
         this.cameras.main.centerOn(x, y);
@@ -233,6 +241,7 @@ export class WorldScene extends Phaser.Scene {
         const w = this.mapLayer.worldWidth, h = this.mapLayer.worldHeight;
         if (w <= 0 || h <= 0) return;
         this.freeCamera = true;
+        this.cameraInitialized = true;
         this.followedId = null;
         this.cameras.main.stopFollow();
         this.cameras.main.centerOn(w / 2, h / 2);
@@ -343,6 +352,7 @@ export class WorldScene extends Phaser.Scene {
         s.nickname = init.nickname ?? s.nickname;
         s.isTagger = this.taggerId === id;
         s.isSelf = this.selfId === id;
+        this.initializePlayCameraIfReady();
     }
 
     removePlayer(id: number): void {
@@ -351,7 +361,7 @@ export class WorldScene extends Phaser.Scene {
         sprite.destroy();
         this.players.delete(id);
         if (this.taggerId === id) this.taggerId = null;
-        if (this.selfId === id) this.selfId = null;
+        // Keep the authoritative self id while a visibility frame temporarily omits the sprite.
     }
 
     getPlayerState(id: number): PlayerVisualState | undefined {
@@ -384,6 +394,17 @@ export class WorldScene extends Phaser.Scene {
             const next = this.players.get(id);
             if (next) next.state.isSelf = true;
         }
+        this.initializePlayCameraIfReady();
+    }
+
+    private initializePlayCameraIfReady(): void {
+        if (this.cameraInitialized || this.mode !== EngineMode.Play || this.selfId === null) return;
+        const sprite = this.players.get(this.selfId);
+        if (!sprite) return;
+        this.freeCamera = false;
+        this.followedId = this.selfId;
+        this.cameraInitialized = true;
+        this.cameras.main.startFollow(sprite.followTarget, true, CAMERA.followLerp, CAMERA.followLerp);
     }
 
     /**

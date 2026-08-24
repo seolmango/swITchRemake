@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { CONTROL_VERSION, CommandType, ControlErrorCode, type ControlCommand, type ControlReply } from 'shared';
 import { RoomsService } from './rooms.service';
 
@@ -66,6 +66,7 @@ function makeService(redis = new FakeRedis()): RoomsService {
 function addLiveRoom(redis: FakeRedis, roomId: string, serverId = 'game-a', hasPassword = false): void {
     redis.values.set(`dev:room:${roomId}`, JSON.stringify({
         roomId,
+        roomCode: 'ABC234',
         serverId,
         name: roomId,
         ownerName: 'Host',
@@ -144,7 +145,7 @@ test('quick join skips cooldown and kick-marked rooms before issuing a command',
 
     const result = await service.quickJoin(1);
 
-    assert.deepEqual(result, { roomId: 'open', wsPath: '/game/game-a', ticket: 'ticket', expiresAt: 1 });
+    assert.deepEqual(result, { roomId: 'open', roomCode: 'ABC234', wsPath: '/game/game-a', ticket: 'ticket', expiresAt: 1 });
     assert.equal(commands.length, 1);
     assert.equal(commands[0].type, CommandType.ReserveJoin);
     assert.equal((commands[0].payload as { roomId: string }).roomId, 'open');
@@ -214,4 +215,43 @@ test('a reply resolves only the pending request from its expected server', async
     (service as any).resolvePendingReply(expectedReply);
     assert.deepEqual(await replyPromise, expectedReply);
     service.onModuleDestroy();
+});
+
+test('a pending active-room reservation is retryable and never masquerades as an assignment', async () => {
+    const redis = new FakeRedis();
+    redis.values.set('dev:user:1:active-room', JSON.stringify({ state: 'reservation', requestId: 'pending' }));
+    const service = makeService(redis);
+    await assert.rejects((service as any).existingRoomResponse(1), (error: unknown) => {
+        assert.ok(error instanceof ServiceUnavailableException);
+        assert.deepEqual(error.getResponse(), { code: 'ACTIVE_ROOM_PENDING', retryable: true });
+        return true;
+    });
+});
+
+test('join command uncertainty rolls back assignment and active-room reservation immediately', async () => {
+    const redis = new FakeRedis();
+    addLiveRoom(redis, 'room-id');
+    const service = makeService(redis);
+    (service as any).sendCommand = async () => {
+        throw new ServiceUnavailableException({ code: 'COMMAND_TIMEOUT', retryable: true, outcome: 'unknown' });
+    };
+    await assert.rejects(service.join(1, 'room-id'), ServiceUnavailableException);
+    assert.equal(redis.values.has('dev:user:1:active-room'), false);
+});
+
+test('six-character room code resolves to the internal room id', async () => {
+    const redis = new FakeRedis();
+    const roomId = '11111111-1111-4111-8111-111111111111';
+    redis.values.set('dev:room-code:ABC234', roomId);
+    addLiveRoom(redis, roomId);
+    const service = makeService(redis);
+    (service as any).sendCommand = async (_serverId: string, command: ControlCommand): Promise<ControlReply> => ({
+        v: CONTROL_VERSION, requestId: command.requestId, serverId: 'game-a', ok: true, code: null,
+        payload: { wsPath: '/game-ws/game-a', ticket: 'ticket', expiresAt: 1 },
+    });
+    const result = await service.joinByCode(1, 'abc234');
+    assert.equal('alreadyAssigned' in result, false);
+    if ('alreadyAssigned' in result) throw new Error('unexpected existing assignment');
+    assert.equal(result.roomId, roomId);
+    assert.equal(result.roomCode, 'ABC234');
 });

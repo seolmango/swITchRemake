@@ -16,7 +16,7 @@ export const JoinRoomPage: React.FC = () => {
     const navigate = useNavigate();
     const [params] = useSearchParams();
     const theme = useSettingsStore((state) => state.theme);
-    const [roomId, setRoomId] = useState((params.get('room_id') ?? '').toUpperCase());
+    const [roomId, setRoomId] = useState((params.get('room_code') ?? '').toUpperCase());
     const passwordNeeded = params.get('pw') === 'true';
     const [password, setPassword] = useState('');
     const [message, setMessage] = useState('');
@@ -32,7 +32,6 @@ export const JoinRoomPage: React.FC = () => {
         try {
             const result = await resolveRoomAssignment(
                 await joinRoom(roomId, passwordNeeded ? password : undefined),
-                roomId,
             );
             await gameSession.connect(result, { isPrivate: passwordNeeded });
             navigate(`/rooms/${encodeURIComponent(result.roomId)}/lobby`);

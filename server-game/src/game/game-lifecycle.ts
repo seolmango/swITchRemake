@@ -134,23 +134,23 @@ export class GameLifecycle implements RoomLifecyclePort {
     /**
      * 시작 위치를 배정한다. MapBuilder가 인원수별로 미리 계산해 둔 좌표를 쓴다.
      *
-     * 좌표는 타일 인덱스라 중심으로 옮긴다. 레거시도 `* 1000 + 500`으로 타일 중심에 뒀다.
+     * `start_pos`는 이미 타일 중심의 픽셀 좌표다(`tools/MapBuilder/builder.py`가
+     * `sx * tile_size + half_tile_size`로 만들어 내려보낸다). 여기서 다시 스케일하면 안 된다.
      * 배정 순서는 `playerId` 오름차순으로 고정한다. 무작위로 섞으면 리플레이가 재현되지 않는다.
      */
     #placePlayers(snapshot: RoomStartSnapshot, tileSize: number, cols: number): PlayerState[] {
         const map = this.#options.bundle.maps[snapshot.mapId];
         const ids = [...snapshot.playerIds].sort((a, b) => a - b);
         const starts = map?.startPositions[ids.length] ?? [];
+        // 인원수에 맞는 시작 위치가 없으면 맵 중앙 근처에 둔다. 겹치면 첫 tick 밀어내기가 푼다.
+        const fallback = (cols * tileSize) / 2;
 
         return ids.map((playerId, index) => {
             const point = starts[index];
-            // 인원수에 맞는 시작 위치가 없으면 맵 중앙 근처에 둔다. 겹치면 첫 tick 밀어내기가 푼다.
-            const tileX = point?.[0] ?? Math.floor(cols / 2);
-            const tileY = point?.[1] ?? Math.floor(cols / 2);
             return {
                 playerId,
-                x: (tileX + 0.5) * tileSize,
-                y: (tileY + 0.5) * tileSize,
+                x: point?.[0] ?? fallback,
+                y: point?.[1] ?? fallback,
                 vx: 0,
                 vy: 0,
                 facingX: 0,

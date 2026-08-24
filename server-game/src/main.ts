@@ -9,7 +9,8 @@
  *   TicketAuth      Redis 명령                         시뮬레이션 + 시야
  */
 
-import { makeKeys, type ViolationSignal } from 'shared';
+import { makeKeys, PROTOCOL_VERSION, type ViolationSignal } from 'shared';
+import { readFile } from 'node:fs/promises';
 import { RULES_VERSION } from './config/gameplay';
 import { INFRA } from './config/infrastructure';
 import { NETWORK, SNAPSHOT_INTERVAL_TICKS } from './config/network';
@@ -55,6 +56,7 @@ async function main(): Promise<void> {
     // simulationHz가 다르면 같은 timeline이 다른 속도로 재생된다. 여기서 실패시키는 편이
     // 경기 중에 자기장과 벽 파괴가 어긋나는 것보다 낫다.
     const bundle = await loadMapBundle(INFRA.MAP_BUNDLE_PATH, NETWORK.SIMULATION_HZ);
+    const mapBundleBody = await readFile(INFRA.MAP_BUNDLE_PATH, 'utf8');
     log(`  maps           ${Object.keys(bundle.maps).length}개, hash ${bundle.mapBundleHash.slice(0, 12)}`);
 
     // ── 시뮬레이션 ──
@@ -131,10 +133,11 @@ async function main(): Promise<void> {
         connections,
         authenticator,
         metadata: {
-            protocolVersion: bundle.schemaVersion,
+            protocolVersion: PROTOCOL_VERSION,
             rulesVersion: RULES_VERSION,
             mapBundleHash: bundle.mapBundleHash,
         },
+        mapBundleBody,
         getServerTick: () => serverTick,
         violationSink,
     });
@@ -158,7 +161,7 @@ async function main(): Promise<void> {
         heartbeat: {
             serverId: INFRA.SERVER_ID,
             buildVersion: INFRA.BUILD_ID,
-            protocolVersion: bundle.schemaVersion,
+            protocolVersion: PROTOCOL_VERSION,
             rulesVersion: RULES_VERSION,
             mapBundleHash: bundle.mapBundleHash,
             connectionCount: () => transport.connectionCount(),
@@ -178,6 +181,11 @@ async function main(): Promise<void> {
         tickets,
         registry,
         isDraining: () => draining,
+        resolveMapId: (mapId) => {
+            if (mapId !== 'random' || bundle.maps[mapId] !== undefined) return mapId;
+            const mapIds = Object.keys(bundle.maps);
+            return mapIds[Math.floor(Math.random() * mapIds.length)] ?? mapId;
+        },
     });
 
     let draining = false;
@@ -208,8 +216,9 @@ async function main(): Promise<void> {
     let redisReady = false;
     const connectRedis = async (): Promise<void> => {
         try {
-            await registry.start();
             await consumer.start();
+            // Do not advertise a healthy server until its command consumer group is ready.
+            await registry.start();
             redisReady = true;
             log('Redis 제어 평면 연결됨.');
         } catch (error) {
@@ -234,8 +243,8 @@ async function main(): Promise<void> {
         clearInterval(redisRetry);
         scheduler.stop();
         outbox.stop();
-        await consumer.stop().catch(() => undefined);
         registry.stop();
+        await consumer.stop().catch(() => undefined);
         await transport.close().catch(() => undefined);
         await redis.close().catch(() => undefined);
         process.exit(0);

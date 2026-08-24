@@ -16,7 +16,7 @@ export const ProfilePage: React.FC = () => {
     const { status, nickname, logout } = useAuthStore();
     const theme = useSettingsStore((state) => state.theme);
     const colors = themeColors(theme);
-    const authenticated = status === 'authenticated';
+    const authenticated = status === 'account';
     const [sessions, setSessions] = useState<LoginSession[]>([]);
     const [loadingSessions, setLoadingSessions] = useState(true);
     const [sessionAction, setSessionAction] = useState<string | null>(null);
@@ -56,7 +56,7 @@ export const ProfilePage: React.FC = () => {
         try {
             await revokeLoginSession(session.id);
             if (session.current) {
-                logout();
+                await logout();
                 navigate('/', { replace: true });
                 return;
             }
@@ -120,9 +120,9 @@ export const ProfilePage: React.FC = () => {
                     <div className="profile-actions is-compact">
                         <RoundButton width={220} height={76} type={1} content={t('profile.changePassword')} onClick={() => navigate('/change-password')}/>
                         <RoundButton width={170} height={76} type={0} content={t('auth.logout')} onClick={() => {
-                            const current = sessions.find((session) => session.current);
-                            if (current) void revokeSession(current);
-                            else { logout(); navigate('/'); }
+                            void logout()
+                                .then(() => navigate('/', { replace: true }))
+                                .catch(() => setSessionMessage(t('profile.sessionActionFailed')));
                         }}/>
                     </div>
                 </div>

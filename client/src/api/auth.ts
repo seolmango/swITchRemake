@@ -1,4 +1,4 @@
-import { apiRequest, setApiAccessToken, tryRefreshSession } from './http.ts';
+import { apiRequest, replaceGuestWithAccount } from './http.ts';
 
 export type VerificationType = 'signup' | 'reset-password' | 'delete';
 
@@ -10,10 +10,8 @@ export const registerUser = (input: { email: string; password: string; nickname:
 
 export const loginUser = async (email: string, password: string) => {
     const result = await apiRequest<{ accessToken: string; nickname: string }>('/auth/login', {
-        method: 'POST', auth: false, retryAuth: false, body: { email, password },
+        method: 'POST', retryAuth: false, body: { email, password },
     });
-    setApiAccessToken(result.accessToken, result.nickname);
+    replaceGuestWithAccount(result.accessToken, result.nickname);
     return result;
 };
-
-export const restoreSession = tryRefreshSession;

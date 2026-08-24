@@ -2,7 +2,7 @@ import { Controller, Delete, Post, Body, Req, Res } from "@nestjs/common";
 import { UserService } from "./user.service";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { RateLimiter } from "../ratelimiter.decorator";
-import { NeedLogin } from '../auth/need-login.decorator';
+import { NeedAccount } from '../auth/need-account.decorator';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -13,13 +13,13 @@ export class UserController {
     ) {}
 
     @Post('register')
-    @RateLimiter({ anon: 5, user: 7, ttl: 60000 })
+    @RateLimiter({ anon: 5, guest: 5, account: 7, ttl: 60000 })
     async register(@Body() createUserDto: CreateUserDto) {
         return this.userService.createUser(createUserDto);
     }
 
     @Delete('me')
-    @NeedLogin()
+    @NeedAccount()
     async deleteMe(
         @Body() dto: DeleteUserDto,
         @Req() req: FastifyRequest & { user: { id: number } },

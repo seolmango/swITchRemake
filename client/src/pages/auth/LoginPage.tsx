@@ -48,7 +48,7 @@ export const LoginPage: React.FC = () => {
                 <TextField label={t('auth.password')} placeholder={t('auth.passwordPlaceholder')} autoComplete="current-password" type="password" value={password} error={touched && !isPassword(password) ? t('auth.invalidPassword') : undefined} onChange={setPassword}/>
                 <InlineLink onClick={() => navigate('/reset-password')} style={{ justifySelf: 'center' }}>{t('auth.forgot')}</InlineLink>
                 <div className="status-message" role="status" style={{ color: message ? Color.red[2] : themeColors(theme).muted }}>{message}</div>
-                <RoundButton width={460} height={104} type={1} content={t('auth.login')} disabled={!valid} isLoading={status === 'loading'} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
+                <RoundButton width={460} height={104} type={1} content={t('auth.login')} disabled={!valid} isLoading={status === 'booting'} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
             </div>
         </PageLayout>
     );

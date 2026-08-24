@@ -37,7 +37,7 @@ export const INFRA = Object.freeze({
     /** 이 프로세스의 고유 id. 예: game-seoul-01-p2. 배정과 티켓 검증의 기준이다. */
     SERVER_ID: required('GAME_SERVER_ID'),
     /** 리버스 프록시가 이 프로세스로 보낼 때 쓰는 공개 경로. 클라이언트에 그대로 내려간다. */
-    PUBLIC_WS_PATH: optional('GAME_PUBLIC_WS_PATH', `/game/${optional('GAME_SERVER_ID', 'local')}`),
+    PUBLIC_WS_PATH: optional('GAME_PUBLIC_WS_PATH', `/game-ws/${optional('GAME_SERVER_ID', 'local')}`),
     PORT: num('GAME_PORT', 4000),
     HOST: optional('GAME_HOST', '0.0.0.0'),
 

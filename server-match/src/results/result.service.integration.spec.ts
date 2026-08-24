@@ -35,7 +35,7 @@ test('stores one idempotent result transaction and excludes guest stats', { skip
         await service.issueMatch(matchId, 'game-a2', 'map-a2', {
             id: user.id, nickname: `A2_${suffix}`.slice(0, 20), guest: false,
         });
-        await service.confirmRoom(matchId, 'room-a2');
+        await service.confirmRoom(matchId, 'room-a2', 'map-a2');
         await service.addAssignmentByRoom('room-a2', {
             id: 'g:33333333-3333-4333-8333-333333333333', nickname: 'Guest_7KPW2M', guest: true,
         });

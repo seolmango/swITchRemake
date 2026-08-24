@@ -79,6 +79,7 @@ export const LobbyPage: React.FC = () => {
         };
     }, [live, liveLockElapsedMs, roomId, session.isPrivate, session.lobby, session.roomName, session.selfId]);
     const room = liveRoom ?? demoRoom;
+    const displayCode = live ? (session.roomCode ?? room.roomId) : room.roomId;
     const isStartLocked = room.startLockMs > 0;
 
     useEffect(() => {
@@ -127,7 +128,7 @@ export const LobbyPage: React.FC = () => {
 
     const copyCode = async () => {
         try {
-            await navigator.clipboard.writeText(room.roomId);
+            await navigator.clipboard.writeText(displayCode);
             setMessage(t('lobby.codeCopied'));
         } catch {
             setMessage(t('lobby.copyFailed'));
@@ -231,7 +232,7 @@ export const LobbyPage: React.FC = () => {
         <PageLayout title={room.roomName} backTo="/rooms">
             <section
                 className="lobby-shell"
-                aria-label={t('lobby.roomAccessible', { name: room.roomName, code: room.roomId })}
+                aria-label={t('lobby.roomAccessible', { name: room.roomName, code: displayCode })}
                 style={{
                     '--surface': colors.panel,
                     '--surface-border': colors.panelBorder,
@@ -242,7 +243,7 @@ export const LobbyPage: React.FC = () => {
                 <header className="lobby-toolbar">
                     <div className="lobby-room-code">
                         <span>{t('lobby.roomCode')}</span>
-                        <strong>{room.roomId}</strong>
+                        <strong>{displayCode}</strong>
                         <button type="button" onClick={() => void copyCode()}>{t('lobby.copyCode')}</button>
                     </div>
                     <div className="lobby-map-picker">

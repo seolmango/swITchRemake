@@ -29,8 +29,8 @@ export class ResultService {
         });
     }
 
-    async confirmRoom(matchId: string, roomId: string): Promise<void> {
-        await this.db.update(schema.matches).set({ roomId }).where(eq(schema.matches.matchId, matchId));
+    async confirmRoom(matchId: string, roomId: string, mapId: string): Promise<void> {
+        await this.db.update(schema.matches).set({ roomId, mapId }).where(eq(schema.matches.matchId, matchId));
     }
 
     async discardIssuedMatch(matchId: string): Promise<void> {

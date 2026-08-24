@@ -12,12 +12,12 @@ import { themeColors } from '../../theme/color.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 
 const PREVIEW_ROOMS: RoomSummary[] = [
-    { id: 'A42B3C', name: '느긋하게 한 판', ownerName: 'Alice', playerCount: 7, capacity: 8, hasPassword: true, status: 'waiting' },
-    { id: 'DDDDDD', name: '초보 환영', ownerName: 'Seolmango', playerCount: 5, capacity: 8, hasPassword: false, status: 'playing' },
-    { id: '123456', name: '스위치 연습방', ownerName: 'Bob', playerCount: 3, capacity: 8, hasPassword: true, status: 'waiting' },
-    { id: '654321', name: 'Quick Match', ownerName: 'Charlie', playerCount: 2, capacity: 8, hasPassword: false, status: 'waiting' },
-    { id: 'ABCDEF', name: '마지막 한 자리', ownerName: 'Dave', playerCount: 7, capacity: 8, hasPassword: true, status: 'waiting' },
-    { id: 'FEDCBA', name: 'Night Switch', ownerName: 'Eve', playerCount: 6, capacity: 8, hasPassword: false, status: 'playing' },
+    { id: 'demo-1', roomCode: 'A42B3C', name: '느긋하게 한 판', ownerName: 'Alice', playerCount: 7, capacity: 8, hasPassword: true, status: 'waiting' },
+    { id: 'demo-2', roomCode: 'DDDDDD', name: '초보 환영', ownerName: 'Seolmango', playerCount: 5, capacity: 8, hasPassword: false, status: 'playing' },
+    { id: 'demo-3', roomCode: '123456', name: '스위치 연습방', ownerName: 'Bob', playerCount: 3, capacity: 8, hasPassword: true, status: 'waiting' },
+    { id: 'demo-4', roomCode: '654321', name: 'Quick Match', ownerName: 'Charlie', playerCount: 2, capacity: 8, hasPassword: false, status: 'waiting' },
+    { id: 'demo-5', roomCode: 'ABCDEF', name: '마지막 한 자리', ownerName: 'Dave', playerCount: 7, capacity: 8, hasPassword: true, status: 'waiting' },
+    { id: 'demo-6', roomCode: 'FEDCBA', name: 'Night Switch', ownerName: 'Eve', playerCount: 6, capacity: 8, hasPassword: false, status: 'playing' },
 ];
 
 export const RoomListPage: React.FC = () => {
@@ -71,7 +71,7 @@ export const RoomListPage: React.FC = () => {
         <PageLayout title={t('rooms.title')}>
             <RoundBox x={960} y={505} width={1640} height={730} type={2}/>
             <section className="room-grid" aria-label={t('rooms.title')}>
-                {rooms.map((room) => <RoomCard key={room.id} room={room} onClick={() => navigate(`/rooms/join?room_id=${room.id}&pw=${room.hasPassword}`)}/>) }
+                {rooms.map((room) => <RoomCard key={room.id} room={room} onClick={() => navigate(`/rooms/join?room_code=${room.roomCode}&pw=${room.hasPassword}`)}/>) }
             </section>
             <nav className="room-pagination" aria-label={t('rooms.pagination')}>
                 <RoundButton width={88} height={88} type={2} content={<Icon name="back"/>} disabled={page <= 1} ariaLabel={t('nav.previousPage')} onClick={() => setPage((value) => Math.max(1, value - 1))}/>

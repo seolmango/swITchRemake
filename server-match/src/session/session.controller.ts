@@ -1,7 +1,7 @@
 import { Controller, Delete, Get, Param, ParseUUIDPipe, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { NeedLogin } from '../auth/need-login.decorator';
+import { NeedAccount } from '../auth/need-account.decorator';
 import { SessionService } from './session.service';
 
 type AuthenticatedRequest = FastifyRequest & {
@@ -9,7 +9,7 @@ type AuthenticatedRequest = FastifyRequest & {
 };
 
 @Controller('users/me/sessions')
-@NeedLogin()
+@NeedAccount()
 export class SessionController {
     constructor(
         private readonly sessionService: SessionService,

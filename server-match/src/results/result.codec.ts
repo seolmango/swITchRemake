@@ -10,6 +10,13 @@ export const RESULT_STREAM_FIELD = 'result';
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SHA256 = /^[0-9a-f]{64}$/;
 
+/**
+ * `survivedMs`는 시뮬레이션 tick 시계(`tick * msPerTick`)로, `durationMs`는 벽시계(`endedAt - startedAt`)로
+ * 잰다. 스케줄러의 catch-up 처리 때문에 두 시계가 긴 경기에서는 수십 ms씩 어긋날 수 있다 — 데이터 조작이
+ * 아니라 정상적인 tick/wall-clock 오차다. 이 여유가 없으면 실제 경기 결과가 간헐적으로 malformed 처리된다.
+ */
+const SURVIVED_MS_CLOCK_SKEW_TOLERANCE_MS = 2_000;
+
 export function decodeMatchResult(raw: string): MatchResultMessage {
     let parsed: unknown;
     try {
@@ -46,7 +53,6 @@ export function isMatchResult(value: unknown): value is MatchResultMessage {
         || !Array.isArray(value.winnerPlayerIds)
         || value.winnerPlayerIds.length !== 2
         || !value.winnerPlayerIds.every(nonNegativeInteger)
-        || value.winnerPlayerIds[0] === value.winnerPlayerIds[1]
         || !isReplay(value.replay)) {
         return false;
     }
@@ -54,7 +60,7 @@ export function isMatchResult(value: unknown): value is MatchResultMessage {
     const players = value.players as unknown[];
     if (!players.every(isParticipant)) return false;
     const durationMs = value.endedAt - value.startedAt;
-    if (players.some((player) => (player as MatchParticipantResult).survivedMs > durationMs)) return false;
+    if (players.some((player) => (player as MatchParticipantResult).survivedMs > durationMs + SURVIVED_MS_CLOCK_SKEW_TOLERANCE_MS)) return false;
     const playerIds = new Set(players.map((player) => (player as MatchParticipantResult).playerId));
     if (playerIds.size !== players.length
         || !value.winnerPlayerIds.every((id) => playerIds.has(id))) {

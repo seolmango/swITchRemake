@@ -2,7 +2,8 @@ import { SetMetadata } from '@nestjs/common';
 
 export interface RateLimitOptions {
     anon: number;
-    user: number;
+    guest: number;
+    account: number;
     ttl: number;
 }
 

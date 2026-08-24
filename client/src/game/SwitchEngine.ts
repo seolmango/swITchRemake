@@ -109,6 +109,7 @@ export class SwitchEngine {
 
         const init: WorldSceneInit = {
             theme: options.theme ?? 0,
+            mode: this.mode,
             settings: this.settings,
             onReady: (scene) => {
                 this.scene = scene;

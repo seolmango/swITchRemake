@@ -26,6 +26,7 @@ import {
 
 export interface CreateManagedRoom {
     readonly id: string;
+    readonly roomCode: string;
     readonly matchId: string;
     readonly name: string;
     readonly password: string | null;
@@ -107,6 +108,7 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
         try {
             const options: RoomOptions = {
                 id: specification.id,
+                roomCode: specification.roomCode,
                 matchId: specification.matchId,
                 name: specification.name,
                 password: specification.password,

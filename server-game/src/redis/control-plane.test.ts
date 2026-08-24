@@ -224,6 +224,7 @@ function latestReply(redis: FakeRedis): ControlReply {
 function createCommand(requestId = 'create-1'): ControlCommand {
     return command(requestId, CommandType.CreateRoom, {
         matchId: 'match-1',
+        roomCode: 'ABC234',
         roomName: 'room',
         password: null,
         ownerUserId: 1,

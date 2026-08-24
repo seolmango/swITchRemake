@@ -59,7 +59,7 @@ test('RoomManager가 티켓 admission과 GameTransport handler 경계를 연결�
     });
     const owner = seat(1);
     const created = manager.createRoom({
-        id: 'room', matchId: 'match', name: 'name', password: null, capacity: 8, mapId: 'map', ownerReservation: owner,
+        id: 'room', roomCode: 'ABC234', matchId: 'match', name: 'name', password: null, capacity: 8, mapId: 'map', ownerReservation: owner,
     });
     assert.equal(created.ok, true);
     const admission = manager.admitReservation(owner)!;

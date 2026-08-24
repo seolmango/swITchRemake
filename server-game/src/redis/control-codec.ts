@@ -47,6 +47,8 @@ function nullableBoundedText(value: unknown, maxLength: number): value is string
 function createRoomPayload(value: unknown): value is CreateRoomPayload {
     if (!object(value)) return false;
     return boundedText(value['matchId'], 128)
+        && typeof value['roomCode'] === 'string'
+        && /^[A-HJ-NP-Z2-9]{6}$/.test(value['roomCode'])
         && boundedText(value['roomName'], 20)
         && nullableBoundedText(value['password'], 32)
         && actor(value['ownerUserId'])

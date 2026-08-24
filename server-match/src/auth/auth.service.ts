@@ -1,6 +1,7 @@
 import {
     HttpException,
     HttpStatus,
+    ConflictException,
     Inject,
     Injectable,
     InternalServerErrorException,
@@ -34,6 +35,25 @@ interface RefreshPayload {
     sid: string;
     type: 'refresh';
     exp?: number;
+}
+
+interface GuestRefreshPayload {
+    sub: string;
+    sid: string;
+    jti: string;
+    type: 'guest-refresh';
+}
+
+interface GuestSession {
+    id: string;
+    nickname: string;
+    jti: string;
+}
+
+interface AuthenticatedActor {
+    id: number | string;
+    sessionId: string;
+    guest: boolean;
 }
 
 type RefreshResult =
@@ -99,6 +119,13 @@ export class AuthService {
         return this.createSession(user.id, user.email, user.nickname, metadata);
     }
 
+    async assertIdentitySwitchAllowed(actorId: number | string | undefined): Promise<void> {
+        if (actorId === undefined) return;
+        if (await this.redisService.get(this.keys.userActiveRoom(actorId))) {
+            throw new ConflictException({ code: 'IDENTITY_SWITCH_DURING_ROOM', message: 'Leave the active room first' });
+        }
+    }
+
     async createGuest(ip: string) {
         const ipKey = this.sessionSecurity.hmacIp(ip);
         const rateKey = this.keys.operation(`guest-auth-rate:${ipKey}`);
@@ -113,19 +140,54 @@ export class AuthService {
 
         const id = `g:${randomUUID()}`;
         const nickname = `Guest_${this.guestSuffix()}`;
-        const expiresIn = Number(this.configService.get('JWT_GUEST_EXPIRATION')
-            ?? this.configService.get('JWT_ACCESS_EXPIRATION')
-            ?? 900);
-        const accessToken = this.jwtService.sign({
-            sub: id,
-            nickname,
-            guest: true,
-            type: 'access',
-        }, {
-            secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-            expiresIn,
-        });
-        return { accessToken, guest: { id, nickname }, expiresIn };
+        const sid = randomUUID();
+        const jti = randomUUID();
+        const tokens = this.buildGuestTokens({ id, nickname, jti }, sid);
+        await this.redisService.set(
+            this.keys.guestSession(sid),
+            JSON.stringify({ id, nickname, jti } satisfies GuestSession),
+            tokens.refreshExpiresIn,
+        );
+        return { ...tokens, guest: { id, nickname } };
+    }
+
+    async refreshGuest(refreshToken: string) {
+        const payload = this.verifyGuestRefreshToken(refreshToken);
+        const key = this.keys.guestSession(payload.sid);
+        const raw = await this.redisService.get(key);
+        if (!raw) throw new UnauthorizedException('Invalid guest refresh token');
+
+        let session: GuestSession;
+        try {
+            session = JSON.parse(raw) as GuestSession;
+        } catch {
+            throw new UnauthorizedException('Invalid guest session');
+        }
+        if (session.id !== payload.sub || session.jti !== payload.jti || !this.isGuestSession(session)) {
+            throw new UnauthorizedException('Invalid guest refresh token');
+        }
+
+        const next: GuestSession = { ...session, jti: randomUUID() };
+        const tokens = this.buildGuestTokens(next, payload.sid);
+        const rotated = await this.redisService.compareAndSetWithTtl(
+            key,
+            raw,
+            JSON.stringify(next),
+            tokens.refreshExpiresIn,
+        );
+        if (!rotated) throw new UnauthorizedException('Guest refresh token was already used');
+        return { ...tokens, guest: { id: next.id, nickname: next.nickname } };
+    }
+
+    async logout(actor: AuthenticatedActor): Promise<void> {
+        await this.assertIdentitySwitchAllowed(actor.id);
+        if (actor.guest) {
+            await this.redisService.del(this.keys.guestSession(actor.sessionId));
+            return;
+        }
+        if (typeof actor.id === 'number') {
+            await this.sessionService.revokeCurrent(actor.id, actor.sessionId);
+        }
     }
 
     async refresh(refreshToken: string, metadata: RequestSessionMetadata) {
@@ -287,6 +349,62 @@ export class AuthService {
             refreshToken,
             expiresAt: new Date(Date.now() + refreshTtlSeconds * 1000),
         };
+    }
+
+    private buildGuestTokens(session: GuestSession, sessionId: string) {
+        const expiresIn = Number(this.configService.get('JWT_GUEST_EXPIRATION')
+            ?? this.configService.get('JWT_ACCESS_EXPIRATION')
+            ?? 900);
+        const refreshExpiresIn = Number(this.configService.get('JWT_GUEST_REFRESH_EXPIRATION') ?? 3600);
+        const accessToken = this.jwtService.sign({
+            sub: session.id,
+            nickname: session.nickname,
+            guest: true,
+            sid: sessionId,
+            type: 'guest-access',
+        }, {
+            secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+            expiresIn,
+        });
+        const refreshToken = this.jwtService.sign({
+            sub: session.id,
+            sid: sessionId,
+            jti: session.jti,
+            type: 'guest-refresh',
+        }, {
+            // Keep a fallback for existing local installations; deployments should set the dedicated secret.
+            secret: this.configService.get<string>('JWT_GUEST_REFRESH_SECRET')
+                ?? this.configService.get<string>('JWT_REFRESH_SECRET'),
+            expiresIn: refreshExpiresIn,
+        });
+        return { accessToken, refreshToken, expiresIn, refreshExpiresIn };
+    }
+
+    private verifyGuestRefreshToken(refreshToken: string): GuestRefreshPayload {
+        try {
+            const payload = this.jwtService.verify<GuestRefreshPayload>(refreshToken, {
+                secret: this.configService.get<string>('JWT_GUEST_REFRESH_SECRET')
+                    ?? this.configService.get<string>('JWT_REFRESH_SECRET'),
+            });
+            if (
+                payload.type !== 'guest-refresh'
+                || typeof payload.sub !== 'string'
+                || !/^g:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.sub)
+                || typeof payload.sid !== 'string'
+                || typeof payload.jti !== 'string'
+            ) throw new Error('Malformed guest refresh token');
+            return payload;
+        } catch {
+            throw new UnauthorizedException('Invalid guest refresh token');
+        }
+    }
+
+    private isGuestSession(value: GuestSession): boolean {
+        return typeof value.id === 'string'
+            && /^g:[0-9a-f-]{36}$/i.test(value.id)
+            && typeof value.nickname === 'string'
+            && /^Guest_[A-HJ-NP-Z2-9]{6}$/.test(value.nickname)
+            && typeof value.jti === 'string';
     }
 
     private verifyRefreshToken(refreshToken: string): RefreshPayload {

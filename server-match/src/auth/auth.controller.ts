@@ -5,6 +5,7 @@ import { LoginDto} from "./dto/login.dto";
 import { RateLimiter } from "../ratelimiter.decorator";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { ConfigService } from "@nestjs/config";
+import { NeedActor } from './need-actor.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -14,18 +15,21 @@ export class AuthController {
     ) {}
 
     @Post('verify')
-    @RateLimiter({ anon: 5, user: 7, ttl: 60000 })
+    @RateLimiter({ anon: 5, guest: 5, account: 7, ttl: 60000 })
     async sendVerificationEmail(@Body() sendEmailDto: SendEmailDto) {
         return this.authService.sendVerificationCodeEmail(sendEmailDto);
     }
 
     @Post('login')
-    @RateLimiter({ anon: 5, user: 7, ttl: 60000 })
+    @RateLimiter({ anon: 5, guest: 5, account: 7, ttl: 60000 })
     async login(
         @Body() loginDto: LoginDto,
         @Req() req: FastifyRequest,
         @Res({ passthrough: true }) res: FastifyReply,
     ) {
+        await this.authService.assertIdentitySwitchAllowed(
+            (req as FastifyRequest & { user?: { id: number | string } }).user?.id,
+        );
         const { accessToken, refreshToken, nickname } = await this.authService.login(loginDto, {
             ip: req.ip,
             userAgent: this.userAgent(req),
@@ -37,7 +41,7 @@ export class AuthController {
     }
 
     @Post('refresh')
-    @RateLimiter({ anon: 5, user: 7, ttl: 60000 })
+    @RateLimiter({ anon: 5, guest: 5, account: 7, ttl: 60000 })
     async refresh(
         @Req() req: FastifyRequest,
         @Res({ passthrough: true }) res: FastifyReply,
@@ -69,9 +73,29 @@ export class AuthController {
     }
 
     @Post('guest')
-    @RateLimiter({ anon: 5, user: 0, ttl: 60_000 })
+    @RateLimiter({ anon: 5, guest: 0, account: 0, ttl: 60_000 })
     async guest(@Req() req: FastifyRequest) {
         return this.authService.createGuest(req.ip);
+    }
+
+    @Post('guest/refresh')
+    @RateLimiter({ anon: 10, guest: 10, account: 0, ttl: 60_000 })
+    async refreshGuest(@Body() body: { refreshToken?: string }) {
+        if (typeof body?.refreshToken !== 'string' || body.refreshToken.length === 0) {
+            throw new UnauthorizedException('No guest refresh token provided');
+        }
+        return this.authService.refreshGuest(body.refreshToken);
+    }
+
+    @Post('logout')
+    @NeedActor()
+    async logout(
+        @Req() req: FastifyRequest & { user: { id: number | string; sessionId: string; guest: boolean } },
+        @Res({ passthrough: true }) res: FastifyReply,
+    ) {
+        await this.authService.logout(req.user);
+        res.clearCookie('refreshToken', this.cookieOptions());
+        return { loggedOut: true };
     }
 
     private cookieOptions() {
