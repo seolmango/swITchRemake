@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { ErrorCode, PlayerRole, RoomState, type InputState } from 'shared';
+import { ErrorCode, PlayerRole, RoomState, SkillId, SkillRejection, type InputState } from 'shared';
 import type { SeatReservation } from '../gateway/ticket-store';
 import type { Connection } from '../transport/game-transport';
 import { Room, type RoomLifecyclePort, type RoomOptions, type RoomStartSnapshot } from './room';
@@ -36,7 +36,7 @@ class FakeLifecycle implements RoomLifecyclePort {
 
     public startGame(snapshot: RoomStartSnapshot) {
         this.starts.push(snapshot);
-        return { startTick: 200, taggerId: snapshot.playerIds[0]! };
+        return { startTick: 200, taggerId: snapshot.players[0]!.playerId };
     }
     public connectionChanged(_roomId: string, playerId: number, connected: boolean): void {
         this.connections.push({ playerId, connected });
@@ -130,6 +130,8 @@ test('ALLOCATING부터 POST_GAME 복귀까지 명단과 관전 자격을 서버�
     context.connect(r3);
     await Promise.resolve();
 
+    assert.equal(context.room.setLoadout(2, SkillId.Flash), null);
+
     assert.equal(context.room.requestStart(1), ErrorCode.StartLocked);
     context.setNow(5_001);
     assert.equal(context.room.requestStart(1), null);
@@ -139,7 +141,8 @@ test('ALLOCATING부터 POST_GAME 복귀까지 명단과 관전 자격을 서버�
     context.setNow(8_001);
     context.room.advance();
     assert.equal(context.room.state, RoomState.Playing);
-    assert.deepEqual(context.lifecycle.starts[0]?.playerIds, [1, 2, 3]);
+    assert.deepEqual(context.lifecycle.starts[0]?.players.map((player) => player.playerId), [1, 2, 3]);
+    assert.equal(context.lifecycle.starts[0]?.players.find((player) => player.playerId === 2)?.loadout, SkillId.Flash);
     assert.equal(context.room.snapshotAccess(1), 'filtered');
     assert.equal(context.room.setSpectating(1, true), ErrorCode.SpectateDenied, '살아 있는 플레이어는 관전할 수 없다');
 
@@ -157,6 +160,22 @@ test('ALLOCATING부터 POST_GAME 복귀까지 명단과 관전 자격을 서버�
     assert.equal(context.room.state, RoomState.Waiting);
     assert.equal(context.room.memberByUser(2)?.role, PlayerRole.Player);
     assert.equal(c1.closes.length, 0);
+});
+
+test('skill.rejected is sent only to the requesting player', () => {
+    const context = setup();
+    const c1 = context.connect(context.owner);
+    const r2 = seat(2, 0);
+    context.room.reserveJoin(r2, 'secret');
+    const c2 = context.connect(r2);
+
+    context.room.sendSkillRejected(1, 2, SkillRejection.OutOfRange);
+
+    assert.deepEqual(c1.messages.filter((message) => message.type === 'skill.rejected'), [{
+        type: 'skill.rejected',
+        payload: { slot: 2, reason: SkillRejection.OutOfRange },
+    }]);
+    assert.equal(c2.messages.some((message) => message.type === 'skill.rejected'), false);
 });
 
 test('최신 u16 sequence만 유지하고 disconnect 즉시 입력을 중립화한 뒤 같은 자리를 복구한다', () => {

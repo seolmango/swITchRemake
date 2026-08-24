@@ -2,6 +2,7 @@ import {
     ControlErrorCode,
     decodeInput,
     ErrorCode,
+    isLoadoutSkill,
     PlayerRole,
     RoomState,
     ViolationKind,
@@ -48,6 +49,7 @@ export interface RoomManagerOptions {
     readonly onResume?: (connection: Connection, access: SnapshotAccess) => void;
     /** game.useSkill을 시뮬레이션으로 넘기는 경계. 성공 여부는 tick 경계에서 정해진다. */
     readonly skillSink?: (roomId: string, request: { playerId: number; slot: number; targetPlayerId?: number }) => boolean;
+    readonly emojiSink?: (roomId: string, request: { playerId: number; emojiId: number }) => boolean;
     readonly now?: () => number;
     readonly timing?: Partial<RoomTiming>;
     readonly maxRooms?: number;
@@ -249,9 +251,15 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 error = room.setSpectating(connection.userId, message.payload.spectate);
                 break;
             case 'lobby.setLoadout':
-                // shared에 허용 skill 집합과 lobby.state의 skills/control 필드가 아직 없다.
-                // 검증 없이 받아 게임 판정에 흘리지 않는다.
-                error = ErrorCode.InvalidPayload;
+                if (room.state !== RoomState.Waiting) {
+                    error = ErrorCode.BadState;
+                    break;
+                }
+                if (message.payload.skills.length !== 1 || !isLoadoutSkill(message.payload.skills[0]!)) {
+                    error = ErrorCode.InvalidPayload;
+                    break;
+                }
+                error = room.setLoadout(connection.userId, message.payload.skills[0]);
                 break;
             case 'game.useSkill': {
                 const member = room.memberByUser(connection.userId);
@@ -276,9 +284,25 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 if (queued !== true) error = ErrorCode.BadState;
                 break;
             }
-            case 'game.emoji':
-                // 서버 -> 클라이언트 emoji 이벤트가 shared 카탈로그에 아직 없다. 게임 상태에는 영향이 없다.
+            case 'game.emoji': {
+                const member = room.memberByUser(connection.userId);
+                if (room.state !== RoomState.Playing || member === null || !member.inCurrentGame
+                    || member.role !== PlayerRole.Player || member.spectatorEligible) {
+                    error = ErrorCode.BadState;
+                    break;
+                }
+                // SnapshotPlayer.emojiId is encoded as u8.
+                if (message.payload.emojiId < 0 || message.payload.emojiId > 0xff) {
+                    error = ErrorCode.InvalidPayload;
+                    break;
+                }
+                const queued = this.#options.emojiSink?.(room.id, {
+                    playerId: member.playerId,
+                    emojiId: message.payload.emojiId,
+                });
+                if (queued !== true) error = ErrorCode.BadState;
                 break;
+            }
             case 'ping':
                 connection.sendJson({
                     type: 'pong',

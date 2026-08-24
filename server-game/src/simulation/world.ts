@@ -11,7 +11,7 @@
  * 신호다. 필요한 값을 `stepWorld`의 입력으로 받아오는 쪽이 맞다.
  */
 
-import type { EffectType, TilePhysics, VisibilityActor, VisibilityWorld } from 'shared';
+import type { EffectType, SkillRejection, TilePhysics, VisibilityActor, VisibilityWorld } from 'shared';
 import type { SkillId } from './skills';
 import { NETWORK } from '../config/network';
 
@@ -41,6 +41,8 @@ export interface PlayerState {
     cooldowns: Record<string, number>;
     /** 2번 슬롯에 넣은 스킬. 1번 슬롯은 스위치 고정이다. */
     loadout: SkillId;
+    /** Presentational state carried by snapshots; expiry is deterministic in simulation ticks. */
+    emoji: { emojiId: number; expiresAtTick: number } | null;
     /** 경기 결과에 실릴 누적 수치. 소급해서 만들 수 없으므로 경기 중에 세어 둔다. */
     stats: MatchStats;
 }
@@ -126,6 +128,8 @@ export interface AuthoritativeFrame {
     tick: number;
     world: World;
     events: WorldEvent[];
+    /** Private outcomes consumed by GameSession and never recorded or broadcast. */
+    skillRejections: { playerId: number; slot: number; reason: SkillRejection }[];
 }
 
 /**

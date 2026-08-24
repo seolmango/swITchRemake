@@ -12,7 +12,7 @@ function fakeTarget(id: string, stopAfter = Infinity) {
         step(): AuthoritativeFrame | null {
             if (state.steps >= stopAfter) return null;
             state.steps += 1;
-            return { tick: state.steps, world: {} as never, events: [] };
+            return { tick: state.steps, world: {} as never, events: [], skillRejections: [] };
         },
         publish(): void {
             state.publishes += 1;

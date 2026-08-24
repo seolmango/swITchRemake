@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { describe, it } from 'node:test';
-import { PlayerRole, PROTOCOL_VERSION, RoomState } from 'shared';
+import { ErrorCode, PlayerRole, PROTOCOL_VERSION, RoomState } from 'shared';
 import { WebSocket } from 'ws';
 import { ConnectionManager } from '../gateway/connection-manager';
 import { TicketAuthenticator } from '../gateway/ticket-auth';
@@ -140,5 +140,32 @@ describe('ws transport', () => {
         assert.equal((response as { statusCode: number }).statusCode, 400);
         (request as { destroy(): void }).destroy();
         await f.transport.close();
+    });
+
+    it('rate-limits consecutive emoji commands from the same player', async () => {
+        const f = await fixture();
+        const socket = connect(f.url);
+        try {
+            await once(socket, 'open');
+            socket.send(JSON.stringify({ v: 1, type: 'auth', payload: { ticket: f.issue().ticket } }));
+            await once(socket, 'message');
+
+            socket.send(JSON.stringify({ v: 1, type: 'game.emoji', requestId: 1, payload: { emojiId: 3 } }));
+            assert.equal(await f.jsonReceived, 'game.emoji');
+
+            const rejected = once(socket, 'message');
+            socket.send(JSON.stringify({ v: 1, type: 'game.emoji', requestId: 2, payload: { emojiId: 4 } }));
+            const [data] = await rejected;
+            const message = JSON.parse(String(data)) as { type: string; payload: { code: string } };
+            assert.equal(message.type, 'error');
+            assert.equal(message.payload.code, ErrorCode.RateLimited);
+            assert.deepEqual(f.jsonTypes, ['game.emoji']);
+        } finally {
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.close();
+                await once(socket, 'close');
+            }
+            await f.transport.close();
+        }
     });
 });

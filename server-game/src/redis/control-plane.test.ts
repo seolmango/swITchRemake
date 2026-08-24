@@ -144,7 +144,7 @@ class FakeConnection implements Connection {
 }
 
 const lifecycle: RoomLifecyclePort = {
-    startGame: (snapshot) => ({ startTick: 1, taggerId: snapshot.playerIds[0]! }),
+    startGame: (snapshot) => ({ startTick: 1, taggerId: snapshot.players[0]!.playerId }),
     connectionChanged: () => undefined,
     participantTimedOut: () => undefined,
     participantRemoved: () => undefined,

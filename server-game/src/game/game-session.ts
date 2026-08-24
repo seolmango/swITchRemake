@@ -20,7 +20,7 @@ import { NETWORK } from '../config/network';
 import { NullReplayRecorder, type ReplayMeta, type ReplayRecorder } from '../replay/recorder';
 import type { Room } from '../rooms/room';
 import type { SchedulerTarget } from '../simulation/scheduler';
-import { isFinished, stepWorld } from '../simulation/step';
+import { isFinished, stepWorld, type EmojiRequest } from '../simulation/step';
 import type { SkillRequest } from '../simulation/skills';
 import type { AuthoritativeFrame, World, WorldEvent } from '../simulation/world';
 import { SessionReplayRecorder } from './session-recorder';
@@ -54,6 +54,8 @@ export class GameSession implements SchedulerTarget {
     readonly #options: GameSessionOptions;
     /** 이번 tick에 처리할 스킬 요청. 처리 후 비운다. */
     readonly #pendingSkills: SkillRequest[] = [];
+    /** 이번 tick에 처리할 이모지 요청. 플레이어별 마지막 요청만 보존한다. */
+    readonly #pendingEmojis = new Map<number, EmojiRequest>();
     /**
      * full 스냅샷을 아직 못 받은 플레이어. 첫 프레임과 재접속 직후가 여기 들어간다.
      * 연결 id가 아니라 playerId로 잡는 이유는 재접속하면 연결 id가 바뀌기 때문이다.
@@ -126,6 +128,24 @@ export class GameSession implements SchedulerTarget {
         this.#pendingSkills.push(request);
     }
 
+    /** 이모지 요청도 tick 경계에서 결정론적으로 적용한다. */
+    public queueEmoji(request: EmojiRequest): void {
+        if (this.#finished) return;
+        if (!this.#pendingEmojis.has(request.playerId) && this.#pendingEmojis.size >= NETWORK.MAX_JSON_COMMANDS_PER_SEC) {
+            this.#options.violationSink({
+                kind: 'RATE_LIMIT',
+                userId: request.playerId,
+                roomId: this.id,
+                tick: this.world.tick,
+                severity: 'low',
+                ruleVersion: 1,
+                detail: { kind: 'emoji-queue' },
+            });
+            return;
+        }
+        this.#pendingEmojis.set(request.playerId, request);
+    }
+
     /** 재접속하거나 관전을 켠 연결에 다음 프레임을 full로 보낸다. */
     public requestFullSnapshot(playerId: number): void {
         this.#needsFullSnapshot.add(playerId);
@@ -136,8 +156,13 @@ export class GameSession implements SchedulerTarget {
 
         const inputs = this.#room.resolvedInputs();
         const skills = this.#pendingSkills.splice(0, this.#pendingSkills.length);
-        const frame = stepWorld(this.world, inputs, skills);
+        const emojis = [...this.#pendingEmojis.values()];
+        this.#pendingEmojis.clear();
+        const frame = stepWorld(this.world, inputs, skills, emojis);
 
+        for (const rejection of frame.skillRejections) {
+            this.#room.sendSkillRejected(rejection.playerId, rejection.slot, rejection.reason);
+        }
         this.#applyEvents(frame.events);
         this.#replay.recordEvents(frame.tick, frame.events);
 

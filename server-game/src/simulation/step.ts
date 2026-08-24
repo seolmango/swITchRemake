@@ -9,14 +9,19 @@
  *     이 함수가 끝난 뒤 시야 코어가 뷰어별로 판단한다.
  */
 
-import { GAMEPLAY, SKILLS } from '../config/gameplay';
-import { expireEffects, tickCooldowns } from './effects';
+import { EMOJI_DISPLAY_MS, GAMEPLAY, SKILLS } from '../config/gameplay';
+import { expireEffects, msToTicks, tickCooldowns } from './effects';
 import { integrate, substepCount } from './movement';
 import { grantTaggerFrenzy, rotationCandidates, useSkill, type SkillRequest } from './skills';
 import { resolvePlayerCollisions, type CollisionPair } from './player-collision';
 import { resolveStatic } from './static-collision';
 import { stormRect } from './storm';
 import type { AuthoritativeFrame, PlayerState, ResolvedInput, World, WorldEvent } from './world';
+
+export interface EmojiRequest {
+    readonly playerId: number;
+    readonly emojiId: number;
+}
 
 /** 이번 tick의 맵 변경을 적용한다. timeline에 해당 tick이 없으면 아무 일도 하지 않는다. */
 function applyMapTimeline(world: World): void {
@@ -90,8 +95,10 @@ export function stepWorld(
     world: World,
     inputs: readonly ResolvedInput[],
     skillRequests: readonly SkillRequest[] = [],
+    emojiRequests: readonly EmojiRequest[] = [],
 ): AuthoritativeFrame {
     const events: WorldEvent[] = [];
+    const skillRejections: AuthoritativeFrame['skillRejections'] = [];
     world.tick += 1;
     world.tileChanges = [];
 
@@ -99,12 +106,25 @@ export function stepWorld(
     for (const player of world.players) {
         expireEffects(world, player);
         tickCooldowns(player, SKILLS.TAGGER_COOLDOWN_RATE);
+        if (player.emoji !== null && player.emoji.expiresAtTick <= world.tick) player.emoji = null;
     }
 
     // 스킬은 이동보다 먼저 판정한다. 유체화를 쓴 tick부터 빨라져야 눌렀을 때 즉시 반응한다.
     // 요청 순서는 playerId로 고정한다. 같은 tick에 두 명이 스위치를 쓰면 순서가 결과를 바꾼다.
     for (const request of [...skillRequests].sort((a, b) => a.playerId - b.playerId)) {
-        useSkill(world, request, events);
+        const outcome = useSkill(world, request, events);
+        if (!outcome.ok) {
+            skillRejections.push({ playerId: request.playerId, slot: request.slot, reason: outcome.reason });
+        }
+    }
+
+    for (const request of [...emojiRequests].sort((a, b) => a.playerId - b.playerId)) {
+        const player = world.players.find((candidate) => candidate.playerId === request.playerId);
+        if (!player?.alive) continue;
+        player.emoji = {
+            emojiId: request.emojiId,
+            expiresAtTick: world.tick + msToTicks(EMOJI_DISPLAY_MS, world.simulationHz),
+        };
     }
 
     // 2. 맵 timeline의 현재 tick 변경 적용
@@ -165,5 +185,5 @@ export function stepWorld(
 
     // 11. 권위 프레임 확정. 여기까지가 연결을 모르는 단일 상태다.
     //     12단계 이후(시야 계산, 연결별 스냅샷)는 이 프레임에서 파생된다.
-    return { tick: world.tick, world, events };
+    return { tick: world.tick, world, events, skillRejections };
 }

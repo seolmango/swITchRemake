@@ -11,12 +11,14 @@
 import {
     EFFECT_BITS,
     PROTOCOL_VERSION,
+    SkillSlot,
     computeVisibility,
     encodeSnapshot,
     type Snapshot,
     type SnapshotPlayer,
 } from 'shared';
 import type { SnapshotAccess } from '../rooms/room';
+import { skillInSlot } from '../simulation/skills';
 import { toVisibilityWorld, type AuthoritativeFrame, type PlayerState, type World } from '../simulation/world';
 
 export interface RosterEntry {
@@ -55,6 +57,9 @@ function toSnapshotPlayer(player: PlayerState, obscured: boolean, tick: number, 
         obscured,
         isTagger: player.isTagger,
         effects: effectRatios(player, tick, simulationHz),
+        ...(player.emoji !== null && player.emoji.expiresAtTick > tick
+            ? { emojiId: player.emoji.emojiId }
+            : {}),
     };
 }
 
@@ -98,6 +103,16 @@ export function buildSnapshot(frame: AuthoritativeFrame, viewer: ViewerContext, 
     // 빈 목록도 보낸다. "이제 비치는 타일이 없다"와 "변화 없음"은 다르다.
     snapshot.tileAlphas = visibility.tileAlphas.map((tile) => ({ ...tile }));
     snapshot.selfId = viewer.playerId;
+    const self = world.players.find((player) => player.playerId === viewer.playerId);
+    if (self !== undefined) {
+        snapshot.cooldowns = [SkillSlot.Switch, SkillSlot.Movement].flatMap((slot) => {
+            const skill = skillInSlot(self, slot);
+            if (skill === null) return [];
+            const remainingTicks = Math.max(0, self.cooldowns[skill] ?? 0);
+            const remainingMs = Math.min(0xffff, Math.round((remainingTicks / world.simulationHz) * 1000));
+            return [{ slot, remainingMs }];
+        });
+    }
 
     return snapshot;
 }

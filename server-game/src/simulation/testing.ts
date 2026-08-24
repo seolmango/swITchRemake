@@ -58,6 +58,7 @@ export function makePlayer(playerId: number, tileX: number, tileY: number, overr
         effects: {},
         cooldowns: {},
         loadout: SkillId.Dash,
+        emoji: null,
         stats: emptyStats(),
         ...overrides,
     };

@@ -59,9 +59,9 @@ export class GameLifecycle implements RoomLifecyclePort {
         tagger.isTagger = true;
         grantTaggerFrenzy(world, tagger);
 
-        const roster: RosterEntry[] = snapshot.playerIds.map((playerId) => ({
-            playerId,
-            nickname: room.nicknameOf(playerId) ?? `P${playerId}`,
+        const roster: RosterEntry[] = snapshot.players.map((player) => ({
+            playerId: player.playerId,
+            nickname: room.nicknameOf(player.playerId) ?? `P${player.playerId}`,
         }));
 
         const session = new GameSession({
@@ -115,6 +115,13 @@ export class GameLifecycle implements RoomLifecyclePort {
         return true;
     }
 
+    public setEmoji(roomId: string, request: { playerId: number; emojiId: number }): boolean {
+        const session = this.#sessions.get(roomId);
+        if (session === undefined) return false;
+        session.queueEmoji(request);
+        return true;
+    }
+
     public requestFullSnapshot(roomId: string, playerId: number): void {
         this.#sessions.get(roomId)?.requestFullSnapshot(playerId);
     }
@@ -144,12 +151,14 @@ export class GameLifecycle implements RoomLifecyclePort {
      */
     #placePlayers(snapshot: RoomStartSnapshot, tileSize: number, cols: number): PlayerState[] {
         const map = this.#options.bundle.maps[snapshot.mapId];
-        const ids = [...snapshot.playerIds].sort((a, b) => a - b);
+        const players = [...snapshot.players].sort((a, b) => a.playerId - b.playerId);
+        const ids = players.map((player) => player.playerId);
         const starts = map?.startPositions[ids.length] ?? [];
         // 인원수에 맞는 시작 위치가 없으면 맵 중앙 근처에 둔다. 겹치면 첫 tick 밀어내기가 푼다.
         const fallback = (cols * tileSize) / 2;
 
-        return ids.map((playerId, index) => {
+        return players.map((startPlayer, index) => {
+            const playerId = startPlayer.playerId;
             const point = starts[index];
             return {
                 playerId,
@@ -167,7 +176,9 @@ export class GameLifecycle implements RoomLifecyclePort {
                 connected: true,
                 effects: {},
                 cooldowns: {},
-                loadout: SkillId.Dash,
+                // Recovery/legacy start snapshots can lack the field; Dash preserves the historical default.
+                loadout: startPlayer.loadout ?? SkillId.Dash,
+                emoji: null,
                 stats: emptyStats(),
             } satisfies PlayerState;
         });

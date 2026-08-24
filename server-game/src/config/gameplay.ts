@@ -18,6 +18,9 @@ export const RULES_VERSION = '0.2.0-legacy-tuned';
 
 const TILE_PX = 256;
 
+/** How long an accepted emoji remains visible in authoritative snapshots. */
+export const EMOJI_DISPLAY_MS = 3_000;
+
 export const GAMEPLAY = Object.freeze({
     // ── 이동 ──
     /** 레거시 `CharRad = 0.4` 타일. */

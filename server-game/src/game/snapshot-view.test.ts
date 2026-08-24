@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { decodeSnapshot, PROTOCOL_VERSION } from 'shared';
+import { decodeSnapshot, PROTOCOL_VERSION, SkillId, SkillSlot } from 'shared';
 import { stepWorld } from '../simulation/step';
 import { mapFromRows, makePlayer, makeWorld } from '../simulation/testing';
 import { buildSnapshot, encodeForViewer } from './snapshot-view';
@@ -113,4 +113,65 @@ test('가까이 붙으면 숨은 사람이 obscured로 보인다', () => {
     const hidden = (snapshot.players ?? []).find((p) => p.id === 2);
     assert.ok(hidden !== undefined, '바로 옆인데 안 보인다');
     assert.equal(hidden.obscured, true, 'obscured 표시가 빠졌다');
+});
+
+test('a filtered snapshot carries only the viewer cooldowns, including ready slots', () => {
+    const world = makeWorld(mapFromRows([
+        '######',
+        '#....#',
+        '#....#',
+        '######',
+    ]), [
+        makePlayer(1, 1, 1, {
+            loadout: SkillId.Flash,
+            cooldowns: { [SkillId.Switch]: 4, [SkillId.Flash]: 100_000 },
+        }),
+        makePlayer(2, 2, 1, { cooldowns: { [SkillId.Dash]: 20 } }),
+    ]);
+    const f = stepWorld(world, []);
+    const filtered = buildSnapshot(f, { playerId: 1, access: 'filtered', full: false }, ROSTER);
+    const unfiltered = buildSnapshot(f, { playerId: null, access: 'unfiltered', full: false }, ROSTER);
+
+    assert.deepEqual(filtered.cooldowns, [
+        {
+            slot: SkillSlot.Switch,
+            remainingMs: Math.round(((world.players[0]!.cooldowns[SkillId.Switch] ?? 0) / world.simulationHz) * 1000),
+        },
+        { slot: SkillSlot.Movement, remainingMs: 65_535 },
+    ]);
+    assert.equal(unfiltered.cooldowns, undefined);
+});
+
+test('a tagger omits the empty switch slot but includes a ready movement slot', () => {
+    const world = makeWorld(mapFromRows([
+        '######',
+        '#....#',
+        '#....#',
+        '######',
+    ]), [
+        makePlayer(1, 1, 1, { isTagger: true, loadout: SkillId.Dash }),
+        makePlayer(2, 2, 1),
+    ]);
+    const snapshot = buildSnapshot(stepWorld(world, []), { playerId: 1, access: 'filtered', full: false }, ROSTER);
+
+    assert.deepEqual(snapshot.cooldowns, [{ slot: SkillSlot.Movement, remainingMs: 0 }]);
+});
+
+test('emoji state is visible in snapshots only until its expiry tick', () => {
+    const world = makeWorld(mapFromRows([
+        '######',
+        '#....#',
+        '#....#',
+        '######',
+    ]), [
+        makePlayer(1, 1, 1, { emoji: { emojiId: 7, expiresAtTick: 2 } }),
+        makePlayer(2, 2, 1),
+    ]);
+
+    const visible = buildSnapshot(stepWorld(world, []), { playerId: null, access: 'unfiltered', full: false }, ROSTER);
+    assert.equal(visible.players?.find((player) => player.id === 1)?.emojiId, 7);
+
+    const expired = buildSnapshot(stepWorld(world, []), { playerId: null, access: 'unfiltered', full: false }, ROSTER);
+    assert.equal(expired.players?.find((player) => player.id === 1)?.emojiId, undefined);
+    assert.equal(world.players[0]!.emoji, null);
 });

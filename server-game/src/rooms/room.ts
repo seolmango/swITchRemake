@@ -15,6 +15,8 @@ import {
     type LobbyPlayer,
     type PlayerRole as PlayerRoleValue,
     type RoomState as RoomStateValue,
+    type SkillId,
+    type SkillRejection,
 } from 'shared';
 import type { SeatReservation } from '../gateway/ticket-store';
 import type { ResolvedInput } from '../simulation/world';
@@ -22,11 +24,17 @@ import type { Connection } from '../transport/game-transport';
 import { LobbyRoster, StartLock, type LobbyMember, type MoveSlotResult } from './lobby-state';
 import { RoomStateMachine } from './room-state';
 
+export interface RoomStartPlayer {
+    readonly playerId: number;
+    /** Recovery-created snapshots may predate loadout persistence, so consumers keep a default. */
+    readonly loadout?: SkillId;
+}
+
 export interface RoomStartSnapshot {
     readonly roomId: string;
     readonly matchId: string;
     readonly mapId: string;
-    readonly playerIds: readonly number[];
+    readonly players: readonly RoomStartPlayer[];
     readonly rules: Readonly<Record<string, number | string | boolean>>;
 }
 
@@ -364,6 +372,17 @@ export class Room {
         return null;
     }
 
+    public setLoadout(userId: ActorId, loadout: SkillId): ErrorCodeValue | null {
+        if (this.state !== RoomState.Waiting) return ErrorCode.BadState;
+        const member = this.#roster.getByUser(userId);
+        if (member === null || member.role !== PlayerRole.Player) return ErrorCode.BadState;
+        if (member.loadout !== loadout) {
+            member.loadout = loadout;
+            this.broadcastLobbyState();
+        }
+        return null;
+    }
+
     /** shared에 lobby.setSlot이 추가되기 전에도 검증 가능한 순수 roster 동작을 제공한다. */
     public moveSlot(userId: ActorId, slot: number): MoveSlotResult | 'bad-state' {
         if (this.state !== RoomState.Waiting) return 'bad-state';
@@ -381,12 +400,15 @@ export class Room {
         if (participants.length < this.#options.minPlayersToStart) return ErrorCode.BadState;
 
         this.#roster.clearHolds();
-        const playerIds = Object.freeze(participants.map((member) => member.playerId));
+        const players = Object.freeze(participants.map((member) => Object.freeze({
+            playerId: member.playerId,
+            loadout: member.loadout,
+        })));
         this.#startSnapshot = Object.freeze({
             roomId: this.id,
             matchId: this.matchId,
             mapId: this.#mapId,
-            playerIds,
+            players,
             rules: Object.freeze({ ...this.#options.rules }),
         });
         this.#countdownEndsAt = now + this.#options.timing.countdownMs;
@@ -493,6 +515,14 @@ export class Room {
         this.#broadcast({ type: 'player.blinked', payload: { playerId, fromX, fromY } });
     }
 
+    /** Skill failures contain private tactical information, so they never use the room broadcaster. */
+    public sendSkillRejected(playerId: number, slot: number, reason: SkillRejection): void {
+        this.#roster.getByPlayerId(playerId)?.connection?.sendJson({
+            type: 'skill.rejected',
+            payload: { slot, reason },
+        });
+    }
+
     /** 스냅샷 인코딩 직전 이 한 메서드만 보고 검열 등급을 고른다. */
     public snapshotAccess(userId: ActorId): SnapshotAccess {
         if (this.state !== RoomState.Playing) return 'none';
@@ -584,7 +614,7 @@ export class Room {
             if (snapshot === null) throw new Error('countdown has no locked start snapshot');
             const started = this.#options.lifecycle.startGame(snapshot);
             for (const member of this.#roster.members()) {
-                member.inCurrentGame = snapshot.playerIds.includes(member.playerId);
+                member.inCurrentGame = snapshot.players.some((player) => player.playerId === member.playerId);
                 member.role = member.inCurrentGame ? PlayerRole.Player : PlayerRole.Waiting;
                 member.spectatorEligible = !member.inCurrentGame;
                 member.latestInput = null;
