@@ -9,7 +9,7 @@
     "dev": "tsc -p tsconfig.json --watch",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.test.json && node scripts/run-tests.cjs",
+    "test": "tsc -p tsconfig.test.json && node ../scripts/run-tests.cjs dist-test",
     "replay:inspect": "node dist/replay/cli.js"
   },
   "dependencies": {

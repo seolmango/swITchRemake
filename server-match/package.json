@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
-    "test": "npm run build && node --test dist/**/*.spec.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build && node ../scripts/run-tests.cjs dist --suffix=.spec.js",
     "start": "node dist/main.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
