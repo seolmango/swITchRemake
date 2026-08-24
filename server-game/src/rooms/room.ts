@@ -81,6 +81,8 @@ export interface RoomOptions {
     readonly lifecycle: RoomLifecyclePort;
     readonly isKnownMap: (mapId: string) => boolean;
     readonly getServerTick: () => number;
+    /** Notifies the directory publisher after a room-list-visible change. */
+    readonly onDirectoryChanged?: () => void;
     readonly now?: () => number;
 }
 
@@ -229,6 +231,7 @@ export class Room {
         }
         const result = this.#roster.hold(reservation);
         if (!result.ok) return result.reason === 'duplicate' ? ControlErrorCode.AlreadyInRoom : ControlErrorCode.RoomFull;
+        this.#directoryChanged();
         return null;
     }
 
@@ -269,6 +272,7 @@ export class Room {
         if (member === null) return null;
         this.#startLock.applyJoin(now);
         if (this.state === RoomState.Allocating) this.#stateMachine.transition(RoomState.Waiting, now);
+        this.#directoryChanged();
         return { playerId: member.playerId, roomState: this.state, role: member.role };
     }
 
@@ -311,6 +315,7 @@ export class Room {
     public releaseSeat(userId: ActorId, reason = 'released'): boolean {
         if (this.#roster.releaseHold(userId)) {
             if (this.#roster.occupiedSize === 0) this.close();
+            this.#directoryChanged();
             return true;
         }
         return this.#removeMember(userId, reason, true);
@@ -347,6 +352,7 @@ export class Room {
         if (!this.#roster.passHost(requester, playerId)) return ErrorCode.InvalidPayload;
         this.#broadcast({ type: 'lobby.hostChanged', payload: { hostId: playerId } });
         this.broadcastLobbyState();
+        this.#directoryChanged();
         return null;
     }
 
@@ -356,6 +362,7 @@ export class Room {
         if (this.#locked !== locked) {
             this.#locked = locked;
             this.broadcastLobbyState();
+            this.#directoryChanged();
         }
         return null;
     }
@@ -368,6 +375,7 @@ export class Room {
             this.#mapId = mapId;
             this.#startLock.applyMapChange(this.#now());
             this.broadcastLobbyState();
+            this.#directoryChanged();
         }
         return null;
     }
@@ -413,6 +421,7 @@ export class Room {
         });
         this.#countdownEndsAt = now + this.#options.timing.countdownMs;
         this.#stateMachine.transition(RoomState.Countdown, now);
+        this.#directoryChanged();
         const startsAtTick = this.#options.getServerTick()
             + Math.ceil((this.#options.timing.countdownMs / 1000) * this.#options.simulationHz);
         this.#broadcast({
@@ -432,6 +441,7 @@ export class Room {
         const now = this.#now();
         this.#postGameEndsAt = now + this.#options.timing.postGameMs;
         this.#stateMachine.transition(RoomState.PostGame, now);
+        this.#directoryChanged();
         this.#broadcast({
             type: 'game.ended',
             payload: { winnerIds: [winnerIds[0], winnerIds[1]], returnsAt: this.#postGameEndsAt },
@@ -587,6 +597,15 @@ export class Room {
     }
 
     public advance(now: number = this.#now()): void {
+        const before = this.#directoryState();
+        try {
+            this.#advance(now);
+        } finally {
+            if (before !== this.#directoryState()) this.#directoryChanged();
+        }
+    }
+
+    #advance(now: number): void {
         if (this.state === RoomState.Closed) return;
         this.#roster.purgeExpiredHolds(now);
 
@@ -647,6 +666,7 @@ export class Room {
             member.connection?.close(CloseCode.Normal, 'room closed');
         }
         this.#stateMachine.transition(RoomState.Closed, this.#now());
+        this.#directoryChanged();
     }
 
     public sendError(connection: Connection, requestId: number | null, code: ErrorCodeValue): void {
@@ -658,12 +678,21 @@ export class Room {
         if (removed === null) return false;
         if (notifyLifecycle) this.#options.lifecycle.participantRemoved(this.id, removed.member.playerId, reason);
         this.#broadcast({ type: 'player.left', payload: { playerId: removed.member.playerId, reason } });
+        this.#directoryChanged();
         if (removed.hostChanged && this.#roster.hostId !== null) {
             this.#broadcast({ type: 'lobby.hostChanged', payload: { hostId: this.#roster.hostId } });
         }
         if (this.#roster.size === 0) this.close();
         else this.broadcastLobbyState();
         return true;
+    }
+
+    #directoryState(): string {
+        return JSON.stringify(this.projection());
+    }
+
+    #directoryChanged(): void {
+        this.#options.onDirectoryChanged?.();
     }
 
     #sendError(connection: Connection, requestId: number | null, code: ErrorCodeValue): void {

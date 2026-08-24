@@ -10,6 +10,7 @@ import { getAlreadyAssignedLobbyPath, getRooms, isAlreadyAssigned, quickJoin, ro
 import { gameSession } from '../../game/GameSession.ts';
 import { themeColors } from '../../theme/color.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
+import { roomErrorMessage } from './roomErrorMessage.ts';
 
 const PREVIEW_ROOMS: RoomSummary[] = [
     { id: 'demo-1', roomCode: 'A42B3C', name: '느긋하게 한 판', ownerName: 'Alice', playerCount: 7, capacity: 8, hasPassword: true, status: 'waiting' },
@@ -38,8 +39,8 @@ export const RoomListPage: React.FC = () => {
             setRooms(result.rooms);
             setTotalPages(result.totalPages);
             setMessage('');
-        } catch {
-            setMessage(t('auth.serverError'));
+        } catch (error) {
+            setMessage(roomErrorMessage(error, t));
         } finally { setLoading(false); }
     }, [page, t]);
 
@@ -51,8 +52,8 @@ export const RoomListPage: React.FC = () => {
             setRooms(result.rooms);
             setTotalPages(result.totalPages);
             setMessage('');
-        }).catch(() => {
-            if (active) setMessage(t('auth.serverError'));
+        }).catch((error: unknown) => {
+            if (active) setMessage(roomErrorMessage(error, t));
         });
         return () => { active = false; };
     }, [page, t]);
@@ -67,7 +68,7 @@ export const RoomListPage: React.FC = () => {
             }
             await gameSession.connect(result, { isPrivate: false });
             navigate(`/rooms/${encodeURIComponent(result.roomId)}/lobby`);
-        } catch (error) { setMessage(error instanceof Error && error.message === 'ACTIVE_ROOM_MISSING' ? t('lobby.resumeFailed') : t('auth.serverError')); }
+        } catch (error) { setMessage(roomErrorMessage(error, t)); }
     };
 
     return (

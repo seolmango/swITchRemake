@@ -11,6 +11,7 @@ import { isRoomName, isRoomPassword } from '../../utils/validation.ts';
 import { useNavigate } from 'react-router-dom';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { themeColors } from '../../theme/color.ts';
+import { roomErrorMessage } from './roomErrorMessage.ts';
 
 export const CreateRoomPage: React.FC = () => {
     const { t } = useTranslation();
@@ -37,7 +38,7 @@ export const CreateRoomPage: React.FC = () => {
             }
             await gameSession.connect(result, { isPrivate: privateRoom });
             navigate(`/rooms/${encodeURIComponent(result.roomId)}/lobby`);
-        } catch (error) { setMessage(error instanceof Error && error.message === 'ACTIVE_ROOM_MISSING' ? t('lobby.resumeFailed') : t('auth.serverError')); } finally { setLoading(false); }
+        } catch (error) { setMessage(roomErrorMessage(error, t)); } finally { setLoading(false); }
     };
 
     return (

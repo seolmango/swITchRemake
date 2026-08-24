@@ -11,7 +11,11 @@
     "passwordPlaceholder": "Up to 12 characters", "roomId": "Room code", "roomIdPlaceholder": "6 letters or numbers",
     "createUnavailable": "The room creation API is not on the server yet. The form and API boundary are ready.",
     "joinUnavailable": "The room join API is not on the server yet. The form and API boundary are ready.", "quickUnavailable": "The quick join API is not on the server yet.",
-    "private": "Private room", "public": "Public room", "roomAccessibleLabel": "{{name}}, host {{owner}}, {{count}} of {{capacity}} players, {{privacy}}, {{status}}"
+    "private": "Private room", "public": "Public room", "roomAccessibleLabel": "{{name}}, host {{owner}}, {{count}} of {{capacity}} players, {{privacy}}, {{status}}",
+    "errors": {
+      "roomUnavailable": "This room is unavailable or can no longer be joined.", "noJoinableRoom": "There are no rooms available to join right now.", "roomFull": "This room is full.",
+      "joinRateLimited": "Too many join attempts. Try again shortly.", "joinRateLimitedRetry": "Too many join attempts. Try again in {{seconds}} seconds.", "rejoinCooldown": "Please wait a moment before rejoining this room.", "kickedFromRoom": "You were removed from this room and cannot rejoin it."
+    }
   },
   "lobby": {
     "roomAccessible": "{{name}} lobby, room code {{code}}", "roomCode": "Room code", "copyCode": "Copy", "codeCopied": "Room code copied.", "copyFailed": "Could not copy the room code.",

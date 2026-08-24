@@ -26,6 +26,8 @@ import { RESULT_STREAM_FIELD, ResultOutbox } from './result-outbox';
 class FakeRedis implements RedisPort {
     ready = true;
     failXAdd = false;
+    blockSet: Promise<void> | null = null;
+    setCalls = 0;
     readonly values = new Map<string, string>();
     readonly ttls = new Map<string, number>();
     readonly sorted = new Map<string, Map<string, number>>();
@@ -41,6 +43,8 @@ class FakeRedis implements RedisPort {
     async get(key: string): Promise<string | null> { return this.values.get(key) ?? null; }
     async setPx(key: string, value: string, ttlMs: number): Promise<void> {
         if (!this.ready) throw new Error('redis unavailable');
+        this.setCalls += 1;
+        if (this.blockSet !== null) await this.blockSet;
         this.values.set(key, value);
         this.ttls.set(key, ttlMs);
         this.log.push(`set:${key}`);
@@ -419,6 +423,43 @@ test('registry가 heartbeat/room TTL, waiting index, active-room lease와 stale 
     assert.equal(h.redis.sorted.get(h.keys.roomsWaiting())?.has(grant.roomId), false);
     assert.equal(h.redis.values.get(h.keys.userActiveRoom(1)), newerClaim,
         '이전 방 종료 정리가 다른 방의 새 claim을 지우면 안 된다');
+});
+
+test('room-directory changes publish immediately, coalesce while in flight, and keep a trailing publish', async () => {
+    const h = harness();
+    let releaseSet!: () => void;
+    h.redis.blockSet = new Promise<void>((resolve) => { releaseSet = resolve; });
+
+    h.registry.requestPublish();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(h.redis.setCalls, 1, 'the first change must begin publishing without a debounce delay');
+
+    for (let index = 0; index < 8; index += 1) h.registry.requestPublish();
+    releaseSet();
+    h.redis.blockSet = null;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.equal(h.redis.setCalls, 2, 'many in-flight changes must become one trailing publish');
+});
+
+test('a live game-server heartbeat claims its GAME_SERVER_ID, while an expired key does not block restart', async () => {
+    const h = harness();
+    assert.equal(await h.registry.claimServerId(), true);
+
+    const duplicate = new GameRegistry({
+        redis: h.redis,
+        keys: h.keys,
+        rooms: h.rooms,
+        heartbeat: {
+            serverId: 'game-1', buildVersion: 'build', protocolVersion: 2, rulesVersion: 'rules', mapBundleHash: 'hash',
+            connectionCount: () => 0, loopLagMs: () => 0, isDraining: () => false,
+        },
+    });
+    assert.equal(await duplicate.claimServerId(), false, 'a live heartbeat rejects a duplicate server ID');
+
+    await h.redis.delete(h.keys.gameServer('game-1'));
+    assert.equal(await duplicate.claimServerId(), true, 'an expired heartbeat no longer blocks a restart');
 });
 
 test('ticket admit 전 hold도 active-room lease를 유지하며 추적에서 제거하지 않는다', async () => {

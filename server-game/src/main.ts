@@ -83,6 +83,7 @@ async function main(): Promise<void> {
     // lookupRoom을 지연 참조로 넘긴다. RoomManager와 GameLifecycle이 서로를 필요로 해서
     // 어느 한쪽을 먼저 완성할 수 없다. 순환을 클래스 참조가 아니라 함수 하나로 좁힌다.
     let rooms: RoomManager | null = null;
+    let registry: GameRegistry | null = null;
     const lifecycle = new GameLifecycle({
         bundle,
         serverId: INFRA.SERVER_ID,
@@ -117,6 +118,7 @@ async function main(): Promise<void> {
             // 재접속한 사람은 화면을 처음부터 다시 구성해야 하므로 다음 프레임을 full로 받는다.
             lifecycle.requestFullSnapshot(connection.roomId, connection.playerId);
         },
+        onDirectoryChanged: () => registry?.requestPublish(),
     });
 
     // ── 게이트웨이와 전송 ──
@@ -170,7 +172,7 @@ async function main(): Promise<void> {
         logger: (level, message, error) => (level === 'error' ? console.error(message, error) : log(message)),
     });
 
-    const registry = new GameRegistry({
+    registry = new GameRegistry({
         redis,
         keys,
         rooms,
@@ -210,6 +212,13 @@ async function main(): Promise<void> {
     // command group, and the first registry heartbeat have all succeeded.
     try {
         await redis.connect();
+        const serverIdClaimed = await registry.claimServerId();
+        if (!serverIdClaimed && !INFRA.ALLOW_DUPLICATE_SERVER_ID) {
+            throw new Error(`GAME_SERVER_ID=${INFRA.SERVER_ID} already has a live Redis heartbeat; refusing to share its command consumer group`);
+        }
+        if (!serverIdClaimed) {
+            console.warn(`[swITch] DANGER: GAME_ALLOW_DUPLICATE_SERVER_ID=true; starting alongside the live GAME_SERVER_ID=${INFRA.SERVER_ID}`);
+        }
         await consumer.start();
         await registry.start();
         if (!registry.healthy) throw new Error('initial registry heartbeat was not written');

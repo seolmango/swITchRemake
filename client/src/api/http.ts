@@ -2,11 +2,15 @@ export interface ApiErrorBody {
     statusCode?: number;
     message?: string | string[];
     error?: string;
+    code?: string;
+    retryAfterMs?: number;
 }
 
 export class ApiError extends Error {
     readonly status: number;
     readonly details: string[];
+    readonly code: string | null;
+    readonly retryAfterMs: number | null;
 
     constructor(status: number, body: ApiErrorBody | null) {
         const details = Array.isArray(body?.message) ? body.message : body?.message ? [body.message] : [];
@@ -14,6 +18,10 @@ export class ApiError extends Error {
         this.name = 'ApiError';
         this.status = status;
         this.details = details;
+        this.code = typeof body?.code === 'string' ? body.code : null;
+        this.retryAfterMs = typeof body?.retryAfterMs === 'number' && Number.isFinite(body.retryAfterMs)
+            ? Math.max(0, body.retryAfterMs)
+            : null;
     }
 }
 

@@ -53,6 +53,8 @@ export interface RoomManagerOptions {
     readonly now?: () => number;
     readonly timing?: Partial<RoomTiming>;
     readonly maxRooms?: number;
+    /** Single integration point for room-directory-visible changes. */
+    readonly onDirectoryChanged?: () => void;
 }
 
 const DEFAULT_TIMING: RoomTiming = Object.freeze({
@@ -125,6 +127,9 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 lifecycle: this.#options.lifecycle,
                 isKnownMap: this.#options.isKnownMap,
                 getServerTick: this.#options.getServerTick,
+                ...(this.#options.onDirectoryChanged === undefined
+                    ? {}
+                    : { onDirectoryChanged: this.#options.onDirectoryChanged }),
                 now: this.#now,
             };
             room = new Room(options);
@@ -132,6 +137,7 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
             return { ok: false, code: ControlErrorCode.Internal };
         }
         this.#rooms.set(room.id, room);
+        this.#options.onDirectoryChanged?.();
         return { ok: true, value: room };
     }
 

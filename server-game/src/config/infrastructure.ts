@@ -50,6 +50,8 @@ export const INFRA = Object.freeze({
     REDIS_HOST: optional('REDIS_HOST', 'localhost'),
     REDIS_PORT: num('REDIS_PORT', 6379),
     REDIS_PASSWORD: optional('REDIS_PASSWORD', ''),
+    /** Emergency-only override for a known live GAME_SERVER_ID collision. */
+    ALLOW_DUPLICATE_SERVER_ID: optional('GAME_ALLOW_DUPLICATE_SERVER_ID', 'false') === 'true',
 
     /**
      * WebSocket upgrade를 허용할 Origin 목록. 비어 있으면 모두 거절한다.

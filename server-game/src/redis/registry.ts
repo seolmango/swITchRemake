@@ -75,6 +75,7 @@ export class GameRegistry {
     #healthy = false;
     #timer: NodeJS.Timeout | null = null;
     #publishing: Promise<boolean> | null = null;
+    #publishRequested = false;
 
     public constructor(options: RegistryOptions) {
         this.#options = options;
@@ -89,6 +90,33 @@ export class GameRegistry {
         await this.publish();
         this.#timer = setInterval(() => { void this.publish(); }, HEARTBEAT_INTERVAL_MS);
         this.#timer.unref();
+    }
+
+    /**
+     * Reserve this server id before the command consumer starts.  A live
+     * heartbeat is also the ownership record, so a second process must not
+     * join the same consumer group.
+     */
+    public async claimServerId(): Promise<boolean> {
+        if (!this.#options.redis.isReady()) return false;
+        const heartbeat = this.#heartbeat(this.#now());
+        return this.#options.redis.setPxIfAbsent(
+            this.#options.keys.gameServer(heartbeat.serverId),
+            JSON.stringify(heartbeat),
+            HEARTBEAT_TTL_MS,
+        );
+    }
+
+    /**
+     * Publish the first directory change immediately.  Changes while a
+     * publish is in flight are folded into exactly one trailing publish.
+     */
+    public requestPublish(): void {
+        if (this.#publishing !== null) {
+            this.#publishRequested = true;
+            return;
+        }
+        void this.#startPublish();
     }
 
     public stop(): void {
@@ -136,8 +164,19 @@ export class GameRegistry {
     /** 장애 시 false를 반환한다. 로컬 rooms나 추적 정보는 버리지 않는다. */
     public publish(): Promise<boolean> {
         if (this.#publishing !== null) return this.#publishing;
-        this.#publishing = this.#publishOnce().finally(() => { this.#publishing = null; });
-        return this.#publishing;
+        return this.#startPublish();
+    }
+
+    #startPublish(): Promise<boolean> {
+        const publishing = this.#publishOnce().finally(() => {
+            this.#publishing = null;
+            if (this.#publishRequested) {
+                this.#publishRequested = false;
+                void this.#startPublish();
+            }
+        });
+        this.#publishing = publishing;
+        return publishing;
     }
 
     async #publishOnce(): Promise<boolean> {
@@ -150,20 +189,7 @@ export class GameRegistry {
             await this.#flushPendingReleases();
             await this.#synchronizeTrackedSeats();
 
-            const counts = this.#options.rooms.counts();
-            const heartbeat: GameServerHeartbeat = {
-                serverId: this.#options.heartbeat.serverId,
-                buildVersion: this.#options.heartbeat.buildVersion,
-                protocolVersion: this.#options.heartbeat.protocolVersion,
-                rulesVersion: this.#options.heartbeat.rulesVersion,
-                mapBundleHash: this.#options.heartbeat.mapBundleHash,
-                waitingRooms: counts.waiting,
-                playingRooms: counts.playing,
-                connections: this.#options.heartbeat.connectionCount(),
-                loopLagMs: this.#options.heartbeat.loopLagMs(),
-                draining: this.#options.heartbeat.isDraining(),
-                updatedAt: now,
-            };
+            const heartbeat = this.#heartbeat(now);
             await this.#options.redis.setPx(
                 this.#options.keys.gameServer(heartbeat.serverId),
                 JSON.stringify(heartbeat),
@@ -206,6 +232,23 @@ export class GameRegistry {
             this.#logger('Redis registry heartbeat failed; local rooms remain active', error);
             return false;
         }
+    }
+
+    #heartbeat(now: number): GameServerHeartbeat {
+        const counts = this.#options.rooms.counts();
+        return {
+            serverId: this.#options.heartbeat.serverId,
+            buildVersion: this.#options.heartbeat.buildVersion,
+            protocolVersion: this.#options.heartbeat.protocolVersion,
+            rulesVersion: this.#options.heartbeat.rulesVersion,
+            mapBundleHash: this.#options.heartbeat.mapBundleHash,
+            waitingRooms: counts.waiting,
+            playingRooms: counts.playing,
+            connections: this.#options.heartbeat.connectionCount(),
+            loopLagMs: this.#options.heartbeat.loopLagMs(),
+            draining: this.#options.heartbeat.isDraining(),
+            updatedAt: now,
+        };
     }
 
     async #publishRoom(projection: RoomProjection, now: number): Promise<void> {

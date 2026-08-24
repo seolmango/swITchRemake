@@ -70,6 +70,7 @@ function errorCode(connection: FakeConnection): string | null {
 
 function managerFixture() {
     let now = 0;
+    let directoryChanges = 0;
     const emojis: { playerId: number; emojiId: number }[] = [];
     const manager = new RoomManager({
         lifecycle,
@@ -83,6 +84,7 @@ function managerFixture() {
             startLockOnJoinMs: 0,
             startLockOnMapChangeMs: 0,
         },
+        onDirectoryChanged: () => { directoryChanges += 1; },
     });
     const ownerSeat = seat(1);
     const created = manager.createRoom({
@@ -94,8 +96,26 @@ function managerFixture() {
     const owner = new FakeConnection(1, 1, 'p1', 'room', admission.playerId);
     manager.onConnect(owner);
 
-    return { manager, owner, emojis, setNow(value: number) { now = value; } };
+    return { manager, owner, emojis, get directoryChanges() { return directoryChanges; }, setNow(value: number) { now = value; } };
 }
+
+test('room-directory-visible mutations notify the single publisher hook', () => {
+    const fixture = managerFixture();
+    assert.equal(fixture.directoryChanges, 2, 'creation and ALLOCATING→WAITING both notify');
+
+    const reservation = seat(2);
+    assert.equal(fixture.manager.reserveJoin(reservation, null).ok, true);
+    assert.equal(fixture.directoryChanges, 3, 'seat reservation changes the projected count');
+    assert.notEqual(fixture.manager.admitReservation(reservation), null);
+    assert.equal(fixture.directoryChanges, 4, 'seat admission notifies');
+    assert.equal(fixture.manager.releaseSeat('room', 2).ok, true);
+    assert.equal(fixture.directoryChanges, 5, 'seat release notifies');
+
+    fixture.manager.onJson(fixture.owner, {
+        v: JSON_MESSAGE_VERSION, type: 'lobby.setLocked', requestId: 1, payload: { locked: true },
+    });
+    assert.equal(fixture.directoryChanges, 6, 'lock changes notify');
+});
 
 function startFixtureGame(fixture: ReturnType<typeof managerFixture>): FakeConnection[] {
     const connections = [fixture.owner];
