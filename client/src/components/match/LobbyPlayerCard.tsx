@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import type { LobbyPlayer, PlayerSkill } from '../../api/matches.ts';
+import type { LobbyViewPlayer, PlayerSkill } from '../../api/matches.ts';
 import { Icon, type IconName } from '../common/Icon.tsx';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color } from '../../theme/color.ts';
@@ -14,14 +14,14 @@ const skillIcons: Record<PlayerSkill, string> = {
     exhaust: exhaustIcon,
 };
 
-const controlIcons: Record<LobbyPlayer['control'], IconName> = {
+const controlIcons: Record<LobbyViewPlayer['control'], IconName> = {
     keyboard: 'keyboard',
     touch: 'touch',
     gamepad: 'gamepad',
 };
 
 interface LobbyPlayerCardProps {
-    player?: LobbyPlayer;
+    player?: LobbyViewPlayer;
     slot: number;
     viewerIsHost?: boolean;
     canSelectEmptySlot?: boolean;

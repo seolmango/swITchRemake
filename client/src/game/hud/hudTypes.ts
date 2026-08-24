@@ -36,6 +36,8 @@ export interface HudSkill {
     cooldown: number;
     /** Full cooldown length, for the sweep overlay. Ignored when `cooldown` is 0. */
     cooldownTotal: number;
+    /** The server omitted this slot from SELF cooldowns, so it cannot be used. */
+    unavailable?: boolean;
 }
 
 /**

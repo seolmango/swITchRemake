@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { PlayerRole } from 'shared';
+import { MAX_PLAYERS_PER_ROOM, PlayerRole } from 'shared';
 import type { SeatReservation } from '../gateway/ticket-store';
 import { LobbyRoster, StartLock } from './lobby-state';
 
@@ -43,6 +43,15 @@ test('roster가 예약까지 정원에 포함하고 playerId와 slot을 분리�
     assert.equal(roster.hostId, first.playerId, '방장 퇴장 시 가장 먼저 들어온 참가자가 이어받는다');
 });
 
+test('lobby colorIndex is the zero-based palette index for every one-based playerId', () => {
+    const roster = new LobbyRoster(MAX_PLAYERS_PER_ROOM);
+    for (let playerId = 1; playerId <= MAX_PLAYERS_PER_ROOM; playerId += 1) {
+        assert.deepEqual(roster.hold(reservation(playerId)), { ok: true, playerId });
+        assert.equal(roster.claim(playerId, 1, PlayerRole.Player)?.colorIndex, playerId - 1);
+    }
+    assert.deepEqual(roster.members().map((member) => member.colorIndex), [0, 1, 2, 3, 4, 5, 6, 7]);
+});
+
 test('참가 잠금은 60초 rolling window에서 15초까지만 grant한다', () => {
     const lock = new StartLock({
         joinLockMs: 5_000,
@@ -60,4 +69,3 @@ test('참가 잠금은 60초 rolling window에서 15초까지만 grant한다', (
     assert.equal(lock.remainingMs(4_000), 10_000, '맵 변경 잠금은 참가 budget과 별개다');
     assert.equal(lock.applyJoin(60_000), 5_000, 'rolling window를 벗어난 grant는 budget에서 빠진다');
 });
-

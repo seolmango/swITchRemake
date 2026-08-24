@@ -67,14 +67,16 @@ export class SessionReplayRecorder {
         this.#writeVisibility(frame);
     }
 
-    /** 뷰어(playerId 0..7)별 1바이트. 재생 시 시야 코어 결과와 대조해 코어 버전 어긋남을 검출한다. */
+    /** One byte per viewer. The mask slots are intentionally zero-based while playerId is one-based. */
     #writeVisibility(frame: AuthoritativeFrame): void {
         const masks = new Uint8Array(8);
         const visibilityWorld = toVisibilityWorld(frame.world);
         for (const entry of this.#roster) {
-            if (entry.playerId < 0 || entry.playerId >= 8) continue;
+            const slotIndex = entry.playerId - 1;
+            if (slotIndex < 0 || slotIndex >= 8) continue;
             const result = computeVisibility(visibilityWorld, entry.playerId);
-            masks[entry.playerId] = packVisibleMask(result.visiblePlayerIds);
+            // Visibility masks are a compact zero-based representation, not playerId values.
+            masks[slotIndex] = packVisibleMask(result.visiblePlayerIds.map((playerId) => playerId - 1));
         }
         this.#recorder.writeVisibility(frame.tick, masks);
     }

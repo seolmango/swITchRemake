@@ -46,14 +46,14 @@ test('stores one idempotent result transaction and excludes guest stats', { skip
             startedAt: 1_000, endedAt: 61_000, durationTicks: 1_800,
             buildId: 'integration', protocolVersion: 1, rulesVersion: 'rules-a2',
             mapBundleHash: 'bundle-a2', visibilityCoreVersion: 1,
-            winnerPlayerIds: [0, 1],
+            winnerPlayerIds: [1, 2],
             replay: {
                 storageKey: 'integration/a2.swrp', formatVersion: 1, chunkCount: 1,
                 sizeBytes: 100, rootHash: 'a'.repeat(64),
             },
             players: [
-                { userId: user.id, playerId: 0, nickname: `A2_${suffix}`.slice(0, 20), colorIndex: 0, isGuest: false, tagCount: 2, taggedCount: 1, switchTry: 4, switchSuccess: 3, survivedMs: 60_000 },
-                { userId: null, playerId: 1, nickname: 'Guest_7KPW2M', colorIndex: 1, isGuest: true, tagCount: 5, taggedCount: 0, switchTry: 9, switchSuccess: 8, survivedMs: 60_000 },
+                { userId: user.id, playerId: 1, nickname: `A2_${suffix}`.slice(0, 20), colorIndex: 0, isGuest: false, tagCount: 2, taggedCount: 1, switchTry: 4, switchSuccess: 3, survivedMs: 60_000 },
+                { userId: null, playerId: 2, nickname: 'Guest_7KPW2M', colorIndex: 1, isGuest: true, tagCount: 5, taggedCount: 0, switchTry: 9, switchSuccess: 8, survivedMs: 60_000 },
             ],
         };
 

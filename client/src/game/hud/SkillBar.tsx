@@ -26,7 +26,7 @@ const SkillSlot: React.FC<{
     passive?: boolean;
     blockedReason?: string | null;
 }> = ({ theme, size, skill, onClick, passive, blockedReason }) => {
-    const ready = skill.cooldown <= 0 && !blockedReason;
+    const ready = skill.cooldown <= 0 && !skill.unavailable && !blockedReason;
     const ratio = skill.cooldownTotal > 0 ? Math.max(0, Math.min(1, skill.cooldown / skill.cooldownTotal)) : 0;
 
     return (
@@ -76,7 +76,7 @@ const SkillSlot: React.FC<{
                 color: blockedReason ? Color.red[2] : (ready ? bodyText(theme) : mutedText(theme)),
                 padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap',
                 border: `1.5px solid ${ready ? (theme === 1 ? '#5A5E60' : Color.gray[1]) : 'transparent'}`,
-            }}>{blockedReason ?? skill.key}</span>
+            }}>{blockedReason ?? (skill.unavailable ? '—' : skill.key)}</span>
         </div>
     );
 };

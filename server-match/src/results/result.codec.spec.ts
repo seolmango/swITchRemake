@@ -18,15 +18,15 @@ function validResult(): MatchResultMessage {
         rulesVersion: 'rules-a',
         mapBundleHash: 'bundle-a',
         visibilityCoreVersion: 1,
-        winnerPlayerIds: [0, 1],
+        winnerPlayerIds: [1, 2],
         replay: null,
         players: [
             {
-                userId: 10, playerId: 0, nickname: 'Alice', colorIndex: 0, isGuest: false,
+                userId: 10, playerId: 1, nickname: 'Alice', colorIndex: 0, isGuest: false,
                 tagCount: 2, taggedCount: 1, switchTry: 3, switchSuccess: 2, survivedMs: 60_000,
             },
             {
-                userId: null, playerId: 1, nickname: 'Guest_7KPW2M', colorIndex: 1, isGuest: true,
+                userId: null, playerId: 2, nickname: 'Guest_7KPW2M', colorIndex: 1, isGuest: true,
                 tagCount: 1, taggedCount: 2, switchTry: 1, switchSuccess: 1, survivedMs: 60_000,
             },
         ],
@@ -44,12 +44,24 @@ test('rejects malformed identity, duplicate slots, and impossible counters', () 
     assert.equal(isMatchResult(guestWithAccount), false);
 
     const duplicateSlot = validResult();
-    duplicateSlot.players[1].playerId = 0;
+    duplicateSlot.players[1].playerId = 1;
     assert.equal(isMatchResult(duplicateSlot), false);
 
     const impossibleSwitches = validResult();
     impossibleSwitches.players[0].switchSuccess = 4;
     assert.equal(isMatchResult(impossibleSwitches), false);
+});
+
+test('rejects playerId 0 and accepts playerId 8', () => {
+    const zero = validResult();
+    zero.players[0].playerId = 0;
+    zero.winnerPlayerIds = [0, 2];
+    assert.equal(isMatchResult(zero), false);
+
+    const eight = validResult();
+    eight.players[1].playerId = 8;
+    eight.winnerPlayerIds = [1, 8];
+    assert.equal(isMatchResult(eight), true);
 });
 
 test('rejects results above documented sanity limits', () => {

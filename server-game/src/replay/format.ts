@@ -49,7 +49,7 @@ export interface RecordedFrame {
     bytes: Uint8Array;
 }
 
-/** masks는 항상 8바이트다. index가 곧 playerId(0..7)다. */
+/** masks is always 8 bytes; its zero-based index is playerId - 1. */
 export interface RecordedVisibility {
     tick: number;
     masks: Uint8Array;

@@ -1,4 +1,4 @@
-import { JSON_MESSAGE_VERSION, RoomState, encodeInput, type ClientMessage, type InputState, type ServerMessage } from 'shared';
+import { JSON_MESSAGE_VERSION, RoomState, encodeInput, type ClientMessage, type InputState, type ServerMessage, type Snapshot } from 'shared';
 import type { RoomSeatGrant } from '../api/rooms.ts';
 
 type AuthOkMessage = Extract<ServerMessage, { type: 'auth.ok' }>;
@@ -7,6 +7,7 @@ type GameStartingMessage = Extract<ServerMessage, { type: 'game.starting' }>;
 type GameStartedMessage = Extract<ServerMessage, { type: 'game.started' }>;
 type GameEndedMessage = Extract<ServerMessage, { type: 'game.ended' }>;
 type ErrorMessage = Extract<ServerMessage, { type: 'error' }>;
+type SkillRejectedMessage = Extract<ServerMessage, { type: 'skill.rejected' }>;
 type ClientMessageBody = ClientMessage extends infer Message
     ? Message extends ClientMessage ? Omit<Message, 'v' | 'requestId'> : never
     : never;
@@ -31,8 +32,15 @@ export interface GameSessionState {
     lobbyReceivedAt: number;
     starting: GameStartingMessage['payload'] | null;
     started: GameStartedMessage['payload'] | null;
+    /** Latest tagger id from the already-decoded snapshot; switches can change it mid-match. */
+    taggerId: number | null;
     ended: GameEndedMessage['payload'] | null;
     errorCode: ErrorMessage['payload']['code'] | null;
+    errorEventId: number;
+    /** Server-authoritative cooldown display values, quantized to 0.1 seconds for the HUD. */
+    cooldowns: ReadonlyArray<{ slot: number; remainingMs: number }> | null;
+    /** Private skill failures, surfaced by GamePage through the HUD alert feed. */
+    skillRejections: ReadonlyArray<{ id: number; reason: SkillRejectedMessage['payload']['reason'] }>;
 }
 
 const INITIAL_STATE: GameSessionState = {
@@ -50,8 +58,12 @@ const INITIAL_STATE: GameSessionState = {
     lobbyReceivedAt: 0,
     starting: null,
     started: null,
+    taggerId: null,
     ended: null,
     errorCode: null,
+    errorEventId: 0,
+    cooldowns: null,
+    skillRejections: [],
 };
 
 const ACTIVE_ROOM_KEY = 'switch-active-room';
@@ -103,6 +115,27 @@ class GameSession {
     };
 
     getLatestSnapshot = (): ArrayBuffer | null => this.latestSnapshot;
+
+    /**
+     * Receives the Snapshot already decoded by SwitchEngine.  Network frames arrive at 30 Hz, but the
+     * HUD only needs tenths of a second, so identical display values never notify React subscribers.
+     */
+    updateHudSnapshot(snapshot: Snapshot): void {
+        const nextCooldowns = snapshot.cooldowns === undefined
+            ? null
+            : snapshot.cooldowns.map(({ slot, remainingMs }) => ({ slot, remainingMs: Math.max(0, Math.round(remainingMs / 100) * 100) }));
+        const previous = this.state.cooldowns;
+        const cooldownsChanged = !(
+            (previous === null && nextCooldowns === null)
+            || (previous !== null && nextCooldowns !== null
+            && previous.length === nextCooldowns.length
+            && previous.every((cooldown, index) => cooldown.slot === nextCooldowns[index]?.slot && cooldown.remainingMs === nextCooldowns[index]?.remainingMs))
+        );
+        const snapshotTaggerId = snapshot.players?.find((player) => player.isTagger)?.id;
+        const taggerId = snapshotTaggerId ?? this.state.taggerId;
+        if (!cooldownsChanged && taggerId === this.state.taggerId) return;
+        this.setState({ cooldowns: nextCooldowns, taggerId });
+    }
 
     async connect(grant: RoomSeatGrant, metadata: GameSessionMetadata = {}): Promise<void> {
         this.closeSocket();
@@ -219,13 +252,18 @@ class GameSession {
                 this.setState({ roomState: RoomState.Countdown, starting: message.payload, ended: null });
                 break;
             case 'game.started':
-                this.setState({ roomState: RoomState.Playing, started: message.payload });
+                this.setState({ roomState: RoomState.Playing, started: message.payload, taggerId: message.payload.taggerId });
                 break;
             case 'game.ended':
-                this.setState({ roomState: RoomState.PostGame, starting: null, started: null, ended: message.payload });
+                this.setState({ roomState: RoomState.PostGame, starting: null, started: null, taggerId: null, ended: message.payload });
+                break;
+            case 'skill.rejected':
+                this.setState({
+                    skillRejections: [...this.state.skillRejections, { id: message.eventId, reason: message.payload.reason }].slice(-20),
+                });
                 break;
             case 'error':
-                this.setState({ errorCode: message.payload.code });
+                this.setState({ errorCode: message.payload.code, errorEventId: message.eventId });
                 break;
             case 'spectate.changed':
                 if (message.payload.playerId === this.state.selfId) {

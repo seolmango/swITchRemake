@@ -9,10 +9,10 @@ const result: MatchResultMessage = {
     matchId: '11111111-1111-4111-8111-111111111111', roomId: 'room', serverId: 'server', mapId: 'map',
     startedAt: 1, endedAt: 2, durationTicks: 1, buildId: 'build', protocolVersion: 1,
     rulesVersion: 'rules', mapBundleHash: 'hash', visibilityCoreVersion: 1,
-    winnerPlayerIds: [0, 1], replay: null,
+    winnerPlayerIds: [1, 2], replay: null,
     players: [
-        { userId: 1, playerId: 0, nickname: 'A', colorIndex: 0, isGuest: false, tagCount: 0, taggedCount: 0, switchTry: 0, switchSuccess: 0, survivedMs: 1 },
-        { userId: null, playerId: 1, nickname: 'Guest_7KPW2M', colorIndex: 1, isGuest: true, tagCount: 0, taggedCount: 0, switchTry: 0, switchSuccess: 0, survivedMs: 1 },
+        { userId: 1, playerId: 1, nickname: 'A', colorIndex: 0, isGuest: false, tagCount: 0, taggedCount: 0, switchTry: 0, switchSuccess: 0, survivedMs: 1 },
+        { userId: null, playerId: 2, nickname: 'Guest_7KPW2M', colorIndex: 1, isGuest: true, tagCount: 0, taggedCount: 0, switchTry: 0, switchSuccess: 0, survivedMs: 1 },
     ],
 };
 

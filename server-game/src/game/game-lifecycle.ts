@@ -170,7 +170,8 @@ export class GameLifecycle implements RoomLifecyclePort {
                 facingY: 1,
                 radius: GAMEPLAY.PLAYER_RADIUS_PX,
                 sightRange: GAMEPLAY.SIGHT_RANGE_PX,
-                colorIndex: playerId,
+                // playerId is 1..8; palette colorIndex is intentionally 0..7.
+                colorIndex: playerId - 1,
                 alive: true,
                 isTagger: false,
                 connected: true,

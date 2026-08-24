@@ -26,7 +26,7 @@ function makeChunk(startTick: number, frameCount: number, withEvent: boolean): C
     }));
     const visibilities = frames.map((f) => ({ tick: f.tick, masks: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]) }));
     const events = withEvent
-        ? [{ tick: startTick + 1, event: { kind: 'tagged' as const, playerId: 0, by: 1 } }]
+        ? [{ tick: startTick + 1, event: { kind: 'tagged' as const, playerId: 1, by: 2 } }]
         : [];
     return { frames, visibilities, events };
 }
@@ -45,8 +45,8 @@ const MANIFEST_BASE: Omit<ReplayManifest, 'chunkCount' | 'rootHash'> = {
     mapBundleHash: 'deadbeef',
     visibilityCoreVersion: 1,
     participants: [
-        { playerId: 0, nickname: 'P0', colorIndex: 0, guest: false },
-        { playerId: 1, nickname: 'P1', colorIndex: 1, guest: true },
+        { playerId: 1, nickname: 'P1', colorIndex: 0, guest: false },
+        { playerId: 2, nickname: 'P2', colorIndex: 1, guest: true },
     ],
 };
 
@@ -76,7 +76,7 @@ test('chunk를 디코드하면 프레임·시야·이벤트가 순서대로 복�
 
     assert.equal(decoded.visibilities.length, 3);
     assert.equal(decoded.events.length, 1);
-    assert.deepEqual(decoded.events[0]!.event, { kind: 'tagged', playerId: 0, by: 1 });
+    assert.deepEqual(decoded.events[0]!.event, { kind: 'tagged', playerId: 1, by: 2 });
 });
 
 test('chunk 해시가 어긋나면 손상으로 거부한다', () => {

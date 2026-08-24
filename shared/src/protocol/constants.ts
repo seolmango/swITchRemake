@@ -72,5 +72,12 @@ export type EffectType = (typeof EffectType)[keyof typeof EffectType];
  */
 export const EFFECT_BITS: readonly EffectType[] = [EffectType.Dash, EffectType.Frenzy, EffectType.Exhaust];
 
-/** 한 방의 최대 인원. 플레이어 id가 u8이고 시야 bitmask가 1바이트인 근거다. */
+/**
+ * 한 방의 최대 인원. 플레이어 id가 u8이고 시야 bitmask가 1바이트인 근거다.
+ *
+ * **`playerId`는 1부터 시작한다. 유효한 값은 `1..MAX_PLAYERS_PER_ROOM`이고 0은 없다.**
+ * 이 한 줄이 어디에도 없어서 네 곳이 0-based로 가정했고, 그중 셋은 실제로 틀린 동작을 했다 —
+ * 스위치 대상 지목이 항상 빗나갔고, 8번 플레이어가 팔레트 밖 색을 받았고, 경기 결과 검증이
+ * 8번 플레이어를 거부했다. 배열 인덱스로 쓸 때는 `playerId - 1`로 바꾼다(`packVisibleMask` 참고).
+ */
 export const MAX_PLAYERS_PER_ROOM = 8;

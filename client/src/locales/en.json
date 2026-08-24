@@ -99,7 +99,19 @@
       }
     }
   },
-  "game": { "serverPending": "The game renderer is ready for server snapshots, but the room and game server connection is still in progress." },
+  "game": {
+    "serverPending": "The game renderer is ready for server snapshots, but the room and game server connection is still in progress.",
+    "noKeyBinding": "Unassigned",
+    "skillRejected": {
+      "notAlive": "You cannot use skills after elimination.",
+      "noSkill": "That skill slot is unavailable.",
+      "onCooldown": "That skill is still on cooldown.",
+      "role": "The tagger cannot use swITch.",
+      "outOfRange": "The target is out of range.",
+      "noTarget": "There is no valid target.",
+      "generic": "That skill could not be used."
+    }
+  },
   "guide": {
     "title": "How to Play", "intro": "Grow your territory and switch places with another player at the right moment.",
     "moveTitle": "Move", "moveBody": "Move with WASD or the arrow keys. Claim territory as you cross the floor.",

@@ -4,7 +4,7 @@ import type { SceneAccessor } from './internal/SceneAccessor.ts';
 import { MapController } from './MapController.ts';
 import { PlayerHandle } from './PlayerHandle.ts';
 import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EngineMode, type DisplayOptions, type EngineSettings, type PlayerInit, type Theme } from './types.ts';
-import { decodeSnapshot } from 'shared';
+import { decodeSnapshot, type Snapshot } from 'shared';
 
 export interface SwitchEngineOptions {
     theme?: Theme;
@@ -172,9 +172,10 @@ export class SwitchEngine {
      * Feeds one server frame straight in — the engine decodes the binary itself so callers never have to
      * translate the wire format into engine calls. This is the only state input a real match needs.
      */
-    applySnapshot(buffer: ArrayBuffer): void {
+    applySnapshot(buffer: ArrayBuffer): Snapshot {
         const snapshot = decodeSnapshot(buffer);
         this._accessor.withScene((s) => s.applySnapshot(snapshot));
+        return snapshot;
     }
 
     /** Local view preferences (in-body number, nickname above head). Never leaves the client. */

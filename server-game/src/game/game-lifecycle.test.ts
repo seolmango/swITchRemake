@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { SkillId, TilePhysics } from 'shared';
+import { MAX_PLAYERS_PER_ROOM, SkillId, TilePhysics } from 'shared';
 import { EMOJI_DISPLAY_MS } from '../config/gameplay';
 import type { ServerMapBundle } from '../maps/map-loader';
 import type { Room, RoomStartSnapshot } from '../rooms/room';
@@ -36,7 +36,7 @@ function fakeRoom(): Room {
             playerId,
             userId: playerId,
             nickname: `P${playerId}`,
-            colorIndex: playerId,
+            colorIndex: playerId - 1,
             guest: false,
         })),
         resolvedInputs: () => [],
@@ -78,6 +78,27 @@ test('selected loadouts enter PlayerState and a missing recovered value falls ba
     assert.equal(players.find((player) => player.playerId === 1)?.loadout, SkillId.Flash);
     assert.equal(players.find((player) => player.playerId === 2)?.loadout, SkillId.Dash);
     assert.equal(players.find((player) => player.playerId === 3)?.loadout, SkillId.Exhaust);
+});
+
+test('in-game colorIndex maps every one-based playerId into the zero-based palette', () => {
+    const lifecycle = new GameLifecycle({
+        bundle,
+        serverId: 'game',
+        buildId: 'test',
+        scheduler: new Scheduler(),
+        lookupRoom: () => fakeRoom(),
+        violationSink: () => undefined,
+        makeSeed: () => 1,
+    });
+    lifecycle.startGame({
+        roomId: 'room',
+        matchId: 'match-colors',
+        mapId: 'map',
+        players: Array.from({ length: MAX_PLAYERS_PER_ROOM }, (_, index) => ({ playerId: index + 1 })),
+        rules: {},
+    });
+
+    assert.deepEqual(lifecycle.session('room')!.world.players.map((player) => player.colorIndex), [0, 1, 2, 3, 4, 5, 6, 7]);
 });
 
 test('emoji request is applied at the next tick boundary with a gameplay-configured expiry', () => {

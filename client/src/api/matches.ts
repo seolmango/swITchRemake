@@ -1,17 +1,18 @@
 import { apiRequest } from './http.ts';
+import type { PlayerRole, SkillId } from 'shared';
 
+/** Local presentation-only room model used by the demo lobby and lobby cards. */
 export type LobbyMap = string;
 export type PlayerControl = 'keyboard' | 'touch' | 'gamepad';
-export type PlayerSkill = 'dash' | 'flash' | 'exhaust';
-export type LobbyRole = 'player' | 'waiting' | 'spectator';
+export type PlayerSkill = Exclude<SkillId, 'switch'>;
 
-export interface LobbyPlayerStats {
+export interface LobbyViewPlayerStats {
     games: number;
     wins: number;
     switchSuccessRate: number;
 }
 
-export interface LobbyPlayer {
+export interface LobbyViewPlayer {
     playerId: string;
     slot: number;
     colorIndex: number;
@@ -19,10 +20,10 @@ export interface LobbyPlayer {
     isHost: boolean;
     isSelf: boolean;
     guest: boolean;
-    role: LobbyRole;
+    role: PlayerRole;
     control: PlayerControl;
     skill: PlayerSkill;
-    stats?: LobbyPlayerStats;
+    stats?: LobbyViewPlayerStats;
 }
 
 /**
@@ -38,37 +39,7 @@ export interface LobbySnapshot {
     minPlayers: number;
     capacity: number;
     startLockMs: number;
-    players: LobbyPlayer[];
-}
-
-/** Commands sent through the authenticated game-server WebSocket. */
-export type LobbyClientCommand =
-    | { v: 1; type: 'lobby.setMap'; requestId: number; payload: { mapId: LobbyMap } }
-    | { v: 1; type: 'lobby.kick'; requestId: number; payload: { playerId: number } }
-    | { v: 1; type: 'lobby.passHost'; requestId: number; payload: { playerId: number } }
-    | { v: 1; type: 'lobby.setSlot'; requestId: number; payload: { slot: number } }
-    | { v: 1; type: 'lobby.setLocked'; requestId: number; payload: { locked: boolean } }
-    | { v: 1; type: 'lobby.setLoadout'; requestId: number; payload: { skills: PlayerSkill[]; control: PlayerControl } }
-    | { v: 1; type: 'lobby.start'; requestId: number; payload: Record<string, never> }
-    | { v: 1; type: 'lobby.leave'; requestId: number; payload: Record<string, never> };
-
-/** Direct payload of the game server's lobby.state event. */
-export interface LobbyStateEventPayload {
-    hostId: number;
-    mapId: LobbyMap;
-    capacity: number;
-    startLockMs: number;
-    players: Array<{
-        playerId: number;
-        slot: number;
-        nickname: string;
-        colorIndex: number;
-        guest: boolean;
-        role: LobbyRole;
-        control: PlayerControl;
-        skills: PlayerSkill[];
-        stats: LobbyPlayerStats | null;
-    }>;
+    players: LobbyViewPlayer[];
 }
 
 /** Direct payload of game.ended; returnsAt controls the POST_GAME deadline. */

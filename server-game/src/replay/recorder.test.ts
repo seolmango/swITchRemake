@@ -29,7 +29,7 @@ const META = {
     rulesVersion: 'rules-1',
     mapBundleHash: 'deadbeef',
     visibilityCoreVersion: 1,
-    participants: [{ playerId: 0, nickname: 'P0', colorIndex: 0, guest: false }],
+    participants: [{ playerId: 1, nickname: 'P1', colorIndex: 0, guest: false }],
 };
 
 function frameBytes(tick: number): Uint8Array {
@@ -55,7 +55,7 @@ test('경기 하나를 기록하면 저장소에 한 번 쓰고 handle을 돌려
         recorder.writeFrame(tick, frameBytes(tick), full);
         recorder.writeVisibility(tick, new Uint8Array(8));
     }
-    recorder.writeEvent(4, { kind: 'tagged', playerId: 0, by: 1 });
+    recorder.writeEvent(4, { kind: 'tagged', playerId: 1, by: 2 });
 
     const handle = await recorder.finish({ endTick: (FRAMES_PER_CHUNK + 5) * 2 });
     assert.ok(handle, 'handle이 만들어져야 한다');

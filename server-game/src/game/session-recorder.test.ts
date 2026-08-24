@@ -39,10 +39,10 @@ function fakeRecorder(): {
 
 test('스냅샷 tick마다 검열 없는 프레임과 시야 bitmask를 기록한다', () => {
     const fake = fakeRecorder();
-    const roster = [{ playerId: 0, nickname: 'P0' }, { playerId: 1, nickname: 'P1' }];
+    const roster = [{ playerId: 1, nickname: 'P1' }, { playerId: 2, nickname: 'P2' }];
     const session = new SessionReplayRecorder({ recorder: fake.recorder, roster });
 
-    const world = makeWorld(mapFromRows(MAP), [makePlayer(0, 1, 1, { isTagger: true }), makePlayer(1, 2, 1)]);
+    const world = makeWorld(mapFromRows(MAP), [makePlayer(1, 1, 1, { isTagger: true }), makePlayer(2, 2, 1)]);
     const frame1 = stepWorld(world, []);
     session.recordSnapshotTick(frame1);
     const frame2 = stepWorld(world, []);
@@ -62,13 +62,14 @@ test('스냅샷 tick마다 검열 없는 프레임과 시야 bitmask를 기록�
 
     assert.equal(fake.visibilities.length, 2);
     assert.equal(fake.visibilities[0]!.masks.length, 8);
+    assert.deepEqual([...fake.visibilities[0]!.masks], [0b00000011, 0b00000011, 0, 0, 0, 0, 0, 0]);
 });
 
 test(`${FRAMES_PER_CHUNK}번째 프레임마다 keyframe으로 돌아간다`, () => {
     const fake = fakeRecorder();
-    const roster = [{ playerId: 0, nickname: 'P0' }];
+    const roster = [{ playerId: 1, nickname: 'P1' }];
     const session = new SessionReplayRecorder({ recorder: fake.recorder, roster });
-    const world = makeWorld(mapFromRows(MAP), [makePlayer(0, 1, 1)]);
+    const world = makeWorld(mapFromRows(MAP), [makePlayer(1, 1, 1)]);
 
     for (let i = 0; i < FRAMES_PER_CHUNK + 1; i++) {
         const frame = stepWorld(world, []);
@@ -82,8 +83,8 @@ test(`${FRAMES_PER_CHUNK}번째 프레임마다 keyframe으로 돌아간다`, ()
 
 test('경기 종료 tick은 스냅샷 주기와 무관하게 항상 keyframe이다', () => {
     const fake = fakeRecorder();
-    const session = new SessionReplayRecorder({ recorder: fake.recorder, roster: [{ playerId: 0, nickname: 'P0' }] });
-    const world = makeWorld(mapFromRows(MAP), [makePlayer(0, 1, 1)]);
+    const session = new SessionReplayRecorder({ recorder: fake.recorder, roster: [{ playerId: 1, nickname: 'P1' }] });
+    const world = makeWorld(mapFromRows(MAP), [makePlayer(1, 1, 1)]);
     const frame = stepWorld(world, []);
 
     session.recordSnapshotTick(frame); // 이미 keyframe(0번째)

@@ -7,6 +7,7 @@ import {
     useSettingsStore,
 } from '../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../theme/color.ts';
+import { formatKeyBinding } from '../utils/keyBinding.ts';
 
 interface Choice<T extends string> {
     value: T;
@@ -83,19 +84,6 @@ const normalizeBinding = (event: KeyboardEvent): string | null => {
     return [...modifiers, event.code].join('+');
 };
 
-const formatBinding = (binding: string | null, emptyLabel: string) => {
-    if (!binding) return emptyLabel;
-    return binding
-        .replace(/Key([A-Z])/g, '$1')
-        .replace(/Digit([0-9])/g, '$1')
-        .replace(/Numpad([0-9])/g, 'Num $1')
-        .replace('ArrowUp', '↑')
-        .replace('ArrowDown', '↓')
-        .replace('ArrowLeft', '←')
-        .replace('ArrowRight', '→')
-        .replace('Space', 'Space');
-};
-
 const MOVEMENT_ACTIONS: KeyAction[] = ['moveUp', 'moveDown', 'moveLeft', 'moveRight', 'movementSkill'];
 const SWITCH_ACTIONS: KeyAction[] = ['switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8'];
 const EMOJI_ACTIONS: KeyAction[] = ['emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8'];
@@ -140,7 +128,7 @@ export const SettingsPage: React.FC = () => {
                 slots.some((binding, slot) => binding === nextBinding && (action !== editing.action || slot !== editing.slot)),
             );
             if (conflict) {
-                setBindingError(t('settings.keymap.conflict', { key: formatBinding(nextBinding, '') }));
+                setBindingError(t('settings.keymap.conflict', { key: formatKeyBinding(nextBinding, '') }));
                 return;
             }
             settings.setKeyBinding(editing.action, editing.slot, nextBinding);
@@ -297,11 +285,11 @@ export const SettingsPage: React.FC = () => {
                                         : t('settings.keymap.bindingLabel', {
                                             action: t(`settings.keymap.actions.${action}`),
                                             slot: slot === 0 ? t('settings.keymap.primary') : t('settings.keymap.secondary'),
-                                            key: formatBinding(settings.keyBindings[action][slot], t('settings.keymap.unassigned')),
+                                            key: formatKeyBinding(settings.keyBindings[action][slot], t('settings.keymap.unassigned')),
                                         })}
                                     onClick={() => { setEditing({ action, slot }); setBindingError(''); }}
                                 >
-                                    {isEditing ? t('settings.keymap.listening') : formatBinding(settings.keyBindings[action][slot], t('settings.keymap.add'))}
+                                    {isEditing ? t('settings.keymap.listening') : formatKeyBinding(settings.keyBindings[action][slot], t('settings.keymap.add'))}
                                 </button>
                             );
                         })}

@@ -14,7 +14,7 @@
     "shared:test": "npm test -w shared",
     "game:build": "npm run build -w server-game",
     "game:dev": "npm run dev -w server-game",
-    "test": "node scripts/run-workspaces.cjs test shared server-game server-match",
+    "test": "node scripts/run-workspaces.cjs test shared server-game server-match client",
     "typecheck": "node scripts/run-workspaces.cjs typecheck shared server-game server-match client",
     "build": "node scripts/run-workspaces.cjs build shared server-game server-match client"
   },

@@ -1,4 +1,5 @@
 import {
+    MAX_PLAYERS_PER_ROOM,
     MATCH_RESULT_VERSION,
     RESULT_SANITY,
     type MatchParticipantResult,
@@ -79,8 +80,8 @@ function isParticipant(value: unknown): value is MatchParticipantResult {
         ? value.userId === null
         : Number.isInteger(value.userId) && (value.userId as number) > 0;
     return userIdValid
-        && nonNegativeInteger(value.playerId)
-        && value.playerId < RESULT_SANITY.MAX_PLAYERS
+        && positiveInteger(value.playerId)
+        && value.playerId <= MAX_PLAYERS_PER_ROOM
         && typeof value.nickname === 'string'
         && value.nickname.length > 0
         && value.nickname.length <= 20

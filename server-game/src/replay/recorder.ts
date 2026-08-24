@@ -34,7 +34,7 @@ export interface ReplayRecorder {
     begin(meta: ReplayMeta): void;
     /** 스냅샷 tick마다. frame은 이미 인코딩된 권위 스냅샷 바이트다. */
     writeFrame(tick: number, frame: Uint8Array, full: boolean): void;
-    /** 시야 판정 기록. 뷰어(playerId 0..7)별 1바이트, 항상 8바이트. */
+    /** Visibility record: one byte per viewer slot (playerId - 1), always 8 bytes. */
     writeVisibility(tick: number, masks: Uint8Array): void;
     /** JSON 이벤트를 tick과 함께. */
     writeEvent(tick: number, event: ReplayEvent): void;

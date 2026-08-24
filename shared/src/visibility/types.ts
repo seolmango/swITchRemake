@@ -56,19 +56,25 @@ export type ComputeVisibility = (world: VisibilityWorld, viewerId: number) => Vi
 /**
  * 플레이어 최대 8명이라 뷰어 하나의 판정 결과가 1바이트에 들어간다.
  * 리플레이는 스냅샷 tick마다 이 bitmask를 남겨, 재생 시 코어 버전이 달라졌는지 검출한다.
+ *
+ * **여기서 다루는 값은 `playerId`가 아니라 0-based 슬롯 번호다.** `playerId`는 1부터 시작하므로
+ * (`MAX_PLAYERS_PER_ROOM` 주석) 호출하는 쪽이 `playerId - 1`로 바꿔서 넘겨야 한다.
+ * 예전에 `playerId`를 그대로 넣어 8번 플레이어의 비트가 1바이트 밖으로 나가 조용히 사라진 적이 있다.
+ * 인자 이름을 `slots`로 둔 이유가 그것이다 — 이름이 `playerIds`였을 때 실제로 그 버그가 났다.
  */
-export function packVisibleMask(visiblePlayerIds: readonly number[]): number {
+export function packVisibleMask(slots: readonly number[]): number {
     let mask = 0;
-    for (const id of visiblePlayerIds) {
-        if (id >= 0 && id < 8) mask |= 1 << id;
+    for (const slot of slots) {
+        if (slot >= 0 && slot < 8) mask |= 1 << slot;
     }
     return mask;
 }
 
+/** 0-based 슬롯 번호를 돌려준다. `playerId`가 필요하면 호출하는 쪽에서 1을 더한다. */
 export function unpackVisibleMask(mask: number): number[] {
     const out: number[] = [];
-    for (let id = 0; id < 8; id++) {
-        if ((mask & (1 << id)) !== 0) out.push(id);
+    for (let slot = 0; slot < 8; slot++) {
+        if ((mask & (1 << slot)) !== 0) out.push(slot);
     }
     return out;
 }

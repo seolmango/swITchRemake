@@ -131,6 +131,7 @@ export class LobbyRoster {
             stats: hold.reservation.lobbyStats,
             loadout: SkillId.Dash,
             joinedOrder: this.#joinOrder++,
+            // playerId is 1..8; palette colorIndex is intentionally 0..7.
             colorIndex: hold.playerId - 1,
             role,
             spectatorEligible: role === PlayerRole.Waiting,

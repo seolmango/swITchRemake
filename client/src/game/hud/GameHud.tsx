@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { EngineMode, type Theme } from '../types.ts';
-import { EMOJI_COUNT } from '../emoji.ts';
 import type { HudState } from './hudTypes.ts';
 import { PlayerList } from './PlayerList.tsx';
 import { SkillBar } from './SkillBar.tsx';
@@ -84,15 +83,7 @@ export const GameHud: React.FC<Props> = ({
      */
     useEffect(() => {
         const onDown = (e: KeyboardEvent) => {
-            if (e.key === 'Shift') { setShiftHeld(true); return; }
-            if (!canAct || !e.shiftKey) return;
-            const match = /^Digit([1-8])$/.exec(e.code);
-            if (!match) return;
-            const id = Number(match[1]);
-            if (id >= 1 && id <= EMOJI_COUNT) {
-                e.preventDefault();
-                onEmoji(id);
-            }
+            if (e.key === 'Shift') setShiftHeld(true);
         };
         const onUp = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftHeld(false); };
         const onBlur = () => setShiftHeld(false);
@@ -105,7 +96,7 @@ export const GameHud: React.FC<Props> = ({
             window.removeEventListener('keyup', onUp);
             window.removeEventListener('blur', onBlur);
         };
-    }, [canAct, onEmoji]);
+    }, []);
 
     const deadInMatch = mode !== EngineMode.Spectate && self !== null && !self.alive;
 

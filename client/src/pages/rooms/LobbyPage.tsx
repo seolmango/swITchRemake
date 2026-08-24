@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { RoomState, SkillId, isLoadoutSkill } from 'shared';
 import { PageLayout } from '../../components/layout/PageLayout.tsx';
 import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
@@ -52,6 +53,7 @@ export const LobbyPage: React.FC = () => {
     const [liveLockElapsedMs, setLiveLockElapsedMs] = useState(0);
     const [hostAction, setHostAction] = useState<HostAction | null>(null);
     const [skillPickerOpen, setSkillPickerOpen] = useState(false);
+    const [pendingLoadout, setPendingLoadout] = useState<{ skill: PlayerSkill; errorEventId: number } | null>(null);
     const liveRoom = useMemo<LobbySnapshot | null>(() => {
         const lobby = session.lobby;
         if (!live || !lobby) return null;
@@ -74,7 +76,10 @@ export const LobbyPage: React.FC = () => {
                 guest: player.guest,
                 role: player.role,
                 control: 'keyboard',
-                skill: 'dash',
+                // `skills` is the shared lobby contract; this view has one movement-skill badge today.
+                skill: player.skills.find(
+                    (candidate): candidate is PlayerSkill => isLoadoutSkill(candidate) && candidate !== SkillId.Switch,
+                ) ?? SkillId.Dash,
             })),
         };
     }, [live, liveLockElapsedMs, roomId, session.isPrivate, session.lobby, session.roomName, session.selfId]);
@@ -109,6 +114,21 @@ export const LobbyPage: React.FC = () => {
         }, 250);
         return () => window.clearInterval(timer);
     }, [live, session.lobby, session.lobbyReceivedAt]);
+
+    useEffect(() => {
+        if (!pendingLoadout || !live) return;
+        const confirmed = session.lobby?.players.find((player) => player.playerId === session.selfId)?.skills.find(
+            (candidate): candidate is PlayerSkill => isLoadoutSkill(candidate) && candidate !== SkillId.Switch,
+        );
+        if (confirmed === pendingLoadout.skill) {
+            setPendingLoadout(null);
+            setMessage(t('lobby.skillChanged', { skill: t(`lobby.skills.${confirmed}`) }));
+        } else if (session.errorEventId > pendingLoadout.errorEventId && session.errorCode) {
+            // Live UI is never changed optimistically; the authoritative lobby.state remains visible.
+            setPendingLoadout(null);
+            setMessage(t('lobby.commandFailed', { code: session.errorCode }));
+        }
+    }, [live, pendingLoadout, session.errorCode, session.errorEventId, session.lobby, session.selfId, t]);
 
     const slots = useMemo(() => Array.from({ length: room.capacity }, (_, index) => ({
         slot: index + 1,
@@ -182,6 +202,21 @@ export const LobbyPage: React.FC = () => {
 
     const changeSkill = (skill: PlayerSkill) => {
         if (!self) return;
+        if (live) {
+            if (self.skill === skill) {
+                setSkillPickerOpen(false);
+                return;
+            }
+            const sent = gameSession.send({ type: 'lobby.setLoadout', payload: { skills: [skill] } });
+            if (!sent) {
+                setMessage(t('lobby.commandFailed', { code: 'DISCONNECTED' }));
+                return;
+            }
+            setPendingLoadout({ skill, errorEventId: session.errorEventId });
+            setMessage('');
+            setSkillPickerOpen(false);
+            return;
+        }
         setDemoRoom((current) => ({
             ...current,
             players: current.players.map((player) => player.isSelf ? { ...player, skill } : player),
@@ -276,7 +311,7 @@ export const LobbyPage: React.FC = () => {
                             player={player}
                             viewerIsHost={isOwner}
                             canSelectEmptySlot={!live && Boolean(self)}
-                            canChangeSkill={!live}
+                            canChangeSkill={!live || session.roomState === RoomState.Waiting}
                             onSelectEmptySlot={() => changeOwnSlot(slot)}
                             onChangeSkill={() => setSkillPickerOpen(true)}
                             onPassHost={() => player && setHostAction({ type: 'passHost', playerId: player.playerId })}

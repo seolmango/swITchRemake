@@ -1,18 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { RoomState, TilePhysics } from 'shared';
+import { RoomState, SkillId, SkillSlot, TilePhysics, isLoadoutSkill } from 'shared';
 import { RoundBox } from '../components/common/RoundBox.tsx';
 import { RoundButton } from '../components/common/RoundButton.tsx';
 import { PageLayout } from '../components/layout/PageLayout.tsx';
 import { EngineMode, SwitchGame, type HudState, type MapView, type SwitchEngine } from '../game';
 import { gameSession } from '../game/GameSession.ts';
 import { useGameSession } from '../game/useGameSession.ts';
-import { useSettingsStore } from '../stores/useSettingsStore.ts';
+import { type KeyAction, useSettingsStore } from '../stores/useSettingsStore.ts';
 import { themeColors } from '../theme/color.ts';
 import { resumeRoom } from '../api/rooms.ts';
 import dashIcon from '../assets/images/skill_dash.webp';
+import flashIcon from '../assets/images/skill_flash.webp';
+import exhaustIcon from '../assets/images/skill_exhaust.webp';
 import switchIcon from '../assets/images/skill_switch.webp';
+import { formatKeyBindings, matchesKeyBinding } from '../utils/keyBinding.ts';
+import { cooldownTotalMs, getSwitchTargets, skillRejectionMessageKey, toCooldownDisplay } from '../utils/skillHud.ts';
+import { switchTargetPlayerIdForMatch } from '../utils/switchTarget.ts';
 
 interface RuntimeMapBundle {
     schemaVersion: number;
@@ -23,6 +28,15 @@ interface RuntimeMapBundle {
 }
 
 const hex = (buffer: ArrayBuffer) => [...new Uint8Array(buffer)].map((value) => value.toString(16).padStart(2, '0')).join('');
+
+const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { iconUrl: string; labelKey: string }> = {
+    [SkillId.Dash]: { iconUrl: dashIcon, labelKey: 'lobby.skills.dash' },
+    [SkillId.Flash]: { iconUrl: flashIcon, labelKey: 'lobby.skills.flash' },
+    [SkillId.Exhaust]: { iconUrl: exhaustIcon, labelKey: 'lobby.skills.exhaust' },
+};
+
+const SWITCH_ACTIONS: readonly KeyAction[] = ['switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8'];
+const EMOJI_ACTIONS: readonly KeyAction[] = ['emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8'];
 
 async function verifiedMapView(mapId: string, expectedHash: string, gameOrigin: string): Promise<MapView> {
     const response = await fetch(`${gameOrigin}/map-bundles/${expectedHash}.json`, { cache: 'force-cache' });
@@ -52,6 +66,7 @@ export const GamePage: React.FC = () => {
     const [searchParams] = useSearchParams();
     const session = useGameSession();
     const theme = useSettingsStore((state) => state.theme);
+    const keyBindings = useSettingsStore((state) => state.keyBindings);
     const engineRef = useRef<SwitchEngine | null>(null);
     const loadedMapId = useRef<string | null>(null);
     const mapReady = useRef(false);
@@ -63,6 +78,11 @@ export const GamePage: React.FC = () => {
     const live = session.status === 'connected' && session.roomId !== null;
     const mapId = session.lobby?.mapId ?? null;
     const mapBundleHash = session.mapBundleHash;
+
+    const applySnapshot = useCallback((engine: SwitchEngine, frame: ArrayBuffer) => {
+        const snapshot = engine.applySnapshot(frame);
+        gameSession.updateHudSnapshot(snapshot);
+    }, []);
 
     useEffect(() => {
         if (live || recoveryAttempted.current || !requestedRoomId || !/^[0-9a-f-]{36}$/i.test(requestedRoomId)) return;
@@ -91,12 +111,12 @@ export const GamePage: React.FC = () => {
             mapReady.current = true;
             const latest = pendingSnapshot.current ?? gameSession.getLatestSnapshot();
             pendingSnapshot.current = null;
-            if (latest) engine.applySnapshot(latest);
+            if (latest) applySnapshot(engine, latest);
         } catch (error) {
             setMapError(error instanceof Error ? error.message : String(error));
             console.error(`[swITch] failed to load map "${id}"`, error);
         }
-    }, []);
+    }, [applySnapshot]);
 
     const handleEngine = useCallback((engine: SwitchEngine | null) => {
         engineRef.current = engine;
@@ -120,7 +140,8 @@ export const GamePage: React.FC = () => {
             return;
         }
         try {
-            engineRef.current?.applySnapshot(frame);
+            const engine = engineRef.current;
+            if (engine) applySnapshot(engine, frame);
         } catch (error) {
             console.error('[swITch] snapshot apply failed', {
                 roomId: gameSession.getSnapshot().roomId,
@@ -129,7 +150,7 @@ export const GamePage: React.FC = () => {
                 error,
             });
         }
-    }), []);
+    }), [applySnapshot]);
 
     useEffect(() => {
         if (!session.ended || !session.roomId) return;
@@ -140,13 +161,34 @@ export const GamePage: React.FC = () => {
         return () => window.clearTimeout(timer);
     }, [navigate, session.ended, session.roomId]);
 
+    const useMovementSkill = useCallback(() => gameSession.send({ type: 'game.useSkill', payload: { slot: SkillSlot.Movement } }), []);
+    const useSwitchTarget = useCallback((targetPlayerId: number) => gameSession.send({
+        type: 'game.useSkill', payload: { slot: SkillSlot.Switch, targetPlayerId },
+    }), []);
+    const useEmoji = useCallback((emojiId: number) => gameSession.send({ type: 'game.emoji', payload: { emojiId } }), []);
+
     useEffect(() => {
-        if (!live || session.roomState !== RoomState.Playing) return;
+        if (!live || session.roomState !== RoomState.Playing || session.role !== 'player') return;
         const pressed = new Set<string>();
         const onKeyDown = (event: KeyboardEvent) => {
+            const alreadyPressed = pressed.has(event.code);
             pressed.add(event.code);
             const bindings = useSettingsStore.getState().keyBindings;
-            if (Object.values(bindings).some((binding) => binding.includes(event.code))) event.preventDefault();
+            const matches = (action: KeyAction) => bindings[action].some((binding) => matchesKeyBinding(event, binding));
+            if (Object.values(bindings).some((binding) => binding.some((entry) => matchesKeyBinding(event, entry)))) event.preventDefault();
+            if (event.repeat || alreadyPressed) return;
+
+            if (matches('movementSkill')) {
+                useMovementSkill();
+                return;
+            }
+            const switchTargetPlayerId = switchTargetPlayerIdForMatch(matches);
+            if (switchTargetPlayerId !== null) {
+                useSwitchTarget(switchTargetPlayerId);
+                return;
+            }
+            const emojiIndex = EMOJI_ACTIONS.findIndex(matches);
+            if (emojiIndex >= 0) useEmoji(emojiIndex);
         };
         const onKeyUp = (event: KeyboardEvent) => pressed.delete(event.code);
         const onBlur = () => pressed.clear();
@@ -169,28 +211,54 @@ export const GamePage: React.FC = () => {
             window.removeEventListener('keyup', onKeyUp);
             window.removeEventListener('blur', onBlur);
         };
-    }, [live, session.roomState]);
+    }, [live, session.role, session.roomState, useEmoji, useMovementSkill, useSwitchTarget]);
 
     const hud = useMemo<HudState>(() => ({
         players: (session.lobby?.players ?? []).map((player) => ({
             id: player.playerId,
             nickname: player.nickname,
             colorIndex: player.colorIndex,
-            isTagger: player.playerId === session.started?.taggerId,
+            isTagger: player.playerId === session.taggerId,
             alive: player.role === 'player',
         })),
         selfId: session.selfId,
-        movementSkill: session.role === 'player' ? {
-            id: 'movement', label: t('lobby.skills.dash'), iconUrl: dashIcon, key: 'Space', cooldown: 0, cooldownTotal: 0,
-        } : null,
-        switchSkill: session.role === 'player' ? {
-            id: 'switch', label: 'swITch', iconUrl: switchIcon, key: '1–8', cooldown: 0, cooldownTotal: 0,
-        } : null,
-        switchTargets: [],
+        movementSkill: (() => {
+            const skill = session.lobby?.players.find((player) => player.playerId === session.selfId)?.skills.find(
+                (candidate): candidate is Exclude<SkillId, 'switch'> => isLoadoutSkill(candidate) && candidate !== SkillId.Switch,
+            );
+            if (session.role !== 'player' || !skill) return null;
+            const presentation = SKILL_PRESENTATION[skill];
+            const cooldown = toCooldownDisplay(session.cooldowns, SkillSlot.Movement, cooldownTotalMs(skill, session.starting?.gameplay));
+            return {
+                id: skill, label: t(presentation.labelKey), iconUrl: presentation.iconUrl,
+                key: formatKeyBindings(keyBindings.movementSkill, t('game.noKeyBinding')),
+                cooldown: cooldown.remainingMs / 1000, cooldownTotal: cooldown.totalMs / 1000,
+                unavailable: !cooldown.available && cooldown.remainingMs === 0,
+            };
+        })(),
+        switchSkill: (() => {
+            if (session.role !== 'player') return null;
+            const cooldown = toCooldownDisplay(session.cooldowns, SkillSlot.Switch, cooldownTotalMs(SkillId.Switch, session.starting?.gameplay));
+            return {
+                id: SkillId.Switch, label: 'swITch', iconUrl: switchIcon,
+                key: formatKeyBindings(SWITCH_ACTIONS.flatMap((action) => keyBindings[action]), t('game.noKeyBinding')),
+                cooldown: cooldown.remainingMs / 1000, cooldownTotal: cooldown.totalMs / 1000,
+                unavailable: !cooldown.available && cooldown.remainingMs === 0,
+            };
+        })(),
+        switchTargets: getSwitchTargets((session.lobby?.players ?? []).map((player) => ({
+            id: player.playerId,
+            alive: player.role === 'player',
+            isTagger: player.playerId === session.taggerId,
+        })), session.selfId),
         elapsedSec: null,
         spectatingId: null,
-        alerts: [],
-    }), [session.lobby, session.role, session.selfId, session.started, t]);
+        alerts: session.skillRejections.map((rejection) => ({
+            id: rejection.id,
+            text: t(skillRejectionMessageKey(rejection.reason)),
+            tone: 'danger' as const,
+        })),
+    }), [keyBindings, session.cooldowns, session.lobby, session.role, session.selfId, session.skillRejections, session.starting, session.taggerId, t]);
 
     if (live) {
         return (
@@ -199,8 +267,9 @@ export const GamePage: React.FC = () => {
                     mode={session.role === 'spectator' ? EngineMode.Spectate : EngineMode.Play}
                     hud={hud}
                     onEngine={handleEngine}
-                    onUseMovementSkill={() => gameSession.send({ type: 'game.useSkill', payload: { slot: 2 } })}
-                    onEmoji={(emojiId) => gameSession.send({ type: 'game.emoji', payload: { emojiId } })}
+                    onUseMovementSkill={useMovementSkill}
+                    onSwitchTarget={useSwitchTarget}
+                    onEmoji={useEmoji}
                 />
                 {mapError && (
                     <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.65)', color: 'white', zIndex: 20 }}>

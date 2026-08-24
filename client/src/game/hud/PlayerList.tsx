@@ -4,6 +4,7 @@ import type { HudPlayer } from './hudTypes.ts';
 import { Color } from '../../theme/color.ts';
 import { HUD_FONT, bodyText, mutedText, panel, userColors } from './hudTheme.ts';
 import type { ColorVisionMode } from '../../theme/cvd.ts';
+import { playerLabel } from './playerLabel.ts';
 
 interface Props {
     theme: Theme;
@@ -84,7 +85,7 @@ export const PlayerList: React.FC<Props> = ({
                                 else if (canWatch) onSpectate(p.id);
                             }}
                             role={clickable ? 'button' : undefined}
-                            title={canTarget ? `스위치 대상 (${p.id + 1})` : canWatch ? '이 플레이어 관전' : undefined}
+                            title={canTarget ? `스위치 대상 (${playerLabel(p.id)})` : canWatch ? '이 플레이어 관전' : undefined}
                             style={{
                                 display: 'flex', alignItems: 'center', gap: 7,
                                 padding: compact ? 3 : '3px 9px 3px 3px', borderRadius: 999,
@@ -105,7 +106,7 @@ export const PlayerList: React.FC<Props> = ({
                                 background: Color.white,
                                 border: `2px solid ${p.isTagger ? Color.red[2] : stroke}`,
                                 color: Color.black, fontSize: 12, fontWeight: 800,
-                            }}>{p.id + 1}</span>
+                            }}>{playerLabel(p.id)}</span>
 
                             {!compact && (
                                 <span style={{
@@ -113,7 +114,7 @@ export const PlayerList: React.FC<Props> = ({
                                     color: Color.black,
                                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                     textDecoration: p.alive ? 'none' : 'line-through',
-                                }}>{p.nickname || `Player ${p.id + 1}`}</span>
+                                }}>{p.nickname || `Player ${playerLabel(p.id)}`}</span>
                             )}
 
                             {compact ? null : p.isTagger ? (
@@ -125,7 +126,7 @@ export const PlayerList: React.FC<Props> = ({
                                 <span style={{
                                     flex: 'none', fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 999,
                                     background: Color.blue[2], color: Color.white,
-                                }}>{p.id + 1}</span>
+                                }}>{playerLabel(p.id)}</span>
                             ) : watching ? (
                                 <span style={{
                                     flex: 'none', fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 999,
