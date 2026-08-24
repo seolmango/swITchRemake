@@ -113,7 +113,11 @@ export const LobbyPage: React.FC = () => {
         let active = true;
         void verifiedMapBundle(session.mapBundleHash, session.gameHttpOrigin)
             .then((bundle) => {
-                if (active) setMapIds(['random', ...Object.keys(bundle.maps)]);
+                // `random`은 방 생성 명령에서만 실제 맵으로 풀린다(command-consumer의 resolveMapId).
+                // 로비의 lobby.setMap은 Room.setMap의 isKnownMap()을 거치므로 `random`을 넣으면
+                // INVALID_PAYLOAD로 거부된다. 방이 이미 있는 시점에 "랜덤"은 방이 가질 수 있는
+                // 상태가 아니다 — 다시 뽑는 것은 별개 기능이다.
+                if (active) setMapIds(Object.keys(bundle.maps));
             })
             .catch(() => {
                 if (active) setMapIds(null);
