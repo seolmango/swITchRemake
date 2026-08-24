@@ -35,8 +35,8 @@ Claude와 codex가 같은 워킹 트리에서 동시에 작업한다. 누가 무
 | C | 시뮬레이션·시야·스킬 | — | 완료 (b6dec64) |
 | 조립 | `game/` 계층과 `main.ts` | — | 완료 (3c86ea4, 96c3646) |
 | X | 실제 경기 한 판 굴려보기 | Sonnet 5 | 완료 (2026-08-24) — 발견한 버그 전부 아래 기록 |
-| **G** | **리플레이 recorder와 로컬 재생 도구** | **Sonnet 5** | **다음 작업** |
-| R | 보안·오류 점검 라운드 | **Opus 5** | 마지막 |
+| G | 리플레이 recorder와 로컬 재생 도구 | Sonnet 5 | 완료 (2026-08-24) — 상세는 아래 |
+| **R** | **보안·오류 점검 라운드** | **Opus 5** | **다음 작업(마지막)** |
 
 ### X. 실제 경기 한 판 굴려보기 — 완료
 
@@ -63,10 +63,28 @@ npm run shared:build && npm run game:build
 인게임 서버는 `GAME_SERVER_ID`와 `GAME_MAP_BUNDLE`(절대경로)이 필요하다. cwd가 `server-game/`이라
 상대경로는 어긋난다. `.env.example`에 나머지 변수가 있다.
 
-### G. 리플레이
+### G. 리플레이 — 완료
 
-X가 끝난 뒤. 권위 프레임 경계(`AuthoritativeFrame`)가 이미 있어 소비자만 붙이면 된다.
-`MatchResultMessage.replay`가 지금 항상 `null`인데 그 자리를 채우는 작업이다.
+`docs/REPLAY.md` 12절의 3~6번(레코더, chunk/파일 형식과 `local` store, 로컬 재생 도구, 결과 메시지 연결)까지 구현했다.
+7번(웹 리플레이 플레이어)부터는 클라이언트 소유라 이 작업 범위 밖이다.
+
+**추가한 것**
+
+- `server-game/src/replay/format.ts` — 컨테이너 파일 형식(magic/manifest/chunk index/gzip chunk). chunk 안은 프레임·시야 bitmask·이벤트 세 트랙이 같은 경계를 공유한다. 파서는 신뢰 못 하는 입력이라 가정하고 chunk 수, 압축 해제 크기, offset을 매번 검증한다.
+- `server-game/src/replay/recorder.ts` — `ReplayRecorder` 계약, `NullReplayRecorder`(꺼짐), `MemoryReplayRecorder`(경기 전체를 메모리에 쌓았다가 `finish()`에서 한 번에 저장 — 5분 경기 원본이 약 1MB라 스트리밍할 이유가 없었다). 경기 단위·프로세스 단위 spool 상한과 저장 실패 시 `abort` 경로가 있다. 기록 실패는 항상 경기 결과 자체는 살리고 `replay: null`만 만든다.
+- `server-game/src/replay/replay-store.ts` — `local` `ReplayStore` (파일시스템, range read 지원, key 검증으로 경로 조작 차단). `s3`는 아직 없다.
+- `server-game/src/replay/cli.ts` — 로컬 재생/점검 도구(`npm run replay:inspect -w server-game -- <file> [--verify|--tick N|--dump-json out.json]`). 그래픽 플레이어가 아니라 텍스트 기반 디버깅 도구다 — 웹 플레이어는 사용자 공개용(7번)이라 범위 밖.
+- `server-game/src/game/session-recorder.ts` — `GameSession`과 레코더 사이. keyframe 주기(2초=60프레임) 판단, 검열 없는 `unfiltered` 인코딩, 뷰어별 시야 bitmask 계산이 여기 있다.
+- `GameSession`에 연결: 스냅샷 tick마다 기록하고, 경기 종료 tick은 스냅샷 주기와 안 맞아도 항상 keyframe으로 강제 기록한다. `#finish()`가 `recorder.finish()`를 기다린 뒤(로컬 파일 쓰기라 게임 루프를 막을 만큼 오래 걸리지 않는다) 결과 메시지의 `replay` 필드를 채운다 — 그래서 `match-result.test.ts`의 `session.step()` 직후 동기 단언이 깨져 `await`로 바꿨다(의도된 변경).
+- `main.ts`가 `REPLAY_ENABLED`/`REPLAY_STORE`/`REPLAY_LOCAL_DIR`로 조립한다. `.env.example`도 기본 `REPLAY_ENABLED=true`로 바꿨다(로컬 개발 기본 켬).
+
+**검증**: server-game 신규 테스트(format/recorder/replay-store/session-recorder) + 기존 스위트 전체 119개 통과, `npm run build`/`typecheck` 통과, 실제 recorder→저장→CLI(`--verify`/`--tick`/`--dump-json`) 왕복을 스크립트로 직접 실행해 확인. 실 서버로 3인 경기를 굴려 리플레이 파일이 실제로 남는지는 아직 안 해봤다 — R 라운드나 다음 실경기 점검에서 확인이 필요하다.
+
+**R 라운드에서 볼 것 (여기서 발견했지만 지금 안 고친 것)**
+
+- 시야 bitmask(`writeVisibility`)를 매 스냅샷 tick마다 로스터 전원에 대해 `computeVisibility`를 새로 돌려서 만든다. 이미 연결된 뷰어의 시야는 `publish()` 쪽에서 한 번 더 계산되고 있어 중복이다(값은 같지만 계산은 두 번). 8인 기준으로는 무시할 만하다고 보고 넘겼지만, tick 예산이 빠듯해지면 여기부터 본다.
+- `MemoryReplayRecorder`의 process-wide spool 상한(`processSpoolBytes`, 256MB)이 모듈 스코프 변수다. 여러 게임 프로세스가 아니라 "한 프로세스 안의 여러 방"을 막는 용도로는 맞지만, 정확한 상한값은 실측 없이 감으로 잡았다.
+- `replays`/`replay_holds`/보존 정책/신고(`docs/REPLAY.md` 7~10절)는 손대지 않았다. `server-match`의 `replays` 테이블 insert(`result.service.ts`)는 이미 있어서 `replay` 필드가 채워지면 자동으로 DB에 남지만, 삭제·보존 주기는 아직 아무것도 안 돈다.
 
 ### R. 점검 라운드
 
@@ -96,10 +114,10 @@ X가 끝난 뒤. 권위 프레임 경계(`AuthoritativeFrame`)가 이미 있어 
   [S · C · 조립]               전부 완료
               │
               ▼
-      [X 실제 경기 한 판] ──> [G 리플레이]
+      [X 실제 경기 한 판] ──> [G 리플레이]   전부 완료
               │
               ▼
-      [R 점검 라운드]
+      [R 점검 라운드]                       다음 작업
 ```
 
 ---

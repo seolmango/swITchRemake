@@ -12,15 +12,18 @@ import {
     VISIBILITY_CORE_VERSION,
     type MatchParticipantResult,
     type MatchResultMessage,
+    type ReplayHandleInfo,
     type ViolationSignal,
 } from 'shared';
 import { RULES_VERSION } from '../config/gameplay';
 import { NETWORK } from '../config/network';
+import { NullReplayRecorder, type ReplayMeta, type ReplayRecorder } from '../replay/recorder';
 import type { Room } from '../rooms/room';
 import type { SchedulerTarget } from '../simulation/scheduler';
 import { isFinished, stepWorld } from '../simulation/step';
 import type { SkillRequest } from '../simulation/skills';
 import type { AuthoritativeFrame, World, WorldEvent } from '../simulation/world';
+import { SessionReplayRecorder } from './session-recorder';
 import { encodeForViewer, type RosterEntry } from './snapshot-view';
 
 export interface GameSessionOptions {
@@ -30,6 +33,8 @@ export interface GameSessionOptions {
     readonly roster: readonly RosterEntry[];
     readonly violationSink: (signal: ViolationSignal) => void;
     readonly onFinished: (session: GameSession, result: MatchResultMessage) => void;
+    /** 기록을 켜지 않은 호출자(테스트 등)는 생략할 수 있다. 기본은 아무것도 안 하는 레코더다. */
+    readonly recorder?: ReplayRecorder;
     /** 경기 결과에 박히는 값들. 나중에 채울 수 없으므로 시작할 때 받아 둔다. */
     readonly meta: {
         readonly serverId: string;
@@ -54,6 +59,7 @@ export class GameSession implements SchedulerTarget {
      * 연결 id가 아니라 playerId로 잡는 이유는 재접속하면 연결 id가 바뀌기 때문이다.
      */
     readonly #needsFullSnapshot = new Set<number>();
+    readonly #replay: SessionReplayRecorder;
     #finished = false;
     readonly #startedAt = Date.now();
 
@@ -64,6 +70,37 @@ export class GameSession implements SchedulerTarget {
         this.matchId = options.matchId;
         this.#roster = options.roster;
         this.id = options.room.id;
+
+        this.#replay = new SessionReplayRecorder({
+            recorder: options.recorder ?? new NullReplayRecorder(),
+            roster: options.roster,
+        });
+        this.#replay.begin(this.#buildReplayMeta());
+    }
+
+    /** 게스트도 포함해 전원의 당시 신원을 고정한다. 나중에 채울 수 없는 값이다. */
+    #buildReplayMeta(): ReplayMeta {
+        const identities = new Map(this.#room.participants().map((p) => [p.playerId, p]));
+        return {
+            matchId: this.matchId,
+            mapId: this.#options.meta.mapId,
+            snapshotHz: NETWORK.SNAPSHOT_HZ,
+            startTick: 0,
+            buildId: this.#options.meta.buildId,
+            protocolVersion: PROTOCOL_VERSION,
+            rulesVersion: RULES_VERSION,
+            mapBundleHash: this.#options.meta.mapBundleHash,
+            visibilityCoreVersion: VISIBILITY_CORE_VERSION,
+            participants: this.world.players.map((player) => {
+                const identity = identities.get(player.playerId);
+                return {
+                    playerId: player.playerId,
+                    nickname: identity?.nickname ?? `P${player.playerId}`,
+                    colorIndex: player.colorIndex,
+                    guest: identity?.guest ?? true,
+                };
+            }),
+        };
     }
 
     /**
@@ -102,10 +139,13 @@ export class GameSession implements SchedulerTarget {
         const frame = stepWorld(this.world, inputs, skills);
 
         this.#applyEvents(frame.events);
+        this.#replay.recordEvents(frame.tick, frame.events);
 
         if (isFinished(this.world)) {
             this.#finished = true;
-            this.#finish();
+            // 스냅샷 주기와 안 맞아도 마지막 tick은 항상 keyframe으로 남긴다.
+            this.#replay.recordFinalFrame(frame);
+            void this.#finish();
             // 마지막 프레임은 보낸다. 탈락 순간이 화면에 안 나오면 갑자기 결과창이 뜬다.
             return frame;
         }
@@ -131,10 +171,15 @@ export class GameSession implements SchedulerTarget {
             }
             target.connection.sendBinary(payload);
         }
+
+        // #finish()가 이미 이번 tick의 마지막 프레임을 기록했다. 여기서 다시 쓰면 중복이다.
+        if (!this.#finished) this.#replay.recordSnapshotTick(frame);
     }
 
     public stop(): void {
+        if (this.#finished) return;
         this.#finished = true;
+        this.#replay.abort('session-stopped');
     }
 
     /**
@@ -161,7 +206,12 @@ export class GameSession implements SchedulerTarget {
         }
     }
 
-    #finish(): void {
+    /**
+     * 비동기인 이유는 리플레이 저장 하나다. 로컬 파일 쓰기 정도라 게임 루프를 막을 만큼 오래
+     * 걸리지 않고, 이 경기는 이미 끝났으므로 다른 방의 tick도 막지 않는다. Redis로 나가는
+     * 결과 전송(outbox)은 여기서 기다리지 않는다 — 그건 네트워크 왕복이라 다른 문제다.
+     */
+    async #finish(): Promise<void> {
         const survivors = this.world.players
             .filter((player) => player.alive)
             .sort((a, b) => a.playerId - b.playerId)
@@ -171,14 +221,15 @@ export class GameSession implements SchedulerTarget {
         // 자리를 억지로 채우지 않고 남은 만큼만 승자로 본다.
         const winners: [number, number] = [survivors[0] ?? 0, survivors[1] ?? survivors[0] ?? 0];
         this.#room.finishGame(winners);
-        this.#options.onFinished(this, this.#buildResult(winners));
+        const replay = await this.#replay.finish({ endTick: this.world.tick });
+        this.#options.onFinished(this, this.#buildResult(winners, replay));
     }
 
     /**
      * 경기 결과 메시지. 버전 스탬프와 당시 닉네임은 **나중에 채울 수 없는 값**이라 여기서 전부 넣는다.
      * 컬럼을 나중에 추가할 수는 있어도 추가 이전 경기의 값은 영원히 빈다.
      */
-    #buildResult(winners: [number, number]): MatchResultMessage {
+    #buildResult(winners: [number, number], replay: ReplayHandleInfo | null): MatchResultMessage {
         const endedAt = Date.now();
         const msPerTick = 1000 / this.world.simulationHz;
         const identities = new Map(this.#room.participants().map((p) => [p.playerId, p]));
@@ -217,8 +268,8 @@ export class GameSession implements SchedulerTarget {
             mapBundleHash: this.#options.meta.mapBundleHash,
             visibilityCoreVersion: VISIBILITY_CORE_VERSION,
             winnerPlayerIds: winners,
-            // 리플레이는 아직 기록하지 않는다. 기록 실패와 미구현이 같은 null인 것은 의도적이다.
-            replay: null,
+            // 기록 실패(abort)와 리플레이 꺼짐이 같은 null인 것은 의도적이다. 원인은 로그에만 남는다.
+            replay,
             players,
         };
     }

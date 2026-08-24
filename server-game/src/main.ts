@@ -23,6 +23,8 @@ import { CommandConsumer } from './redis/command-consumer';
 import { RedisClient } from './redis/redis-client';
 import { GameRegistry } from './redis/registry';
 import { ResultOutbox } from './redis/result-outbox';
+import { MemoryReplayRecorder, NullReplayRecorder, type ReplayRecorder } from './replay/recorder';
+import { LocalReplayStore } from './replay/replay-store';
 import { RoomManager } from './rooms/room-manager';
 import { Scheduler } from './simulation/scheduler';
 import { WsTransport } from './transport/ws-transport';
@@ -46,6 +48,17 @@ async function main(): Promise<void> {
     log(`  listen         ${INFRA.HOST}:${INFRA.PORT}${INFRA.PUBLIC_WS_PATH}`);
     log(`  rulesVersion   ${RULES_VERSION}  buildId ${INFRA.BUILD_ID}`);
     log(`  simulation     ${NETWORK.SIMULATION_HZ}Hz, 스냅샷 ${NETWORK.SNAPSHOT_HZ}Hz (${SNAPSHOT_INTERVAL_TICKS} tick마다)`);
+
+    // ── 리플레이 ──
+    // `s3`는 아직 구현이 없다. 그 상태로 켜져 있으면 조용히 기록을 잃는 것보다 꺼서 알리는 편이 낫다.
+    const replayStore = INFRA.REPLAY_STORE === 'local' ? new LocalReplayStore(INFRA.REPLAY_LOCAL_DIR) : null;
+    if (INFRA.REPLAY_ENABLED && replayStore === null) {
+        console.warn(`[swITch] REPLAY_STORE=${INFRA.REPLAY_STORE}은 아직 구현되지 않았다. 리플레이 기록을 끈다.`);
+    }
+    const replayEnabled = INFRA.REPLAY_ENABLED && replayStore !== null;
+    log(`  replay         ${replayEnabled ? `on (local -> ${INFRA.REPLAY_LOCAL_DIR})` : 'off'}`);
+    const replayRecorderFactory = (): ReplayRecorder =>
+        replayEnabled && replayStore ? new MemoryReplayRecorder({ store: replayStore }) : new NullReplayRecorder();
 
     if (INFRA.ALLOWED_ORIGINS.length === 0) {
         // 비어 있으면 upgrade를 전부 거절한다. 조용히 전체 허용으로 열리는 것보다 낫다.
@@ -74,8 +87,10 @@ async function main(): Promise<void> {
         scheduler,
         lookupRoom: (roomId) => rooms?.get(roomId) ?? null,
         violationSink,
+        replayRecorderFactory,
         onMatchFinished: (session, result) => {
-            log(`경기 종료 room=${session.id} match=${session.matchId} tick=${result.durationTicks}`);
+            const replayNote = result.replay ? `replay=${result.replay.storageKey}` : 'replay=none';
+            log(`경기 종료 room=${session.id} match=${session.matchId} tick=${result.durationTicks} ${replayNote}`);
             // outbox가 Redis 장애를 흡수한다. 여기서 await 하지 않는 이유는
             // 결과 전송이 게임 루프를 막으면 안 되기 때문이다.
             try {

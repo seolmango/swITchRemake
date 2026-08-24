@@ -7,6 +7,7 @@
 import type { MatchResultMessage, ViolationSignal } from 'shared';
 import { GAMEPLAY } from '../config/gameplay';
 import { instantiateMap, type ServerMapBundle } from '../maps/map-loader';
+import { NullReplayRecorder, type ReplayRecorder } from '../replay/recorder';
 import type { GameStartInfo, Room, RoomLifecyclePort, RoomStartSnapshot } from '../rooms/room';
 import type { Scheduler } from '../simulation/scheduler';
 import { grantTaggerFrenzy, SkillId, type SkillRequest } from '../simulation/skills';
@@ -25,6 +26,8 @@ export interface GameLifecycleOptions {
     readonly onMatchFinished?: (session: GameSession, result: MatchResultMessage) => void;
     /** 테스트에서 고정 seed를 넣기 위한 통로. 기본은 시각 기반이다. */
     readonly makeSeed?: (snapshot: RoomStartSnapshot) => number;
+    /** 경기마다 새 레코더가 필요하다 — 인스턴스를 공유하면 두 경기가 한 파일에 섞인다. */
+    readonly replayRecorderFactory?: () => ReplayRecorder;
 }
 
 export class GameLifecycle implements RoomLifecyclePort {
@@ -67,6 +70,7 @@ export class GameLifecycle implements RoomLifecyclePort {
             matchId: snapshot.matchId,
             roster,
             violationSink: this.#options.violationSink,
+            recorder: (this.#options.replayRecorderFactory ?? (() => new NullReplayRecorder()))(),
             meta: {
                 serverId: this.#options.serverId,
                 buildId: this.#options.buildId,
