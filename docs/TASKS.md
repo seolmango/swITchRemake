@@ -89,11 +89,20 @@ fetch, `/game` F5 복구, 카메라 자동 추적, 리플레이 기록·CLI까�
 - 서버는 `game.useSkill { slot, targetPlayerId? }`를 정상적으로 받는다. `slot 1`이 스위치, `slot 2`가 이동
   스킬이다(`simulation/skills.ts:229`). 쿨타임·사거리 판정도 tick 경계에서 제대로 돈다.
 - 클라이언트는 **`slot 2`만 보낸다**(`GamePage.tsx:202`). `slot 1`을 보내는 코드가 저장소 전체에 없다.
-- `SkillBar`는 스위치 슬롯을 **그리기만 하고 `onClick`을 주지 않는다**(`hud/SkillBar.tsx:101`).
-  `GameHud`에 `onSwitchTarget` prop이 있지만 `GamePage`가 넘기지 않는다.
+- **조준 UI가 죽어 있다.** 스위치는 설계상 `SkillBar`의 버튼이 아니라 `PlayerList`의 번호 칩을 눌러 대상을
+  지목하는 방식이다(`hud/PlayerList.tsx:33`의 주석, 레거시 `main.js:283-292`). 그래서 `SkillBar`의 스위치
+  슬롯이 `passive`인 것은 **정상이다.** 문제는 `GamePage`가 `hud.switchTargets`를 **빈 배열로 하드코딩**하고
+  (`GamePage.tsx:186`) `onSwitchTarget`을 아예 넘기지 않는 것이다. 지목 가능한 사람이 늘 0명이라 칩을 눌러도
+  아무 일도 안 난다.
 - 이동 스킬조차 **HUD 클릭으로만** 된다. 키보드 입력은 이동 4방향만 보내고 `heldActions`를 **0으로
   하드코딩**한다(`GamePage.tsx:160`). 와이어 프로토콜과 시뮬레이션은 `heldActions`를 제대로 나르는데
   클라이언트가 채우지 않는다. 결과적으로 설정의 `movementSkill`·`switch1~8`·`emoji1~8` **바인딩 18개가 죽은 키다.**
+- **스냅샷에 쿨타임이 없다.** `SnapshotPlayer`에 `effects`는 있는데 `cooldowns`가 없다
+  (`shared/src/protocol/snapshot.ts:23`). 그래서 HUD의 `cooldown: 0`도 하드코딩이고, 쿨타임 표시가 원리적으로
+  불가능하다. **클라이언트가 추측하면 안 된다** — 거절된 스킬 요청까지 쿨타임을 소모하므로(`skills.ts:204`)
+  추측한 타이머는 서버와 어긋난다.
+- **실패 피드백이 없다.** `useSwitch`는 `OUT_OF_RANGE`/`NO_TARGET`/`ROLE`을 구분해 반환하는데 실패 시
+  `events`에 아무것도 넣지 않는다. 플레이어는 쿨타임만 날리고 왜 안 됐는지 모른다.
 - `lobby.setLoadout`은 서버가 **무조건 `InvalidPayload`로 거절**한다(`rooms/room-manager.ts:251`,
   주석: "shared에 허용 skill 집합과 lobby.state의 skills/control 필드가 아직 없다"). **스킬 선택이 저장되지 않는다.**
   게다가 클라는 `{skills, control}`을 보내는데 서버 검증은 `exactKeys(payload, ['skills'])`라 형태도 어긋나 있다.
@@ -101,22 +110,30 @@ fetch, `/game` F5 복구, 카메라 자동 추적, 리플레이 기록·CLI까�
 
 X 라운드에서 "3인 경기가 끝까지 돌았다"고 확인한 것은 **아무도 스킬을 쓰지 않은 경기**였다.
 
+**대상 선택 방식은 이미 정해져 있다.** 새로 결정할 것이 아니다 — `switch1~8` 키 바인딩, `showPlayerNumber`
+설정, `PlayerList`의 번호 칩, 서버 `useSwitch`의 필수 `targetPlayerId`가 전부 같은 설계를 가리킨다.
+**술래 사거리 안에서 다른 사람의 번호를 눌러 그 사람에게 술래를 넘긴다.**
+
 **할 것**
 
-1. **shared 계약(Claude 선행)**: 허용 skill 집합(`SkillId`와 로드아웃 가능 목록), `lobby.state`의
-   `skills`/`control` 필드, emoji 브로드캐스트 이벤트를 카탈로그에 넣는다. 이게 없어서 서버가 거절하고 있다.
-2. **`lobby.setLoadout` 검증을 실제로 구현한다.** 클라이언트가 보내는 payload 형태와 서버 검증을 하나로 맞춘다
+1. **shared 계약(Claude 선행)** — 이게 없어서 서버가 거절하고 있다.
+   - 허용 skill 집합(`SkillId`와 로드아웃 가능 목록), `lobby.state`의 `skills`/`control` 필드.
+   - **스냅샷에 self 전용 쿨타임 섹션을 추가한다.** 슬롯 2개의 남은 tick만 보내면 된다(뷰어 본인 것만).
+     남에게 보낼 필요가 없으므로 대역폭 영향은 무시할 수준이다.
+   - 스킬 실패 사유 이벤트(`OUT_OF_RANGE` / `NO_TARGET` / `ROLE`)와 emoji 브로드캐스트 이벤트.
+2. **`lobby.setLoadout` 검증을 실제로 구현한다.** 클라이언트 payload와 서버 검증을 하나로 맞춘다
    (`control`을 계약에 넣든지, 클라이언트가 빼든지 — **둘 중 하나로 정하고 shared에 적는다**).
-3. **키보드에서 스킬을 쓸 수 있게 한다.** `keyBindings.movementSkill`이 `game.useSkill { slot: 2 }`를,
-   스위치 키가 `{ slot: 1 }`을 보낸다. `switch1~8`은 대상 지정(`targetPlayerId`)이므로 스위치의 대상 선택
-   방식을 먼저 정한다 — 슬롯 번호로 지목인지, 가장 가까운 대상 자동인지. **이건 게임 디자인 결정이라
-   사용자 확인이 필요하다.**
-4. `SkillBar`의 스위치 슬롯에 동작을 연결한다. 클릭과 키보드가 같은 경로로 가야 한다.
-5. `heldActions` 비트 정의를 shared에 명시하고 클라이언트가 실제로 채운다. 지금은 프로토콜에 자리만 있다.
-6. `game.emoji`를 브로드캐스트한다. 게임 상태에 영향이 없으므로 판정은 필요 없지만 다른 사람에게 보여야 의미가 있다.
+3. **키보드 배선**: `movementSkill` 키 → `{ slot: 2 }`, `switchN` 키 → `{ slot: 1, targetPlayerId: N-1 }`,
+   `emojiN` 키 → `game.emoji { emojiId: N-1 }`. `heldActions` 비트 정의를 shared에 명시하고 클라이언트가 채운다.
+4. **`hud.switchTargets`를 실제로 계산하고 `onSwitchTarget`을 `GamePage`에서 넘긴다.** 클릭과 키보드가
+   같은 경로로 가야 한다. 지목 가능 조건은 서버 규칙과 같다 — 살아 있고, 술래가 아니고, 자기 자신이 아니다.
+5. **HUD 쿨타임을 서버 값으로 표시한다.** 1번의 self 섹션을 읽는다. 추측하지 않는다.
+6. **실패 사유를 화면에 띄운다.** `AlertStack`이 이미 있다. "사거리 밖", "대상 없음" 정도면 충분하다.
+7. `game.emoji`를 브로드캐스트한다. 게임 판정에는 영향이 없지만 남에게 보여야 의미가 있다.
 
-**완료 조건**: 실제 경기에서 키보드로 스위치와 이동 스킬을 쓰고, 쿨타임이 HUD에 돌고, 로비에서 고른 스킬이
-실제로 그 경기에 적용된다. 이모지가 상대 화면에 보인다. 설정에서 키를 바꾸면 그 키로 된다.
+**완료 조건**: 실제 경기에서 키보드로 스위치와 이동 스킬을 쓰고, 지목 가능한 사람의 번호 칩이 실제로 켜지고,
+쿨타임이 서버 값으로 HUD에 돌고, 사거리 밖에서 누르면 이유가 뜬다. 로비에서 고른 스킬이 그 경기에 적용된다.
+이모지가 상대 화면에 보인다. 설정에서 키를 바꾸면 그 키로 된다.
 
 > **T5·T6의 선행이다.** 도움말이 키를 설명하고 훈련장이 스킬을 연습시키는데, 그 스킬이 안 나가면 둘 다 의미가 없다.
 
