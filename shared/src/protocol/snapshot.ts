@@ -51,6 +51,16 @@ export interface Snapshot {
     players?: SnapshotPlayer[];
     regions?: { x: number; y: number; remaining: number }[];
     selfId?: number;
+    /**
+     * 보는 사람 **본인**의 남은 쿨타임. 남의 쿨타임은 보내지 않는다 — 알 이유가 없고, 알면 안 된다.
+     *
+     * 총 길이는 여기 없다. `game.starting`의 `gameplay`가 경기 시작에 한 번 내려주므로 매 프레임 실어
+     * 보낼 이유가 없다. 클라이언트는 남은 시간을 그 총량으로 나눠 스윕을 그린다.
+     *
+     * **클라이언트가 자기 쿨타임을 추측하면 안 된다.** 사거리 밖이나 잘못된 지목으로 거부된 요청도
+     * 쿨타임을 소모하므로(`SkillRejection` 주석) 추측한 타이머는 서버와 반드시 어긋난다.
+     */
+    cooldowns?: { slot: number; remainingMs: number }[];
     roster?: { id: number; nickname: string }[];
 }
 
@@ -228,8 +238,22 @@ function readSection(snapshot: Snapshot, type: number, view: DataView, start: nu
         case SectionType.Self: {
             need(type, end - start, 1);
             snapshot.selfId = view.getUint8(start);
-            // 이 섹션은 나중에 lastProcessedInputSequence 등이 붙어 길어질 수 있다.
-            // 바깥 루프가 length prefix로 건너뛰므로 구버전 디코더도 깨지지 않는다.
+            let p = start + 1;
+
+            // 쿨타임은 나중에 붙은 필드다. 이게 없는 옛 프레임(리플레이 파일에 이미 남아 있다)은
+            // selfId만 읽고 끝나야 하므로 여기서 need()를 부르지 않고 남은 길이로 판단한다.
+            // 반대로 이 섹션에 더 붙는 필드가 생겨도 바깥 루프가 length prefix로 건너뛴다.
+            if (end - p >= 1) {
+                const count = view.getUint8(p);
+                p += 1;
+                need(type, end - p, count * 3);
+                const out: { slot: number; remainingMs: number }[] = [];
+                for (let i = 0; i < count; i++) {
+                    out.push({ slot: view.getUint8(p), remainingMs: view.getUint16(p + 1, true) });
+                    p += 3;
+                }
+                snapshot.cooldowns = out;
+            }
             return;
         }
 
@@ -392,7 +416,16 @@ export function encodeSnapshot(snapshot: Snapshot): ArrayBuffer {
 
     if (snapshot.selfId !== undefined) {
         const selfId = snapshot.selfId;
-        w.section(SectionType.Self, () => w.u8(selfId));
+        const cooldowns = snapshot.cooldowns;
+        w.section(SectionType.Self, () => {
+            w.u8(selfId);
+            // 비어 있어도 count 0을 쓴다. "쿨타임이 하나도 안 돈다"와 "이 서버는 쿨타임을 안 보낸다"는
+            // 다른 뜻이고, 전자는 HUD가 스킬을 즉시 사용 가능으로 그려야 하는 상태다.
+            if (cooldowns) {
+                w.u8(cooldowns.length);
+                for (const c of cooldowns) { w.u8(c.slot); w.u16(c.remainingMs); }
+            }
+        });
     }
 
     if (snapshot.roster?.length) {

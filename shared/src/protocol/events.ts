@@ -9,6 +9,8 @@
  *  - 서버는 `userId`를 클라이언트에 내려보내지 않는다. 방 안에서 사람을 가리키는 값은 항상 `playerId`다.
  */
 
+import type { SkillId, SkillRejection } from './skills';
+
 export const JSON_MESSAGE_VERSION = 1;
 
 /* ────────────────────────────── 공통 ────────────────────────────── */
@@ -141,6 +143,14 @@ export interface LobbyPlayer {
     colorIndex: number;
     guest: boolean;
     role: PlayerRole;
+    /**
+     * 이 사람이 고른 로드아웃. `lobby.setLoadout`으로 보낸 것이 그대로 돌아온다 — 보내는 형태와 보이는
+     * 형태가 같아야 클라이언트가 두 벌의 변환을 갖지 않는다.
+     *
+     * 지금은 2번 슬롯 하나뿐이라 길이 1이다. 슬롯이 늘면 뒤에 붙는다. 1번 슬롯(스위치)은 고를 수 있는
+     * 대상이 아니라서 여기 없다.
+     */
+    skills: SkillId[];
 }
 
 export type AuthOkMessage = ServerEnvelope<'auth.ok', {
@@ -175,6 +185,17 @@ export type GameStartingMessage = ServerEnvelope<'game.starting', {
 }>;
 
 export type GameStartedMessage = ServerEnvelope<'game.started', { startTick: number; taggerId: number }>;
+/**
+ * 스킬 요청이 거부됐다. **요청한 본인에게만** 간다.
+ *
+ * 거부돼도 쿨타임은 소모되므로(`SkillRejection` 주석) 이유를 안 보여주면 사용자는 그냥 "안 눌렸다"고
+ * 읽는다. 성공은 따로 알리지 않는다 — 뒤따르는 스냅샷과 `player.tagged`가 곧 성공의 증거다.
+ */
+export type SkillRejectedMessage = ServerEnvelope<'skill.rejected', {
+    slot: number;
+    reason: SkillRejection;
+}>;
+
 export type PlayerTaggedMessage = ServerEnvelope<'player.tagged', { playerId: number; by: number }>;
 export type PlayerEliminatedMessage = ServerEnvelope<'player.eliminated', { playerId: number; by: number }>;
 export type PlayerLeftMessage = ServerEnvelope<'player.left', { playerId: number; reason: string }>;
@@ -213,6 +234,7 @@ export type ServerMessage =
     | LobbyHostChangedMessage
     | GameStartingMessage
     | GameStartedMessage
+    | SkillRejectedMessage
     | PlayerTaggedMessage
     | PlayerEliminatedMessage
     | PlayerLeftMessage

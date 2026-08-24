@@ -22,6 +22,15 @@ export {
 } from './protocol/constants';
 
 export {
+    SkillId,
+    SkillSlot,
+    SkillRejection,
+    LOADOUT_SKILLS,
+    isLoadoutSkill,
+    isSkillSlot,
+} from './protocol/skills';
+
+export {
     decodeSnapshot,
     encodeSnapshot,
     SnapshotDecodeError,
@@ -57,6 +66,7 @@ export {
     type ServerMessage,
     type ServerMessageType,
     type LobbyPlayer,
+    type SkillRejectedMessage,
     type ViolationSignal,
 } from './protocol/events';
 

@@ -141,3 +141,56 @@ test('MAP 섹션의 cols*rows가 payload보다 크면 거부한다', () => {
 
     assert.throws(() => decodeSnapshot(buf.buffer), SnapshotDecodeError);
 });
+
+test('SELF 섹션이 본인 쿨타임을 왕복시킨다', () => {
+    const encoded = encodeSnapshot({
+        version: PROTOCOL_VERSION, full: false, tick: 9,
+        selfId: 4,
+        cooldowns: [{ slot: 1, remainingMs: 4200 }, { slot: 2, remainingMs: 0 }],
+    });
+    const decoded = decodeSnapshot(encoded);
+
+    assert.equal(decoded.selfId, 4);
+    assert.deepEqual(decoded.cooldowns, [{ slot: 1, remainingMs: 4200 }, { slot: 2, remainingMs: 0 }]);
+});
+
+test('빈 쿨타임 목록과 쿨타임을 안 보내는 것은 다르다', () => {
+    // 빈 목록은 "지금 도는 쿨타임이 없다"(= 즉시 사용 가능)이고,
+    // 필드 자체가 없는 것은 "이 서버는 쿨타임을 안 알려준다"이다. HUD가 다르게 그려야 한다.
+    const empty = decodeSnapshot(encodeSnapshot({
+        version: PROTOCOL_VERSION, full: false, tick: 1, selfId: 0, cooldowns: [],
+    }));
+    const absent = decodeSnapshot(encodeSnapshot({
+        version: PROTOCOL_VERSION, full: false, tick: 1, selfId: 0,
+    }));
+
+    assert.deepEqual(empty.cooldowns, []);
+    assert.equal(absent.cooldowns, undefined);
+});
+
+test('쿨타임이 붙기 전에 기록된 SELF 섹션도 읽힌다', () => {
+    // 이미 디스크에 남아 있는 리플레이 파일이 selfId 1바이트짜리 SELF 섹션을 갖고 있다.
+    // 새 디코더가 그 프레임에서 길이를 넘겨 읽거나 예외를 던지면 과거 경기를 못 연다.
+    const buf = new Uint8Array(SNAPSHOT_HEADER_BYTES + 3 + 1);
+    const view = new DataView(buf.buffer);
+    buf[0] = PROTOCOL_VERSION;
+    buf[SNAPSHOT_HEADER_BYTES] = SectionType.Self;
+    view.setUint16(SNAPSHOT_HEADER_BYTES + 1, 1, true);
+    buf[SNAPSHOT_HEADER_BYTES + 3] = 6;
+
+    const decoded = decodeSnapshot(buf.buffer);
+    assert.equal(decoded.selfId, 6);
+    assert.equal(decoded.cooldowns, undefined);
+});
+
+test('SELF 섹션의 쿨타임 count가 payload보다 크면 거부한다', () => {
+    const payload = new Uint8Array([2, 5, 1, 0]); // 2개를 선언하고 1개분(3바이트)만 담았다
+    const buf = new Uint8Array(SNAPSHOT_HEADER_BYTES + 3 + payload.length);
+    const view = new DataView(buf.buffer);
+    buf[0] = PROTOCOL_VERSION;
+    buf[SNAPSHOT_HEADER_BYTES] = SectionType.Self;
+    view.setUint16(SNAPSHOT_HEADER_BYTES + 1, payload.length, true);
+    buf.set(payload, SNAPSHOT_HEADER_BYTES + 3);
+
+    assert.throws(() => decodeSnapshot(buf.buffer), SnapshotDecodeError);
+});

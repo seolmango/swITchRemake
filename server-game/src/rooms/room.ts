@@ -540,6 +540,7 @@ export class Room {
             colorIndex: member.colorIndex,
             guest: member.guest,
             role: member.role,
+            skills: [member.loadout],
         }));
         this.#broadcast({
             type: 'lobby.state',

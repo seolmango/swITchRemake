@@ -6,27 +6,19 @@
  * 클라이언트 HUD의 쿨타임 표시는 서버가 내려준 값을 그리는 것이고 판정 근거가 아니다.
  */
 
-import { EffectType } from 'shared';
+import { EffectType, LOADOUT_SKILLS, SkillId, SkillRejection, SkillSlot, isLoadoutSkill } from 'shared';
 import { SKILLS } from '../config/gameplay';
 import { applyEffect, isReady, startCooldown } from './effects';
 import { isPositionFree } from './static-collision';
 import { stormRect } from './storm';
 import type { PlayerState, World, WorldEvent } from './world';
 
-export const SkillId = {
-    Dash: 'dash',
-    Flash: 'flash',
-    Exhaust: 'exhaust',
-    Switch: 'switch',
-} as const;
-export type SkillId = (typeof SkillId)[keyof typeof SkillId];
-
-/** 2번 슬롯에 넣을 수 있는 것. 1번 슬롯은 스위치 고정이다. */
-export const LOADOUT_SKILLS: readonly SkillId[] = [SkillId.Dash, SkillId.Flash, SkillId.Exhaust];
-
-export function isLoadoutSkill(value: string): value is SkillId {
-    return (LOADOUT_SKILLS as readonly string[]).includes(value);
-}
+/**
+ * 스킬 식별자와 로드아웃 집합은 `shared`가 원본이다. 클라이언트의 선택 UI와 매칭 서버의 로비 중계가
+ * 같은 값을 봐야 하는데, 여기 두면 그쪽이 복사본을 갖게 된다. 실제로 그래서 `lobby.setLoadout`이
+ * 무조건 거부되고 있었다. 기존 import 경로를 깨지 않으려고 여기서 다시 내보낸다.
+ */
+export { SkillId, LOADOUT_SKILLS, isLoadoutSkill };
 
 /** 스킬 사용 요청. `targetPlayerId`는 스위치에만 쓰인다. */
 export interface SkillRequest {
@@ -37,7 +29,7 @@ export interface SkillRequest {
 
 export type SkillOutcome =
     | { ok: true; skill: SkillId }
-    | { ok: false; reason: 'NOT_ALIVE' | 'NO_SKILL' | 'ON_COOLDOWN' | 'ROLE' | 'OUT_OF_RANGE' | 'NO_TARGET' };
+    | { ok: false; reason: SkillRejection };
 
 function livingRunners(world: World, exceptId?: number): PlayerState[] {
     return world.players
@@ -227,8 +219,8 @@ function useSwitch(world: World, caster: PlayerState, targetPlayerId: number | u
  * 1번은 스위치 고정, 2번은 경기 전에 고른 스킬이다. 술래는 1번 슬롯이 비활성이다.
  */
 export function skillInSlot(player: PlayerState, slot: number): SkillId | null {
-    if (slot === 1) return player.isTagger ? null : SkillId.Switch;
-    if (slot === 2) return player.loadout;
+    if (slot === SkillSlot.Switch) return player.isTagger ? null : SkillId.Switch;
+    if (slot === SkillSlot.Movement) return player.loadout;
     return null;
 }
 

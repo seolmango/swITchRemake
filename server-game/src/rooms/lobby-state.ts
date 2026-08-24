@@ -1,5 +1,6 @@
 import {
     MAX_PLAYERS_PER_ROOM,
+    SkillId,
     PlayerRole,
     type ActorId,
     type InputState,
@@ -21,6 +22,14 @@ export interface LobbyMember {
     readonly nickname: string;
     readonly guest: boolean;
     readonly stats: LobbyStats | null;
+    /**
+     * 2번 슬롯에 넣을 스킬. `lobby.setLoadout`이 이 값을 바꾼다.
+     *
+     * 기본값이 대시인 것은 선택이 아니라 자리를 채우는 값이다 — 지금은 `lobby.setLoadout` 처리가
+     * 아직 없어서 모두가 대시로 시작한다(T0). 그 전까지 `game-lifecycle`이 하드코딩하던 것을
+     * 여기로 옮겨, 로드아웃이 붙을 자리를 한 곳으로 모았다.
+     */
+    loadout: SkillId;
     readonly joinedOrder: number;
     colorIndex: number;
     role: PlayerRoleValue;
@@ -120,6 +129,7 @@ export class LobbyRoster {
             nickname: hold.reservation.nickname,
             guest: typeof userId === 'string',
             stats: hold.reservation.lobbyStats,
+            loadout: SkillId.Dash,
             joinedOrder: this.#joinOrder++,
             colorIndex: hold.playerId - 1,
             role,
