@@ -576,6 +576,7 @@ export class Room {
         if (this.state === RoomState.Closed || this.#roster.hostId === null) return;
         const players: LobbyPlayer[] = this.#roster.members().map((member) => ({
             playerId: member.playerId,
+            slot: member.slot,
             nickname: member.nickname,
             colorIndex: member.colorIndex,
             guest: member.guest,

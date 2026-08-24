@@ -98,6 +98,13 @@ export type LobbySetMapMessage = ClientEnvelope<'lobby.setMap', { mapId: string 
 export type LobbyKickMessage = ClientEnvelope<'lobby.kick', { playerId: number }>;
 export type LobbyPassHostMessage = ClientEnvelope<'lobby.passHost', { playerId: number }>;
 export type LobbySetLockedMessage = ClientEnvelope<'lobby.setLocked', { locked: boolean }>;
+/**
+ * 대기실 자리 옮기기. `slot`은 1..capacity다.
+ *
+ * `playerId`와 다른 개념이다 — `playerId`는 연결과 시뮬레이션이 쓰는 불변 식별자고, `slot`은 대기실
+ * 화면에서 몇 번째 칸에 앉아 있는지다. 자리를 옮겨도 `playerId`는 그대로다.
+ */
+export type LobbySetSlotMessage = ClientEnvelope<'lobby.setSlot', { slot: number }>;
 export type LobbyStartMessage = ClientEnvelope<'lobby.start', Record<string, never>>;
 export type LobbyLeaveMessage = ClientEnvelope<'lobby.leave', Record<string, never>>;
 export type LobbySetLoadoutMessage = ClientEnvelope<'lobby.setLoadout', { skills: string[] }>;
@@ -116,6 +123,7 @@ export type ClientMessage =
     | LobbyKickMessage
     | LobbyPassHostMessage
     | LobbySetLockedMessage
+    | LobbySetSlotMessage
     | LobbyStartMessage
     | LobbyLeaveMessage
     | LobbySetLoadoutMessage
@@ -139,6 +147,8 @@ interface ServerEnvelope<T extends string, P> {
 
 export interface LobbyPlayer {
     playerId: number;
+    /** 대기실 자리 번호(1..capacity). playerId와 다르다 — 자리를 옮겨도 playerId는 그대로다. */
+    slot: number;
     nickname: string;
     colorIndex: number;
     guest: boolean;

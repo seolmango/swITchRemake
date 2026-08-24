@@ -242,6 +242,12 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
             case 'lobby.setLocked':
                 error = room.setLocked(connection.userId, message.payload.locked);
                 break;
+            case 'lobby.setSlot': {
+                const result = room.moveSlot(connection.userId, message.payload.slot);
+                if (result === 'bad-state' || result === 'occupied') error = ErrorCode.BadState;
+                else if (result === 'not-found' || result === 'out-of-range') error = ErrorCode.InvalidPayload;
+                break;
+            }
             case 'lobby.start':
                 error = room.requestStart(connection.userId);
                 break;

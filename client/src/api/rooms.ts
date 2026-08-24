@@ -30,8 +30,6 @@ export interface ExistingRoomAssignment {
 
 export type RoomAssignment = RoomSeatGrant | ExistingRoomAssignment;
 
-export const roomApiEnabled = import.meta.env.VITE_ENABLE_ROOM_API !== 'false';
-
 export const getRooms = (page: number) => apiRequest<RoomPageResponse>(`/rooms?page=${page}`, { method: 'GET' });
 export const createRoom = (body: { name: string; password?: string }) => apiRequest<RoomAssignment>('/rooms', { method: 'POST', body });
 export const joinRoom = (roomCode: string, password?: string) => apiRequest<RoomAssignment>(`/rooms/code/${encodeURIComponent(roomCode)}/join`, { method: 'POST', body: { password } });

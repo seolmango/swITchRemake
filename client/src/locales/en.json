@@ -6,11 +6,9 @@
   "rooms": {
     "title": "Rooms", "create": "Create Room", "join": "Join by Code", "quick": "Quick Join", "refresh": "Refresh", "pagination": "Room list pages", "currentPage": "Page {{page}} of {{totalPages}}",
     "players": "{{count}} / {{capacity}} players", "waiting": "Waiting", "playing": "Playing", "empty": "No rooms are available.",
-    "previewNotice": "Showing preview rooms until the room server API is available.", "createTitle": "Create Room", "joinTitle": "Join Room",
+    "createTitle": "Create Room", "joinTitle": "Join Room",
     "roomName": "Room name", "roomNamePlaceholder": "A name your friends can find", "usePassword": "Make this room private", "password": "Room password",
     "passwordPlaceholder": "Up to 12 characters", "roomId": "Room code", "roomIdPlaceholder": "6 letters or numbers",
-    "createUnavailable": "The room creation API is not on the server yet. The form and API boundary are ready.",
-    "joinUnavailable": "The room join API is not on the server yet. The form and API boundary are ready.", "quickUnavailable": "The quick join API is not on the server yet.",
     "private": "Private room", "public": "Public room", "roomAccessibleLabel": "{{name}}, host {{owner}}, {{count}} of {{capacity}} players, {{privacy}}, {{status}}",
     "errors": {
       "roomUnavailable": "This room is unavailable or can no longer be joined.", "noJoinableRoom": "There are no rooms available to join right now.", "roomFull": "This room is full.",
@@ -19,7 +17,7 @@
   },
   "lobby": {
     "roomAccessible": "{{name}} lobby, room code {{code}}", "roomCode": "Room code", "copyCode": "Copy", "codeCopied": "Room code copied.", "copyFailed": "Could not copy the room code.",
-    "map": "Map", "previousMap": "Previous map", "nextMap": "Next map", "maps": { "random": "Random", "openField": "Open Field", "forest": "Forest", "stadium": "Stadium", "house": "House" },
+    "map": "Map", "previousMap": "Previous map", "nextMap": "Next map",
     "players": "Player slots", "emptySlot": "Open slot", "waitingForPlayer": "Waiting for a player", "emptySlotAccessible": "Slot {{slot}}, open",
     "playerAccessible": "Slot {{slot}}, {{nickname}}, {{role}}, {{control}}, {{skill}}", "owner": "Host", "member": "Player", "you": "You", "guest": "Guest",
     "roles": { "player": "Playing next match", "waiting": "Waiting", "spectator": "Spectating" },

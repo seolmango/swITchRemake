@@ -5,7 +5,7 @@ import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { TextField } from '../../components/common/TextField.tsx';
 import { Checkbox } from '../../components/common/Checkbox.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
-import { createRoom, getAlreadyAssignedLobbyPath, isAlreadyAssigned, roomApiEnabled } from '../../api/rooms.ts';
+import { createRoom, getAlreadyAssignedLobbyPath, isAlreadyAssigned } from '../../api/rooms.ts';
 import { gameSession } from '../../game/GameSession.ts';
 import { isRoomName, isRoomPassword } from '../../utils/validation.ts';
 import { useNavigate } from 'react-router-dom';
@@ -25,10 +25,6 @@ export const CreateRoomPage: React.FC = () => {
     const valid = isRoomName(name) && (!privateRoom || isRoomPassword(password));
 
     const submit = async () => {
-        if (!roomApiEnabled) {
-            navigate(`/rooms/DEMO01/lobby?name=${encodeURIComponent(name.trim())}`);
-            return;
-        }
         setLoading(true);
         try {
             const result = await createRoom({ name: name.trim(), password: privateRoom ? password : undefined });

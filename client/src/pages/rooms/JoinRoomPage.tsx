@@ -5,7 +5,7 @@ import { PageLayout } from '../../components/layout/PageLayout.tsx';
 import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { TextField } from '../../components/common/TextField.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
-import { getAlreadyAssignedLobbyPath, isAlreadyAssigned, joinRoom, roomApiEnabled } from '../../api/rooms.ts';
+import { getAlreadyAssignedLobbyPath, isAlreadyAssigned, joinRoom } from '../../api/rooms.ts';
 import { gameSession } from '../../game/GameSession.ts';
 import { isRoomId, isRoomPassword } from '../../utils/validation.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
@@ -25,10 +25,6 @@ export const JoinRoomPage: React.FC = () => {
     const valid = isRoomId(roomId) && (!passwordNeeded || isRoomPassword(password));
 
     const submit = async () => {
-        if (!roomApiEnabled) {
-            navigate(`/rooms/${encodeURIComponent(roomId)}/lobby`);
-            return;
-        }
         setLoading(true);
         try {
             const result = await joinRoom(roomId, passwordNeeded ? password : undefined);

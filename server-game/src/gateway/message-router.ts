@@ -41,6 +41,7 @@ function validPayload(type: string, payload: unknown): boolean {
     if (!object(payload)) return false;
     switch (type) {
         case 'lobby.setMap': return exactKeys(payload, ['mapId']) && string(payload['mapId']) && payload['mapId'].length > 0;
+        case 'lobby.setSlot': return exactKeys(payload, ['slot']) && integer(payload['slot']);
         case 'lobby.kick':
         case 'lobby.passHost': return exactKeys(payload, ['playerId']) && integer(payload['playerId']);
         case 'lobby.setLocked': return exactKeys(payload, ['locked']) && typeof payload['locked'] === 'boolean';

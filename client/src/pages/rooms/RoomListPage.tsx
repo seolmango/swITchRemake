@@ -6,33 +6,23 @@ import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
 import { Icon } from '../../components/common/Icon.tsx';
 import { RoomCard } from '../../components/room/RoomCard.tsx';
-import { getAlreadyAssignedLobbyPath, getRooms, isAlreadyAssigned, quickJoin, roomApiEnabled, type RoomSummary } from '../../api/rooms.ts';
+import { getAlreadyAssignedLobbyPath, getRooms, isAlreadyAssigned, quickJoin, type RoomSummary } from '../../api/rooms.ts';
 import { gameSession } from '../../game/GameSession.ts';
 import { themeColors } from '../../theme/color.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { roomErrorMessage } from './roomErrorMessage.ts';
 
-const PREVIEW_ROOMS: RoomSummary[] = [
-    { id: 'demo-1', roomCode: 'A42B3C', name: '느긋하게 한 판', ownerName: 'Alice', playerCount: 7, capacity: 8, hasPassword: true, status: 'waiting' },
-    { id: 'demo-2', roomCode: 'DDDDDD', name: '초보 환영', ownerName: 'Seolmango', playerCount: 5, capacity: 8, hasPassword: false, status: 'playing' },
-    { id: 'demo-3', roomCode: '123456', name: '스위치 연습방', ownerName: 'Bob', playerCount: 3, capacity: 8, hasPassword: true, status: 'waiting' },
-    { id: 'demo-4', roomCode: '654321', name: 'Quick Match', ownerName: 'Charlie', playerCount: 2, capacity: 8, hasPassword: false, status: 'waiting' },
-    { id: 'demo-5', roomCode: 'ABCDEF', name: '마지막 한 자리', ownerName: 'Dave', playerCount: 7, capacity: 8, hasPassword: true, status: 'waiting' },
-    { id: 'demo-6', roomCode: 'FEDCBA', name: 'Night Switch', ownerName: 'Eve', playerCount: 6, capacity: 8, hasPassword: false, status: 'playing' },
-];
-
 export const RoomListPage: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const theme = useSettingsStore((state) => state.theme);
-    const [rooms, setRooms] = useState<RoomSummary[]>(roomApiEnabled ? [] : PREVIEW_ROOMS);
+    const [rooms, setRooms] = useState<RoomSummary[]>([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const [message, setMessage] = useState(roomApiEnabled ? '' : t('rooms.previewNotice'));
+    const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
 
     const loadRooms = useCallback(async () => {
-        if (!roomApiEnabled) { setRooms(PREVIEW_ROOMS); setMessage(t('rooms.previewNotice')); return; }
         setLoading(true);
         try {
             const result = await getRooms(page);
@@ -45,7 +35,6 @@ export const RoomListPage: React.FC = () => {
     }, [page, t]);
 
     useEffect(() => {
-        if (!roomApiEnabled) return;
         let active = true;
         void getRooms(page).then((result) => {
             if (!active) return;
@@ -59,7 +48,6 @@ export const RoomListPage: React.FC = () => {
     }, [page, t]);
 
     const handleQuickJoin = async () => {
-        if (!roomApiEnabled) { navigate('/rooms/654321/lobby'); return; }
         try {
             const result = await quickJoin();
             if (isAlreadyAssigned(result)) {

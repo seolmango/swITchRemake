@@ -17,3 +17,14 @@ it('validates commands at runtime and preserves requestId on rejection', () => {
     assert.equal(invalid.requestId, 13);
     assert.equal(violations.length, 1);
 });
+
+it('accepts only an integer slot for lobby.setSlot', () => {
+    const context = { userId: 7, roomId: 'room', tick: 9 };
+    const signals: unknown[] = [];
+    const accepted = parseClientMessage('{"v":1,"type":"lobby.setSlot","requestId":4,"payload":{"slot":2}}', context, (signal) => signals.push(signal));
+    assert.equal(accepted.message?.type, 'lobby.setSlot');
+    const rejected = parseClientMessage('{"v":1,"type":"lobby.setSlot","requestId":5,"payload":{"slot":2.5}}', context, (signal) => signals.push(signal));
+    assert.equal(rejected.message, null);
+    assert.equal(rejected.requestId, 5);
+    assert.equal(signals.length, 1);
+});

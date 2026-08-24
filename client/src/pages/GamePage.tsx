@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { RoomState, SkillId, SkillSlot, TilePhysics, isLoadoutSkill } from 'shared';
+import { RoomState, SkillId, SkillSlot, isLoadoutSkill } from 'shared';
 import { RoundBox } from '../components/common/RoundBox.tsx';
 import { RoundButton } from '../components/common/RoundButton.tsx';
 import { PageLayout } from '../components/layout/PageLayout.tsx';
-import { EngineMode, SwitchGame, type HudState, type MapView, type SwitchEngine } from '../game';
+import { EngineMode, SwitchGame, type HudState, type SwitchEngine } from '../game';
+import { verifiedMapView } from '../game/mapBundle.ts';
 import { gameSession } from '../game/GameSession.ts';
 import { useGameSession } from '../game/useGameSession.ts';
 import { type KeyAction, useSettingsStore } from '../stores/useSettingsStore.ts';
@@ -19,16 +20,6 @@ import { formatKeyBindings, matchesKeyBinding } from '../utils/keyBinding.ts';
 import { cooldownTotalMs, getSwitchTargets, skillRejectionMessageKey, toCooldownDisplay } from '../utils/skillHud.ts';
 import { switchTargetPlayerIdForMatch } from '../utils/switchTarget.ts';
 
-interface RuntimeMapBundle {
-    schemaVersion: number;
-    mapBundleHash: string;
-    simulationHz: number;
-    tileSize: number;
-    maps: Record<string, { size: number; initial_map: number[][] }>;
-}
-
-const hex = (buffer: ArrayBuffer) => [...new Uint8Array(buffer)].map((value) => value.toString(16).padStart(2, '0')).join('');
-
 const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { iconUrl: string; labelKey: string }> = {
     [SkillId.Dash]: { iconUrl: dashIcon, labelKey: 'lobby.skills.dash' },
     [SkillId.Flash]: { iconUrl: flashIcon, labelKey: 'lobby.skills.flash' },
@@ -37,28 +28,6 @@ const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { iconUrl: string; 
 
 const SWITCH_ACTIONS: readonly KeyAction[] = ['switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8'];
 const EMOJI_ACTIONS: readonly KeyAction[] = ['emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8'];
-
-async function verifiedMapView(mapId: string, expectedHash: string, gameOrigin: string): Promise<MapView> {
-    const response = await fetch(`${gameOrigin}/map-bundles/${expectedHash}.json`, { cache: 'force-cache' });
-    if (!response.ok) throw new Error(`map bundle request failed (${response.status})`);
-    const bundle = await response.json() as RuntimeMapBundle;
-    if (bundle.mapBundleHash !== expectedHash || bundle.schemaVersion !== 1) throw new Error('map bundle identity mismatch');
-    const unsigned = JSON.stringify({
-        schemaVersion: bundle.schemaVersion,
-        simulationHz: bundle.simulationHz,
-        tileSize: bundle.tileSize,
-        maps: bundle.maps,
-    });
-    const actualHash = hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(unsigned)));
-    if (actualHash !== expectedHash) throw new Error('map bundle hash verification failed');
-    const map = bundle.maps[mapId];
-    if (!map || !Number.isInteger(map.size) || map.initial_map.length !== map.size) throw new Error(`unknown map: ${mapId}`);
-    const validTiles = new Set<number>(Object.values(TilePhysics));
-    if (map.initial_map.some((row) => row.length !== map.size || row.some((tile) => !validTiles.has(tile)))) {
-        throw new Error('map tile data is malformed');
-    }
-    return { cols: map.size, rows: map.size, tiles: map.initial_map as MapView['tiles'] };
-}
 
 export const GamePage: React.FC = () => {
     const { t } = useTranslation();
@@ -288,7 +257,7 @@ export const GamePage: React.FC = () => {
         <PageLayout title="swITch" backTo="/rooms">
             <RoundBox x={960} y={535} width={1250} height={650} type={1}/>
             <div style={{ position: 'absolute', left: 960, top: 520, width: 900, transform: 'translate(-50%,-50%)', textAlign: 'center', display: 'grid', gap: 45, justifyItems: 'center' }}>
-                <p style={{ color: themeColors(theme).text, fontSize: 43, lineHeight: 1.5, margin: 0 }}>{t('rooms.joinUnavailable')}</p>
+                <p style={{ color: themeColors(theme).text, fontSize: 43, lineHeight: 1.5, margin: 0 }}>{t('lobby.resumeFailed')}</p>
                 <p style={{ color: themeColors(theme).muted, fontSize: 27, lineHeight: 1.45, margin: 0 }}>{t('game.serverPending')}</p>
                 <RoundButton width={600} height={108} type={1} content={t('guide.openSandbox')} onClick={() => navigate('/sandbox')}/>
             </div>

@@ -6,11 +6,9 @@
   "rooms": {
     "title": "방 목록", "create": "방 만들기", "join": "코드로 참가", "quick": "빠른 참가", "refresh": "새로고침", "pagination": "방 목록 페이지", "currentPage": "{{totalPages}}페이지 중 {{page}}페이지",
     "players": "{{count}} / {{capacity}}명", "waiting": "대기 중", "playing": "게임 중", "empty": "참가할 수 있는 방이 없습니다.",
-    "previewNotice": "방 서버 API가 추가되기 전까지 예시 목록을 보여주고 있습니다.", "createTitle": "방 만들기", "joinTitle": "방 참가",
+    "createTitle": "방 만들기", "joinTitle": "방 참가",
     "roomName": "방 이름", "roomNamePlaceholder": "함께 찾기 쉬운 이름", "usePassword": "비공개 방으로 만들기", "password": "방 비밀번호",
     "passwordPlaceholder": "12자 이내 비밀번호", "roomId": "방 코드", "roomIdPlaceholder": "6자리 영문·숫자 코드",
-    "createUnavailable": "방 생성 API가 아직 서버에 없습니다. 입력 화면과 연결 계층만 준비했습니다.",
-    "joinUnavailable": "방 참가 API가 아직 서버에 없습니다. 입력 화면과 연결 계층만 준비했습니다.", "quickUnavailable": "빠른 참가 API가 아직 서버에 없습니다.",
     "private": "비공개 방", "public": "공개 방", "roomAccessibleLabel": "{{name}}, 방장 {{owner}}, {{count}} / {{capacity}}명, {{privacy}}, {{status}}",
     "errors": {
       "roomUnavailable": "방을 찾을 수 없거나 지금은 참가할 수 없습니다.", "noJoinableRoom": "지금 바로 참가할 수 있는 방이 없습니다.", "roomFull": "방이 가득 찼습니다.",
@@ -19,7 +17,7 @@
   },
   "lobby": {
     "roomAccessible": "{{name}} 대기실, 방 코드 {{code}}", "roomCode": "방 코드", "copyCode": "복사", "codeCopied": "방 코드를 복사했습니다.", "copyFailed": "방 코드를 복사하지 못했습니다.",
-    "map": "맵", "previousMap": "이전 맵", "nextMap": "다음 맵", "maps": { "random": "랜덤", "openField": "공터", "forest": "숲", "stadium": "경기장", "house": "집" },
+    "map": "맵", "previousMap": "이전 맵", "nextMap": "다음 맵",
     "players": "플레이어 슬롯", "emptySlot": "빈 자리", "waitingForPlayer": "플레이어를 기다리는 중", "emptySlotAccessible": "{{slot}}번, 빈 자리",
     "playerAccessible": "{{slot}}번 {{nickname}}, {{role}}, {{control}}, {{skill}}", "owner": "방장", "member": "참가자", "you": "나", "guest": "게스트",
     "roles": { "player": "다음 경기 참가", "waiting": "대기 중", "spectator": "관전 중" },

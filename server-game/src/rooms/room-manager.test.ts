@@ -63,6 +63,15 @@ function loadoutMessage(skills: string[]): ClientMessage {
     } as unknown as ClientMessage;
 }
 
+function slotMessage(slot: number): ClientMessage {
+    return {
+        v: JSON_MESSAGE_VERSION,
+        type: 'lobby.setSlot',
+        requestId: 43,
+        payload: { slot },
+    } as unknown as ClientMessage;
+}
+
 function errorCode(connection: FakeConnection): string | null {
     const message = connection.messages.at(-1);
     return message?.type === 'error' ? message.payload.code : null;
@@ -180,6 +189,35 @@ test('lobby.setLoadout rejects players and spectators once the game is playing',
     fixture.manager.get('room')?.markEliminated(spectator!.playerId, fixture.owner.playerId);
     fixture.manager.onJson(spectator!, loadoutMessage([SkillId.Exhaust]));
     assert.equal(errorCode(spectator!), ErrorCode.BadState);
+});
+
+test('lobby.setSlot changes the roster slot and rejects invalid waiting-room moves', () => {
+    const fixture = managerFixture();
+    fixture.owner.messages.length = 0;
+
+    fixture.manager.onJson(fixture.owner, slotMessage(2));
+    assert.equal(fixture.manager.get('room')?.memberByUser(1)?.slot, 2);
+    const state = fixture.owner.messages.at(-1);
+    assert.equal(state?.type, 'lobby.state');
+    if (state?.type === 'lobby.state') assert.equal(state.payload.players[0]?.slot, 2);
+
+    fixture.manager.onJson(fixture.owner, slotMessage(9));
+    assert.equal(errorCode(fixture.owner), ErrorCode.InvalidPayload);
+
+    const reservation = seat(2);
+    assert.equal(fixture.manager.reserveJoin(reservation, null).ok, true);
+    const admission = fixture.manager.admitReservation(reservation)!;
+    const peer = new FakeConnection(2, 2, 'p2', 'room', admission.playerId);
+    fixture.manager.onConnect(peer);
+    fixture.manager.onJson(fixture.owner, slotMessage(1));
+    assert.equal(errorCode(fixture.owner), ErrorCode.BadState);
+});
+
+test('lobby.setSlot rejects requests once the room has started', () => {
+    const fixture = managerFixture();
+    startFixtureGame(fixture);
+    fixture.manager.onJson(fixture.owner, slotMessage(4));
+    assert.equal(errorCode(fixture.owner), ErrorCode.BadState);
 });
 
 test('game.emoji forwards an in-game player request to the emoji state sink', () => {
