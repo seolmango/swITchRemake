@@ -1,171 +1,432 @@
-# swITch 작업 분담
+# swITch 작업 큐
 
-Claude와 codex가 같은 워킹 트리에서 동시에 작업한다. 누가 무엇을 맡는지와 그때 읽을 문서를 정리한다.
-
-묶음 정의는 `docs/SERVER_ARCHITECTURE.md`의 작업 분담 기준 절에 있다.
+Claude와 codex가 같은 워킹 트리에서 작업한다. **codex가 구현하고, Claude가 계약·설계·점검을 맡는다.**
+이 문서가 유일한 작업 큐다. 계약을 바꾸는 작업은 문서를 먼저 고친 뒤 코드를 고친다.
 
 ## 개발 방식
 
-기능 구현을 먼저 하고, 취약점과 오류 점검은 나중에 한 번에 돈다. 공개 서비스가 아니라 가능한 방식이다.
-다만 나중에 되돌리기 비싼 것 — 티켓 규격, IP 저장 형태, 경기 결과의 버전 스탬프 — 은 처음부터 문서대로
-넣는다. 소급이 안 되는 값들이다.
+기능 구현을 먼저 하고, 취약점과 오류 점검은 마지막에 한 번에 돈다(R). 공개 서비스가 아니라 가능한 방식이다.
+되돌리기 비싼 것 — 와이어 계약, 저장 형식, 결과의 버전 스탬프 — 은 처음부터 문서대로 넣는다.
 
 ## 파일 소유
 
 | 경로 | 소유 |
 | --- | --- |
-| `shared/` | Claude. 다른 세션은 **읽기만** |
+| `shared/` | Claude. 다른 세션은 **읽기만**. 계약 변경은 Claude가 먼저 하고 알린다 |
 | `server-game/src/simulation/` | Claude |
-| `server-game/src/config/` | 공유. **값을 추가해야 하면 먼저 알린다** |
-| `server-game/src/{maps,transport,gateway,rooms,redis}/` | codex |
-| `server-match/` | codex |
-| `client/` | 사용자 |
+| `server-game/src/config/`, `client/src/game/constants.ts` | 공유. **값을 추가해야 하면 먼저 알린다** |
+| `server-game/` 나머지, `server-match/`, `client/`, `e2e/` | codex |
+| `tools/` | codex. 맵 포맷을 바꾸면 Claude에게 알린다 |
 | `docs/` | 누구든. 계약을 바꿀 때는 문서를 먼저 고친다 |
 
-`config/`의 세 파일(gameplay, network, infrastructure)은 이미 채워져 있다. 양쪽이 같은 파일을 동시에
-고칠 유일한 지점이라 새 상수가 필요하면 임의로 넣지 않는다.
+> 이전 큐에서 `client/`는 사용자 소유였다. 지금은 codex가 구현하고 사용자는 밸런스(`config/gameplay.ts`)와
+> 감각 판정(시작 잠금 길이, 예측 on/off, 스킬 체감)만 맡는다. 다르게 하고 싶으면 이 줄을 고친다.
+
+## 문서 지도
+
+| 문서 | 무엇 | 언제 읽나 |
+| --- | --- | --- |
+| `SERVER_ARCHITECTURE.md` | 두 서버의 책임, 신뢰 경계, Redis/WS 계약, 방 상태 머신 | 서버 작업 전부 |
+| `ENGINE.md` | 클라이언트 엔진의 공개 API, React↔Phaser 경계, 표시 옵션 | 클라이언트 인게임 작업 |
+| `REPLAY.md` | 리플레이 프레임·파일 형식·저장소·재생 | T4, T7 |
+| `FUTURE.md` | 아직 안 만든 것 — 운영자 페이지, 신고, 안티치트 | 지금은 참고만 |
+| `TASKS.md` | 이 문서. 작업 큐 | 항상 |
 
 ---
 
-## Claude가 할 것
+## 지금 상태 (2026-08-24)
 
-| # | 작업 | 모델 | 상태 |
-| --- | --- | --- | --- |
-| S | 공유 계약 | — | 완료 (b6dec64) |
-| C | 시뮬레이션·시야·스킬 | — | 완료 (b6dec64) |
-| 조립 | `game/` 계층과 `main.ts` | — | 완료 (3c86ea4, 96c3646) |
-| X | 실제 경기 한 판 굴려보기 | Sonnet 5 | 완료 (2026-08-24) — 발견한 버그 전부 아래 기록 |
-| G | 리플레이 recorder와 로컬 재생 도구 | Sonnet 5 | 완료 (2026-08-24) — 상세는 아래 |
-| **R** | **보안·오류 점검 라운드** | **Opus 5** | **다음 작업(마지막)** |
+경기가 끝까지 굴러가고 결과가 DB에 남는 것까지 확인했다. 게스트 신분, 방 코드/roomId 분리, 런타임 맵 번들
+fetch, `/game` F5 복구, 카메라 자동 추적, 리플레이 기록·CLI까지 붙었다.
 
-### X. 실제 경기 한 판 굴려보기 — 완료
+**완료 기록** (상세는 git log)
 
-**아무도 이 게임을 아직 플레이해 본 적이 없다.** 단위 테스트 130개가 통과하고 서버도 기동되지만,
-브라우저 둘을 붙여 방을 만들고 경기를 끝까지 돌려본 적은 없다. **G와 R보다 이게 먼저다.**
-검증되지 않은 것 위에 리플레이를 얹으면 틀린 것을 기록하게 되고, 무엇을 점검해야 하는지도 모른다.
+| 묶음 | 내용 | 커밋 |
+| --- | --- | --- |
+| S·C·조립 | shared 계약, 시뮬레이션·시야·스킬, `game/` 계층과 `main.ts` | b6dec64, 3c86ea4, 96c3646 |
+| 0·A·B·D·E | 매칭 서버, 게이트웨이, Redis 컨트롤 플레인, 방, 결과 저장 | 73a8aca, 0ed27d7, 46804e0, b33c634, b5c0163, c03145c |
+| X | 실제 경기 한 판. 스폰 좌표·`protocolVersion`·`'random'` 맵·결과 저장 4중 버그 수정 | de2dea6 이전 |
+| 게스트/복구 | 게스트 JWT 세션, `NeedActor`/`NeedAccount` 분리, 3등급 rate limit, roomCode, 맵 번들 fetch, F5 복구, 카메라 follow | de2dea6 |
+| G | 리플레이 recorder·컨테이너 형식·local store·CLI | f20f354 |
 
-목표는 이 한 줄이다.
+**남은 것**: 아래 T1~T11과 마지막 R.
+
+---
+
+## 작업 순서
 
 ```text
-로그인 -> 방 생성 -> 다른 브라우저로 참가 -> 시작 -> 서로 움직이는 게 보임
-      -> 경기 종료 -> 대기실 복귀 -> 결과가 DB에 남음
+  T1 테스트 러너 통일 ─┬─> T2 이메일 테스트 모드 ─┬─> T8 E2E 자동화 ──> T10 테스트 정리
+                       │                          │
+                       │                          └─> T3 통계 연결
+                       │
+                       ├─> T4 리플레이 코덱 shared 이관 ──> T7 로컬 재생기
+                       │
+                       ├─> T5 도움말 리뉴얼 ──> T6 훈련장
+                       │
+                       └─> T9 클라이언트 점검
+
+                              T11 문서 정리 ──> R 점검 라운드
 ```
 
-여기서 나오는 버그가 지금 남은 진짜 작업이다. 계층 사이의 조립은 단위 테스트가 잡지 못한다.
+지켜야 하는 것은 세 개뿐이다.
 
-띄우는 법:
+1. **T10(테스트 정리)은 T8(E2E) 뒤에.** 그물을 새로 치기 전에 옛 그물을 걷으면 그동안 아무것도 안 잡힌다.
+2. **T7(웹 재생)은 T4(코덱 이관) 뒤에.** 지금 코덱은 `node:zlib`/`node:crypto`에 묶여 브라우저에서 안 돈다.
+3. **R은 항상 마지막.** 코드가 더 안 움직일 때 도는 라운드다.
+
+나머지는 병렬로 해도 된다.
+
+---
+
+## T1. 테스트 러너 통일과 루트 `npm test`
+
+**왜**: `server-game`은 `scripts/run-tests.cjs`로 결정론적 나열을 하는데, `shared`와 `server-match`는 아직
+셸 glob(`"dist-test/**/*.test.js"`, `dist/**/*.spec.js`)이다. X 라운드에서 같은 명령이 실행마다 다른 개수를
+잡는 것을 확인한 그 문제가 두 워크스페이스에 그대로 남아 있다. 앞으로의 모든 작업이 이 그물 위에서 돈다.
+
+**할 것**
+
+- `server-game/scripts/run-tests.cjs`를 재사용 가능한 형태로 옮긴다(루트 `scripts/run-tests.cjs`에 두고
+  대상 디렉터리와 접미사 `.test.js`/`.spec.js`를 인자로 받는다). 세 워크스페이스가 같은 러너를 쓴다.
+- 발견 0개면 실패시키고, 발견/실행 파일 수를 항상 로그에 남긴다.
+- 루트 `package.json`에 `test`(shared → server-game → server-match 순차), `typecheck`, `build`를 넣는다.
+  `client`에도 `typecheck` 스크립트를 넣어 루트에서 같이 돈다.
+
+**완료 조건**: 루트 `npm test`를 10회 반복해 매번 같은 파일 수·같은 테스트 수가 나온다.
+
+---
+
+## T2. 이메일 테스트 모드
+
+**왜**: 지금 SMTP가 실제 Gmail로 뚫려 있어서, 가입/탈퇴 흐름을 테스트할 때마다 존재하지 않는 주소로 메일이
+나가고 반송이 사용자에게 온다. T8(E2E)이 인증 코드를 읽어야 하는데 지금은 Redis를 직접 뒤지는 수밖에 없다.
+
+**할 것**
+
+- `EMAIL_TRANSPORT=smtp|sink` 환경변수를 `EmailModule`에 넣는다. `sink`는 메일을 보내지 않고 Redis
+  `test:mail:{to}` 리스트에 `{kind, subject, code, sentAt}`을 TTL 10분으로 push한다.
+- **연결 검사는 sink 모드에서도 한다.** 기동 시 `transporter.verify()`를 한 번 돌려 결과를 `GET /health`의
+  `email: 'ok' | 'unconfigured' | 'unreachable'`로 노출한다. 보내지 않으면서 "메일 서버가 살아 있는가"는
+  확인된다.
+- **안전장치**: `APP_ENV=prod`인데 `EMAIL_TRANSPORT=sink`면 기동을 거부한다. sink 조회 엔드포인트를 만든다면
+  `APP_ENV !== 'prod'`에서만 등록하고, 인증 코드는 응답 본문·로그에 그대로 남기지 않는다(E2E는 Redis에서 직접 읽는다).
+- `EmailService`의 세 메서드는 지금 HTML 본문이 통째로 복사돼 있다. transport 분기를 넣는 김에 템플릿 하나에
+  제목·문구만 다르게 넣는 형태로 합친다.
+- `.env.example`에 `EMAIL_TRANSPORT` 기본값 `sink`를 넣는다. **로컬 기본이 sink여야 사고가 안 난다.**
+
+**완료 조건**: sink 모드에서 가입 → 코드 수신(Redis) → 인증 완료가 되고, 실제 메일함에는 아무것도 안 온다.
+`GET /health`가 SMTP 연결 상태를 정확히 보고한다.
+
+---
+
+## T3. 통계 연결
+
+**왜**: 결과는 이미 DB에 쌓인다(`users.stats` jsonb 누적 + `match_participants` 행). 그런데 **읽는 경로가 하나도
+없다.** 지금 끊어져 있는 곳이 셋이다.
+
+1. `client/src/api/matches.ts`의 `getMatchResult()`가 `GET /matches/:id/result`를 부르는데 **server-match에
+   그런 라우트가 없다.** `matchApiEnabled`가 false면 `data/demoMatch.ts`의 가짜 결과가 화면에 나온다.
+2. `ProfilePage`는 로그인 여부와 무관하게 `profile.statsPending`("준비 중") 문구만 띄운다.
+3. 로비의 `LobbyPlayerStats`(전적·승률·스위치 성공률)는 게임 서버까지 배선돼 있지만
+   (`ticket-store.ts` → `lobby-state.ts`), **server-match가 방 참가 명령에 stats를 실어 보내지 않아** 항상 `null`이다.
+
+**할 것**
+
+- server-match에 `MatchesModule`을 만든다.
+  - `GET /matches/:matchId/result` — `MatchResultSnapshot` 형태 그대로. 참가자였거나 공개 경기면 조회 가능.
+  - `GET /users/me/stats` (`@NeedAccount`) — 누적 전적 + 파생값(승률, 스위치 성공률, 평균 생존).
+  - `GET /users/me/matches?limit&cursor` (`@NeedAccount`) — 최근 경기 목록. 커서는 `(playedAt, matchId)`.
+- **shared 계약 변경(Claude)**: 방 생성·참가 명령에 `stats: LobbyStats | null`을 추가한다. server-match가
+  참가자 계정의 stats를 채워 보내고 게스트는 `null`이다. `command-consumer.ts:277`(방장 경로)도 같이 채운다.
+- 클라이언트: `api/stats.ts`를 추가하고 `ProfilePage`의 `statsPending` 자리에 실제 카드 + 최근 경기 목록을
+  넣는다. 게스트에게는 "계정을 만들면 전적이 남는다"를 보여준다.
+- **`data/demoMatch.ts`와 `matchApiEnabled`/`roomApiEnabled` 플래그를 제거한다.** 서버가 없을 때 가짜 결과를
+  진짜처럼 보여주는 건 지금 시점에 득보다 실이 크다. 실패는 실패로 보여준다.
+
+**완료 조건**: 경기를 한 판 끝내면 결과 화면이 실제 DB 값을 보여주고, 프로필의 누적 전적이 그만큼 늘고,
+다음 로비에서 그 값이 카드에 뜬다. 게스트는 전적이 안 늘고 로비 카드에도 안 뜬다.
+
+---
+
+## T4. 리플레이 코덱을 `shared`로 (Claude)
+
+**왜**: T7(브라우저 재생)의 전제. `server-game/src/replay/format.ts`가 `node:zlib`의 `gzipSync`와
+`node:crypto`의 `createHash`를 직접 부른다. 브라우저에는 둘 다 없다.
+
+**할 것**
+
+- `shared/src/replay/format.ts`로 옮기고 압축·해시를 주입받게 한다.
+
+  ```ts
+  interface ReplayCodecEnv {
+      gzip(data: Uint8Array): Uint8Array | Promise<Uint8Array>;
+      gunzip(data: Uint8Array): Uint8Array | Promise<Uint8Array>;
+      sha256(data: Uint8Array): Uint8Array | Promise<Uint8Array>;
+  }
+  ```
+
+  Node 어댑터는 `zlib`/`crypto`, 브라우저 어댑터는 `DecompressionStream('gzip')`/`crypto.subtle.digest`.
+- 파서는 여전히 **신뢰할 수 없는 입력**을 가정한다. 지금 있는 상한 검사(chunk 수, 해제 크기, offset, sha256)를
+  하나도 빼지 않는다. 브라우저는 남의 파일을 여는 쪽이라 오히려 여기가 더 중요하다.
+- `server-game/src/replay/`는 shared 코덱 + Node 어댑터를 쓰는 얇은 껍데기로 남는다. `recorder.ts`,
+  `replay-store.ts`, `cli.ts`는 그대로 둔다.
+- `REPLAY_CONTAINER_VERSION`은 그대로 1이다. 형식이 안 바뀌므로 기존 파일이 계속 열려야 한다.
+
+**완료 조건**: 기존 `format.test.ts`가 shared에서 그대로 통과하고, f20f354로 만든 실제 리플레이 파일이 Node
+어댑터와 브라우저 어댑터 양쪽에서 같은 프레임을 낸다.
+
+---
+
+## T5. 도움말 화면 리뉴얼
+
+**왜**: `HowToPlayPage.tsx`는 39줄짜리 정적 카드 4장이고 키를 `'W A S D'`, `'SPACE'`, `'1 — 8'`로 **하드코딩**한다.
+설정에서 키를 바꾼 사람에게는 거짓말이다. `useSettingsStore`에 `keyBindings`와 `KEY_ACTIONS` 22개가 이미 있는데
+도움말이 그걸 안 읽는다.
+
+**할 것**
+
+- 키 표시는 전부 `keyBindings`에서 읽는다. `'KeyW'`/`'Shift+Digit1'` 같은 코드를 사람이 읽는 라벨로 바꾸는
+  `formatKeyBinding(code, locale)`을 `client/src/utils/`에 하나 만들어 도움말과 설정 화면이 같이 쓴다
+  (설정 화면에 이미 비슷한 변환이 있으면 그쪽으로 통일한다). 두 번째 슬롯이 있으면 `W / ↑`처럼 같이 보인다.
+- 스킬 설명은 카드가 아니라 **움직이는 데모**로 만든다. 유체화(대시), 점멸, 탈진, 스위치(술래 넘기기),
+  자기장 축소, 수풀·연막 은신 — 여섯 개의 짧은 루프.
+  - 구현은 **`SwitchEngine`을 작은 캔버스로 띄우고 스크립트된 스냅샷을 먹이는 방식**을 우선 검토한다. 실제
+    렌더러가 그리므로 이펙트가 게임과 어긋나지 않는다. 무거우면 SVG/CSS 루프로 내려가되, 그때는 "실제와 다를 수
+    있다"를 감수한 결정이라는 주석을 남긴다.
+  - `motionLevel === 'reduced'`와 `prefers-reduced-motion`이면 정지 프레임으로 대체하고 `reduceFlash`도 존중한다.
+    도움말은 접근성 설정을 가장 먼저 지켜야 하는 화면이다.
+- 하단 버튼은 `/sandbox` 대신 **훈련장(T6)** 으로 간다. 도움말에서 바로 몸으로 익히는 동선.
+- 문구는 `locales/ko.json`·`en.json` 양쪽에 넣는다. 지금의 `guide.*` 키를 확장한다.
+
+**완료 조건**: 설정에서 이동키를 바꾸면 도움말 표시가 즉시 따라 바뀐다. 데모 6종이 돌고 reduced motion에서 멈춘다.
+ko/en 둘 다 빠진 문구가 없다.
+
+---
+
+## T6. 훈련장
+
+**왜**: 지금 `/sandbox`(`EngineSandboxPage.tsx`, 764줄)는 **클라이언트가 자기 물리를 다시 구현한 목업**이다.
+이동, 충돌, 속도 배율, 시야 근접 창까지 서버 시뮬레이션과 별개로 들어 있고 이미 값이 갈라져 있다
+(`BASE_SPEED = 820`, `EFFECT_DEF`의 배율·지속시간이 `config/gameplay.ts`와 무관하다). 여기에 기능을 더 얹으면
+갈라짐만 커진다. 훈련장은 **진짜 시뮬레이션 위에서** 돌아야 한다.
+
+**설계 결정: 게임 서버의 방 모드로 만든다.**
+
+로컬(브라우저 안) 실행도 가능은 하다 — `server-game/src/simulation/`은 `shared`와 `config` 외에 아무것도 import
+하지 않아서 Vite로 번들이 된다. 그런데 그러면 네트워크 구간(스냅샷 인코딩, 시야 필터링, 보간, 지연)이 통째로
+빠져서 **훈련장의 감각이 실제 경기와 달라진다.** 스킬 타이밍을 익히는 게 목적인 화면에서 그건 치명적이다.
+
+**할 것**
+
+- 방에 `mode: 'match' | 'training'`을 추가한다(shared 계약 — Claude). training 방은
+  - 정원 1명, `minPlayers = 1`, 시작 잠금 없음, 경기 결과를 **outbox로 보내지 않는다**(전적 오염 금지).
+  - 공개 방 목록에 뜨지 않고, 한 계정·게스트당 하나만. 게스트도 쓸 수 있다.
+- **훈련 맵**: `tools/MapBuilder`로 `barrier_speed = 0`, timeline 비어 있는 맵을 하나 만든다. `storm.ts`의
+  `stormInset = tick * barrierSpeed`가 0이 되어 자기장이 그대로 멈춘다 — **시뮬레이션 코드는 한 줄도 안 고쳐도 된다.**
+  수풀과 연막 구역을 넉넉히 넣어 시야를 시험할 수 있게 한다.
+- **더미**: 서버가 방에 스크립트 봇을 넣는다. 봇도 그냥 `PlayerState`다 — `ResolvedInput`을 사람 대신 경로
+  추종기가 만들어 준다. 웨이포인트 루프를 돌고 잡히면 잠깐 뒤 리스폰한다. **봇 로직은 `simulation/` 밖에 둔다**
+  (시뮬레이션은 입력을 받을 뿐 누가 만들었는지 몰라야 한다).
+- **특수 블록**: `TilePhysics`에 새 값을 넣지 **않는다.** 그 enum은 모든 맵과 시야 계산이 공유하는 와이어
+  계약이고, 훈련장 전용 개념을 거기 넣으면 전체가 넓어진다. 대신 훈련 맵 메타데이터에 패드 목록을 둔다.
+
+  ```
+  pads: [{ x, y, w, h, action: 'becomeTagger' | 'setSkill:dash' | 'setSkill:flash' | 'setSkill:exhaust' | 'reset' }]
+  ```
+
+  서버가 매 tick 밟았는지 검사해 효과를 적용하고, 클라이언트는 training 모드에서만 오버레이로 그린다.
+- 인게임에서 설정을 여는 경로가 훈련장에도 있어야 한다(`SettingsDock` 재사용). 바꾼 값이 즉시 반영되는지가
+  훈련장의 목적 중 하나다.
+- **`/sandbox`는 훈련장이 생기면 지운다.** 렌더러 단독 확인이 계속 필요하면 목업 물리를 뺀 "스냅샷 fixture를
+  먹여 그림만 보는" 100줄짜리로 줄여 남긴다. 지금의 764줄 목업 시뮬레이션은 유지 비용만 남는다.
+
+**완료 조건**: 도움말 → 훈련장으로 혼자 들어가 움직이고, 봇을 잡고, 패드를 밟아 술래가 되거나 스킬을 바꾸고,
+수풀에 들어가면 봇 시야에서 사라지고, 자기장이 끝까지 안 줄고, 설정을 열어 바꾼 값이 바로 보인다.
+훈련 경기가 `matches`·`match_participants`에 한 행도 안 남는다.
+
+---
+
+## T7. 리플레이 로컬 재생기
+
+**왜**: 지금은 `npm run replay:inspect`(텍스트 CLI)뿐이다. `REPLAY.md` 11절의 재생은 아직 없다.
+
+**할 것**
+
+- 클라이언트에 `/replay` 라우트를 추가한다. **서버 없이 도는 화면이어야 한다** — `.swr` 파일을 드래그&드롭하거나
+  파일 선택으로 열고, T4의 브라우저 어댑터로 파싱한 뒤 `SwitchEngine`에 프레임을 먹인다.
+- 컨트롤: 재생·일시정지, 배속(0.25×~4×), 프레임 단위 이동, 타임라인 시크(chunk 첫 프레임이 항상 full 스냅샷이라
+  처음부터 되감지 않고 해당 chunk만 풀면 된다), 뷰어 전환(`unfiltered` ↔ 특정 플레이어 시야 bitmask).
+- 맵은 manifest의 `mapId`/`mapBundleHash`로 정해진다. 서버가 없을 수도 있으므로 (a) `/map-bundles/`에서 받아오고
+  (b) 실패하면 번들 파일을 직접 열게 한다. 해시 검증은 `GamePage`의 `verifiedMapView()`와 같은 것을 쓴다 —
+  그 함수를 `client/src/game/`으로 빼서 공유한다.
+- 파싱은 워커에서 돌린다. 5분 경기 원본이 ~1MB지만 gunzip이 메인 스레드를 잡으면 재생이 튄다.
+- **Electron 같은 별도 앱은 만들지 않는다.** 렌더러가 이미 브라우저에 있는데 껍데기를 하나 더 만들 이유가 없다.
+  "로컬 프로그램"이 필요하면 `npm run replay:web`이 정적 빌드를 띄우는 것으로 충분하다.
+
+**완료 조건**: 실제 경기 리플레이를 열어 끝까지 재생하고, 시크가 맞고, 뷰어를 바꾸면 그 사람이 본 것만 보인다.
+잘린 파일·변조된 chunk를 열면 화면이 깨지지 않고 오류 메시지가 뜬다.
+
+---
+
+## T8. 브라우저 E2E 자동화
+
+**왜**: 지금 검증은 단위 테스트 + 사람이 브라우저 둘을 켜는 것뿐이다. X 라운드에서 나온 버그 대부분(맵 미로드,
+결과 미저장, 방 코드 불일치)은 단위 테스트가 잡을 수 없는 **계층 사이**의 것이었다.
+
+**할 것**
+
+- `e2e/` 워크스페이스를 새로 만든다. Playwright(Chromium). 시나리오는 실제 사용자 동선 순서대로.
+  1. 첫 방문 → 게스트 세션 자동 발급 → 방 목록이 401 없이 뜬다
+  2. 회원가입 → (sink에서 코드 읽기) → 인증 → 로그인 → 프로필
+  3. 방 생성 → 두 번째 브라우저 컨텍스트가 **방 코드로** 참가 → 세 번째는 빠른 참가
+  4. 로비: 맵 변경, 스킬 로드아웃, 준비, 시작
+  5. 인게임: 이동 입력, 스킬 사용, 태그 성사, 한 명 이상 탈락
+  6. 경기 중 F5 → 같은 방으로 복구
+  7. 경기 종료 → 결과 화면 → 프로필 전적 증가 → 리플레이 파일 생성 확인
+  8. 훈련장 진입·이탈(T6 뒤)
+  9. 설정 변경 지속(F5 후에도 유지), 언어 전환, 테마 전환
+  10. 계정 삭제 → (sink 코드) → 삭제 후 로그인 불가
+- **이메일은 T2의 sink로만 읽는다. 실제 발송 0건.**
+- 실패 시 스크린샷·트레이스·서버 로그를 아티팩트로 남긴다. 콘솔 에러와 미처리 네트워크 실패는 그 자체로 실패다.
+- **리포트 메일**: 마지막에 결과 요약(통과·실패 수, 소요, 실패 시나리오, 커밋 해시)을 **실제 SMTP로**
+  `seolchaehwan70@gmail.com`에 한 통 보낸다. 이게 "메일 서버가 실제로 살아 있다"의 증거이자 유일한 실발송이다.
+  `--report-email` 플래그가 있을 때만 보낸다(기본은 안 보냄).
+- 서버 기동·정리는 스크립트가 맡는다. Postgres/Redis는 `docker compose`, 두 서버는 빌드 후 실행, 클라이언트는
+  `vite preview`. **테스트 DB는 개발 DB와 분리한다** — 계정 삭제 시나리오가 있다.
+
+**완료 조건**: `npm run e2e`가 깨끗한 체크아웃에서 처음부터 끝까지 돌고 리포트 메일이 도착한다.
+시나리오 하나를 일부러 깨뜨리면 실패로 잡힌다.
+
+---
+
+## T9. 클라이언트 점검
+
+Claude가 정적으로 훑어 확인한 것들. 각각 독립 커밋이면 좋다.
+
+**끊긴 기능**
+
+- **소리가 아예 없다.** 설정에 마스터·BGM·효과음 슬라이더 3개가 있는데 `masterVolume`/`bgmVolume`/`sfxVolume`을
+  읽는 코드가 클라이언트 전체에 하나도 없다. 오디오 시스템을 만들든지, 만들 때까지 슬라이더를 감추든지 정한다.
+  (권장: 지금은 감춘다. 없는 기능의 스위치가 설정에 있는 게 더 나쁘다.)
+- 가짜 데이터 폴백 — T3에서 같이 정리한다(`demoMatch.ts`, `matchApiEnabled`, `roomApiEnabled`).
+- `LobbyPage`가 `useParams()` 기본값으로 `DEMO_LOBBY.roomId`를 쓴다. 라우트가 `:roomId`라 실제로 걸리진 않지만,
+  없는 방을 데모 방으로 눌러 앉히는 형태라 지운다.
+
+**없는 화면**
+
+- 최근 경기 목록·전적 상세(T3), 리플레이 재생(T7), 훈련장(T6).
+- ErrorBoundary가 없다. 렌더 중 예외가 나면 흰 화면이다. 최소한 루트에 하나.
+- 404가 무조건 `/`로 리다이렉트된다. 잘못된 방 코드로 들어온 사람이 아무 설명 없이 타이틀로 튕긴다.
+
+**클라이언트에 테스트가 0개다**
+
+`client`에 `test` 스크립트도 테스트 파일도 없다. T8이 큰 그물을 치더라도 순수 함수는 단위로 잡는 게 싸다.
+최소한 `utils/validation.ts`, `formatKeyBinding`(T5), 스냅샷→HUD 변환은 테스트가 있어야 한다. Vitest 도입을 검토한다.
+
+**성능**
+
+- `MapLayer`가 정적 레이어를 캐시하는지 매 프레임 다시 그리는지 확인한다(`quality.ambientFrameSkip`이 있는 걸 보면
+  일부는 하고 있다). **8인 풀방 + 연막에서 프레임을 실측한다 — 지금까지 3인 경기밖에 안 돌렸다.**
+- `resolutionScale`/`frameRate`/`graphicsQuality`가 실제로 렌더 비용을 바꾸는지 수치로 확인한다. 배선은 돼 있다.
+- 리플레이 gunzip은 워커로(T7).
+
+**UI 판단이 필요한 것** (사용자 확인 후 진행)
+
+- 로비의 스킬 선택이 지금 팝오버다. 훈련장이 생기면 "골라서 바로 시험"하는 동선이 자연스러워진다.
+- 결과 화면의 승자 2인 표기 — 동시 탈락으로 1명만 남으면 같은 사람이 두 번 들어간다(서버의 의도된 동작).
+  화면에서 어떻게 보일지 정해야 한다.
+
+---
+
+## T10. 테스트 정리 (T8 뒤에)
+
+**먼저 사실 관계**: 지금 테스트는 **30개 파일 약 180개**다. 이 규모의 코드베이스에서 많은 편이 아니다. "너무
+많다"는 느낌의 원인은 개수가 아니라 (a) 실행이 불안정했던 것(T1에서 해결) (b) 값이 낮은 파일이 눈에 띄는 것
+(c) E2E가 없어서 단위 테스트가 실제 동작을 보증하지 못한 것에 가깝다. **일괄 삭감은 권하지 않는다.**
+
+**기준을 정해 그 기준으로만 줄인다**
+
+| 남긴다 | 지운다·합친다 |
+| --- | --- |
+| 와이어 계약 (`shared/protocol/*`, 결과 코덱, 컨트롤 스트림) | 구현 세부를 그대로 베낀 단언 |
+| 규칙 (`simulation/skills`, `step`, 시야 코어) | T8 E2E가 같은 경로를 더 진짜로 덮는 것 |
+| 파서의 악의적 입력 방어 (`replay/format`, `map-loader`) | 파일 하나에 테스트 1~2개뿐인 조각 |
+| 회귀 — X 라운드에서 실제로 났던 버그 | 프레임워크 동작을 확인하는 것 |
+
+**구체 후보**
+
+- `gateway/connection-manager.test.ts`(1개/15줄), `gateway/message-router.test.ts`(2개/19줄),
+  `gateway/rate-limit.test.ts`(1개/16줄) → `gateway/gateway.test.ts` 하나로 합친다. 커버리지 그대로, 파일 3개 감소.
+- `rooms/room-manager.test.ts`(1개/100줄)가 `rooms/room.test.ts`와 겹치는지 확인해 겹치면 합친다.
+- `simulation/skills.test.ts`(28개/387줄)는 **줄이지 않는다.** 게임 규칙 자체다.
+- `results/result.service.integration.spec.ts`는 DB opt-in이라 평소 안 돈다. T8의 CI에서 실제로 돌게 붙이거나,
+  안 돌 거면 지운다. **안 도는 테스트가 제일 나쁘다.**
+
+**완료 조건**: 파일 수는 줄고 검증하는 동작 범위는 그대로다. 줄인 근거를 커밋 메시지에 남긴다.
+T8이 전부 통과하는 상태에서만 머지한다.
+
+---
+
+## T11. 문서 정리
+
+**먼저 사실 관계**: `docs/`는 5개 파일 2,600여 줄이다. 파일 수가 문제가 아니라 **한 문서 안에 "변하지 않는 설계"와
+"이미 끝난 구현 순서·미결 사항"이 섞여 있는 것**이 문제다. 그래서 읽는 사람이 뭐가 현재 사실인지 모른다.
+
+**할 것 (삭제가 아니라 분리)**
+
+- `SERVER_ARCHITECTURE.md`(1,194줄): §23 구현 순서, §26 작업 분담 기준, §27 미결 사항을 걷어낸다. 큐는 이 문서에
+  있어야 하고, 두 곳에 있으면 갈라진다. 해결된 미결은 본문 규칙으로 승격하고 안 해결된 것만 여기 T 항목으로 옮긴다.
+- `REPLAY.md`: §12 구현 순서에서 끝난 3~6번을 "구현됨(f20f354)"으로 한 줄 처리하고 7번 이후만 남긴다.
+  §14 미결 중 결정된 것을 본문에 반영한다.
+- `ENGINE.md`: §7 유저 설정이 실제 `useSettingsStore`와 어긋난 부분을 대조한다(특히 소리 — T9 참고).
+  문서에만 있고 코드에 없는 설정은 문서에서 지우거나 T 항목으로 만든다.
+- `FUTURE.md`(435줄): 아직 아무것도 구현 안 된 미래 구상이다. **지우지 않는다** — 대신 맨 위에 "구현된 것 없음,
+  결정 아님"을 한 줄로 못 박는다.
+- 각 문서 맨 위에 `최종 검토: YYYY-MM-DD` 한 줄. 오래된 문서를 알아볼 수 있어야 한다.
+
+**완료 조건**: 같은 사실이 두 문서에 다르게 적힌 곳이 없다. 큐는 `TASKS.md`에만 있다.
+
+---
+
+## R. 보안·오류 점검 라운드 (마지막)
+
+T1~T11이 끝나고 코드가 더 안 움직일 때. 찾을 것이 "스펙 위반"이 아니라 **"그럴듯한데 틀린 것"** 이라서 마지막에 돈다.
+
+- 티켓 검증의 원자적 소비와 실패 응답의 타이밍 차이
+- Redis ACL 사용자 분리. 지금은 단일 비밀번호로 전부 접근 가능하다
+- 세션 테이블 원본 IP의 보관 기간과 파기(`SESSION_IP_RETENTION_DAYS`가 실제로 도는지)
+- 위반 신호(`ViolationSignal`)의 실제 소비자 연결
+- 결정론 테스트와 가짜 클라이언트 부하 테스트
+- 8인 풀방 tick 측정 후 프로세스당 방 수 상한 확정. `draining` 임계값과 연결 상한 확정
+- outbox가 가득 찼을 때 신규 게임 시작 차단(`outbox.canStartNewGame`). 지금은 로그만 남기고 그 경기 전적이 유실된다
+- `GameSession`이 방을 직접 참조한다. 지금은 메서드 6개만 쓰지만 늘어나면 경계가 새고 있다는 신호다
+- `COMMAND_TIMEOUT_MS = 2000`에 근접하는 왕복 지연의 원인. **계측부터 하고 숫자를 만지지 않는다**
+- 참가 빈도 제한과 timeout 재시도가 겹쳐 "그냥 못 들어가는" 상태가 되는 문제
+- 리플레이: 시야 bitmask를 `writeVisibility`와 `publish()`가 각각 계산한다(값은 같고 계산은 두 번).
+  `MemoryReplayRecorder`의 프로세스 상한 256MB는 실측 없이 잡은 값이다
+- `replays`/`replay_holds` 보존·삭제 주기가 아무것도 안 돈다(`REPLAY.md` 7~10절)
+- T2의 sink 모드가 prod에서 켜질 수 없는지 재확인
+- T6 훈련장이 실경기 자원(방 수, tick 예산, 전적)으로 새지 않는지
+
+---
+
+## 부록: 로컬 실행
 
 ```bash
 npm run db:up
 npm run shared:build && npm run game:build
+npm run match:dev      # 3000
+npm run game:dev       # 4000 — GAME_SERVER_ID, GAME_MAP_BUNDLE(절대경로) 필요
+npm run dev -w client  # 5173
 ```
 
-인게임 서버는 `GAME_SERVER_ID`와 `GAME_MAP_BUNDLE`(절대경로)이 필요하다. cwd가 `server-game/`이라
-상대경로는 어긋난다. `.env.example`에 나머지 변수가 있다.
+인게임 서버는 cwd가 `server-game/`이라 `GAME_MAP_BUNDLE`에 상대경로를 쓰면 어긋난다. 나머지 변수는 `.env.example`.
 
-### G. 리플레이 — 완료
+## 부록: 테스트 계정
 
-`docs/REPLAY.md` 12절의 3~6번(레코더, chunk/파일 형식과 `local` store, 로컬 재생 도구, 결과 메시지 연결)까지 구현했다.
-7번(웹 리플레이 플레이어)부터는 클라이언트 소유라 이 작업 범위 밖이다.
-
-**추가한 것**
-
-- `server-game/src/replay/format.ts` — 컨테이너 파일 형식(magic/manifest/chunk index/gzip chunk). chunk 안은 프레임·시야 bitmask·이벤트 세 트랙이 같은 경계를 공유한다. 파서는 신뢰 못 하는 입력이라 가정하고 chunk 수, 압축 해제 크기, offset을 매번 검증한다.
-- `server-game/src/replay/recorder.ts` — `ReplayRecorder` 계약, `NullReplayRecorder`(꺼짐), `MemoryReplayRecorder`(경기 전체를 메모리에 쌓았다가 `finish()`에서 한 번에 저장 — 5분 경기 원본이 약 1MB라 스트리밍할 이유가 없었다). 경기 단위·프로세스 단위 spool 상한과 저장 실패 시 `abort` 경로가 있다. 기록 실패는 항상 경기 결과 자체는 살리고 `replay: null`만 만든다.
-- `server-game/src/replay/replay-store.ts` — `local` `ReplayStore` (파일시스템, range read 지원, key 검증으로 경로 조작 차단). `s3`는 아직 없다.
-- `server-game/src/replay/cli.ts` — 로컬 재생/점검 도구(`npm run replay:inspect -w server-game -- <file> [--verify|--tick N|--dump-json out.json]`). 그래픽 플레이어가 아니라 텍스트 기반 디버깅 도구다 — 웹 플레이어는 사용자 공개용(7번)이라 범위 밖.
-- `server-game/src/game/session-recorder.ts` — `GameSession`과 레코더 사이. keyframe 주기(2초=60프레임) 판단, 검열 없는 `unfiltered` 인코딩, 뷰어별 시야 bitmask 계산이 여기 있다.
-- `GameSession`에 연결: 스냅샷 tick마다 기록하고, 경기 종료 tick은 스냅샷 주기와 안 맞아도 항상 keyframe으로 강제 기록한다. `#finish()`가 `recorder.finish()`를 기다린 뒤(로컬 파일 쓰기라 게임 루프를 막을 만큼 오래 걸리지 않는다) 결과 메시지의 `replay` 필드를 채운다 — 그래서 `match-result.test.ts`의 `session.step()` 직후 동기 단언이 깨져 `await`로 바꿨다(의도된 변경).
-- `main.ts`가 `REPLAY_ENABLED`/`REPLAY_STORE`/`REPLAY_LOCAL_DIR`로 조립한다. `.env.example`도 기본 `REPLAY_ENABLED=true`로 바꿨다(로컬 개발 기본 켬).
-
-**검증**: server-game 신규 테스트(format/recorder/replay-store/session-recorder) + 기존 스위트 전체 119개 통과, `npm run build`/`typecheck` 통과, 실제 recorder→저장→CLI(`--verify`/`--tick`/`--dump-json`) 왕복을 스크립트로 직접 실행해 확인. 실 서버로 3인 경기를 굴려 리플레이 파일이 실제로 남는지는 아직 안 해봤다 — R 라운드나 다음 실경기 점검에서 확인이 필요하다.
-
-**R 라운드에서 볼 것 (여기서 발견했지만 지금 안 고친 것)**
-
-- 시야 bitmask(`writeVisibility`)를 매 스냅샷 tick마다 로스터 전원에 대해 `computeVisibility`를 새로 돌려서 만든다. 이미 연결된 뷰어의 시야는 `publish()` 쪽에서 한 번 더 계산되고 있어 중복이다(값은 같지만 계산은 두 번). 8인 기준으로는 무시할 만하다고 보고 넘겼지만, tick 예산이 빠듯해지면 여기부터 본다.
-- `MemoryReplayRecorder`의 process-wide spool 상한(`processSpoolBytes`, 256MB)이 모듈 스코프 변수다. 여러 게임 프로세스가 아니라 "한 프로세스 안의 여러 방"을 막는 용도로는 맞지만, 정확한 상한값은 실측 없이 감으로 잡았다.
-- `replays`/`replay_holds`/보존 정책/신고(`docs/REPLAY.md` 7~10절)는 손대지 않았다. `server-match`의 `replays` 테이블 insert(`result.service.ts`)는 이미 있어서 `replay` 필드가 채워지면 자동으로 DB에 남지만, 삭제·보존 주기는 아직 아무것도 안 돈다.
-
-### R. 점검 라운드
-
-실제로 한 판 돌아간 뒤. 아래 "나중에 볼 것" 목록을 훑는다. Opus인 이유는 여기서 찾을 것이
-"스펙 위반"이 아니라 "그럴듯한데 틀린 것"이기 때문이다.
-
----
-
-## codex가 할 것
-
-0, A1, B1, D, E, A2 **전부 완료**. 커밋 73a8aca, 0ed27d7, 46804e0, b33c634, b5c0163, c03145c.
-
----
-
-## 사용자가 할 것
-
-- F 클라이언트 연결 — 방 API 연동, WebSocket 접속과 티켓 전송, 스냅샷을 엔진에 연결, 대기실 UI
-- `config/gameplay.ts`의 밸런스 수치 전부. 지금 값은 구조를 보여주기 위한 임시값이다
-- 시작 잠금 5초/10초가 실제로 답답한지, 예측 on/off 중 뭐가 나은지 같은 감각 판정
-
----
-
-## 순서
-
-```text
-  [0 · A1 · B1 · D · E · A2]   전부 완료
-  [S · C · 조립]               전부 완료
-              │
-              ▼
-      [X 실제 경기 한 판] ──> [G 리플레이]   전부 완료
-              │
-              ▼
-      [R 점검 라운드]                       다음 작업
-```
-
----
-
-## 나중에 볼 것 (R 라운드)
-
-기능이 다 붙은 뒤 점검할 목록. 지금은 신경 쓰지 않는다.
-
-- 티켓 검증의 원자적 소비와 실패 응답의 타이밍 차이
-- Redis ACL 사용자 분리. 지금은 단일 비밀번호로 전부 접근 가능하다
-- 세션 테이블 원본 IP의 보관 기간과 파기
-- 위반 신호(`ViolationSignal`)의 실제 소비자 연결
-- 결정론 테스트와 가짜 클라이언트 부하 테스트
-- 8인 풀방 tick 측정 후 프로세스당 방 수 상한 확정
-- `draining` 임계값과 연결 상한 확정
-- outbox가 가득 찼을 때 신규 게임 시작 차단(`outbox.canStartNewGame`). 지금은 로그만 남기고 그 경기 전적이 유실된다
-- `GameSession`이 방을 직접 참조한다. 지금은 메서드 6개만 쓰지만 늘어나면 경계가 새고 있다는 신호다
-
-### X 진행 중 발견 (2026-08-24)
-
-실제로 한 판 굴려보면서 나온 것들. 막는 버그는 바로 고쳤고(아래 "고침" 표시), 안 막는 건 여기 적어두고 넘어간다.
-
-**고침**
-- `server-match/src/rooms/rooms.module.ts`가 `SanctionModule`을 import하지 않아 `RoomsService` DI가 죽어 있었다. 서버가 아예 못 떴다.
-- `server-game/src/main.ts`가 WS metadata와 heartbeat의 `protocolVersion`에 `bundle.schemaVersion`(맵 포맷 버전)을 넣고 있었다. `shared`의 `PROTOCOL_VERSION`(와이어 프로토콜 버전, 지금 2)과 다른 개념인데 섞여 있었다. 맵 버전은 1이라 매칭 서버의 `selectServer` 필터에 항상 걸려 `NO_GAME_SERVER`가 났다. `PROTOCOL_VERSION`을 쓰도록 고쳤다.
-- `server-match`가 방 생성 시 `mapId` 미지정이면 리터럴 문자열 `'random'`을 그대로 인게임 서버에 보내는데, 인게임 서버는 `'random'`을 실제 맵 id로 풀어주지 않아 항상 `INVALID_MAP`이 났다. `CommandConsumer`에 `resolveMapId` 훅을 추가해 인게임 서버(맵 번들을 실제로 들고 있는 쪽)가 `'random'`을 로드된 맵 중 하나로 치환하게 했다.
-- 3명으로 게임 시작하면 tick=1에 바로 끝났다. `game-lifecycle.ts`의 `#placePlayers`가 `start_pos`를 타일 인덱스로 착각해 `tileSize`를 또 곱해서 스폰 좌표가 맵 밖으로 수백 배 벗어났다(`tools/MapBuilder/builder.py`가 이미 픽셀 좌표를 내려줌). 재스케일을 빼고 좌표를 그대로 쓰게 고쳤다. 사용자 확인 후 진행(server-game 쪽 수정으로 확정).
-- 위 스폰 좌표 수정 뒤 3명이서 실제로 경기를 시작하는 데까지는 됐는데, 게임 화면(`/game`)이 완전히 빈 화면이었다. `client/src/pages/GamePage.tsx`가 `engine.applySnapshot(frame)`만 호출하고 `engine.map.load(...)`를 어디서도 안 불러서 맵 타일이 로드된 적이 없었다(`MapController.load(view: MapView)`는 호출자가 명시적으로 넣어줘야 함 — `client/src/game/MapController.ts:13`). `client/src/pages/dev/EngineSandboxPage.tsx`가 쓰던 것과 같은 fixture(`dev/fixtures/serverMaps.ts` — `tools/MapBuilder`의 `server_maps.json`과 물리값이 완전히 동일한 걸 확인함, 타일셋 텍스처는 이제 안 씀)로 `engine.map.load()` 호출을 GamePage에 배선했다. 사용자 확인 후 client도 진행(원래는 사용자 소유라 안 건드리려 했다). 실제 게임 화면에서 맵 타일 렌더링 확인함, 콘솔 예외 없음, EngineSandboxPage에서 같은 렌더러로 플레이어 스프라이트도 정상 렌더링 확인함(라이브 화면에서 스프라이트까지 직접 스크린샷하려다 rate limit/latency로 막혀서 sandbox로 렌더러 자체를 교차 검증했다). **남은 진짜 문제**: `mapId`로 실제 서버 맵 번들을 받아오는 경로가 없다 — 지금은 클라이언트에 미리 박아둔 fixture 스냅샷을 그대로 쓴다. 맵이 바뀌면 fixture도 손으로 다시 내보내야 하고, 서버가 알지 못하는 mapId가 오면 조용히 실패한다(`console.error`만 찍고 빈 화면). 장기적으로는 `mapBundleHash`로 실제 번들을 fetch하는 경로가 필요하다.
-
-- 경기 결과가 DB에 한 건도 안 남고 있었다(사용자가 직접 확인 요청해서 발견). 원인이 네 개나 겹쳐 있었다 — 하나씩 고칠 때마다 다음 게 드러났다:
-  1. `server-match`가 방 생성 시 `matches.map_id`에 미해결 `'random'`을 그대로 저장하는데, 실제 경기 결과의 `mapId`는 인게임 서버가 해석한 진짜 맵 이름이라 `record()`의 일관성 체크(`match.mapId !== result.mapId`)에서 항상 `invalid`로 걸렸다. `CreateRoomResult`(shared)에 `mapId` 필드를 추가하고, 인게임 서버가 해석된 맵을 응답에 실어 보내고, `ResultService.confirmRoom(matchId, roomId, mapId)`이 방 생성 확정 시점에 `matches.map_id`를 진짜 값으로 덮어쓰게 했다.
-  2. `server-match/src/results/result.codec.ts`의 `isMatchResult`가 `winnerPlayerIds[0] === winnerPlayerIds[1]`이면 무조건 `malformed`로 버렸다. 그런데 `server-game/src/game/game-session.ts`의 `#finish()`는 생존자가 1명만 남으면 의도적으로 같은 id를 두 번 채운다(주석: "동시 탈락으로 더 적게 남을 수 있다. 자리를 억지로 채우지 않고 남은 만큼만 승자로 본다"). 검증 쪽이 인게임 서버의 의도된 동작을 몰랐던 것 — 중복 거부 조건을 뺐다.
-  3. 위 둘을 고치고도 여전히 `malformed`였다. `isMatchResult`가 `survivedMs > durationMs`(각 플레이어의 생존 시간이 경기 전체 길이를 넘으면 조작으로 간주)를 체크하는데, `survivedMs`는 시뮬레이션 tick 시계로, `durationMs`(`endedAt - startedAt`)는 벽시계로 잰다. 100초 넘는 실제 경기에서 스케줄러 catch-up 때문에 두 시계가 20ms 남짓 어긋났고, 그 사소한 오차로 정상 결과가 매번 걸렸다. 2초 tolerance를 넣었다(`SURVIVED_MS_CLOCK_SKEW_TOLERANCE_MS`).
-  4. (참고) 위 세 개를 고치기 전, tick=1에 끝난 옛날 경기들도 같은 이유들로 `malformed`/`invalid`로 버려졌던 걸 로그에서 확인함 — 그 경기들은 스폰 버그 자체가 원인이라 다시 안 만듦.
-  네 개 다 고친 뒤 실제 3인 경기(6196틱, ~103초) 결과가 `matches`(map_id="BattleField", duration_ticks=6196, started_at/ended_at/result_recorded_at 전부 채워짐)와 `match_participants`(3행, is_winner/tag_count/tagged_count/survived_ms 전부 정상)에 제대로 저장되는 것까지 직접 쿼리로 확인함.
-
-**안 막지만 남겨둠 (R 라운드나 여유될 때)**
-- `RoomListPage`가 마운트되자마자 방 목록을 요청하는데, `useAuthStore.bootstrap()`의 refresh-cookie 복구보다 먼저 나가서 새로고침 직후엔 401이 한 번 뜬다. 그 다음 재시도(수동 새로고침 버튼)에서는 정상 동작. `client/src/pages/rooms/RoomListPage.tsx`
-- 방 생성 흐름: `registry.start()`가 heartbeat를 올려 매칭 서버에 "이 서버 씀직함"으로 보이자마자, `consumer.start()`(명령 소비자)는 아직 안 붙어 있는 startup 윈도우가 있다(`server-game/src/main.ts`의 `connectRedis()`가 registry→consumer 순서로 순차 실행). 이 사이에 들어온 `CREATE_ROOM`은 아무도 안 읽어서 `COMMAND_TIMEOUT`으로 죽는다. 로컬 재현: 서버 기동 직후 30초 안에 방 만들기 시도.
-- `COMMAND_TIMEOUT_MS = 2000`(`server-match/src/rooms/rooms.service.ts`)이 로컬 개발 환경에서도 여유가 별로 없다. 정상 처리되는 요청도 왕복이 1~2초 걸리는 걸 몇 번 관찰했다(원인 미확인 — Redis stream round trip 자체가 이렇게 느릴 이유가 없어 보임). 타이트한 타임아웃 하나가 간헐적 `EXPIRED`를 만든다. **부작용 확인**: 이 상태에서 quick-join이 timeout 나면 `user:{userId}:active-room` claim이 `'reservation'` 상태로 박힌 채 남고, 그 다음 재시도는 `existingRoomResponse`가 `{alreadyAssigned:true}`(roomId 없이)를 돌려줘서 클라이언트가 아무 데도 못 간다. `ACTIVE_ROOM_RESERVATION_TTL_SECONDS = 30`초 지나야 풀린다 — 그동안 그 계정은 방을 못 만들고도 못 들어간다.
-- 방 코드 계약이 어긋나 있다: 인게임 서버가 `roomId`를 `randomUUID()`(36자)로 만드는데(`server-game/src/redis/command-consumer.ts`의 `roomIdFactory` 기본값), 클라이언트의 코드-참가 입력창은 `maxLength={6}`이고 `isRoomId`가 `/^[A-Za-z0-9]{6}$/`만 통과시킨다(`client/src/pages/rooms/JoinRoomPage.tsx`, `client/src/utils/validation.ts`). 방금 만든 방을 코드로 못 들어간다 — 지금은 "빠른 참가"로 우회해서 테스트했다. 둘 중 하나가 실제 계약에 맞춰야 한다: 인게임 서버가 짧은 코드를 만들거나, 클라이언트가 UUID를 받게 하거나.
-- `npm test`(server-game)의 `node --test "dist-test/**/*.test.js"` glob이 안정적이지 않다. 같은 명령을 반복 실행해도 매번 다른 개수(96 / 99 / 89 등)가 잡히고, 어떤 실행에서는 `dist-test/game/*.test.js`가 통째로 빠진다. 파일은 항상 존재하고 개별 실행하면 통과한다 — node 자체의 재귀 glob discovery 문제로 보인다. CI에서 조용히 테스트가 덜 도는 상태일 수 있어 R 라운드에서 확인 필요.
-- `client/vite.config.ts`의 프록시 규칙이 `/game` 경로 접두어로 WS 요청(`ws://localhost:4000`)을 잡는데, 클라이언트 라우터의 실제 페이지 경로도 `/game`이다(`GamePage`). SPA 내부 네비게이션(`navigate('/game?...')`)은 새 HTTP 요청을 안 만들어서 문제가 없지만, `/game?room_id=...`에서 브라우저 새로고침(F5)이나 직접 URL 접속을 하면 vite dev 서버가 이 요청을 WS 프록시로 보내버려서 404가 난다. 실사용자가 게임 중 새로고침하면 그대로 재현될 것.
-- COMMAND_TIMEOUT/latency 이슈가 세션이 길어질수록(오래 켜둔 `nest --watch` 프로세스, 반복된 join/leave) 더 자주 재현됐다 — 짧은 시간에 quick-join을 여러 번 재시도하면 `참가 빈도 제한(분당 6회)`에도 금방 걸린다. 둘이 겹치면(타임아웃 → 재시도 → rate limit) 사용자 입장에서는 그냥 방에 못 들어가는 것처럼 보인다.
-
-### 테스트 계정 (2026-08-24)
-
-X 진행하면서 만든 로컬 계정. SMTP가 실제 Gmail로 뚫려 있어서 새 계정을 계속 만들면 존재하지 않는 도메인(example.com)으로 보낸 메일이 사용자에게 반송 에러로 온다 — **새로 만들지 말고 아래 계정을 재사용한다.**
+SMTP가 실제 Gmail로 뚫려 있어 존재하지 않는 도메인으로 보낸 메일이 반송된다. **T2가 끝나기 전에는 새 계정을
+만들지 말고 아래를 재사용한다.**
 
 | 이메일 | 비밀번호 | 닉네임 |
 | --- | --- | --- |
@@ -173,148 +434,5 @@ X 진행하면서 만든 로컬 계정. SMTP가 실제 Gmail로 뚫려 있어서
 | switch.tester2@example.com | TestPass123! | Player2 |
 | switch.tester3@example.com | TestPass123! | Player3 |
 
-인증 코드가 필요하면(비번 재설정 등) 이메일로 안 오니 Redis에서 바로 읽는다: `auth:code:{vtype}:{email}` 키(`vtype`은 `signup`/`reset-password`/`delete`).
-
----
-
-## 게스트 기본 신분과 후속 버그 (2026-08-24, 구현·자동 검증 완료)
-
-> 아래 항목은 2026-08-24 구현 후 shared 34개, server-game 97개, server-match 25개(통합 1개는 DB opt-in이라 제외) 테스트와 client production build로 검증했다. 실제 다중 브라우저 한 판 E2E는 별도 실행이 필요하다.
-
-### 결정된 제품 정책
-
-- **계정 로그인은 방 목록·방 생성·방 참가의 자격 조건이 아니다.** 비로그인 사용자도 모두 사용한다.
-- 클라이언트는 첫 진입 시 임시 guest session을 자동으로 받고, 방 API/WS에서 이 access JWT를 account access JWT와 같은 Bearer token처럼 처리한다.
-- 같은 탭에서는 F5 후에도 같은 guest ID/닉네임을 유지한다. 탭을 닫으면 소유권은 사라지고 서버의 임시 세션도 짧은 TTL 후 자동 삭제된다.
-- account의 추가 효과는 **영구 통계/전적, 계정 관리, guest보다 높은 rate limit**이다.
-- guest도 경기 결과의 무결성을 위해 `match_participants` 로우로는 남기되, `user_id = null`, `is_guest = true`로 계정 통계에 합산하지 않는 현재 규칙을 유지한다.
-- 신분은 `anonymous(no token)`, `guest`, `account`를 명확히 구분한다. anonymous는 guest 발급·로그인·회원가입 같은 인증 경계에만 짧게 존재하고, 방 UI를 보이기 전에 guest/account 중 하나로 bootstrap이 끝나야 한다.
-
-### P0. 첫 화면부터 탭 고정 guest JWT session
-
-#### 현재 코드에서 확인한 원인/추가 버그
-
-1. `POST /auth/guest`는 이미 `g:{uuid}` ID와 guest access JWT를 발급하지만(`server-match/src/auth/auth.service.ts`, `auth.controller.ts`), 클라이언트가 첫 진입 시 이를 받거나 갱신/복구하는 흐름이 없다. `useAuthStore.bootstrap()`은 account refresh cookie만 복구한다.
-2. `RoomListPage`가 auth bootstrap보다 먼저 방 목록을 요청해 첫 401이 난다. `apiRequest()`도 access token이 이미 있어야만 401 refresh를 시도한다.
-3. `@NeedLogin()`의 `LoggedInGuard`는 `request.user`만 있으면 통과시킨다. 방 API에서 guest가 통과하는 것은 원하는 동작이지만, 같은 guard를 쓰는 `SessionController`/`UserController`의 **account-only API까지 guest가 통과**한다. `sessionId` 없는 문자열 guest ID를 정수 account ID로 가정하는 보안/안정성 버그다.
-4. 전역 `RateLimiterGuard`는 `req.user` 유무로 `anon`/`user` 두 등급만 고르므로 guest JWT도 account와 같은 상한을 받는다.
-5. 현재 로그아웃은 세션 목록에서 current session을 찾았을 때만 서버 revoke/쿠키 제거를 한다. 목록 로드가 실패하면 로컬 token만 지워 refresh cookie로 새로고침 후 다시 로그인된다(`ProfilePage.tsx`).
-6. 회원가입 성공 후 account token 없이 닉네임만 auth store에 넣는 흐름은 guest JWT의 닉네임과 UI를 불일치시킨다. 가입 성공은 guest 신분을 변경하지 말고 실제 login 성공 시에만 account로 바꿔야 한다.
-
-#### 채택할 토큰/세션 구조
-
-- **guest access JWT**: API/WS Bearer 용도. 현재 수명 15분(`JWT_GUEST_EXPIRATION=900`) 정도를 유지하고 `type: 'guest-access'`, `sub`, `nickname`, `guest: true`, `sid`, `iat`, `exp`를 담는다.
-- **guest refresh JWT**: 1시간 idle TTL. `type: 'guest-refresh'`, `sub`, `sid`, `jti`, `iat`, `exp`를 담고 access JWT와 용도를 엄격히 구분한다. `JWT_GUEST_REFRESH_SECRET`, `JWT_GUEST_REFRESH_EXPIRATION=3600`을 별도 설정해 account refresh와 오인식하지 않게 한다.
-- **Redis 임시 session**: DB `sessions`는 쓰지 않고 `guest-session:{sid}`에 guest ID/닉네임/현재 refresh `jti` 또는 token hash만 1시간 TTL로 저장한다. refresh할 때 compare-and-set/Lua로 일회용 회전하고 TTL을 1시간 연장한다. 탭이 살아 있는 동안은 같은 guest를 계속 쓰고, 탭을 닫은 뒤 최대 1시간 후 자동 제거된다.
-- **클라이언트 저장**: guest refresh JWT만 `sessionStorage`에 넣고 access JWT는 현재처럼 메모리에 둔다. `localStorage`는 탭을 닫아도 남고, cookie는 모든 탭이 공유하므로 “탭 고정 guest” 요구와 맞지 않다.
-- 이는 무상태 refresh JWT보다는 조금 복잡하지만, account DB session에 의존하지 않고 1시간 sliding session과 refresh replay 차단을 모두 얻는 구조다.
-
-#### server/auth 수정 계획
-
-1. `POST /auth/guest`가 access token, guest refresh token, guest 표시 정보, 두 만료 시간을 반환하게 한다. 발급은 IP로 엄격히 제한한다.
-2. `POST /auth/guest/refresh`를 추가해 JWT와 Redis의 현재 jti/hash를 모두 검증하고, 성공 시 같은 guest의 access+refresh 페어를 회전한다. replay/만료/세션 소실은 401로 끝낸다.
-3. `NeedLogin` 의미를 폐기하고 `NeedActor`(guest/account, RoomsController/WS) 및 `NeedAccount`(`guest === false`, 정수 user ID, 유효한 sessionId; SessionController/UserController/통계)로 분리한다. guest의 account API 호출은 DB 오류가 아닌 403(팀 정책이 401이면 401)로 끝낸다.
-4. `RateLimitOptions`를 `anon`/`guest`/`account` 3등급으로 바꾸고 tracker도 `ip:`, `guest:`, `account:`로 분리한다. 방 생성/참가는 account보다 guest 상한을 낮게 잡고, guest는 기존 `RoomsService.assertGuestJoinRate()`의 actor ID + IP 이중 제한을 유지한다. 같은 요청을 의도치 않게 두 번 카운트하지 않도록 레이어별 차감 책임을 명세한다.
-5. `POST /auth/logout`을 추가해 session 목록 조회 성공 여부와 무관하게 현재 account session revoke + refresh cookie 제거를 수행한다. 성공 후 client는 즉시 새 guest를 발급한다.
-6. Redis key는 `shared` `makeKeys()`에 `guestSession(sid)`를 추가해 사용한다. **shared 계약 변경이므로 현 소유자/동시 수정 여부를 확인한 뒤 적용**하고 key prefix 충돌 테스트를 추가한다.
-
-#### client bootstrap/UI 수정 계획
-
-1. auth state를 `booting | guest | account | error`로 명확히 나누고 access token 유무만으로 account를 판단하지 않는다.
-2. 앱 시작 순서는 (a) sessionStorage guest refresh가 있으면 guest refresh, (b) 없으면 account refresh cookie 복구, (c) 둘 다 실패/부재면 새 guest 발급이다. 성공 전에는 방 화면을 마운트하지 않아 첫 방 목록 401을 없앤다.
-3. login 성공 시에만 guest refresh를 지우고 account로 교체한다. login 실패/회원가입 성공은 현재 guest 신분을 변경하지 않는다.
-4. 401 회복은 신분별 single-flight로 account는 `/auth/refresh`, guest는 `/auth/guest/refresh`를 한 번만 호출하고 원요청을 1회만 retry한다. 동시 401이 refresh 회전을 충돌시키지 않도록 Promise를 공유한다.
-5. guest refresh 만료 시 활성 방/경기가 없으면 새 guest를 발급한다. 활성 방/경기 중이면 새 ID로 조용히 바꾸지 말고 세션 만료를 안내한 뒤 방 목록으로 복귀한다.
-6. Profile은 guest 닉네임을 보여 줄 수 있지만 session 목록/비번 변경/계정 삭제/영구 통계는 account에서만 노출한다. guest를 기존 `authenticated` 불리언과 동치시켜 `getLoginSessions()`를 호출하지 말 것.
-7. 방/경기 중 login/logout은 active-room claim이 guest/account 두 신분으로 갈라지므로 1차 구현에서 UI와 가능한 server 경계 모두에서 막고 이유를 안내한다. guest→account 방 소유권 이전은 별도 원자적 프로토콜 없이 암묵적으로 하지 않는다.
-
-#### guest 완료 조건
-
-- 처음 방문한 브라우저에서 login 없이 방 목록·생성·코드 참가·빠른 참가가 된다.
-- 같은 탭 F5에서 guest ID/닉네임이 유지되고, 15분 이상 열어 둔 탭에서도 401 노출 없이 회전된다.
-- 탭을 닫은 뒤 1시간 이상 refresh가 없으면 Redis guest session이 사라지고, 회전 전 refresh token replay는 거부된다.
-- guest는 room API에 접근하지만 account session/계정 API에는 접근하지 못하고 account와 다른 rate limit을 적용받는다.
-- logout 직후 guest로 자동 전환되고, F5 후 폐기한 account cookie로 다시 login되지 않는다.
-- guest 경기는 participant row를 남기되 account stats에 합산되지 않는 기존 integration test를 통과한다.
-
-### P0. 인게임은 실행되지만 자기 플레이어가 안 보임
-
-**정적 분석으로 확인한 원인**: GamePage snapshot은 `Engine.applySnapshot()`으로 들어가고 플레이어 스프라이트 렌더러도 sandbox에서 정상이다. 그러나 카메라는 `freeCamera = true`, `(x, y) = (0, 0)`에서 시작하고, `WorldScene.setSelf()`는 self ID만 설정할 뿐 `camera.follow(selfId)`를 호출하지 않는다. `EngineMode`(`play`/`spectate`)도 실질적으로 사용되지 않아, 스폰이 월드 원점에서 멀면 화면에 아무도 없는 것처럼 보인다. 앞서 고친 “GamePage가 맵을 load하지 않음”과는 별개의 남은 문제다.
-
-**수정 계획**:
-
-1. `Engine` mode를 `WorldScene`/카메라 초기화 정책까지 전달한다.
-2. play mode에서 첫 snapshot이 self player를 실제 생성한 직후 **한 번만** `camera.follow(selfId)`한다. `setSelf()` 시점에 sprite가 아직 없을 수 있으므로 pending self ID를 두고 snapshot materialization 후 처리한다.
-3. 매 snapshot마다 follow를 강제하지 말고 `cameraInitialized`/명시적 사용자 선택을 두어 최초 1회만 자동 follow한다. spectate mode는 임의 player를 자동 follow하지 않는다.
-4. snapshot 적용 예외를 완전히 숨기지 말고 room/tick/selfId 정도를 남긴 제한된 진단 로그를 남긴다.
-
-**검증**: 맵 원점에서 멀리 스폰하는 fixture, self가 두 번째 snapshot에 등장하는 fixture, spectate mode, free camera 전환 후 후속 snapshot을 테스트한다. 실제 3인 경기에서 self/상대 sprite와 카메라 추적을 눈으로 확인한다.
-
-### P0. room create/quick-join `COMMAND_TIMEOUT`, 준비 전 노출, 유령 reservation
-
-#### 서로 다른 두 문제로 분리
-
-- **기동 직후의 확정된 준비 순서 버그**: `server-game/src/main.ts`/Redis 기동에서 registry heartbeat가 먼저 서버를 healthy로 노출하고 command consumer가 나중에 붙는 창이 있다. 이 때 `CREATE_ROOM`은 소비자가 없어 timeout난다.
-- **정상 운영 중의 1~2초 지연은 원인 미확정**: `COMMAND_TIMEOUT_MS=2000`에 가까운 지연이 오래 켜 둔 watch process에서 자주 보였지만 Redis round trip, consumer lag, event-loop stall, reply polling, DB/lock 중 어디가 원인인지는 측정 전에 단정하지 말 것.
-
-#### 수정 순서
-
-1. request ID로 `match enqueue -> game consume -> room create/join -> reply publish -> match receive`의 monotonic timestamp과 stream/consumer lag를 기록해 병목을 먼저 확정한다. 로그에 `requestId`, `serverId`, `roomId`, stage elapsed를 남긴다.
-2. game server는 command consumer가 구독 준비를 끝낸 후에만 registry ready/heartbeat를 노출한다. 종료는 반대 순서로 한다. 준비 전 server를 `RoomsService` 선택 후보에 넣지 않는 테스트를 추가한다.
-3. timeout 숫자만 키우지 말고 계측 결과로 정상 상한을 재설정한다. network timeout과 operation 실패를 구분해 “결과 미확정” 상태를 따로 둔다.
-4. `CREATE_ROOM`/`JOIN_ROOM`은 같은 request ID 재전송이 같은 결과를 돌려주는 idempotency를 보장한다. timeout 후 원 request ID로 재확인/재전송하고, 늦게 온 reply는 operation cache와 대조해 회수한다.
-5. quick-join 후보별 시도와 최상위 user operation을 구분하고, 모든 경로에서 `user:{actorId}:active-room='reservation'`을 commit(room ID)/rollback 중 하나로 종료하는 `finally`/원자적 Lua를 둔다. `{alreadyAssigned:true, roomId 없음}`을 정상 응답으로 반환하지 말 것.
-6. timeout된 create가 game server에서 늦게 성공한 경우 match DB/active-room/directory가 모두 그 방을 인지하거나 모두 보상 삭제하도록 상태 전이를 정의한다.
-
-**검증**: consumer 준비 전 명령, late reply, 같은 request ID 중복, quick-join 첫 후보 timeout/두 번째 성공, process restart를 가상 시계로 테스트한다. 한 번의 UI 행동이 retry 때문에 rate limit에 여러 번 차감되지 않아야 한다.
-
-### P1. 방 코드 6자리와 내부 `roomId` UUID 계약 분리
-
-**원인**: game server는 UUID `roomId`를 만들지만 client code-join은 6자 영숫자만 받는다. UI만 UUID를 받게 늘리지 말고 다음 계약으로 고정한다.
-
-- `roomId`: 서버·Redis·WS·URL이 쓰는 내부 UUID, 불변.
-- `roomCode`: 사용자가 보고 입력하는 6자 대문자+숫자. 혼동 문자를 빼고 server에서 생성한다.
-- room directory에 code→roomId 역인덱스를 room TTL과 함께 두고, 충돌 시 유한 횟수 재생성한다. room 삭제 시 역인덱스도 지운다.
-- shared `CreateRoomResult`, room list/detail DTO, join command에 `roomCode`를 추가한다. code join은 code를 roomId로 resolve한 뒤 기존 join command를 쓴다.
-- client Lobby/초대 UI는 code를 보이고 URL/WS는 roomId를 유지한다. `matches.room_id`와 result idempotency도 계속 UUID를 써야 한다.
-- `shared`, game command consumer/directory, match `RoomsService`, client API/validation/LobbyPage를 함께 검색해 타입 계약을 한 번에 전환한다.
-
-### P1. `/game` F5/직접 URL 404와 실제 경기 복구 부재
-
-1. `client/vite.config.ts`의 WS proxy를 SPA route `/game`과 겹치지 않는 전용 접두어(예: `/game-ws`)로 바꾸거나 WS upgrade/하위 경로만 proxy하게 한다. `GET /game?room_id=...`는 Vite SPA fallback으로 가야 한다.
-2. proxy만 고쳐도 `GamePage` 마운트 시 active room 복구가 없으므로 불충분하다. guest/account bootstrap 완료 → URL `room_id` 검증 → active-room 조회/복구 → 새 WS ticket → connect → snapshot 적용 순서를 구현한다.
-3. disconnect grace 10초 안에 일반 F5 복구가 들어오는지 측정하고, 시간을 늘리기 전 client bootstrap/WS 병목을 먼저 제거한다.
-4. lobby/game/end 상태와 만료 guest refresh 각각의 F5 결과를 정의해 테스트한다.
-
-### P1. runtime map bundle 경로 부재
-
-현재 GamePage는 `dev/fixtures/serverMaps.ts`를 로드해 빈 화면은 해결했지만 server가 선택한 `mapBundleHash`를 받는 경로가 없다.
-
-- bootstrap의 `mapId`+`mapBundleHash`로 immutable bundle을 fetch하고 hash를 검증한 후 `engine.map.load()`한다.
-- loading 중 snapshot은 유한 크기로 버퍼링하거나 최신 full snapshot 하나만 잡고, 실패 시 retry/나가기가 있는 명시적 UI를 보인다.
-- fixture는 sandbox/오프라인 test로만 남기고 production GamePage fallback으로 쓰지 않는다.
-- bundle serving 소유권, cache header, hash 알고리즘은 shared/server-game/client 계약을 먼저 고정한 뒤 구현한다.
-
-### P1. `server-game` test discovery 비결정성
-
-`node --test "dist-test/**/*.test.js"`가 반복 실행에서 다른 테스트 수를 실행한 것은 확인했지만 “Node 자체 glob bug”로는 아직 확정하지 말 것. compile 후 `dist-test` 목록, reporter 시작 목록, shell/Node 버전별 glob 확장을 비교한다. 해결은 OS/shell glob에 의존하지 않는 Node launcher가 `*.test.js`를 재귀적으로 정렬·나열해 runner에 명시적으로 넘기는 방식으로 한다. 발견 0개는 실패시키고 CI log에 발견/실행 파일 수를 남긴다.
-
-### 구현 순서와 충돌/회귀 체크리스트
-
-1. **선행 상태 확인**: worktree 차이, 다른 세션의 test 결과/수정, `docs/TASKS.md`의 새 내용을 먼저 재확인한다. 이미 고쳐진 항목은 재구현하지 않는다.
-2. **auth boundary first**: `NeedActor`/`NeedAccount` 분리와 guest의 account API 차단을 먼저 테스트한다. guest-first UI를 켜기 전에 막아야 할 기존 보안 버그다.
-3. **guest server lifecycle**: Redis session, issue/refresh rotation/logout, 3-tier rate limit을 test와 함께 구현한다. Redis 장애/재시작 시 새 guest로 안전하게 fallback하되 active game 중 신분을 조용히 바꾸지 않는다.
-4. **client bootstrap**: auth state 분리, sessionStorage refresh, single-flight 401, Profile/login/signup/logout을 구현한 뒤 첫 요청 401과 account cookie 복구를 확인한다.
-5. **camera auto-follow**를 작은 독립 변경으로 처리하고 실제 경기로 검증한다. map bundle 작업과 묶어 원인을 혼합하지 말 것.
-6. **control-plane readiness -> measurement -> timeout/idempotency/reservation** 순서로 진행한다. 현재 결과 저장에서 쓰는 `requestId`, `matchId`, `roomId`, `mapId` idempotency를 깨지 않는지 확인한다.
-7. **roomCode shared contract**은 관련 server/client를 한 번에 전환한다. 구버전 producer/consumer 호환 창이 필요하면 optional field -> 전체 배포 -> required field 순서로 옮긴다.
-8. **F5 recovery/map bundle**은 guest identity 복구와 roomCode/roomId 분리가 안정된 뒤 연결한다.
-9. **full regression**: server-match unit/integration, server-game의 명시적 전체 test 명단, client typecheck/build/test를 돌린다. 그 뒤 guest 3 tabs + account 1 tab으로 create -> code join -> ready -> game -> F5 recovery -> result DB save를 통과한다. guest stats 제외, account stats 합산, active-room 잔존 key 0, 닫힌 room의 directory/code reverse index 잔존 0을 직접 확인한다.
-
-#### 파일/계약 영향 검색 범위
-
-- `server-match`: `src/auth/**`, `src/session/**`, `src/user/**`, `src/rooms/**`, `src/results/**`, `src/ratelimiter.*`, config/env validation, app module/global guard order.
-- `server-game`: Redis registry/consumer/reply, room directory/lifecycle, WS handshake/ticket/active-room, result payload, startup/shutdown order.
-- `client`: `src/api/http.ts`, auth/rooms/matches/sessions API, `useAuthStore`, Router/root bootstrap, login/signup/profile, RoomList/Create/Join/Lobby/GamePage, game `Engine`/`WorldScene`/`CameraController`, `vite.config.ts`, i18n.
-- `shared`: JWT actor/request type, room `roomId`/`roomCode`, create/join/result protocol, Redis `makeKeys`, map bundle identity. **shared를 바꾸면 `server-match`, `server-game`, `client`의 typecheck를 같은 작업 단위에서 확인**한다.
-- docs/infra: `.env.example` 및 deployment secret, Redis TTL/key 명세, API schema, client dev proxy. 실제 secret이나 발급 token은 문서/log에 남기지 않는다.
+인증 코드는 메일로 안 오니 Redis에서 직접 읽는다: `auth:code:{vtype}:{email}` (`vtype`은 `signup`/`reset-password`/`delete`).
+T2 이후에는 sink(`test:mail:{to}`)에서 읽는다.
