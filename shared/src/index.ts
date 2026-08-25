@@ -53,6 +53,16 @@ export {
 } from './protocol/input';
 
 export {
+    MapMarkerKind,
+    MapZoneKind,
+    MAP_MARKER_KINDS,
+    MAP_ZONE_KINDS,
+    MAP_MARKER_RADIUS_TILES,
+    type MapMarker,
+    type MapZone,
+} from './protocol/mapMarkers';
+
+export {
     TILE_PX,
     MOVEMENT,
     SKILL_TUNING,

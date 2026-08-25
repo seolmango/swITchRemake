@@ -4,7 +4,7 @@ import type { SceneAccessor } from './internal/SceneAccessor.ts';
 import { MapController } from './MapController.ts';
 import { PlayerHandle } from './PlayerHandle.ts';
 import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EngineMode, type DisplayOptions, type EngineSettings, type PlayerInit, type Theme } from './types.ts';
-import { decodeSnapshot, type Snapshot } from 'shared';
+import { decodeSnapshot, type Snapshot, type TrainingPad } from 'shared';
 import { phaserFpsLimit } from './internal/frameRateLimit.ts';
 
 export interface SwitchEngineOptions {
@@ -223,6 +223,11 @@ export class SwitchEngine {
      */
     playSkillArea(playerId: number, x: number, y: number, targetPlayerId: number | null, rangePx: number): void {
         this._accessor.withScene((s) => s.playSkillArea(playerId, x, y, targetPlayerId, rangePx));
+    }
+
+    /** 서버가 보낸 훈련장 판정 반경을 그대로 바닥 레이어에 반영한다. */
+    setTrainingPads(pads: readonly TrainingPad[]): void {
+        this._accessor.withScene((s) => s.setTrainingPads(pads));
     }
 
     /** Local view preferences (in-body number, nickname above head). Never leaves the client. */

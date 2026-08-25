@@ -19,6 +19,7 @@ import {
     CONTROL_VERSION,
     ControlErrorCode,
     MAX_PLAYERS_PER_ROOM,
+    RoomMode,
     PROTOCOL_VERSION,
     makeKeys,
     type ActorId,
@@ -144,6 +145,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         const actor = await this.requireActor(principal);
         await this.enforceActorRate(actor.id, 'room-create-rate');
         await this.enforceGuestIpRate(actor, clientIp, 'room-create-rate');
+        const training = dto.mode === RoomMode.Training;
         const roomName = this.cleanRoomName(dto.name);
         const requestId = randomUUID();
         const claim = await this.claimActiveRoom(actor.id, requestId);
@@ -171,8 +173,9 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                     password: dto.password?.length ? dto.password : null,
                     ownerUserId: actor.id,
                     ownerNickname: actor.nickname,
-                    capacity: dto.capacity ?? MAX_PLAYERS_PER_ROOM,
+                    capacity: dto.capacity ?? (training ? 1 : MAX_PLAYERS_PER_ROOM),
                     mapId: dto.mapId ?? 'random',
+                    ...(training ? { mode: RoomMode.Training } : {}),
                 },
             });
             if (!reply.ok || !reply.payload) {

@@ -317,6 +317,13 @@ html[lang='ko'] .page-title { top: 42px; }
   color: var(--settings-text);
 }
 
+.settings-shell.is-embedded {
+  left: 110px;
+  right: 110px;
+  top: 70px;
+  bottom: 70px;
+}
+
 .settings-tabs {
   padding: 34px 26px;
   display: flex;
@@ -827,6 +834,96 @@ html[data-motion='reduced'] .room-card {
   color: var(--guide-muted);
   font-size: var(--guide-body-font);
   font-weight: 700;
+}
+
+.training-entry {
+  position: absolute;
+  left: 50%;
+  top: 505px;
+  width: 880px;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 30px;
+  text-align: center;
+}
+
+.training-entry p { margin: 0; font-size: 34px; line-height: 1.5; }
+.training-entry span { font-size: 23px; line-height: 1.5; }
+
+.training-guide {
+  position: absolute;
+  z-index: 30;
+  top: 24px;
+  left: 50%;
+  max-width: 760px;
+  transform: translateX(-50%);
+  padding: 12px 22px;
+  border: 3px solid var(--training-border);
+  border-radius: 999px;
+  background: var(--training-panel);
+  color: var(--training-text);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+}
+
+.training-actions {
+  position: absolute;
+  z-index: 35;
+  right: 28px;
+  bottom: 28px;
+  display: flex;
+  gap: 10px;
+}
+
+.training-actions button,
+.training-respawn,
+.training-settings-close {
+  min-height: 54px;
+  padding: 9px 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 3px solid var(--training-border);
+  border-radius: 17px;
+  background: var(--training-panel);
+  color: var(--training-text);
+  font: 700 18px var(--font-body);
+  cursor: pointer;
+}
+
+.training-actions button:hover,
+.training-settings-close:hover { border-color: #71B9FF; }
+
+.training-respawn {
+  position: absolute;
+  z-index: 35;
+  left: 50%;
+  bottom: 42px;
+  min-width: 260px;
+  transform: translateX(-50%);
+  border-color: #FF7171;
+  font-size: 21px;
+}
+
+.training-settings-overlay {
+  position: absolute;
+  z-index: 70;
+  inset: 0;
+  background: var(--training-backdrop);
+  pointer-events: auto;
+}
+
+.training-settings-close {
+  position: absolute;
+  left: 50%;
+  bottom: 9px;
+  min-width: 220px;
+  transform: translateX(-50%);
 }
 
 .profile-panel {

@@ -409,6 +409,17 @@
       "generic": "That skill could not be used."
     }
   },
+  "training": {
+    "title": "Training Ground",
+    "roomName": "Personal Training Ground",
+    "connecting": "Preparing your training ground…",
+    "connectingDetail": "You enter alone and training starts as soon as it is ready.",
+    "guide": "Use the floor pads to change tagger, skill, or reset state, then test against targets and walls.",
+    "settings": "Live settings",
+    "exit": "Leave training",
+    "respawn": "Respawn",
+    "closeSettings": "Close settings"
+  },
   "guide": {
     "title": "How to Play",
     "intro": "Stay alive inside the shrinking storm, evade the tagger, and pass the role to another runner at the decisive moment.",
@@ -464,7 +475,7 @@
     },
     "training": {
       "button": "Training Ground",
-      "status": "Coming soon"
+      "status": "Safely practice skills, physics, and spectating."
     },
     "tagger": {
       "eyebrow": "The tagger",

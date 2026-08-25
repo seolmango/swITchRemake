@@ -1,6 +1,7 @@
 import {
     HEARTBEAT_INTERVAL_MS,
     HEARTBEAT_TTL_MS,
+    RoomMode,
     RoomState,
     type ActorId,
     type GameServerHeartbeat,
@@ -260,7 +261,10 @@ export class GameRegistry {
         };
         await this.#options.redis.setPx(this.#options.keys.room(projection.roomId), JSON.stringify(value), HEARTBEAT_TTL_MS);
         await this.#options.redis.setPx(this.#options.keys.roomCode(projection.roomCode), projection.roomId, HEARTBEAT_TTL_MS);
-        if (projection.state === RoomState.Waiting && !projection.locked) {
+        // 훈련장은 혼자 들어가는 방이라 목록에도 빠른 참가에도 나오면 안 된다.
+        // 코드로도 못 들어오게 하려면 roomCode 자체를 안 실어야 하지만, 그건 방을 만든
+        // 본인의 재접속(resume) 경로까지 막는다. 목록에서 빼는 선에서 멈춘다.
+        if (projection.mode !== RoomMode.Training && projection.state === RoomState.Waiting && !projection.locked) {
             await this.#options.redis.zAdd(this.#options.keys.roomsWaiting(), now, projection.roomId);
         } else {
             await this.#options.redis.zRemove(this.#options.keys.roomsWaiting(), projection.roomId);

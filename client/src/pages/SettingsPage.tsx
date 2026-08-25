@@ -88,7 +88,7 @@ const MOVEMENT_ACTIONS: KeyAction[] = ['moveUp', 'moveDown', 'moveLeft', 'moveRi
 const SWITCH_ACTIONS: KeyAction[] = ['switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8'];
 const EMOJI_ACTIONS: KeyAction[] = ['emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8'];
 
-export const SettingsPage: React.FC = () => {
+export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
     const { t } = useTranslation();
     const [section, setSection] = useState<SettingsSection>('general');
     const [editing, setEditing] = useState<{ action: KeyAction; slot: 0 | 1 } | null>(null);
@@ -315,10 +315,9 @@ export const SettingsPage: React.FC = () => {
         </>
     );
 
-    return (
-        <PageLayout title={t('settings.title')}>
+    const panel = (
             <div
-                className="settings-shell"
+                className={`settings-shell ${embedded ? 'is-embedded' : ''}`}
                 style={{
                     '--settings-panel': colors.panel,
                     '--settings-border': colors.panelBorder,
@@ -384,6 +383,8 @@ export const SettingsPage: React.FC = () => {
                     </div>
                 </section>
             </div>
-        </PageLayout>
     );
+
+    if (embedded) return panel;
+    return <PageLayout title={t('settings.title')}>{panel}</PageLayout>;
 };

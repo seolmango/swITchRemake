@@ -116,6 +116,7 @@ export interface RoomProjection {
     readonly capacity: number;
     readonly hasPassword: boolean;
     readonly locked: boolean;
+    readonly mode: RoomMode;
 }
 
 function passwordMatches(expected: string, supplied: string): boolean {
@@ -221,6 +222,7 @@ export class Room {
             capacity: this.#roster.capacity,
             hasPassword: this.#password !== null,
             locked: this.#locked,
+            mode: this.mode,
         };
     }
 
@@ -482,6 +484,26 @@ export class Room {
             type: 'game.ended',
             payload: { matchId: this.matchId, winnerIds: [winnerIds[0], winnerIds[1]], returnsAt: this.#postGameEndsAt },
         });
+        return true;
+    }
+
+    /**
+     * 훈련장 부활. 탈락으로 관전자가 된 사람을 다시 플레이어로 돌린다.
+     *
+     * 시뮬레이션에서 `alive`만 되돌리면 안 된다 — `resolvedInputs()`가 `spectatorEligible`인
+     * 사람의 입력을 버리기 때문에, 화면에는 살아 있는데 움직이지 않는 상태가 된다.
+     * 명단과 시뮬레이션 양쪽을 같이 되돌려야 한다.
+     */
+    public reviveForTraining(playerId: number): boolean {
+        if (this.mode !== RoomMode.Training || this.state !== RoomState.Playing) return false;
+        const member = this.#roster.getByPlayerId(playerId);
+        if (member === null || !member.spectatorEligible) return false;
+        member.spectatorEligible = false;
+        member.role = PlayerRole.Player;
+        member.inCurrentGame = true;
+        member.latestInput = null;
+        this.#broadcast({ type: 'spectate.changed', payload: { playerId, spectating: false } });
+        this.broadcastLobbyState();
         return true;
     }
 

@@ -3,12 +3,14 @@ import { MapLayer } from './MapLayer.ts';
 import { PlayerSprite, type PlayerVisualState } from './PlayerSprite.ts';
 import { BlinkFxLayer } from './BlinkFxLayer.ts';
 import { SwitchFxLayer } from './SwitchFxLayer.ts';
+import { TrainingPadLayer } from './TrainingPadLayer.ts';
 import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EffectType, EngineMode, type DisplayOptions, type EngineSettings, type FloorVariant, type MapView, type PlayerInit, type StormRect, type Theme, type TilePhysics } from '../types.ts';
 import { applyColorVision, Palette } from '../palette.ts';
 import { CAMERA, CAMERA_FX, CULL_MARGIN, MOTION_PRESETS, QUALITY_PRESETS, TILE_SIZE, type RenderOptions } from '../constants.ts';
 import { EMOJI_COUNT, emojiDataUri, emojiTextureKey } from '../emoji.ts';
+import { TRAINING_PAD_TEXTURES, trainingPadTextureUri } from '../trainingPadTextures.ts';
 import { Color } from '../../theme/color.ts';
-import { EFFECT_BITS, type Snapshot } from 'shared';
+import { EFFECT_BITS, type Snapshot, type TrainingPad } from 'shared';
 import {
     advanceRenderTick,
     bufferEntityPositions,
@@ -60,6 +62,7 @@ export class WorldScene extends Phaser.Scene {
     private mapLayer!: MapLayer;
     private blinkFx!: BlinkFxLayer;
     private switchFx!: SwitchFxLayer;
+    private trainingPads!: TrainingPadLayer;
     private readonly players = new Map<number, PlayerSprite>();
     private taggerId: number | null = null;
     private selfId: number | null = null;
@@ -117,6 +120,9 @@ export class WorldScene extends Phaser.Scene {
                 if (uri) this.load.image(emojiTextureKey(id, theme), uri);
             }
         }
+        for (const [key, svg] of TRAINING_PAD_TEXTURES) {
+            this.load.image(key, trainingPadTextureUri(svg));
+        }
     }
 
     create(): void {
@@ -124,6 +130,7 @@ export class WorldScene extends Phaser.Scene {
         this.baseZoom = this.cameras.main.zoom;
         this.mapLayer = new MapLayer(this, this.theme);
         this.mapLayer.setRenderOptions(this.renderOptions);
+        this.trainingPads = new TrainingPadLayer(this, this.theme);
         this.blinkFx = new BlinkFxLayer(this);
         this.switchFx = new SwitchFxLayer(this);
         this.setupCameraInput();
@@ -323,6 +330,7 @@ export class WorldScene extends Phaser.Scene {
         this.theme = theme;
         this.cameras.main.setBackgroundColor(theme === 1 ? Palette.black : Palette.white);
         this.mapLayer.setTheme(theme);
+        this.trainingPads.setTheme(theme);
     }
 
     // ---- 유저 설정 ----
@@ -378,6 +386,10 @@ export class WorldScene extends Phaser.Scene {
 
     setStormRect(rect: StormRect | null): void {
         this.mapLayer.setStormRect(rect);
+    }
+
+    setTrainingPads(pads: readonly TrainingPad[]): void {
+        this.trainingPads.setPads(pads);
     }
 
     setTileAlphas(overrides: readonly { x: number; y: number; alpha: number }[]): void {

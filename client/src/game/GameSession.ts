@@ -1,4 +1,16 @@
-import { JSON_MESSAGE_VERSION, RoomState, encodeInput, type ClientMessage, type InputState, type ServerMessage, type Snapshot } from 'shared';
+import {
+    JSON_MESSAGE_VERSION,
+    RoomMode,
+    RoomState,
+    SkillId,
+    TrainingPadKind,
+    encodeInput,
+    type ClientMessage,
+    type InputState,
+    type ServerMessage,
+    type Snapshot,
+    type TrainingPad,
+} from 'shared';
 import { resumeRoom, type RoomSeatGrant } from '../api/rooms.ts';
 import { reconnectDelayMs } from './reconnectPolicy.ts';
 
@@ -46,6 +58,9 @@ export interface GameSessionState {
     latencyMs: number | null;
     /** Client-side estimate from authoritative snapshot tick progress over arrival time. */
     estimatedTps: number | null;
+    trainingPads: readonly TrainingPad[];
+    trainingPlayers: ReadonlyArray<{ id: number; nickname: string; colorIndex: number; alive: boolean }>;
+    trainingSkill: Exclude<SkillId, 'switch'> | null;
 }
 
 const INITIAL_STATE: GameSessionState = {
@@ -70,6 +85,9 @@ const INITIAL_STATE: GameSessionState = {
     skillRejections: [],
     latencyMs: null,
     estimatedTps: null,
+    trainingPads: [],
+    trainingPlayers: [],
+    trainingSkill: null,
 };
 
 const ACTIVE_ROOM_KEY = 'switch-active-room';
@@ -166,8 +184,50 @@ class GameSession {
         const snapshotTaggerId = snapshot.players?.find((player) => player.isTagger)?.id;
         const taggerId = snapshotTaggerId ?? this.state.taggerId;
         const estimatedTps = this.sampleTps(snapshot.tick);
-        if (!cooldownsChanged && taggerId === this.state.taggerId && estimatedTps === this.state.estimatedTps) return;
-        this.setState({ cooldowns: nextCooldowns, taggerId, estimatedTps });
+        let trainingPlayers = this.state.trainingPlayers;
+        let trainingSkill = this.state.trainingSkill;
+        if (this.state.lobby?.mode === RoomMode.Training) {
+            const visible = new Map(snapshot.players?.map((player) => [player.id, player]) ?? []);
+            const roster = snapshot.roster ?? trainingPlayers.map(({ id, nickname }) => ({ id, nickname }));
+            if (roster.length > 0) {
+                trainingPlayers = roster.map((entry) => {
+                    const previous = this.state.trainingPlayers.find((player) => player.id === entry.id);
+                    const player = visible.get(entry.id);
+                    return {
+                        id: entry.id,
+                        nickname: entry.nickname,
+                        colorIndex: player?.colorIndex ?? previous?.colorIndex ?? entry.id - 1,
+                        alive: player !== undefined || previous?.alive !== false,
+                    };
+                });
+            } else if (snapshot.players) {
+                trainingPlayers = trainingPlayers.map((entry) => {
+                    const player = visible.get(entry.id);
+                    return player ? { ...entry, colorIndex: player.colorIndex, alive: true } : entry;
+                });
+            }
+
+            const self = this.state.selfId === null ? undefined : visible.get(this.state.selfId);
+            if (self) {
+                const pad = this.state.trainingPads.find((candidate) => {
+                    const dx = candidate.x - self.x;
+                    const dy = candidate.y - self.y;
+                    return dx * dx + dy * dy <= candidate.radius * candidate.radius;
+                });
+                if (pad?.kind === TrainingPadKind.SkillDash) trainingSkill = SkillId.Dash;
+                else if (pad?.kind === TrainingPadKind.SkillFlash) trainingSkill = SkillId.Flash;
+                else if (pad?.kind === TrainingPadKind.SkillExhaust) trainingSkill = SkillId.Exhaust;
+            }
+        }
+        const trainingPlayersChanged = trainingPlayers.length !== this.state.trainingPlayers.length
+            || trainingPlayers.some((player, index) => {
+                const previous = this.state.trainingPlayers[index];
+                return !previous || player.id !== previous.id || player.nickname !== previous.nickname
+                    || player.colorIndex !== previous.colorIndex || player.alive !== previous.alive;
+            });
+        if (!cooldownsChanged && taggerId === this.state.taggerId && estimatedTps === this.state.estimatedTps
+            && !trainingPlayersChanged && trainingSkill === this.state.trainingSkill) return;
+        this.setState({ cooldowns: nextCooldowns, taggerId, estimatedTps, trainingPlayers, trainingSkill });
     }
 
     async connect(grant: RoomSeatGrant, metadata: GameSessionMetadata = {}): Promise<void> {
@@ -328,6 +388,15 @@ class GameSession {
                 break;
             case 'player.skillArea':
                 for (const listener of this.skillAreaListeners) listener(message.payload);
+                break;
+            case 'player.eliminated':
+                this.setState({
+                    trainingPlayers: this.state.trainingPlayers.map((player) =>
+                        player.id === message.payload.playerId ? { ...player, alive: false } : player),
+                });
+                break;
+            case 'training.state':
+                this.setState({ trainingPads: message.payload.pads.map((pad) => ({ ...pad })) });
                 break;
             case 'player.left':
                 if (message.payload.playerId === this.state.selfId) sessionStorage.removeItem(ACTIVE_ROOM_KEY);

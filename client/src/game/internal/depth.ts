@@ -9,6 +9,9 @@ export const DEPTH = {
     smoke: 2,
     stormFill: 3,
     stormBorder: 4,
+    /** 서버 판정 반경을 보여 주는 바닥 표식. 자기장 위에 보이되 플레이어나 순간 효과를 가리지 않는다. */
+    trainingPad: 4.2,
+    trainingPadIcon: 4.3,
     /** 점멸 궤적보다 아래. 사거리 원이 궤적을 덮으면 어느 쪽이 무슨 스킬인지 안 읽힌다. */
     switchFx: 4.5,
     blinkFx: 5,

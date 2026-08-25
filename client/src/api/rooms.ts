@@ -1,5 +1,5 @@
 import { apiRequest } from './http.ts';
-import type { SeatGrant } from 'shared';
+import type { RoomMode, SeatGrant } from 'shared';
 
 export interface RoomSummary {
     id: string;
@@ -31,7 +31,14 @@ export interface ExistingRoomAssignment {
 export type RoomAssignment = RoomSeatGrant | ExistingRoomAssignment;
 
 export const getRooms = (page: number) => apiRequest<RoomPageResponse>(`/rooms?page=${page}`, { method: 'GET' });
-export const createRoom = (body: { name: string; password?: string }) => apiRequest<RoomAssignment>('/rooms', { method: 'POST', body });
+export interface CreateRoomRequest {
+    name: string;
+    password?: string;
+    capacity?: number;
+    mode?: RoomMode;
+}
+
+export const createRoom = (body: CreateRoomRequest) => apiRequest<RoomAssignment>('/rooms', { method: 'POST', body });
 export const joinRoom = (roomCode: string, password?: string) => apiRequest<RoomAssignment>(`/rooms/code/${encodeURIComponent(roomCode)}/join`, { method: 'POST', body: { password } });
 export const quickJoin = () => apiRequest<RoomAssignment>('/rooms/quick-join', { method: 'POST' });
 export const resumeRoom = async (roomId: string, preserveActiveRoomOnFailure = false) => {

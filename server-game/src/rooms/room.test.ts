@@ -62,7 +62,7 @@ function seat(userId: number, now: number, resume = false): SeatReservation {
     };
 }
 
-function setup() {
+function setup(mode: RoomMode = RoomMode.Match) {
     let now = 0;
     let tick = 10;
     const lifecycle = new FakeLifecycle();
@@ -76,8 +76,8 @@ function setup() {
         capacity: 8,
         mapId: 'map-a',
         ownerReservation: owner,
-        mode: RoomMode.Match,
-        minPlayersToStart: 3,
+        mode,
+        minPlayersToStart: mode === RoomMode.Training ? 1 : 3,
         simulationHz: 60,
         rules: { rulesVersion: 'test' },
         hudGameplay: { cooldownMs: 123 },
@@ -261,4 +261,34 @@ test('강퇴한 사용자는 방이 살아 있는 동안 다시 예약할 수 �
     assert.equal(context.room.kick(1, 2), null);
     assert.equal(c2.closes[0]?.code, 1008);
     assert.equal(context.room.reserveJoin(seat(2, 1), 'secret'), 'KICKED_FROM_ROOM');
+});
+
+test('훈련장 부활은 관전자를 다시 플레이어로 돌린다', () => {
+    // 시뮬레이션의 alive만 되돌리면 resolvedInputs가 관전자 입력을 버려서
+    // 화면에는 살아 있는데 움직이지 않는 상태가 된다.
+    const context = setup(RoomMode.Training);
+    context.connect(context.owner);
+    const second = seat(2, 0);
+    assert.equal(context.room.reserveJoin(second, 'secret'), null);
+    context.connect(second);
+    context.setNow(6_000);  // 참가 잠금(5초)이 풀린 뒤
+    assert.equal(context.room.requestStart(1), null);
+    context.setNow(10_000);
+    context.room.advance();
+    assert.equal(context.room.state, RoomState.Playing);
+
+    assert.equal(context.room.markEliminated(2, 1), true);
+    const member = context.room.memberByUser(2)!;
+    assert.equal(member.spectatorEligible, true);
+
+    assert.equal(context.room.reviveForTraining(2), true);
+    assert.equal(member.spectatorEligible, false);
+    assert.equal(member.role, PlayerRole.Player);
+    assert.equal(context.room.reviveForTraining(2), false, '살아 있는데 또 되살아났다');
+});
+
+test('경기 방에서는 훈련장 부활이 거부된다', () => {
+    const context = setup();
+    context.connect(context.owner);
+    assert.equal(context.room.reviveForTraining(1), false);
 });

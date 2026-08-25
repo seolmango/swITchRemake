@@ -259,8 +259,7 @@ export const HowToPlayPage: React.FC = () => {
                         height={120}
                         type={0}
                         content={t('guide.training.button')}
-                        ariaLabel={`${t('guide.training.button')}, ${t('guide.training.status')}`}
-                        disabled
+                        ariaLabel={t('guide.training.button')}
                         onClick={() => navigate('/training')}
                     />
                     <p>{t('guide.training.status')}</p>
