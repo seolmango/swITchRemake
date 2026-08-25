@@ -39,6 +39,7 @@ const lifecycle: RoomLifecyclePort = {
     connectionChanged: () => undefined,
     participantTimedOut: () => undefined,
     participantRemoved: () => undefined,
+        stopRoom: () => undefined,
 };
 
 function seat(userId: number, resume = false): SeatReservation {

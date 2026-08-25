@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { decodeSnapshot, SkillId, SkillRejection, SkillSlot, TilePhysics } from 'shared';
+import { decodeSnapshot, SkillId, SkillRejection, SkillSlot, TilePhysics , RoomMode } from 'shared';
 import { EMOJI_DISPLAY_MS } from '../config/gameplay';
 import type { ReplayRecorder } from '../replay/recorder';
 import { msToTicks } from '../simulation/effects';
 import type { Room } from '../rooms/room';
+import { stepWorld } from '../simulation/step';
 import { mapFromRows, makePlayer, makeWorld } from '../simulation/testing';
 import { GameSession } from './game-session';
 
@@ -45,6 +46,7 @@ test('a failed queued skill is returned to its requester at the tick boundary', 
         room,
         world,
         matchId: 'match',
+        mode: RoomMode.Match,
         roster: [],
         violationSink: () => undefined,
         meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' },
@@ -83,6 +85,7 @@ test('queued emojis keep the last request per player and apply only for living p
         room,
         world,
         matchId: 'match',
+        mode: RoomMode.Match,
         roster: [],
         violationSink: () => undefined,
         meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' },
@@ -145,7 +148,7 @@ test('publish 사이의 timeline tile 변경을 delta와 replay에 모두 한 �
         3: [[2, 1, TilePhysics.Wall]],
     };
     const session = new GameSession({
-        room, world, matchId: 'match', roster: [], recorder,
+        room, world, matchId: 'match', mode: RoomMode.Match, roster: [], recorder,
         violationSink: () => undefined,
         meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' },
         onFinished: () => undefined,
@@ -192,7 +195,7 @@ test('full 및 delta 뷰어가 섞여도 delta가 누적 타일 변경을 잃지
     ]);
     world.map.timeline = { 2: [[1, 1, TilePhysics.Wall]], 3: [[2, 1, TilePhysics.Wall]] };
     const session = new GameSession({
-        room, world, matchId: 'match', roster: [], violationSink: () => undefined,
+        room, world, matchId: 'match', mode: RoomMode.Match, roster: [], violationSink: () => undefined,
         meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' }, onFinished: () => undefined,
     });
 
@@ -212,4 +215,62 @@ test('full 및 delta 뷰어가 섞여도 delta가 누적 타일 변경을 잃지
         { x: 1, y: 1, physics: TilePhysics.Wall },
         { x: 2, y: 1, physics: TilePhysics.Wall },
     ]);
+});
+
+test('훈련장은 혼자 있어도 첫 tick에 끝나지 않는다', () => {
+    // `isFinished`는 생존자가 2명 이하면 참이다. 훈련장은 혼자 들어가는 방이라 그 규칙을 그대로
+    // 두면 시작하자마자 끝난다. 결과도 내보내면 안 된다 — 봇 잡은 기록이 전적에 남을 자리가 없다.
+    const finished: string[] = [];
+    const room = {
+        id: 'room',
+        participants: () => [{ playerId: 1, userId: 1, nickname: 'P1', colorIndex: 0, guest: false }],
+        resolvedInputs: () => [],
+        sendSkillRejected: () => undefined,
+        markEliminated: () => true,
+        broadcastTagged: () => undefined,
+        broadcastBlinked: () => undefined,
+        broadcastSwitchAttempted: () => undefined,
+        finishGame: () => { finished.push('finished'); return true; },
+        snapshotTargets: () => [],
+    } as unknown as Room;
+    const world = makeWorld(mapFromRows([
+        '######',
+        '#....#',
+        '######',
+    ]), [makePlayer(1, 1, 1)]);
+
+    const session = new GameSession({
+        room,
+        world,
+        matchId: 'match',
+        mode: RoomMode.Training,
+        roster: [],
+        violationSink: () => undefined,
+        meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' },
+        onFinished: () => finished.push('result'),
+    });
+
+    for (let i = 0; i < 10; i += 1) assert.notEqual(session.step(), null, `tick ${i}에서 세션이 멈췄다`);
+    assert.deepEqual(finished, [], '훈련장이 스스로 끝났다');
+});
+
+test('훈련장 맵은 자기장이 닫히지 않는다', () => {
+    // barrierSpeed 0이면 inset이 0으로 고정돼 자기장 사각형이 맵 전체가 된다.
+    // 시뮬레이션을 고치지 않고 데이터만으로 끄는 것이 요점이다.
+    const world = makeWorld(mapFromRows([
+        '######',
+        '#....#',
+        '#....#',
+        '######',
+    ], { barrierSpeed: 0 }), [makePlayer(1, 1, 1), makePlayer(2, 3, 2)]);
+    const before = { x: world.players[0]!.x, y: world.players[0]!.y };
+
+    for (let i = 0; i < 300; i += 1) stepWorld(world, []);
+
+    assert.equal(world.storm!.x, 0);
+    assert.equal(world.storm!.width, world.map.cols * world.map.tileSize);
+    assert.deepEqual(
+        { x: world.players[0]!.x, y: world.players[0]!.y }, before,
+        '자기장이 안 좁아지면 아무도 밀려나지 않는다',
+    );
 });

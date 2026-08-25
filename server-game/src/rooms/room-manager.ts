@@ -5,6 +5,7 @@ import {
     isLoadoutSkill,
     PlayerRole,
     RoomState,
+    RoomMode,
     ViolationKind,
     type ActorId,
     type ClientMessage,
@@ -34,6 +35,7 @@ export interface CreateManagedRoom {
     readonly capacity: number;
     readonly mapId: string;
     readonly ownerReservation: Readonly<SeatReservation>;
+    readonly mode?: RoomMode;
 }
 
 export type ManagerResult<T> =
@@ -119,7 +121,9 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 capacity: specification.capacity,
                 mapId: specification.mapId,
                 ownerReservation: specification.ownerReservation,
-                minPlayersToStart: GAMEPLAY.MIN_PLAYERS_TO_START,
+                mode: specification.mode ?? RoomMode.Match,
+                // 훈련장은 혼자 시작한다. 사람을 셋 모아야 연습할 수 있으면 연습장이 아니다.
+                minPlayersToStart: specification.mode === RoomMode.Training ? 1 : GAMEPLAY.MIN_PLAYERS_TO_START,
                 simulationHz: NETWORK.SIMULATION_HZ,
                 rules: gameplayRules(),
                 hudGameplay: hudGameplayPayload(),

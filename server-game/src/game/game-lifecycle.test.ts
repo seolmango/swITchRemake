@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { MAX_PLAYERS_PER_ROOM, SkillId, TilePhysics } from 'shared';
+import { MAX_PLAYERS_PER_ROOM, SkillId, TilePhysics, RoomMode } from 'shared';
 import { EMOJI_DISPLAY_MS } from '../config/gameplay';
 import type { ServerMapBundle } from '../maps/map-loader';
 import type { Room, RoomStartSnapshot } from '../rooms/room';
@@ -64,6 +64,7 @@ test('selected loadouts enter PlayerState and a missing recovered value falls ba
         roomId: 'room',
         matchId: 'match',
         mapId: 'map',
+        mode: RoomMode.Match,
         players: [
             { playerId: 1, loadout: SkillId.Flash },
             { playerId: 2 },
@@ -94,6 +95,7 @@ test('in-game colorIndex maps every one-based playerId into the zero-based palet
         roomId: 'room',
         matchId: 'match-colors',
         mapId: 'map',
+        mode: RoomMode.Match,
         players: Array.from({ length: MAX_PLAYERS_PER_ROOM }, (_, index) => ({ playerId: index + 1 })),
         rules: {},
     });
@@ -116,6 +118,7 @@ test('emoji request is applied at the next tick boundary with a gameplay-configu
         roomId: 'room',
         matchId: 'match',
         mapId: 'map',
+        mode: RoomMode.Match,
         players: [{ playerId: 1 }, { playerId: 2 }, { playerId: 3 }],
         rules: {},
     });

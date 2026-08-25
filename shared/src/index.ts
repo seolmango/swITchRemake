@@ -55,6 +55,7 @@ export {
 export {
     JSON_MESSAGE_VERSION,
     RoomState,
+    RoomMode,
     PlayerRole,
     ErrorCode,
     NON_RETRYABLE_ERRORS,

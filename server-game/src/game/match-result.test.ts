@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { PROTOCOL_VERSION, statsEligible, VISIBILITY_CORE_VERSION, winnerUserIds, type MatchResultMessage, type ReplayHandleInfo } from 'shared';
+import { PROTOCOL_VERSION, statsEligible, VISIBILITY_CORE_VERSION, winnerUserIds, type MatchResultMessage, type ReplayHandleInfo , RoomMode } from 'shared';
 import { RULES_VERSION } from '../config/gameplay';
 import type { ReplayMeta, ReplayOutcome, ReplayRecorder } from '../replay/recorder';
 import { GameSession } from './game-session';
@@ -50,6 +50,7 @@ function runToFinish(recorder?: ReplayRecorder): Promise<MatchResultMessage> {
             room: fakeRoom(),
             world,
             matchId: 'match-1',
+            mode: RoomMode.Match,
             roster: [],
             violationSink: () => undefined,
             ...(recorder ? { recorder } : {}),

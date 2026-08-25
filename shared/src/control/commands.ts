@@ -5,6 +5,8 @@
  * 이 파일이 두 담당자가 서로를 기다리지 않고 작업하기 위한 경계다. 바꾸려면 양쪽이 함께 바꾼다.
  */
 
+import type { RoomMode } from '../protocol/events';
+
 export const CONTROL_VERSION = 1;
 
 export const CommandType = {
@@ -87,6 +89,8 @@ export interface CreateRoomPayload {
     ownerNickname: string;
     capacity: number;
     mapId: string;
+    /** 생략하면 일반 경기. 훈련장은 방 목록에도 빠른 참가에도 나오지 않는다. */
+    mode?: RoomMode;
 }
 
 export interface ReserveJoinPayload {

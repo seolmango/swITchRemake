@@ -8,6 +8,7 @@ import {
     movementVector,
     PlayerRole,
     RoomState,
+    RoomMode,
     type ActorId,
     type ControlErrorCode as ControlErrorCodeValue,
     type ErrorCode as ErrorCodeValue,
@@ -34,6 +35,7 @@ export interface RoomStartSnapshot {
     readonly roomId: string;
     readonly matchId: string;
     readonly mapId: string;
+    readonly mode: RoomMode;
     readonly players: readonly RoomStartPlayer[];
     readonly rules: Readonly<Record<string, number | string | boolean>>;
 }
@@ -49,6 +51,8 @@ export interface GameStartInfo {
  */
 export interface RoomLifecyclePort {
     startGame(snapshot: RoomStartSnapshot): GameStartInfo;
+    /** 방이 사라졌다. 결과를 내보내지 않고 돌던 세션만 내린다. */
+    stopRoom(roomId: string): void;
     connectionChanged(roomId: string, playerId: number, connected: boolean): void;
     participantTimedOut(roomId: string, playerId: number): void;
     participantRemoved(roomId: string, playerId: number, reason: string): void;
@@ -70,6 +74,7 @@ export interface RoomOptions {
     readonly matchId: string;
     readonly name: string;
     readonly password: string | null;
+    readonly mode: RoomMode;
     readonly capacity: number;
     readonly mapId: string;
     readonly ownerReservation: Readonly<SeatReservation>;
@@ -120,6 +125,7 @@ function passwordMatches(expected: string, supplied: string): boolean {
 export class Room {
     readonly id: string;
     readonly roomCode: string;
+    readonly mode: RoomMode;
     readonly name: string;
     readonly #password: string | null;
     readonly #options: RoomOptions;
@@ -148,6 +154,7 @@ export class Room {
         this.id = options.id;
         this.roomCode = options.roomCode;
         this.#matchId = options.matchId;
+        this.mode = options.mode;
         this.name = options.name;
         this.#password = options.password;
         this.#options = options;
@@ -441,6 +448,7 @@ export class Room {
             roomId: this.id,
             matchId: this.matchId,
             mapId: this.#mapId,
+            mode: this.mode,
             players,
             rules: Object.freeze({ ...this.#options.rules }),
         });
@@ -625,6 +633,7 @@ export class Room {
                 hostId: this.#roster.hostId,
                 roomName: this.name,
                 mapId: this.#mapId,
+                mode: this.mode,
                 capacity: this.#roster.capacity,
                 locked: this.#locked,
                 startLockMs: this.#startLock.remainingMs(this.#now()),
@@ -698,6 +707,7 @@ export class Room {
 
     public close(): void {
         if (this.state === RoomState.Closed) return;
+        this.#options.lifecycle.stopRoom(this.id);
         this.#roster.clearHolds();
         for (const member of this.#roster.members()) {
             member.connection?.close(CloseCode.Normal, 'room closed');

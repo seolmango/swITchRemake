@@ -10,6 +10,7 @@ import {
     type ReleaseSeatPayload,
     type ReserveJoinPayload,
     type ReserveResumePayload,
+    RoomMode,
 } from 'shared';
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -55,9 +56,11 @@ function createRoomPayload(value: unknown): value is CreateRoomPayload {
         && boundedText(value['ownerNickname'], 20)
         && Number.isSafeInteger(value['capacity'])
         && typeof value['capacity'] === 'number'
-        && value['capacity'] >= 2
+        // 훈련장은 혼자 들어가는 방이라 정원 1을 허용한다. 경기 방은 예전대로 2 이상이다.
+        && value['capacity'] >= (value['mode'] === RoomMode.Training ? 1 : 2)
         && value['capacity'] <= MAX_PLAYERS_PER_ROOM
-        && boundedText(value['mapId'], 64);
+        && boundedText(value['mapId'], 64)
+        && (value['mode'] === undefined || value['mode'] === RoomMode.Match || value['mode'] === RoomMode.Training);
 }
 
 function reserveJoinPayload(value: unknown): value is ReserveJoinPayload {

@@ -25,6 +25,19 @@ export const RoomState = {
 } as const;
 export type RoomState = (typeof RoomState)[keyof typeof RoomState];
 
+/**
+ * 방이 무엇을 하는 곳인가.
+ *
+ * 훈련장을 별도의 방 종류로 두는 이유는, 클라이언트가 물리를 다시 구현한 로컬 목업으로 만들면
+ * 서버와 값이 갈라지기 때문이다(예전 `/sandbox`가 실제로 그랬다). 같은 시뮬레이션, 같은
+ * 네트워크 구간을 쓰되 방 규칙만 바꾼다.
+ */
+export const RoomMode = {
+    Match: 'match',
+    Training: 'training',
+} as const;
+export type RoomMode = (typeof RoomMode)[keyof typeof RoomMode];
+
 export const PlayerRole = {
     /** 이번 경기의 참가자. */
     Player: 'player',
@@ -185,6 +198,8 @@ export type LobbyStateMessage = ServerEnvelope<'lobby.state', {
      */
     roomName: string;
     mapId: string;
+    /** 훈련장은 규칙이 다르다 — 자기장이 멈추고, 혼자 시작할 수 있고, 전적이 남지 않는다. */
+    mode: RoomMode;
     capacity: number;
     locked: boolean;
     /** 시작 버튼이 풀리기까지 남은 밀리초. 0이면 시작할 수 있다. */

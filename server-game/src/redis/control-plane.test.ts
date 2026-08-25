@@ -152,6 +152,7 @@ const lifecycle: RoomLifecyclePort = {
     connectionChanged: () => undefined,
     participantTimedOut: () => undefined,
     participantRemoved: () => undefined,
+        stopRoom: () => undefined,
 };
 
 function harness() {

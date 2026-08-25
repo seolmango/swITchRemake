@@ -296,6 +296,7 @@ export class CommandConsumer {
             capacity: payload.capacity,
             mapId,
             ownerReservation: reservation,
+            ...(payload.mode === undefined ? {} : { mode: payload.mode }),
         });
         if (!created.ok) return failure(this.#options.serverId, command, created.code);
         try {

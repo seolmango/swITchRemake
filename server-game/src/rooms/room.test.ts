@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { ErrorCode, PlayerRole, RoomState, SkillId, SkillRejection, type InputState } from 'shared';
+import { ErrorCode, PlayerRole, RoomState, SkillId, SkillRejection, type InputState , RoomMode } from 'shared';
 import type { SeatReservation } from '../gateway/ticket-store';
 import type { Connection } from '../transport/game-transport';
 import { Room, type RoomLifecyclePort, type RoomOptions, type RoomStartSnapshot } from './room';
@@ -45,6 +45,7 @@ class FakeLifecycle implements RoomLifecyclePort {
     public participantRemoved(_roomId: string, playerId: number, reason: string): void {
         this.removals.push({ playerId, reason });
     }
+    public stopRoom(_roomId: string): void {}
 }
 
 function seat(userId: number, now: number, resume = false): SeatReservation {
@@ -74,6 +75,7 @@ function setup() {
         capacity: 8,
         mapId: 'map-a',
         ownerReservation: owner,
+        mode: RoomMode.Match,
         minPlayersToStart: 3,
         simulationHz: 60,
         rules: { rulesVersion: 'test' },

@@ -4,7 +4,7 @@
  * 방은 world를 모르고 시뮬레이션은 방을 모른다. 둘을 아는 유일한 곳이 이 파일이다.
  */
 
-import type { MatchResultMessage, ViolationSignal } from 'shared';
+import { RoomMode, type MatchResultMessage, type ViolationSignal } from 'shared';
 import { GAMEPLAY } from '../config/gameplay';
 import { instantiateMap, type ServerMapBundle } from '../maps/map-loader';
 import { NullReplayRecorder, type ReplayRecorder } from '../replay/recorder';
@@ -47,10 +47,13 @@ export class GameLifecycle implements RoomLifecyclePort {
         if (room === null) throw new Error(`start requested for unknown room: ${snapshot.roomId}`);
 
         const map = instantiateMap(this.#options.bundle, snapshot.mapId);
+        // 훈련장은 자기장이 닫히지 않는다. barrierSpeed가 0이면 inset이 0으로 고정돼(storm.ts)
+        // 자기장 사각형이 맵 전체가 되므로, 시뮬레이션을 고치지 않고 데이터만으로 꺼진다.
+        const trainingMap = snapshot.mode === RoomMode.Training ? { ...map, barrierSpeed: 0 } : map;
         const seed = this.#options.makeSeed?.(snapshot) ?? Date.now();
         const players = this.#placePlayers(snapshot, map.tileSize, map.cols);
 
-        const world = createWorld({ map, players, seed });
+        const world = createWorld({ map: trainingMap, players, seed });
 
         // 술래는 world의 PRNG로 고른다. Math.random을 쓰면 리플레이가 같은 경기를 재현하지 못한다.
         const taggerIndex = world.nextRandomInt(players.length);
@@ -68,6 +71,7 @@ export class GameLifecycle implements RoomLifecyclePort {
             room,
             world,
             matchId: snapshot.matchId,
+            mode: snapshot.mode,
             roster,
             violationSink: this.#options.violationSink,
             recorder: (this.#options.replayRecorderFactory ?? (() => new NullReplayRecorder()))(),
@@ -133,6 +137,12 @@ export class GameLifecycle implements RoomLifecyclePort {
         this.#sessions.get(roomId)?.requestFullSnapshot(playerId);
     }
 
+    /**
+     * 결과 없이 세션만 내린다. 리플레이는 버린다 — 중간에 끊긴 기록은 재생해도 경기가 아니다.
+     *
+     * 훈련장은 생존자 수로 끝나지 않으므로(혼자 들어가면 첫 tick에 끝나 버린다) 이 경로가 유일한
+     * 종료다. 경기 방도 마지막 사람이 나가면 계속 돌 이유가 없다.
+     */
     public stopRoom(roomId: string): void {
         const session = this.#sessions.get(roomId);
         if (session === undefined) return;

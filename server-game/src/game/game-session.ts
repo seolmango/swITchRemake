@@ -7,6 +7,7 @@
  */
 
 import {
+    RoomMode,
     MATCH_RESULT_VERSION,
     PROTOCOL_VERSION,
     VISIBILITY_CORE_VERSION,
@@ -30,6 +31,11 @@ export interface GameSessionOptions {
     readonly room: Room;
     readonly world: World;
     readonly matchId: string;
+    /**
+     * 훈련장은 생존자 수로 끝나지 않는다. 혼자 들어가면 생존자가 1명이라 첫 tick에 `isFinished`가
+     * 참이 되어 시작하자마자 끝난다. 결과도 내보내지 않는다 — 봇을 잡은 기록이 전적에 남으면 안 된다.
+     */
+    readonly mode: RoomMode;
     readonly roster: readonly RosterEntry[];
     readonly violationSink: (signal: ViolationSignal) => void;
     readonly onFinished: (session: GameSession, result: MatchResultMessage) => void;
@@ -178,7 +184,7 @@ export class GameSession implements SchedulerTarget {
         this.#applyEvents(frame.events);
         this.#replay.recordEvents(frame.tick, frame.events);
 
-        if (isFinished(this.world)) {
+        if (this.#options.mode === RoomMode.Match && isFinished(this.world)) {
             this.#finished = true;
             // 스냅샷 주기와 안 맞아도 마지막 tick은 항상 keyframe으로 남긴다.
             this.#replay.recordFinalFrame(frame);
