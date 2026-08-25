@@ -167,3 +167,29 @@ test('레코더가 저장에 실패(abort)하면 replay는 null이지 경기 결
     assert.equal(result.replay, null);
     assert.equal(result.players.length, 3, '리플레이 실패가 경기 결과 저장 자체를 막으면 안 된다');
 });
+
+test('로스터 밖 world 액터는 결과와 전적 행에 들어가지 않는다', async () => {
+    const world = makeWorld(mapFromRows(MAP), [
+        makePlayer(1, 1, 1),
+        makePlayer(2, 3, 2),
+        makePlayer(3, 5, 3, { alive: false }),
+        makePlayer(4, 4, 1, { alive: false }),
+    ]);
+
+    const result = await new Promise<MatchResultMessage>((resolve) => {
+        const session = new GameSession({
+            room: fakeRoom(),
+            world,
+            matchId: 'match-with-world-actor',
+            mode: RoomMode.Match,
+            roster: [],
+            violationSink: () => undefined,
+            meta: { serverId: 'game', buildId: 'test', mapId: 'testmap', mapBundleHash: 'hash' },
+            onFinished: (_session, finished) => resolve(finished),
+        });
+        session.step();
+    });
+
+    assert.deepEqual(result.players.map((player) => player.playerId), [1, 2, 3]);
+    assert.deepEqual(result.winnerPlayerIds, [1, 2]);
+});

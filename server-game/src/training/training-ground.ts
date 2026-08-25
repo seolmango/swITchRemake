@@ -22,6 +22,16 @@ interface DummyState {
     readonly kind: CourseDefinition['kind'];
     targetIndex: number;
     respawnAtTick: number | null;
+    /**
+     * 마지막으로 계산한 경로와 그때의 조건.
+     *
+     * BFS는 맵 전체를 훑고 타일마다 문자열 키를 만든다. 50x50 맵에서 tick마다 더미 셋이 돌면
+     * 초당 수십만 개의 문자열이 생겼다 사라진다 — 이 저장소가 예전에 겪은 GC/메모리 문제와
+     * 같은 종류다. 경로는 **서 있는 타일이나 목표가 바뀔 때만** 달라지므로 그때만 다시 푼다.
+     */
+    cachedRoute: RouteResult | null;
+    cachedFromKey: string;
+    cachedTargetIndex: number;
 }
 
 interface RouteResult {
@@ -85,7 +95,7 @@ function nearestWalkable(map: WorldMap, desired: TilePoint): TilePoint {
  * 탐색 순서와 동률 해소가 고정되어 있어 같은 맵과 상태에서는 항상 같은 방향을 낸다.
  */
 function routeToward(map: WorldMap, from: TilePoint, target: TilePoint): RouteResult {
-    const start = nearestWalkable(map, from);
+    const start = isWalkable(map, from) ? from : nearestWalkable(map, from);
     const queue: TilePoint[] = [start];
     const previous = new Map<string, TilePoint | null>([[tileKey(start), null]]);
     let head = 0;
@@ -173,6 +183,9 @@ export class TrainingGround {
                 kind: definition.kind,
                 targetIndex: definition.kind === 'stationary' ? 0 : 1,
                 respawnAtTick: null,
+                cachedRoute: null,
+                cachedFromKey: '',
+                cachedTargetIndex: -1,
             };
         });
 
@@ -208,27 +221,48 @@ export class TrainingGround {
         }
     }
 
+    /**
+     * 서 있는 타일과 목표가 그대로면 지난 경로를 다시 쓴다. 다만 다음 걸음이 벽이 되었으면
+     * (맵 timeline이 벽을 세울 수 있다) 캐시를 버리고 다시 푼다.
+     */
+    #routeFor(world: World, state: DummyState, targetTile: TilePoint): RouteResult {
+        const from = this.#tileOf(world.map, state.player);
+        const fromKey = tileKey(from);
+        const cached = state.cachedRoute;
+        const stepBlocked = cached !== null
+            && cached.tiles[1] !== undefined
+            && !isWalkable(world.map, cached.tiles[1]);
+        if (cached !== null && !stepBlocked
+            && state.cachedFromKey === fromKey && state.cachedTargetIndex === state.targetIndex) {
+            return cached;
+        }
+        const route = routeToward(world.map, from, targetTile);
+        state.cachedRoute = route;
+        state.cachedFromKey = fromKey;
+        state.cachedTargetIndex = state.targetIndex;
+        return route;
+    }
+
     #follow(world: World, state: DummyState): ResolvedInput {
+        // 한 tick 이동량보다는 넓어 목표를 지나쳐 진동하지 않고, 타일 여유 폭보다는 좁아 모서리를 자르지 않는다.
         const arrivalRadius = Math.min(world.map.tileSize / 16, GAMEPLAY.PLAYER_RADIUS_PX / 6);
         let targetTile = state.course[state.targetIndex]!;
-        let target = tileCenter(world.map, targetTile);
-        let route = routeToward(world.map, this.#tileOf(world.map, state.player), targetTile);
-        const routeEnd = route.tiles.at(-1)!;
-        const routeEndPoint = tileCenter(world.map, routeEnd);
+        let route = this.#routeFor(world, state, targetTile);
+        let routeEndPoint = tileCenter(world.map, route.tiles.at(-1)!);
 
         if (Math.hypot(state.player.x - routeEndPoint[0], state.player.y - routeEndPoint[1]) <= arrivalRadius) {
             state.targetIndex = (state.targetIndex + 1) % state.course.length;
             targetTile = state.course[state.targetIndex]!;
-            target = tileCenter(world.map, targetTile);
-            route = routeToward(world.map, this.#tileOf(world.map, state.player), targetTile);
-        } else if (!route.reachedTarget) {
-            target = routeEndPoint;
+            route = this.#routeFor(world, state, targetTile);
+            routeEndPoint = tileCenter(world.map, route.tiles.at(-1)!);
         }
 
         // 밀리거나 timeline으로 길이 바뀌면 현재 타일에서 다시 탐색한다. 길이 없을 때도 가장 가까운
         // 도달 가능 타일을 향하므로 벽 앞에서 좌표를 덮어쓰거나 원래 속도로 미끄러지지 않는다.
         const nextTile = route.tiles[1];
-        if (nextTile !== undefined) target = tileCenter(world.map, nextTile);
+        const target = nextTile !== undefined
+            ? tileCenter(world.map, nextTile)
+            : route.reachedTarget ? tileCenter(world.map, targetTile) : routeEndPoint;
         const dx = target[0] - state.player.x;
         const dy = target[1] - state.player.y;
         const length = Math.hypot(dx, dy);
@@ -242,6 +276,7 @@ export class TrainingGround {
             const [x, y] = tileCenter(world.map, state.course[0]!);
             state.player.x = x;
             state.player.y = y;
+            state.cachedRoute = null;
             state.player.vx = 0;
             state.player.vy = 0;
             state.player.facingX = 0;

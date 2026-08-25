@@ -302,22 +302,22 @@ export class GameSession implements SchedulerTarget {
         const players: MatchParticipantResult[] = this.world.players
             .filter((player) => identities.has(player.playerId))
             .map((player) => {
-            const identity = identities.get(player.playerId);
-            const endTick = player.stats.eliminatedAtTick ?? this.world.tick;
-            const guest = identity?.guest ?? true;
-            return {
-                // 게스트는 null이지만 행 자체는 남긴다. 리플레이가 전원의 slot과 이름을 필요로 한다.
-                userId: guest || typeof identity?.userId !== 'number' ? null : identity.userId,
-                playerId: player.playerId,
-                nickname: identity?.nickname ?? `P${player.playerId}`,
-                colorIndex: player.colorIndex,
-                isGuest: guest,
-                tagCount: player.stats.tagCount,
-                taggedCount: player.stats.taggedCount,
-                switchTry: player.stats.switchTry,
-                switchSuccess: player.stats.switchSuccess,
-                survivedMs: Math.round(endTick * msPerTick),
-            };
+                const identity = identities.get(player.playerId);
+                const endTick = player.stats.eliminatedAtTick ?? this.world.tick;
+                const guest = identity?.guest ?? true;
+                return {
+                    // 게스트는 null이지만 행 자체는 남긴다. 리플레이가 전원의 slot과 이름을 필요로 한다.
+                    userId: guest || typeof identity?.userId !== 'number' ? null : identity.userId,
+                    playerId: player.playerId,
+                    nickname: identity?.nickname ?? `P${player.playerId}`,
+                    colorIndex: player.colorIndex,
+                    isGuest: guest,
+                    tagCount: player.stats.tagCount,
+                    taggedCount: player.stats.taggedCount,
+                    switchTry: player.stats.switchTry,
+                    switchSuccess: player.stats.switchSuccess,
+                    survivedMs: Math.round(endTick * msPerTick),
+                };
             });
 
         return {

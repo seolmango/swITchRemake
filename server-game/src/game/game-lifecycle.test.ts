@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { MAX_PLAYERS_PER_ROOM, SkillId, TilePhysics, RoomMode } from 'shared';
+import { decodeSnapshot, MAX_PLAYERS_PER_ROOM, SkillId, TilePhysics, RoomMode } from 'shared';
 import { EMOJI_DISPLAY_MS } from '../config/gameplay';
 import type { ServerMapBundle } from '../maps/map-loader';
 import type { Room, RoomStartSnapshot } from '../rooms/room';
@@ -131,4 +131,53 @@ test('emoji request is applied at the next tick boundary with a gameplay-configu
         emojiId: 9,
         expiresAtTick: session.world.tick + msToTicks(EMOJI_DISPLAY_MS, session.world.simulationHz),
     });
+});
+
+test('훈련장에만 이름이 붙은 더미가 생기며 로비 참가자로 등록되지 않는다', () => {
+    const sent: ArrayBuffer[] = [];
+    const finished: string[] = [];
+    const participants = [{ playerId: 1, userId: 1, nickname: '연습생', colorIndex: 0, guest: false }];
+    const room = {
+        ...fakeRoom(),
+        participants: () => participants,
+        nicknameOf: () => '연습생',
+        snapshotTargets: () => [{
+            playerId: 1,
+            access: 'unfiltered' as const,
+            connection: { bufferedBytes: () => 0, sendBinary: (payload: ArrayBuffer) => sent.push(payload) },
+        }],
+    } as unknown as Room;
+    const lifecycle = new GameLifecycle({
+        bundle,
+        serverId: 'game',
+        buildId: 'test',
+        scheduler: new Scheduler(),
+        lookupRoom: () => room,
+        violationSink: () => undefined,
+        makeSeed: () => 1,
+        onMatchFinished: () => finished.push('result'),
+    });
+
+    lifecycle.startGame({
+        roomId: 'room', matchId: 'training', mapId: 'map', mode: RoomMode.Training,
+        players: [{ playerId: 1 }], rules: {},
+    });
+    const trainingSession = lifecycle.session('room')!;
+    assert.equal(trainingSession.world.players.length, 4);
+    assert.equal(participants.length, 1, 'LobbyRoster에 해당하는 실제 참가자 목록은 그대로다');
+    trainingSession.publish(trainingSession.step()!);
+    assert.deepEqual(
+        decodeSnapshot(sent[0]!).roster?.map((entry) => entry.nickname),
+        ['연습생', '[더미] 고정', '[더미] 왕복', '[더미] 순환'],
+    );
+    for (const dummy of trainingSession.world.players.slice(1)) dummy.alive = false;
+    assert.notEqual(trainingSession.step(), null);
+    assert.deepEqual(finished, [], '더미가 모두 탈락해도 훈련 결과를 내보내지 않는다');
+
+    lifecycle.stopRoom('room');
+    lifecycle.startGame({
+        roomId: 'room', matchId: 'match', mapId: 'map', mode: RoomMode.Match,
+        players: [{ playerId: 1 }, { playerId: 2 }, { playerId: 3 }], rules: {},
+    });
+    assert.equal(lifecycle.session('room')!.world.players.length, 3, '경기 방에는 더미가 들어가지 않는다');
 });
