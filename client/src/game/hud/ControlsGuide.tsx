@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Theme } from '../types.ts';
-import { HUD_FONT, bodyText, mutedText, panel } from './hudTheme.ts';
+import { Color } from '../../theme/color.ts';
+import { HUD_DISPLAY_FONT, HUD_FONT, HUD_METRICS, bodyText, mutedText, panel } from './hudTheme.ts';
 
 interface Props {
     theme: Theme;
@@ -9,10 +10,10 @@ interface Props {
 
 const Key: React.FC<{ theme: Theme; children: React.ReactNode }> = ({ theme, children }) => (
     <span style={{
-        display: 'inline-block', minWidth: 20, padding: '2px 7px', borderRadius: 6,
-        border: `1.5px solid ${theme === 1 ? '#5A5E60' : '#CFCFCB'}`,
-        background: theme === 1 ? '#2E3132' : '#FFFFFF',
-        color: bodyText(theme), fontSize: 11, fontWeight: 800, textAlign: 'center',
+        display: 'inline-block', minWidth: 24, padding: '4px 8px', borderRadius: 8,
+        border: `2px solid ${theme === 1 ? Color.smoke[2] : Color.smoke[1]}`,
+        background: theme === 1 ? Color.black : Color.white,
+        color: bodyText(theme), fontSize: HUD_METRICS.captionFont, fontWeight: 800, textAlign: 'center',
     }}>{children}</span>
 );
 
@@ -32,15 +33,16 @@ export const ControlsGuide: React.FC<Props> = ({ theme, movementSkillLabel }) =>
 
     return (
         <div style={{
-            ...panel(theme), position: 'absolute', left: 16, bottom: 16, padding: 14, minWidth: 260,
+            ...panel(theme), position: 'absolute', left: HUD_METRICS.corner, bottom: HUD_METRICS.corner,
+            padding: 18, minWidth: 360,
             fontFamily: HUD_FONT,
         }}>
-            <div style={{ color: mutedText(theme), fontSize: 11, fontWeight: 800, letterSpacing: 0.5, paddingBottom: 10 }}>조작</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+            <div style={{ color: mutedText(theme), fontFamily: HUD_DISPLAY_FONT, fontSize: 18, fontWeight: 400, letterSpacing: 0.5, paddingBottom: 13 }}>조작</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
                 {rows.map(([keys, desc], i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ flex: 'none', minWidth: 116 }}>{keys}</span>
-                        <span style={{ color: bodyText(theme), fontSize: 12, fontWeight: 600 }}>{desc}</span>
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <span style={{ flex: 'none', minWidth: 146 }}>{keys}</span>
+                        <span style={{ color: bodyText(theme), fontSize: HUD_METRICS.bodyFont, fontWeight: 600 }}>{desc}</span>
                     </div>
                 ))}
             </div>

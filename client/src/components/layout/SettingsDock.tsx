@@ -5,6 +5,8 @@ import { RoundButton } from '../common/RoundButton.tsx';
 import { Icon } from '../common/Icon.tsx';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 
+const DOCK_BUTTON_SIZE = 112;
+
 export const SettingsDock: React.FC<{ showProfile?: boolean }> = ({ showProfile = false }) => {
     const navigate = useNavigate();
     const { t } = useTranslation();
@@ -12,9 +14,9 @@ export const SettingsDock: React.FC<{ showProfile?: boolean }> = ({ showProfile 
     const toggleTheme = useSettingsStore((state) => state.toggleTheme);
     return (
         <div className="settings-dock">
-            <RoundButton width={104} height={104} type={2} content={<Icon name={theme === 0 ? 'moon' : 'sun'}/>} ariaLabel={t('common.toggleTheme')} onClick={toggleTheme}/>
-            {showProfile && <RoundButton width={104} height={104} type={2} content={<Icon name="person"/>} ariaLabel={t('nav.profile')} onClick={() => navigate('/profile')}/>} 
-            <RoundButton width={104} height={104} type={2} content={<Icon name="settings"/>} ariaLabel={t('nav.settings')} onClick={() => navigate('/settings')}/>
+            <RoundButton width={DOCK_BUTTON_SIZE} height={DOCK_BUTTON_SIZE} type={2} content={<Icon name={theme === 0 ? 'moon' : 'sun'}/>} ariaLabel={t('common.toggleTheme')} onClick={toggleTheme}/>
+            {showProfile && <RoundButton width={DOCK_BUTTON_SIZE} height={DOCK_BUTTON_SIZE} type={2} content={<Icon name="person"/>} ariaLabel={t('nav.profile')} onClick={() => navigate('/profile')}/>}
+            <RoundButton width={DOCK_BUTTON_SIZE} height={DOCK_BUTTON_SIZE} type={2} content={<Icon name="settings"/>} ariaLabel={t('nav.settings')} onClick={() => navigate('/settings')}/>
         </div>
     );
 };

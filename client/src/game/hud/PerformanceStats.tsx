@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { SwitchEngine } from '../SwitchEngine.ts';
 import type { Theme } from '../types.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
-import { HUD_FONT, mutedText, panel } from './hudTheme.ts';
+import { HUD_FONT, HUD_METRICS, mutedText, panel } from './hudTheme.ts';
 
 interface Props {
     theme: Theme;
@@ -41,15 +41,16 @@ export function PerformanceStats({ theme, engine, latencyMs, estimatedTps }: Pro
             style={{
                 ...panel(theme),
                 position: 'absolute',
-                right: 16,
-                bottom: 16,
+                left: '50%',
+                bottom: HUD_METRICS.corner,
+                transform: 'translateX(-50%)',
                 zIndex: 4,
                 display: 'flex',
-                gap: 12,
-                padding: '7px 11px',
+                gap: 16,
+                padding: '9px 14px',
                 color: mutedText(theme),
                 fontFamily: HUD_FONT,
-                fontSize: 12,
+                fontSize: HUD_METRICS.captionFont,
                 fontWeight: 800,
                 fontVariantNumeric: 'tabular-nums',
                 pointerEvents: 'none',

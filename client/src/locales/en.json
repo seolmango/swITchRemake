@@ -33,13 +33,13 @@
     "leave": "Leave Room", "previewResult": "Preview Results", "start": "Start Game", "startCountdown": "Start in {{seconds}}s", "liveData": "Game server connected", "commandFailed": "The request could not be completed. ({{code}})", "reconnecting": "Reconnecting to the game server…", "resumeFailed": "This room connection could not be restored."
   },
   "result": {
-    "title": "Match Results", "winner": "WINNERS", "victory": "CO-WINNER", "winnerDetail": "{{tags}} tags · swITch {{success}}/{{tries}}", "details": "Key results",
-    "player": "Player", "tags": "Successful tags", "switches": "swITch success", "times": "times",
+    "title": "Match Results", "winner": "CO-WINNERS", "winnerSingle": "WINNER", "noWinner": "NO WINNER", "noWinnerDetail": "No player survived to the end of the match.", "victory": "CO-WINNER", "victorySingle": "WINNER", "winnerDetail": "{{tags}} tags · swITch {{success}}/{{tries}}", "details": "Player records",
+    "player": "Player", "tags": "Tag record", "taggedCount": "Tagged {{count}} times", "switches": "swITch record", "successRate": "{{rate}}% success", "survived": "Survival", "survivalTime": "Time survived", "times": " times",
     "duration": "Duration", "players": "Players", "tableScrollLabel": "Player key match results table",
     "switchShort": "swITch", "tagsShort": "Tags", "shareImage": "Share Result Image", "shareUnavailable": "Sharing unavailable", "backToLobby": "Back to Lobby",
     "imageShared": "Opened the image share sheet.", "imageSaved": "Saved the result image.", "imageFailed": "Could not create the result image.", "shareCancelled": "Image sharing was cancelled.",
     "openExternal": "Open in external browser", "externalCopied": "Address copied. Paste it into Safari to continue.", "externalUnavailable": "Could not open an external browser automatically.",
-    "shareSummary": "swITch result: {{winners}} won together", "returnCountdown": "Returning to the lobby in {{seconds}}s", "returnNotice": "You will return to the same room when the server's result period ends.", "returnTimerLabel": "Time remaining before automatic lobby return", "invalidMatch": "The match result cannot be loaded because its identifier is invalid."
+    "shareSummary": "swITch result: {{winners}} won together", "shareSummarySingle": "swITch result: {{winner}} won", "shareSummaryNoWinner": "swITch result: no survivors", "returnCountdown": "Returning to the lobby in {{seconds}}s", "returnNotice": "You will return to the same room when the server's result period ends.", "returnTimerLabel": "Time remaining before automatic lobby return", "invalidMatch": "The match result cannot be loaded because its identifier is invalid."
   },
   "auth": {
     "login": "Log In", "signup": "Sign Up", "email": "Email", "emailPlaceholder": "name@example.com", "password": "Password",

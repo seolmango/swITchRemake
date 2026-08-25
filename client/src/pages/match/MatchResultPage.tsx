@@ -11,6 +11,7 @@ import { Color, themeColors } from '../../theme/color.ts';
 import { isInAppBrowser, openInExternalBrowser } from '../../utils/inAppBrowser.ts';
 import { createResultImage, shareOrSaveResultImage } from '../../utils/resultImage.ts';
 import { isValidMatchId } from '../../utils/matchId.ts';
+import { matchResultWinners } from '../../utils/matchResultWinners.ts';
 
 const IN_APP_BROWSER = typeof navigator !== 'undefined' && isInAppBrowser();
 
@@ -71,9 +72,7 @@ export const MatchResultPage: React.FC = () => {
     const roomId = searchParams.get('room_id') || result?.roomId || '';
     const lobbyPath = roomId ? `/rooms/${encodeURIComponent(roomId)}/lobby` : '/rooms';
 
-    const winners = useMemo(() => result === null ? [] : result.winners
-        .map((winnerId) => result.players.find((player) => player.playerId === winnerId))
-        .filter((player): player is NonNullable<typeof player> => Boolean(player)), [result]);
+    const winners = useMemo(() => result === null ? [] : matchResultWinners(result), [result]);
     useEffect(() => {
         const returnsAt = result?.returnsAt ?? eventReturnsAt;
         if (returnsAt === null) return;
@@ -101,6 +100,8 @@ export const MatchResultPage: React.FC = () => {
     }
 
     const getShareSummary = () => {
+        if (winners.length === 0) return t('result.shareSummaryNoWinner');
+        if (winners.length === 1) return t('result.shareSummarySingle', { winner: winners[0]!.nickname });
         const winnerNames = winners.map((winner) => winner.nickname).join(', ');
         return t('result.shareSummary', { winners: winnerNames });
     };
@@ -111,8 +112,10 @@ export const MatchResultPage: React.FC = () => {
         try {
             const image = await createResultImage(result, {
                 title: t('result.title'),
-                winner: t('result.winner'),
-                victory: t('result.victory'),
+                winner: t(winners.length === 1 ? 'result.winnerSingle' : 'result.winner'),
+                noWinner: t('result.noWinner'),
+                noWinnerDetail: t('result.noWinnerDetail'),
+                victory: t(winners.length === 1 ? 'result.victorySingle' : 'result.victory'),
                 map: t(`lobby.maps.${result.map}`),
                 duration: formatDuration(result.durationMs),
                 player: t('result.player'),
@@ -145,14 +148,33 @@ export const MatchResultPage: React.FC = () => {
                     '--surface-border': colors.panelBorder,
                     '--surface-field': colors.field,
                     '--surface-muted': colors.muted,
+                    '--result-text': colors.text,
+                    '--result-victory-fill': Color.frenzy[0],
+                    '--result-victory-accent': Color.frenzy[2],
+                    '--result-self-fill': Color.blue[0],
+                    '--result-progress': Color.blue[2],
+                    '--result-dark-text': Color.black,
+                    '--result-table-header': colors.canvas,
                 } as React.CSSProperties}
             >
                 <div className="result-main">
-                    <aside className="result-winner-panel">
-                        <span className="result-kicker">{t('result.winner')}</span>
-                        <div className="result-winners">
-                            {winners.slice(0, 2).map((winner) => (
-                                <article key={winner.playerId}>
+                    <aside className={`result-winner-panel has-${winners.length}-winners`}>
+                        <span className="result-kicker">{t(winners.length === 0 ? 'result.noWinner' : winners.length === 1 ? 'result.winnerSingle' : 'result.winner')}</span>
+                        <div className="result-winners" data-winner-count={winners.length}>
+                            {winners.length === 0 ? (
+                                <div className="result-no-winner">
+                                    <Icon name="remove" size={58}/>
+                                    <strong>{t('result.noWinner')}</strong>
+                                    <p>{t('result.noWinnerDetail')}</p>
+                                </div>
+                            ) : winners.map((winner) => (
+                                <article
+                                    key={winner.playerId}
+                                    style={{
+                                        '--winner-fill': theme === 0 ? Color.user[(winner.slot - 1) % Color.user.length]![0] : 'transparent',
+                                        '--winner-border': Color.user[(winner.slot - 1) % Color.user.length]![1],
+                                    } as React.CSSProperties}
+                                >
                                     <div
                                         className="result-winner-avatar"
                                         style={{
@@ -163,8 +185,10 @@ export const MatchResultPage: React.FC = () => {
                                         <span>{winner.slot}</span>
                                         <i aria-hidden="true">★</i>
                                     </div>
-                                    <h2>{winner.nickname}</h2>
-                                    <p>{t('result.winnerDetail', { tags: winner.tagCount, success: winner.switchSuccess, tries: winner.switchTry })}</p>
+                                    <div className="result-winner-copy">
+                                        <h2 title={winner.nickname}>{winner.nickname}</h2>
+                                        <p>{t('result.winnerDetail', { tags: winner.tagCount, success: winner.switchSuccess, tries: winner.switchTry })}</p>
+                                    </div>
                                 </article>
                             ))}
                         </div>
@@ -181,7 +205,7 @@ export const MatchResultPage: React.FC = () => {
                                 <h2 id="result-stats-title">{t('result.details')}</h2>
                             </div>
                         </header>
-                        <MatchResultTable players={result.players} winnerIds={result.winners} />
+                        <MatchResultTable players={result.players} winnerIds={winners.map((winner) => winner.playerId)} />
                     </section>
                 </div>
                 <footer className="result-footer">

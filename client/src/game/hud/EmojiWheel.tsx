@@ -2,7 +2,7 @@ import React from 'react';
 import type { Theme } from '../types.ts';
 import { EMOJI_COUNT, emojiDataUri } from '../emoji.ts';
 import { Color } from '../../theme/color.ts';
-import { HUD_FONT, mutedText } from './hudTheme.ts';
+import { HUD_FONT, HUD_METRICS, mutedText } from './hudTheme.ts';
 
 interface Props {
     theme: Theme;
@@ -10,8 +10,8 @@ interface Props {
     onPick: (emojiId: number) => void;
 }
 
-const RADIUS = 132;
-const RADIUS_COMPACT = 92;
+const RADIUS = 145;
+const RADIUS_COMPACT = 104;
 
 /**
  * Legacy's radial picker (RenderingManager.js:404-425), rebuilt as DOM.
@@ -24,13 +24,13 @@ const RADIUS_COMPACT = 92;
  */
 export const EmojiWheel: React.FC<Props> = ({ theme, compact, onPick }) => {
     const radius = compact ? RADIUS_COMPACT : RADIUS;
-    const slot = compact ? 50 : 68;
+    const slot = compact ? 60 : 78;
     const iconColor = theme === 1 ? Color.white : Color.black;
 
     return (
         <div style={{
             position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
-            background: theme === 1 ? 'rgba(0,0,0,0.45)' : 'rgba(59,59,59,0.28)',
+            background: `color-mix(in srgb, ${Color.black} ${theme === 1 ? 45 : 28}%, transparent)`,
             backdropFilter: 'blur(2px)', fontFamily: HUD_FONT,
         }}>
             <div style={{ position: 'relative', width: radius * 2 + slot + 12, height: radius * 2 + slot + 12 }}>
@@ -49,16 +49,16 @@ export const EmojiWheel: React.FC<Props> = ({ theme, compact, onPick }) => {
                                 transform: `translate(-50%, -50%) translate(${Math.cos(angle) * radius}px, ${Math.sin(angle) * radius}px)`,
                                 width: slot, height: slot, borderRadius: '50%', padding: 0, cursor: 'pointer',
                                 display: 'grid', placeItems: 'center',
-                                background: theme === 1 ? 'rgba(35,37,38,0.92)' : Color.white,
-                                border: `2px solid ${theme === 1 ? '#5A5E60' : Color.gray[1]}`,
+                                background: theme === 1 ? Color.black : Color.white,
+                                border: `3px solid ${theme === 1 ? Color.smoke[2] : Color.gray[1]}`,
                             }}
                         >
                             {uri && <img src={uri} alt={`emoji ${id}`} style={{ width: slot * 0.56, height: slot * 0.56 }} />}
                             <span style={{
                                 position: 'absolute', bottom: -4, right: -4,
-                                width: 20, height: 20, borderRadius: '50%', display: 'grid', placeItems: 'center',
-                                fontSize: 11, fontWeight: 800,
-                                background: theme === 1 ? '#5A5E60' : Color.gray[0],
+                                width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                                fontSize: HUD_METRICS.captionFont, fontWeight: 800,
+                                background: theme === 1 ? Color.smoke[2] : Color.gray[0],
                                 color: theme === 1 ? Color.white : Color.black,
                             }}>{id}</span>
                         </button>
@@ -67,10 +67,10 @@ export const EmojiWheel: React.FC<Props> = ({ theme, compact, onPick }) => {
 
                 <div style={{
                     position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)',
-                    textAlign: 'center', color: mutedText(theme), fontSize: 12, fontWeight: 700, lineHeight: 1.7,
+                    textAlign: 'center', color: mutedText(theme), fontSize: HUD_METRICS.bodyFont, fontWeight: 700, lineHeight: 1.7,
                 }}>
                     Shift + 1~8<br />
-                    <span style={{ fontSize: 11, fontWeight: 600 }}>Shift 놓으면 닫힘</span>
+                    <span style={{ fontSize: HUD_METRICS.captionFont, fontWeight: 600 }}>Shift 놓으면 닫힘</span>
                 </div>
             </div>
         </div>

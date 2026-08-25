@@ -7,7 +7,7 @@ import { EmojiWheel } from './EmojiWheel.tsx';
 import { StatusBar } from './StatusBar.tsx';
 import { ControlsGuide } from './ControlsGuide.tsx';
 import { AlertStack } from './AlertStack.tsx';
-import { HUD_FONT } from './hudTheme.ts';
+import { HUD_FONT, HUD_METRICS } from './hudTheme.ts';
 import type { ColorVisionMode } from '../../theme/cvd.ts';
 
 interface Props {
@@ -24,10 +24,6 @@ interface Props {
     onSpectate: (playerId: number) => void;
     onEmoji: (emojiId: number) => void;
 }
-
-/** Below either of these the corner panels start colliding, so they switch to their compact metrics. */
-const COMPACT_WIDTH = 760;
-const COMPACT_HEIGHT = 560;
 
 /**
  * Screen-anchored overlay above the Phaser world. Everything here stays a fixed size regardless of camera
@@ -66,7 +62,7 @@ export const GameHud: React.FC<Props> = ({
         const observer = new ResizeObserver(([entry]) => {
             if (!entry) return;
             const { width, height } = entry.contentRect;
-            setCompact(width < COMPACT_WIDTH || height < COMPACT_HEIGHT);
+            setCompact(width < HUD_METRICS.compactWidth || height < HUD_METRICS.compactHeight);
         });
         observer.observe(el);
         return () => observer.disconnect();
@@ -137,7 +133,7 @@ export const GameHud: React.FC<Props> = ({
 
             {/* No out-of-zone warning: the storm is a solid boundary the server collides against, so a
                 player can never be outside it in the first place. */}
-            <AlertStack theme={theme} alerts={hud.alerts} offsetTop={24} />
+            <AlertStack theme={theme} alerts={hud.alerts} offsetTop={HUD_METRICS.corner + 8} />
 
             {/* 도움말 모드에서만 띄우던 것을 설정으로 옮겼다 — 문구가 "경기 중"을 약속하므로 인게임에서도 뜬다.
                 좁은 화면에서는 여전히 접는다(좌하단이 다른 패널과 겹친다). */}

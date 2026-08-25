@@ -2,7 +2,7 @@ import React from 'react';
 import type { Theme } from '../types.ts';
 import type { HudPlayer } from './hudTypes.ts';
 import { Color } from '../../theme/color.ts';
-import { HUD_FONT, bodyText, mutedText, panel, userColors } from './hudTheme.ts';
+import { HUD_DISPLAY_FONT, HUD_FONT, HUD_METRICS, bodyText, mutedText, panel, userColors } from './hudTheme.ts';
 import type { ColorVisionMode } from '../../theme/cvd.ts';
 import { playerLabel } from './playerLabel.ts';
 
@@ -48,26 +48,26 @@ export const PlayerList: React.FC<Props> = ({
     return (
         <div style={{
             ...panel(theme),
-            position: 'absolute', top: compact ? 10 : 16, right: compact ? 10 : 16,
-            padding: compact ? 7 : 10,
+            position: 'absolute', top: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner, right: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner,
+            padding: compact ? HUD_METRICS.panelPaddingCompact : HUD_METRICS.panelPadding,
             // Compact drops the name column entirely — number chips alone still identify everyone, and a
             // truncated nickname is worth less than the space it costs on a small viewport.
-            minWidth: compact ? 0 : 190,
-            maxHeight: compact ? 'calc(100% - 20px)' : 'calc(100% - 32px)',
+            minWidth: compact ? 0 : 250,
+            maxHeight: compact ? `calc(100% - ${HUD_METRICS.cornerCompact * 2}px)` : `calc(100% - ${HUD_METRICS.corner * 2}px)`,
             display: 'flex', flexDirection: 'column',
             fontFamily: HUD_FONT,
         }}>
             <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flex: 'none',
-                padding: '0 2px 8px', color: mutedText(theme), fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+                padding: '0 3px 11px', color: mutedText(theme), fontSize: HUD_METRICS.captionFont, fontWeight: 700, letterSpacing: 0.5,
             }}>
                 <span>생존</span>
-                <span style={{ color: bodyText(theme), fontSize: 18, fontWeight: 800 }}>
-                    {aliveCount}<span style={{ color: mutedText(theme), fontSize: 11, fontWeight: 700 }}> / {players.length}</span>
+                <span style={{ color: bodyText(theme), fontFamily: HUD_DISPLAY_FONT, fontSize: 22, fontWeight: 400 }}>
+                    {aliveCount}<span style={{ color: mutedText(theme), fontFamily: HUD_FONT, fontSize: HUD_METRICS.captionFont, fontWeight: 700 }}> / {players.length}</span>
                 </span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, overflowY: 'auto', minHeight: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, overflowY: 'auto', minHeight: 0 }}>
                 {players.map((p) => {
                     const [fill, stroke] = userColors(p.colorIndex, colorVision);
                     const isSelf = p.id === selfId;
@@ -87,8 +87,8 @@ export const PlayerList: React.FC<Props> = ({
                             role={clickable ? 'button' : undefined}
                             title={canTarget ? `스위치 대상 (${playerLabel(p.id)})` : canWatch ? '이 플레이어 관전' : undefined}
                             style={{
-                                display: 'flex', alignItems: 'center', gap: 7,
-                                padding: compact ? 3 : '3px 9px 3px 3px', borderRadius: 999,
+                                display: 'flex', alignItems: 'center', gap: 9,
+                                padding: compact ? 4 : '4px 11px 4px 4px', borderRadius: 999,
                                 background: fill,
                                 border: `2px solid ${p.isTagger ? Color.red[2] : (isSelf || watching ? Color.black : stroke)}`,
                                 filter: p.alive ? 'none' : 'grayscale(1)',
@@ -101,16 +101,16 @@ export const PlayerList: React.FC<Props> = ({
                             }}
                         >
                             <span style={{
-                                width: 24, height: 24, borderRadius: '50%', flex: 'none',
+                                width: 34, height: 34, borderRadius: '50%', flex: 'none',
                                 display: 'grid', placeItems: 'center',
                                 background: Color.white,
                                 border: `2px solid ${p.isTagger ? Color.red[2] : stroke}`,
-                                color: Color.black, fontSize: 12, fontWeight: 800,
+                                color: Color.black, fontSize: HUD_METRICS.bodyFont, fontWeight: 800,
                             }}>{playerLabel(p.id)}</span>
 
                             {!compact && (
                                 <span style={{
-                                    flex: 1, minWidth: 0, fontSize: 13, fontWeight: isSelf ? 800 : 600,
+                                    flex: 1, minWidth: 0, fontSize: HUD_METRICS.bodyFont, fontWeight: isSelf ? 800 : 600,
                                     color: Color.black,
                                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                     textDecoration: p.alive ? 'none' : 'line-through',
@@ -119,17 +119,17 @@ export const PlayerList: React.FC<Props> = ({
 
                             {compact ? null : p.isTagger ? (
                                 <span style={{
-                                    flex: 'none', fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 999,
+                                    flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
                                     background: Color.red[2], color: Color.white,
                                 }}>술래</span>
                             ) : canTarget ? (
                                 <span style={{
-                                    flex: 'none', fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 999,
+                                    flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
                                     background: Color.blue[2], color: Color.white,
                                 }}>{playerLabel(p.id)}</span>
                             ) : watching ? (
                                 <span style={{
-                                    flex: 'none', fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 999,
+                                    flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
                                     background: Color.black, color: Color.white,
                                 }}>보는 중</span>
                             ) : null}

@@ -3,6 +3,11 @@ import { useTranslation } from 'react-i18next';
 import type { MatchPlayerResult } from '../../api/matches.ts';
 import { Color } from '../../theme/color.ts';
 
+const formatSurvival = (survivedMs: number) => {
+    const totalSeconds = Math.floor(survivedMs / 1000);
+    return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+};
+
 export const MatchResultTable: React.FC<{ players: MatchPlayerResult[]; winnerIds: string[] }> = ({ players, winnerIds }) => {
     const { t } = useTranslation();
     return (
@@ -11,8 +16,9 @@ export const MatchResultTable: React.FC<{ players: MatchPlayerResult[]; winnerId
                 <thead>
                     <tr>
                         <th scope="col">{t('result.player')}</th>
-                        <th scope="col">{t('result.switches')}</th>
                         <th scope="col">{t('result.tags')}</th>
+                        <th scope="col">{t('result.switches')}</th>
+                        <th scope="col">{t('result.survived')}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -25,12 +31,28 @@ export const MatchResultTable: React.FC<{ players: MatchPlayerResult[]; winnerId
                                 <td>
                                     <span className="result-player-cell">
                                         <i style={{ background: ramp[0], borderColor: ramp[1], color: Color.black }}>{player.slot}</i>
-                                        <span>{player.nickname}{player.isSelf ? ` · ${t('lobby.you')}` : ''}</span>
-                                        {isWinner && <em>{t('result.victory')}</em>}
+                                        <span title={player.nickname}>{player.nickname}{player.isSelf ? ` · ${t('lobby.you')}` : ''}</span>
+                                        {isWinner && <em>{t(winnerIds.length === 1 ? 'result.victorySingle' : 'result.victory')}</em>}
                                     </span>
                                 </td>
-                                <td><strong>{successRate}%</strong> <small>{player.switchSuccess}/{player.switchTry}</small></td>
-                                <td><strong>{player.tagCount}</strong> <small>{t('result.times')}</small></td>
+                                <td>
+                                    <span className="result-metric-cell">
+                                        <strong>{player.tagCount}{t('result.times')}</strong>
+                                        <small>{t('result.taggedCount', { count: player.taggedCount })}</small>
+                                    </span>
+                                </td>
+                                <td>
+                                    <span className="result-metric-cell">
+                                        <strong>{player.switchSuccess}/{player.switchTry}</strong>
+                                        <small>{t('result.successRate', { rate: successRate })}</small>
+                                    </span>
+                                </td>
+                                <td>
+                                    <span className="result-metric-cell">
+                                        <strong>{formatSurvival(player.survivedMs)}</strong>
+                                        <small>{t('result.survivalTime')}</small>
+                                    </span>
+                                </td>
                             </tr>
                         );
                     })}

@@ -33,13 +33,13 @@
     "leave": "방 나가기", "previewResult": "결과 화면 미리보기", "start": "게임 시작", "startCountdown": "{{seconds}}초 뒤 시작", "liveData": "게임 서버 연결됨", "commandFailed": "요청을 처리하지 못했습니다. ({{code}})", "reconnecting": "게임 서버에 다시 연결하는 중입니다…", "resumeFailed": "이 방의 연결을 복구할 수 없습니다."
   },
   "result": {
-    "title": "게임 결과", "winner": "WINNERS", "victory": "공동 승리", "winnerDetail": "태그 {{tags}}회 · swITch {{success}}/{{tries}}", "details": "핵심 기록",
-    "player": "플레이어", "tags": "태그 성공", "switches": "swITch 성공률", "times": "회",
+    "title": "게임 결과", "winner": "공동 우승자", "winnerSingle": "우승자", "noWinner": "승자 없음", "noWinnerDetail": "끝까지 살아남은 플레이어가 없습니다.", "victory": "공동 승리", "victorySingle": "승리", "winnerDetail": "태그 {{tags}}회 · swITch {{success}}/{{tries}}", "details": "플레이어 기록",
+    "player": "플레이어", "tags": "태그 기록", "taggedCount": "태그당함 {{count}}회", "switches": "swITch 기록", "successRate": "성공률 {{rate}}%", "survived": "생존 시간", "survivalTime": "경기 생존", "times": "회",
     "duration": "경기 시간", "players": "참가자", "tableScrollLabel": "플레이어별 핵심 경기 결과 표",
     "switchShort": "swITch", "tagsShort": "태그", "shareImage": "결과 이미지 공유", "shareUnavailable": "인앱 공유 불가", "backToLobby": "대기실로 돌아가기",
     "imageShared": "결과 이미지 공유창을 열었습니다.", "imageSaved": "결과 이미지를 저장했습니다.", "imageFailed": "결과 이미지를 만들지 못했습니다.", "shareCancelled": "이미지 공유를 취소했습니다.",
     "openExternal": "외부 브라우저에서 열기", "externalCopied": "주소를 복사했습니다. Safari에서 붙여넣어 열어 주세요.", "externalUnavailable": "외부 브라우저를 자동으로 열 수 없습니다.",
-    "shareSummary": "swITch 경기 결과: {{winners}} 공동 승리", "returnCountdown": "{{seconds}}초 뒤 대기실로 돌아갑니다", "returnNotice": "서버의 결과 표시 시간이 끝나면 같은 방으로 자동 복귀합니다.", "returnTimerLabel": "대기실 자동 복귀까지 남은 시간", "invalidMatch": "올바른 경기 정보가 없어 결과를 불러올 수 없습니다."
+    "shareSummary": "swITch 경기 결과: {{winners}} 공동 승리", "shareSummarySingle": "swITch 경기 결과: {{winner}} 승리", "shareSummaryNoWinner": "swITch 경기 결과: 생존자 없음", "returnCountdown": "{{seconds}}초 뒤 대기실로 돌아갑니다", "returnNotice": "서버의 결과 표시 시간이 끝나면 같은 방으로 자동 복귀합니다.", "returnTimerLabel": "대기실 자동 복귀까지 남은 시간", "invalidMatch": "올바른 경기 정보가 없어 결과를 불러올 수 없습니다."
   },
   "auth": {
     "login": "로그인", "signup": "회원가입", "email": "이메일", "emailPlaceholder": "name@example.com", "password": "비밀번호",

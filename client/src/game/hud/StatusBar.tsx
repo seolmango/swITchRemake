@@ -2,7 +2,7 @@ import React from 'react';
 import type { Theme } from '../types.ts';
 import type { HudPlayer } from './hudTypes.ts';
 import { Color } from '../../theme/color.ts';
-import { HUD_FONT, bodyText, mutedText, panel } from './hudTheme.ts';
+import { HUD_DISPLAY_FONT, HUD_FONT, HUD_METRICS, bodyText, mutedText, panel } from './hudTheme.ts';
 
 interface Props {
     theme: Theme;
@@ -30,25 +30,25 @@ const clock = (sec: number): string => {
  */
 export const StatusBar: React.FC<Props> = ({ theme, spectating, compact, elapsedSec, selfIsTagger, watching, deadInMatch }) => (
     <div style={{
-        position: 'absolute', top: compact ? 10 : 16, left: compact ? 10 : 16,
-        display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start', fontFamily: HUD_FONT,
+        position: 'absolute', top: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner, left: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner,
+        display: 'flex', flexDirection: 'column', gap: 9, alignItems: 'flex-start', fontFamily: HUD_FONT,
     }}>
         {elapsedSec !== null && (
-            <div style={{ ...panel(theme), padding: compact ? '4px 10px' : '6px 14px', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ color: mutedText(theme), fontSize: 10, fontWeight: 700, letterSpacing: 0.5 }}>경과</span>
-                <span style={{ color: bodyText(theme), fontSize: compact ? 14 : 17, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ ...panel(theme), padding: compact ? '7px 12px' : '9px 16px', display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <span style={{ color: mutedText(theme), fontSize: HUD_METRICS.captionFont, fontWeight: 700, letterSpacing: 0.5 }}>경과</span>
+                <span style={{ color: bodyText(theme), fontFamily: HUD_DISPLAY_FONT, fontSize: compact ? 19 : 24, fontWeight: 400, fontVariantNumeric: 'tabular-nums' }}>
                     {clock(elapsedSec)}
                 </span>
             </div>
         )}
 
         {spectating && (
-            <div style={{ ...panel(theme), padding: compact ? '4px 9px' : '6px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: mutedText(theme), fontSize: 11, fontWeight: 700 }}>
+            <div style={{ ...panel(theme), padding: compact ? '7px 11px' : '9px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ color: mutedText(theme), fontSize: HUD_METRICS.bodyFontCompact, fontWeight: 700 }}>
                     {deadInMatch ? '탈락 · 관전' : '관전 중'}
                 </span>
                 {watching && (
-                    <span style={{ color: bodyText(theme), fontSize: compact ? 12 : 13, fontWeight: 800 }}>
+                    <span style={{ color: bodyText(theme), fontSize: compact ? HUD_METRICS.bodyFontCompact : HUD_METRICS.bodyFont, fontWeight: 800 }}>
                         {watching.nickname || `Player ${watching.id + 1}`}
                     </span>
                 )}
@@ -57,10 +57,10 @@ export const StatusBar: React.FC<Props> = ({ theme, spectating, compact, elapsed
 
         {selfIsTagger && (
             <div style={{
-                padding: compact ? '5px 11px' : '7px 14px', borderRadius: 12, whiteSpace: 'nowrap',
+                padding: compact ? '8px 13px' : '10px 16px', borderRadius: HUD_METRICS.controlRadius, whiteSpace: 'nowrap',
                 background: Color.red[2], color: Color.white,
-                fontSize: compact ? 12 : 13, fontWeight: 800, letterSpacing: 0.5,
-                boxShadow: '0 2px 10px rgba(255,113,113,0.45)',
+                fontSize: compact ? HUD_METRICS.bodyFontCompact : HUD_METRICS.bodyFont, fontWeight: 800, letterSpacing: 0.5,
+                boxShadow: `0 3px 12px color-mix(in srgb, ${Color.red[2]} 48%, transparent)`,
             }}>당신이 술래입니다</div>
         )}
     </div>

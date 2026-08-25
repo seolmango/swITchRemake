@@ -90,10 +90,10 @@ export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, 
             {viewerIsHost && !player.isSelf && (
                 <div className="lobby-host-actions" aria-label={t('lobby.hostActions', { nickname: player.nickname })}>
                     <button type="button" onClick={onPassHost} aria-label={t('lobby.passHostTo', { nickname: player.nickname })} title={t('lobby.passHost')}>
-                        <Icon name="crown" size={21}/>
+                        <Icon name="crown" size={24}/>
                     </button>
                     <button type="button" className="is-danger" onClick={onKick} aria-label={t('lobby.kickPlayer', { nickname: player.nickname })} title={t('lobby.kick')}>
-                        <Icon name="remove" size={21}/>
+                        <Icon name="remove" size={24}/>
                     </button>
                 </div>
             )}
@@ -107,14 +107,14 @@ export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, 
             </div>
             <div className="lobby-player-loadout">
                 <span title={t(`lobby.controls.${player.control}`)}>
-                    <Icon name={controlIcons[player.control]} size={26}/>
+                    <Icon name={controlIcons[player.control]} size={30}/>
                     <small>{t(`lobby.controls.${player.control}`)}</small>
                 </span>
                 {player.isSelf ? (
                     <button type="button" className="lobby-skill-button" disabled={!canChangeSkill} title={t('lobby.changeSkill')} aria-label={t('lobby.changeSkillLabel', { skill: t(`lobby.skills.${player.skill}`) })} onClick={onChangeSkill}>
                         <img src={skillIcons[player.skill]} alt=""/>
                         <small>{t(`lobby.skills.${player.skill}`)}</small>
-                        <Icon name="swap" size={15}/>
+                        <Icon name="swap" size={18}/>
                     </button>
                 ) : (
                     <span className="lobby-skill-display" title={t(`lobby.skills.${player.skill}`)}>

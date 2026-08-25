@@ -2,7 +2,7 @@ import React from 'react';
 import type { Theme } from '../types.ts';
 import type { HudSkill } from './hudTypes.ts';
 import { Color } from '../../theme/color.ts';
-import { HUD_FONT, bodyText, mutedText, panel } from './hudTheme.ts';
+import { HUD_FONT, HUD_METRICS, bodyText, mutedText, panel } from './hudTheme.ts';
 
 interface Props {
     theme: Theme;
@@ -13,9 +13,6 @@ interface Props {
     /** Why switch can't be used at all right now (e.g. you're the tagger) — distinct from cooldown. */
     switchBlockedReason: string | null;
 }
-
-const SIZE = 62;
-const SIZE_COMPACT = 46;
 
 const SkillSlot: React.FC<{
     theme: Theme;
@@ -30,18 +27,18 @@ const SkillSlot: React.FC<{
     const ratio = skill.cooldownTotal > 0 ? Math.max(0, Math.min(1, skill.cooldown / skill.cooldownTotal)) : 0;
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <button
                 onClick={() => ready && !passive && onClick?.()}
                 disabled={!ready || passive}
                 title={`${skill.label} (${skill.key})`}
                 style={{
-                    position: 'relative', width: size, height: size, borderRadius: 15, padding: 0,
+                    position: 'relative', width: size, height: size, borderRadius: HUD_METRICS.controlRadius, padding: 0,
                     cursor: ready && !passive ? 'pointer' : 'default',
-                    background: theme === 1 ? '#2E3132' : Color.white,
+                    background: theme === 1 ? Color.black : Color.white,
                     // Ready reads as a lit blue rim, so availability is legible without reading the number.
-                    border: `2px solid ${ready ? Color.blue[2] : (theme === 1 ? '#4A4D4F' : Color.gray[1])}`,
-                    boxShadow: ready ? `0 0 0 2px ${theme === 1 ? 'rgba(113,185,255,0.22)' : 'rgba(113,185,255,0.32)'}` : 'none',
+                    border: `3px solid ${ready ? Color.blue[2] : (theme === 1 ? Color.smoke[2] : Color.gray[1])}`,
+                    boxShadow: ready ? `0 0 0 3px color-mix(in srgb, ${Color.blue[2]} 38%, transparent)` : 'none',
                     overflow: 'hidden',
                     transition: 'border-color 120ms ease-out, box-shadow 120ms ease-out',
                 }}
@@ -50,7 +47,7 @@ const SkillSlot: React.FC<{
                     src={skill.iconUrl}
                     alt=""
                     style={{
-                        width: size - 14, height: size - 14, objectFit: 'contain',
+                        width: size - 18, height: size - 18, objectFit: 'contain',
                         filter: ready ? 'none' : 'grayscale(0.85)', opacity: ready ? 1 : 0.45,
                     }}
                 />
@@ -58,13 +55,14 @@ const SkillSlot: React.FC<{
                     <>
                         <span style={{
                             position: 'absolute', inset: 0,
-                            background: `conic-gradient(rgba(0,0,0,0.55) ${ratio * 360}deg, transparent 0deg)`,
+                            background: `conic-gradient(color-mix(in srgb, ${Color.black} 55%, transparent) ${ratio * 360}deg, transparent 0deg)`,
                             pointerEvents: 'none',
                         }} />
                         <span style={{
                             position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
-                            fontSize: 21, fontWeight: 800, color: Color.white,
-                            textShadow: '0 1px 3px rgba(0,0,0,0.75)', pointerEvents: 'none',
+                            fontSize: size === HUD_METRICS.skillSizeCompact ? HUD_METRICS.cooldownFontCompact : HUD_METRICS.cooldownFont,
+                            fontWeight: 800, color: Color.white,
+                            textShadow: `0 2px 4px ${Color.black}`, pointerEvents: 'none',
                         }}>{Math.ceil(skill.cooldown)}</span>
                     </>
                 )}
@@ -72,10 +70,10 @@ const SkillSlot: React.FC<{
             {/* A blocked skill states *why* — otherwise it looks identical to one on cooldown, and the
                 player has no way to learn that being the tagger disables switch entirely. */}
             <span style={{
-                fontSize: 10, fontWeight: 800, letterSpacing: 0.4,
+                fontSize: HUD_METRICS.badgeFont, fontWeight: 800, letterSpacing: 0.4,
                 color: blockedReason ? Color.red[2] : (ready ? bodyText(theme) : mutedText(theme)),
-                padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap',
-                border: `1.5px solid ${ready ? (theme === 1 ? '#5A5E60' : Color.gray[1]) : 'transparent'}`,
+                padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap',
+                border: `2px solid ${ready ? (theme === 1 ? Color.smoke[2] : Color.gray[1]) : 'transparent'}`,
             }}>{blockedReason ?? (skill.unavailable ? '—' : skill.key)}</span>
         </div>
     );
@@ -90,12 +88,13 @@ const SkillSlot: React.FC<{
  * and "just pressed" looked nearly identical.
  */
 export const SkillBar: React.FC<Props> = ({ theme, compact, movementSkill, switchSkill, onUseMovement, switchBlockedReason }) => {
-    const size = compact ? SIZE_COMPACT : SIZE;
+    const size = compact ? HUD_METRICS.skillSizeCompact : HUD_METRICS.skillSize;
     return (
         <div style={{
             ...panel(theme),
-            position: 'absolute', right: compact ? 10 : 16, bottom: compact ? 10 : 16,
-            padding: compact ? 7 : 10, display: 'flex', gap: compact ? 7 : 10,
+            position: 'absolute', right: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner, bottom: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner,
+            padding: compact ? HUD_METRICS.panelPaddingCompact : HUD_METRICS.panelPadding,
+            display: 'flex', gap: compact ? HUD_METRICS.panelGapCompact : HUD_METRICS.panelGap,
             alignItems: 'flex-end', fontFamily: HUD_FONT,
         }}>
             {movementSkill && <SkillSlot theme={theme} size={size} skill={movementSkill} onClick={onUseMovement} />}

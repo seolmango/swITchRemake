@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { Color } from '../../theme/color.ts';
+import { Color, themeColors } from '../../theme/color.ts';
 import { userColorsFor, type ColorVisionMode } from '../../theme/cvd.ts';
 import type { Theme } from '../types.ts';
 
@@ -33,14 +33,16 @@ export const surface = (theme: Theme, tone: Tone, emphasis = false): CSSProperti
 
 /** Panel behind a group of HUD controls. Translucent so the world stays readable underneath. */
 export const panel = (theme: Theme): CSSProperties => ({
-    background: theme === 1 ? 'rgba(35,37,38,0.72)' : 'rgba(250,250,248,0.82)',
-    border: `2px solid ${theme === 1 ? '#4A4D4F' : '#E4E4E0'}`,
-    borderRadius: 14,
+    background: theme === 1
+        ? `color-mix(in srgb, ${Color.black} 78%, transparent)`
+        : `color-mix(in srgb, ${Color.white} 86%, transparent)`,
+    border: `3px solid ${theme === 1 ? Color.smoke[2] : Color.smoke[1]}`,
+    borderRadius: 18,
     backdropFilter: 'blur(6px)',
 });
 
 export const bodyText = (theme: Theme): string => (theme === 1 ? Color.white : Color.black);
-export const mutedText = (theme: Theme): string => (theme === 1 ? '#9BA0A3' : '#8A8A8A');
+export const mutedText = (theme: Theme): string => themeColors(theme).muted;
 
 /**
  * Both halves of a player's palette slot: [fill, stroke].
@@ -51,4 +53,25 @@ export const mutedText = (theme: Theme): string => (theme === 1 ? '#9BA0A3' : '#
 export const userColors = (colorIndex: number, colorVision: ColorVisionMode = 'off'): readonly [string, string] =>
     userColorsFor(colorIndex, colorVision);
 
-export const HUD_FONT = 'ui-sans-serif, system-ui, sans-serif';
+export const HUD_FONT = 'var(--font-ui)';
+export const HUD_DISPLAY_FONT = 'var(--font-display)';
+
+export const HUD_METRICS = Object.freeze({
+    corner: 18,
+    cornerCompact: 12,
+    panelPadding: 14,
+    panelPaddingCompact: 10,
+    panelGap: 12,
+    panelGapCompact: 9,
+    captionFont: 14,
+    bodyFont: 16,
+    bodyFontCompact: 15,
+    badgeFont: 14,
+    skillSize: 92,
+    skillSizeCompact: 72,
+    cooldownFont: 32,
+    cooldownFontCompact: 27,
+    controlRadius: 18,
+    compactWidth: 820,
+    compactHeight: 620,
+});

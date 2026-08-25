@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
-import { themeColors } from '../../theme/color.ts';
+import { Color, themeColors } from '../../theme/color.ts';
 import type { Theme } from '../types.ts';
 
 interface Props {
@@ -47,14 +47,14 @@ export function GameLoadingOverlay({
             }}
         >
             <div style={{ width: 'min(720px, 90%)', display: 'grid', gap: 24, justifyItems: 'center', textAlign: 'center' }}>
-                <div aria-hidden="true" style={{ fontSize: 72, fontWeight: 950, letterSpacing: -6 }}>swITch</div>
-                <h1 style={{ margin: 0, fontSize: 36 }}>{failed ? t('game.loadingFailed') : t('game.loadingTitle')}</h1>
+                <div aria-hidden="true" style={{ fontFamily: 'var(--font-display)', fontSize: 72, fontWeight: 400, letterSpacing: -4 }}>swITch</div>
+                <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400 }}>{failed ? t('game.loadingFailed') : t('game.loadingTitle')}</h1>
                 <p style={{ margin: 0, color: colors.muted, fontSize: 22, lineHeight: 1.5 }}>
                     {mapError ? `${t('game.mapLoadFailed')} ${mapError}` : timedOut ? `${t('game.loadingTimedOut')} ${waitingFor}` : waitingFor}
                 </p>
                 {!failed && !reducedMotion && (
                     <div aria-hidden="true" style={{ width: 280, height: 8, overflow: 'hidden', borderRadius: 999, background: colors.panelBorder }}>
-                        <div style={{ width: '45%', height: '100%', borderRadius: 999, background: '#82BCEF', animation: 'switch-loading-slide 1.1s ease-in-out infinite alternate' }}/>
+                        <div style={{ width: '45%', height: '100%', borderRadius: 999, background: Color.blue[2], animation: 'switch-loading-slide 1.1s ease-in-out infinite alternate' }}/>
                     </div>
                 )}
                 {failed && (

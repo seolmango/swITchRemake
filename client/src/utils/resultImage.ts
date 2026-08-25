@@ -1,5 +1,6 @@
 import type { MatchResultSnapshot } from '../api/matches.ts';
 import { Color } from '../theme/color.ts';
+import { matchResultWinners } from './matchResultWinners.ts';
 
 const roundRect = (context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number, fill: string, stroke?: string) => {
     context.beginPath();
@@ -24,6 +25,8 @@ const drawText = (context: CanvasRenderingContext2D, text: string, x: number, y:
 export async function createResultImage(result: MatchResultSnapshot, labels: {
     title: string;
     winner: string;
+    noWinner: string;
+    noWinnerDetail: string;
     victory: string;
     map: string;
     duration: string;
@@ -47,14 +50,16 @@ export async function createResultImage(result: MatchResultSnapshot, labels: {
     drawText(context, 'swITch', 100, 120, 48, 700);
     drawText(context, labels.title, 980, 120, 34, 700, 'right');
 
-    const winners = result.winners
-        .map((winnerId) => result.players.find((player) => player.playerId === winnerId))
-        .filter((player): player is NonNullable<typeof player> => Boolean(player))
-        .slice(0, 2);
-    drawText(context, labels.winner, 540, 185, 27, 700, 'center');
+    const winners = matchResultWinners(result);
+    const winnerIds = new Set(winners.map((winner) => winner.playerId));
+    drawText(context, winners.length === 0 ? labels.noWinner : labels.winner, 540, 185, 27, 700, 'center');
+    if (winners.length === 0) {
+        drawText(context, labels.noWinner, 540, 290, 40, 700, 'center');
+        drawText(context, labels.noWinnerDetail, 540, 350, 22, 500, 'center');
+    }
     winners.forEach((winner, index) => {
         const winnerColor = Color.user[(winner.slot - 1) % Color.user.length]!;
-        const x = 100 + index * 450;
+        const x = winners.length === 1 ? 325 : 100 + index * 450;
         roundRect(context, x, 215, 430, 235, 32, winnerColor[0], winnerColor[1]);
         context.beginPath();
         context.arc(x + 100, 330, 62, 0, Math.PI * 2);
@@ -83,8 +88,8 @@ export async function createResultImage(result: MatchResultSnapshot, labels: {
     sortedPlayers.slice(0, 8).forEach((player, index) => {
         const y = 615 + index * rowHeight;
         const playerColor = Color.user[(player.slot - 1) % Color.user.length]!;
-        const isWinner = result.winners.includes(player.playerId);
-        const rowFill = player.isSelf ? Color.blue[0] : isWinner ? '#FFF1C7' : Color.white;
+        const isWinner = winnerIds.has(player.playerId);
+        const rowFill = player.isSelf ? Color.blue[0] : isWinner ? Color.frenzy[0] : Color.white;
         const rowStroke = player.isSelf ? Color.blue[2] : isWinner ? Color.frenzy[1] : Color.smoke[1];
         roundRect(context, 100, y, 880, 66, 18, rowFill, rowStroke);
         context.beginPath();

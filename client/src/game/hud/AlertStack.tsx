@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { Theme } from '../types.ts';
 import type { HudAlert } from './hudTypes.ts';
 import { Color } from '../../theme/color.ts';
-import { HUD_FONT, bodyText, panel } from './hudTheme.ts';
+import { HUD_FONT, HUD_METRICS, bodyText, panel } from './hudTheme.ts';
 
 interface Props {
     theme: Theme;
@@ -56,7 +56,7 @@ export const AlertStack: React.FC<Props> = ({ theme, alerts, offsetTop }) => {
     return (
         <div style={{
             position: 'absolute', top: offsetTop, left: '50%', transform: 'translateX(-50%)',
-            display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center',
+            display: 'flex', flexDirection: 'column', gap: 9, alignItems: 'center',
             fontFamily: HUD_FONT, pointerEvents: 'none',
         }}>
             {visible.map((a) => (
@@ -64,13 +64,13 @@ export const AlertStack: React.FC<Props> = ({ theme, alerts, offsetTop }) => {
                     key={a.id}
                     style={a.tone === 'danger'
                         ? {
-                            padding: '8px 18px', borderRadius: 12, whiteSpace: 'nowrap',
-                            background: Color.red[2], color: Color.white, fontSize: 13, fontWeight: 800,
-                            boxShadow: '0 2px 12px rgba(255,113,113,0.45)',
+                            padding: '11px 21px', borderRadius: HUD_METRICS.controlRadius, whiteSpace: 'nowrap',
+                            background: Color.red[2], color: Color.white, fontSize: HUD_METRICS.bodyFont, fontWeight: 800,
+                            boxShadow: `0 3px 14px color-mix(in srgb, ${Color.red[2]} 48%, transparent)`,
                         }
                         : {
-                            ...panel(theme), padding: '8px 18px', whiteSpace: 'nowrap',
-                            color: bodyText(theme), fontSize: 13, fontWeight: 700,
+                            ...panel(theme), padding: '11px 21px', whiteSpace: 'nowrap',
+                            color: bodyText(theme), fontSize: HUD_METRICS.bodyFont, fontWeight: 700,
                         }}
                 >{a.text}</div>
             ))}
