@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
     CloseCode,
     ControlErrorCode,
@@ -81,6 +81,8 @@ export interface RoomOptions {
     readonly lifecycle: RoomLifecyclePort;
     readonly isKnownMap: (mapId: string) => boolean;
     readonly getServerTick: () => number;
+    /** 두 번째 경기부터 쓸 새 matchId. 테스트가 고정값을 넣기 위한 통로다. */
+    readonly newMatchId?: () => string;
     /** Notifies the directory publisher after a room-list-visible change. */
     readonly onDirectoryChanged?: () => void;
     readonly now?: () => number;
@@ -118,7 +120,6 @@ function passwordMatches(expected: string, supplied: string): boolean {
 export class Room {
     readonly id: string;
     readonly roomCode: string;
-    readonly matchId: string;
     readonly name: string;
     readonly #password: string | null;
     readonly #options: RoomOptions;
@@ -128,6 +129,12 @@ export class Room {
     readonly #startLock: StartLock;
     readonly #kickedUsers = new Set<ActorId>();
     #mapId: string;
+    /**
+     * 경기마다 새로 발급한다. 방 하나가 여러 경기를 치르는데 matchId를 고정하면 두 번째 경기부터는
+     * 매칭 서버가 `duplicate`로 버려서 전적도 결과 화면도 안 나온다.
+     */
+    #matchId: string;
+    #playedGames = 0;
     #locked = false;
     #countdownEndsAt: number | null = null;
     #postGameEndsAt: number | null = null;
@@ -140,7 +147,7 @@ export class Room {
         if (!options.isKnownMap(options.mapId)) throw new Error(`unknown map: ${options.mapId}`);
         this.id = options.id;
         this.roomCode = options.roomCode;
-        this.matchId = options.matchId;
+        this.#matchId = options.matchId;
         this.name = options.name;
         this.#password = options.password;
         this.#options = options;
@@ -160,6 +167,10 @@ export class Room {
 
     public get state(): RoomStateValue {
         return this.#stateMachine.state;
+    }
+
+    public get matchId(): string {
+        return this.#matchId;
     }
 
     public get mapId(): string {
@@ -406,6 +417,10 @@ export class Room {
         if (this.#startLock.remainingMs(now) > 0) return ErrorCode.StartLocked;
         const participants = this.#roster.members().filter((member) => member.connection !== null);
         if (participants.length < this.#options.minPlayersToStart) return ErrorCode.BadState;
+
+        // 첫 경기는 매칭 서버가 발급해 둔 id를 그대로 쓴다. 재경기부터 새로 만든다.
+        if (this.#playedGames > 0) this.#matchId = (this.#options.newMatchId ?? randomUUID)();
+        this.#playedGames += 1;
 
         this.#roster.clearHolds();
         const players = Object.freeze(participants.map((member) => Object.freeze({

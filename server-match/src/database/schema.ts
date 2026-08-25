@@ -71,7 +71,10 @@ export const matches = pgTable('matches', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     resultRecordedAt: timestamp('result_recorded_at', { withTimezone: true }),
 }, (table) => [
-    uniqueIndex('matches_room_id_idx').on(table.roomId),
+    // 방 하나가 여러 경기를 치른다. 유일 인덱스였을 때는 재경기의 결과 행 자체를 만들 수 없어서
+    // 두 번째 경기부터 전적도 결과 화면도 사라졌다. '방의 현재 경기'는 resultRecordedAt이 비어 있는
+    // 행 하나라는 규칙으로 대신 지킨다.
+    index('matches_room_id_idx').on(table.roomId),
     index('matches_ended_at_idx').on(table.endedAt),
 ]);
 

@@ -64,6 +64,13 @@ export class GameSession implements SchedulerTarget {
     /** simulation의 이번-tick 신호를 네트워크 publish 경계까지 보존한다. */
     #pendingTileChanges: SnapshotTileChange[] = [];
     readonly #replay: SessionReplayRecorder;
+    /**
+     * 경기 시작 시점의 신원. 경기 중 나간 사람은 room의 roster에서 사라지므로, 결과를 만들 때 roster를
+     * 다시 읽으면 그 사람만 `P3` 같은 자리표시자 이름에 userId=null이 된다. 매칭 서버는 결과의 참가자가
+     * 배정과 다르면 **경기 전체**를 버리므로, 한 명이 중간에 나가면 나머지 전원의 전적과 결과 화면까지
+     * 같이 사라졌다. 그래서 시작할 때 고정한다.
+     */
+    readonly #identities: ReadonlyMap<number, ReturnType<Room['participants']>[number]>;
     #finished = false;
     readonly #startedAt = Date.now();
 
@@ -75,6 +82,8 @@ export class GameSession implements SchedulerTarget {
         this.#roster = options.roster;
         this.id = options.room.id;
 
+        this.#identities = new Map(options.room.participants().map((p) => [p.playerId, p]));
+
         this.#replay = new SessionReplayRecorder({
             recorder: options.recorder ?? new NullReplayRecorder(),
             roster: options.roster,
@@ -84,7 +93,7 @@ export class GameSession implements SchedulerTarget {
 
     /** 게스트도 포함해 전원의 당시 신원을 고정한다. 나중에 채울 수 없는 값이다. */
     #buildReplayMeta(): ReplayMeta {
-        const identities = new Map(this.#room.participants().map((p) => [p.playerId, p]));
+        const identities = this.#identities;
         return {
             matchId: this.matchId,
             mapId: this.#options.meta.mapId,
@@ -266,7 +275,7 @@ export class GameSession implements SchedulerTarget {
     #buildResult(winners: [number, number], replay: ReplayHandleInfo | null): MatchResultMessage {
         const endedAt = Date.now();
         const msPerTick = 1000 / this.world.simulationHz;
-        const identities = new Map(this.#room.participants().map((p) => [p.playerId, p]));
+        const identities = this.#identities;
 
         const players: MatchParticipantResult[] = this.world.players.map((player) => {
             const identity = identities.get(player.playerId);
