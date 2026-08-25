@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 import { decodeSnapshot, SkillId, SkillRejection, SkillSlot, TilePhysics , RoomMode } from 'shared';
 import { EMOJI_DISPLAY_MS } from '../config/gameplay';
+import { NETWORK } from '../config/network';
 import type { ReplayRecorder } from '../replay/recorder';
 import { msToTicks } from '../simulation/effects';
 import type { Room } from '../rooms/room';
@@ -277,4 +278,90 @@ test('훈련장 맵은 자기장이 닫히지 않는다', () => {
         { x: world.players[0]!.x, y: world.players[0]!.y }, before,
         '자기장이 안 좁아지면 아무도 밀려나지 않는다',
     );
+});
+
+test('rate-limit 신호는 방 범위 playerId가 아니라 계정 id로 나간다', () => {
+    // playerId는 1..8이고 방마다 다시 매겨진다. 그대로 실어 보내면 제재 소비자가 붙는 날
+    // id 1..8 계정이 남의 요청 폭주로 제재된다.
+    const signals: { userId: number | string; detail?: Record<string, number | string> }[] = [];
+    const room = {
+        id: 'room',
+        participants: () => [{
+            playerId: 2,
+            userId: 4_242,
+            nickname: 'P2',
+            colorIndex: 1,
+            guest: false,
+        }],
+        resolvedInputs: () => [],
+        sendSkillRejected: () => undefined,
+        markEliminated: () => true,
+        broadcastTagged: () => undefined,
+        broadcastBlinked: () => undefined,
+        broadcastSkillArea: () => undefined,
+        finishGame: () => true,
+        snapshotTargets: () => [],
+    } as unknown as Room;
+    const world = makeWorld(mapFromRows([
+        '####',
+        '#..#',
+        '####',
+    ]), [makePlayer(2, 1, 1)]);
+    const session = new GameSession({
+        room,
+        world,
+        matchId: 'match',
+        mode: RoomMode.Match,
+        roster: [],
+        violationSink: (signal) => { signals.push(signal); },
+        meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' },
+        onFinished: () => undefined,
+    });
+
+    // 큐 상한을 넘길 때까지 밀어 넣는다. 상한 이후의 요청이 신호를 낸다.
+    for (let i = 0; i < NETWORK.MAX_JSON_COMMANDS_PER_SEC + 1; i += 1) {
+        session.queueSkill({ playerId: 2, slot: SkillSlot.Movement });
+    }
+
+    assert.equal(signals.length, 1);
+    assert.equal(signals[0]?.userId, 4_242);
+    // playerId도 버리지 않는다 — 리플레이와 신고가 가리키는 값이다.
+    assert.equal(signals[0]?.detail?.playerId, 2);
+});
+
+test('명단에 없는 world 액터의 신호는 버려지지 않고 방 범위로 남는다', () => {
+    // 훈련 표적은 계정이 없다. 신호를 버리면 표적을 흉내 낸 폭주가 아무 기록도 남기지 않는다.
+    const signals: { userId: number | string }[] = [];
+    const room = {
+        id: 'room-7',
+        participants: () => [],
+        resolvedInputs: () => [],
+        sendSkillRejected: () => undefined,
+        markEliminated: () => true,
+        broadcastTagged: () => undefined,
+        broadcastBlinked: () => undefined,
+        broadcastSkillArea: () => undefined,
+        finishGame: () => true,
+        snapshotTargets: () => [],
+    } as unknown as Room;
+    const world = makeWorld(mapFromRows(['####', '#..#', '####']), [makePlayer(5, 1, 1)]);
+    const session = new GameSession({
+        room,
+        world,
+        matchId: 'match',
+        mode: RoomMode.Training,
+        roster: [],
+        violationSink: (signal) => { signals.push(signal); },
+        meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' },
+        onFinished: () => undefined,
+    });
+
+    // 이모지는 플레이어별 마지막 요청만 남으므로 같은 id를 반복하면 상한에 닿지 않는다.
+    // 서로 다른 id로 자리를 채운 뒤에 5번을 넣어야 거부된다.
+    for (let i = 0; i < NETWORK.MAX_JSON_COMMANDS_PER_SEC; i += 1) {
+        session.queueEmoji({ playerId: 100 + i, emojiId: 1 });
+    }
+    session.queueEmoji({ playerId: 5, emojiId: 1 });
+
+    assert.equal(signals[0]?.userId, 'room:room-7#5');
 });

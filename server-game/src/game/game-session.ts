@@ -135,12 +135,12 @@ export class GameSession implements SchedulerTarget {
         if (this.#pendingSkills.length >= NETWORK.MAX_JSON_COMMANDS_PER_SEC) {
             this.#options.violationSink({
                 kind: 'RATE_LIMIT',
-                userId: request.playerId,
+                userId: this.#actorOf(request.playerId),
                 roomId: this.id,
                 tick: this.world.tick,
                 severity: 'low',
                 ruleVersion: 1,
-                detail: { kind: 'skill-queue' },
+                detail: { kind: 'skill-queue', playerId: request.playerId },
             });
             return;
         }
@@ -153,16 +153,30 @@ export class GameSession implements SchedulerTarget {
         if (!this.#pendingEmojis.has(request.playerId) && this.#pendingEmojis.size >= NETWORK.MAX_JSON_COMMANDS_PER_SEC) {
             this.#options.violationSink({
                 kind: 'RATE_LIMIT',
-                userId: request.playerId,
+                userId: this.#actorOf(request.playerId),
                 roomId: this.id,
                 tick: this.world.tick,
                 severity: 'low',
                 ruleVersion: 1,
-                detail: { kind: 'emoji-queue' },
+                detail: { kind: 'emoji-queue', playerId: request.playerId },
             });
             return;
         }
         this.#pendingEmojis.set(request.playerId, request);
+    }
+
+    /**
+     * 방 범위 `playerId`를 계정/게스트 식별자로 옮긴다.
+     *
+     * `ViolationSignal.userId`에 playerId를 그대로 넣으면 안 된다. playerId는 1..8이고 방마다
+     * 다시 매겨지므로, 제재 소비자가 붙는 날 **엉뚱한 계정**(id 1..8)이 제재된다. 지금은 로그뿐이라
+     * 눈에 띄지 않는 종류의 버그다.
+     *
+     * 훈련 표적처럼 명단에 없는 world 액터는 계정이 없다. 그때는 방 id로 남긴다 — 신호를
+     * 버리면 표적을 흉내 낸 요청 폭주가 아무 기록도 남기지 않는다.
+     */
+    #actorOf(playerId: number): ViolationSignal['userId'] {
+        return this.#identities.get(playerId)?.userId ?? `room:${this.id}#${playerId}`;
     }
 
     /** 훈련장에서 죽은 사람을 되살린다. 경기 방이면 아무것도 하지 않는다. */
