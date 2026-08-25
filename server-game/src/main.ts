@@ -115,6 +115,12 @@ async function main(): Promise<void> {
         violationSink,
         skillSink: (roomId, request) => lifecycle.queueSkill(roomId, request),
         emojiSink: (roomId, request) => lifecycle.setEmoji(roomId, request),
+        respawnSink: (roomId, playerId) => {
+            if (!lifecycle.respawn(roomId, playerId)) return false;
+            // 살아났으니 화면을 처음부터 다시 구성해야 한다.
+            lifecycle.requestFullSnapshot(roomId, playerId);
+            return true;
+        },
         onResume: (connection) => {
             // 재접속한 사람은 화면을 처음부터 다시 구성해야 하므로 다음 프레임을 full로 받는다.
             lifecycle.requestFullSnapshot(connection.roomId, connection.playerId);

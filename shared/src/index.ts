@@ -63,6 +63,8 @@ export {
     JSON_MESSAGE_VERSION,
     RoomState,
     RoomMode,
+    TrainingPadKind,
+    type TrainingPad,
     PlayerRole,
     ErrorCode,
     NON_RETRYABLE_ERRORS,

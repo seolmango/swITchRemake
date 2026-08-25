@@ -55,6 +55,7 @@ function validPayload(type: string, payload: unknown): boolean {
                 && integer(payload['slot'])
                 && (payload['targetPlayerId'] === undefined || integer(payload['targetPlayerId']));
         case 'game.emoji': return exactKeys(payload, ['emojiId']) && integer(payload['emojiId']);
+        case 'training.respawn': return exactKeys(payload, []);
         case 'ping': return exactKeys(payload, ['clientTime']) && typeof payload['clientTime'] === 'number' && Number.isFinite(payload['clientTime']);
         default: return false;
     }

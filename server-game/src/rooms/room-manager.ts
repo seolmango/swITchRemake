@@ -52,6 +52,8 @@ export interface RoomManagerOptions {
     /** game.useSkill을 시뮬레이션으로 넘기는 경계. 성공 여부는 tick 경계에서 정해진다. */
     readonly skillSink?: (roomId: string, request: { playerId: number; slot: number; targetPlayerId?: number }) => boolean;
     readonly emojiSink?: (roomId: string, request: { playerId: number; emojiId: number }) => boolean;
+    /** 훈련장 부활. 경기 방에서는 호출되지 않는다. */
+    readonly respawnSink?: (roomId: string, playerId: number) => boolean;
     readonly now?: () => number;
     readonly timing?: Partial<RoomTiming>;
     readonly maxRooms?: number;
@@ -296,6 +298,19 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                         : { targetPlayerId: message.payload.targetPlayerId }),
                 });
                 if (queued !== true) error = ErrorCode.BadState;
+                break;
+            }
+            case 'training.respawn': {
+                // 훈련장에만 있는 동작이다. 경기 방에서 오면 잘못된 클라이언트다.
+                if (room.mode !== RoomMode.Training || room.state !== RoomState.Playing) {
+                    error = ErrorCode.BadState;
+                    break;
+                }
+                const member = room.memberByUser(connection.userId);
+                if (member === null || !this.#options.respawnSink?.(room.id, member.playerId)) {
+                    error = ErrorCode.BadState;
+                    break;
+                }
                 break;
             }
             case 'game.emoji': {

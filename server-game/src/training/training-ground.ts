@@ -1,11 +1,32 @@
-import { MAX_PLAYERS_PER_ROOM, SkillId, TilePhysics } from 'shared';
+import { MAX_PLAYERS_PER_ROOM, SkillId, TilePhysics, TrainingPadKind, type TrainingPad } from 'shared';
 import { GAMEPLAY } from '../config/gameplay';
 import { msToTicks } from '../simulation/effects';
 import type { PlayerState, ResolvedInput, World, WorldMap } from '../simulation/world';
 import { emptyStats } from '../simulation/world';
+import { grantTaggerFrenzy } from '../simulation/skills';
 import type { RosterEntry } from '../game/snapshot-view';
 
 export const TRAINING_DUMMY_RESPAWN_MS = 3_000;
+
+/**
+ * 패드 반경. 지나가다 실수로 밟히지 않을 만큼 작고, 노리고 가면 확실히 밟히는 크기다.
+ * 클라이언트가 그리는 크기도 이 값이라 "밟았는데 안 밟혔다"가 생기지 않는다.
+ */
+const PAD_RADIUS_TILES = 0.75;
+
+/**
+ * 패드 배치. 맵 비율 기준이라 맵이 달라도 같은 자리에 놓인다.
+ *
+ * 스킬 셋을 나란히 두는 이유는 갈아 끼우면서 바로 비교해 보라는 것이다. 술래 패드는 조금 떨어뜨려
+ * 놓았다 — 스킬을 고르다 실수로 술래가 되면 흐름이 끊긴다.
+ */
+const PAD_ANCHORS: readonly { kind: TrainingPadKind; at: readonly [number, number] }[] = [
+    { kind: TrainingPadKind.SkillDash, at: [0.34, 0.5] },
+    { kind: TrainingPadKind.SkillFlash, at: [0.44, 0.5] },
+    { kind: TrainingPadKind.SkillExhaust, at: [0.54, 0.5] },
+    { kind: TrainingPadKind.Reset, at: [0.64, 0.5] },
+    { kind: TrainingPadKind.Tagger, at: [0.5, 0.28] },
+];
 
 type Point = readonly [x: number, y: number];
 type TilePoint = readonly [x: number, y: number];
@@ -165,6 +186,9 @@ export class TrainingGround {
     readonly roster: readonly RosterEntry[];
     readonly #states: readonly DummyState[];
     readonly #dummyIds: ReadonlySet<number>;
+    readonly pads: readonly TrainingPad[];
+    /** 지금 밟고 있는 패드. 서 있는 동안 매 tick 발동하면 스킬이 계속 바뀐다. */
+    readonly #standingOn = new Map<number, TrainingPadKind>();
 
     public constructor(map: WorldMap, occupiedPlayerIds: readonly number[]) {
         const availableIds = Array.from({ length: MAX_PLAYERS_PER_ROOM }, (_, index) => index + 1)
@@ -196,6 +220,11 @@ export class TrainingGround {
             nickname: COURSE_DEFINITIONS[index]!.nickname,
         }));
         this.#dummyIds = new Set(this.players.map((player) => player.playerId));
+        const radius = PAD_RADIUS_TILES * map.tileSize;
+        this.pads = PAD_ANCHORS.map(({ kind, at }) => {
+            const [x, y] = tileCenter(map, nearestWalkable(map, desiredTile(map, at)));
+            return { kind, x, y, radius };
+        });
     }
 
     public isDummy(playerId: number): boolean {
@@ -211,7 +240,76 @@ export class TrainingGround {
         });
     }
 
+    /**
+     * 패드 판정. 사람에게만 적용한다 — 표적이 코스를 돌다 스킬 패드를 밟으면 표적의 성격이 바뀐다.
+     *
+     * **밟는 순간에만** 발동한다. 서 있는 동안 매 tick 발동하면 스킬이 계속 바뀌어서 고를 수가 없다.
+     */
+    #applyPads(world: World): void {
+        for (const player of world.players) {
+            if (!player.alive || this.isDummy(player.playerId)) continue;
+            const pad = this.pads.find((candidate) => {
+                const dx = candidate.x - player.x;
+                const dy = candidate.y - player.y;
+                return dx * dx + dy * dy <= candidate.radius * candidate.radius;
+            });
+            const previous = this.#standingOn.get(player.playerId);
+            if (pad === undefined) {
+                this.#standingOn.delete(player.playerId);
+                continue;
+            }
+            this.#standingOn.set(player.playerId, pad.kind);
+            if (previous === pad.kind) continue;
+            this.#trigger(world, player, pad.kind);
+        }
+    }
+
+    #trigger(world: World, player: PlayerState, kind: TrainingPadKind): void {
+        switch (kind) {
+            case TrainingPadKind.SkillDash: player.loadout = SkillId.Dash; break;
+            case TrainingPadKind.SkillFlash: player.loadout = SkillId.Flash; break;
+            case TrainingPadKind.SkillExhaust: player.loadout = SkillId.Exhaust; break;
+            case TrainingPadKind.Tagger: {
+                // 술래를 벗을 때 아무도 술래가 아닌 상태가 된다. 훈련장은 그래도 된다 —
+                // 경기가 아니라 실험실이고, 술래 없는 상태의 움직임도 볼 수 있어야 한다.
+                const becoming = !player.isTagger;
+                for (const other of world.players) other.isTagger = false;
+                player.isTagger = becoming;
+                if (becoming) grantTaggerFrenzy(world, player);
+                world.taggerChangedAtTick = world.tick;
+                break;
+            }
+            case TrainingPadKind.Reset:
+                // 쿨타임과 효과를 지운다. 같은 것을 반복해서 시험하려면 기다릴 필요가 없어야 한다.
+                for (const key of Object.keys(player.cooldowns)) delete player.cooldowns[key];
+                for (const key of Object.keys(player.effects)) {
+                    delete player.effects[key as keyof typeof player.effects];
+                }
+                break;
+        }
+    }
+
+    /** 죽은 사람을 코스가 아닌 자기 자리에서 되살린다. 훈련장에는 탈락이 없다. */
+    public respawn(world: World, playerId: number): boolean {
+        const player = world.players.find((p) => p.playerId === playerId);
+        if (player === undefined || this.isDummy(playerId) || player.alive) return false;
+        const [x, y] = tileCenter(world.map, nearestWalkable(world.map, desiredTile(world.map, [0.5, 0.62])));
+        player.x = x;
+        player.y = y;
+        player.vx = 0;
+        player.vy = 0;
+        player.alive = true;
+        player.isTagger = false;
+        player.stats.eliminatedAtTick = null;
+        for (const key of Object.keys(player.cooldowns)) delete player.cooldowns[key];
+        for (const key of Object.keys(player.effects)) {
+            delete player.effects[key as keyof typeof player.effects];
+        }
+        return true;
+    }
+
     public afterStep(world: World): void {
+        this.#applyPads(world);
         const delayTicks = msToTicks(TRAINING_DUMMY_RESPAWN_MS, world.simulationHz);
         for (const state of this.#states) {
             if (!state.player.alive && state.respawnAtTick === null) {
