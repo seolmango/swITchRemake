@@ -1,5 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="스위치">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="presentation">
   <!--
+    스위치 아이콘. 이름표는 여기 두지 않는다 — 화면에 보이는 이름은 로케일의
+    `lobby.skills.*`가 유일한 출처이고, 이 파일이 따로 이름을 들면 둘이 갈라진다.
     스위치. 게임 이름이자 핵심이라 넷 중 가장 강해야 한다.
     유일하게 주체가 둘이다 — 그 자체가 나머지와 구분되는 지점이라 하나로 줄이면 안 된다.
     빨간 쪽이 술래다. 두 화살표가 "자리를 맞바꾼다"를 말한다.

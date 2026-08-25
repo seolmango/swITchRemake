@@ -1,5 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="탈진">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="presentation">
   <!--
+    탈진 아이콘. 이름표는 여기 두지 않는다 — 화면에 보이는 이름은 로케일의
+    `lobby.skills.*`가 유일한 출처이고, 이 파일이 따로 이름을 들면 둘이 갈라진다.
     탈진. 남에게 거는 유일한 스킬이라 혼자 성격이 다르다.
     나머지 셋이 전부 수평·전진 방향이므로 이것만 수직 하강으로 그려 실루엣만으로 갈린다.
     채도를 낮춰 "약화"를 전달한다.
