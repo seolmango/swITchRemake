@@ -94,6 +94,14 @@ export class SwitchEngine {
             parent: container,
             transparent: false,
             banner: false,
+            // Phaser의 PreFX/PostFX는 이 게임이 한 줄도 쓰지 않는데, 켜져 있으면 부팅할 때
+            // `PipelineManager.boot()`이 32px 간격으로 정사각 RenderTarget 사다리를 통째로 미리 만든다
+            // (32² 부터 캔버스 짧은 변까지, 크기마다 3개 + 전체 화면 3개).
+            // 1920x1080 캔버스에서 약 180MB다. 창을 세 개 띄우면 그것만으로 500MB가 넘고,
+            // 엔진을 다시 만들 때마다 또 잡는다. 사용자가 겪은 out-of-memory의 가장 큰 몫이 여기였다.
+            // 나중에 FX를 실제로 쓸 일이 생기면 그때 필요한 쪽만 켠다.
+            disablePreFX: true,
+            disablePostFX: true,
             // Lets canvas.toDataURL()/readPixels capture the actual last-rendered frame (default false
             // lets the browser clear the WebGL buffer right after compositing) — needed for any tooling
             // that screenshots the canvas directly instead of via the OS compositor.
@@ -257,7 +265,19 @@ export class SwitchEngine {
     }
 
     destroy(): void {
-        this.game.destroy(true);
+        // Phaser는 GL 자원을 하나씩 지우기는 해도 컨텍스트 자체는 놓지 않는다. 로비→인게임→결과를
+        // 오갈 때마다 엔진이 새로 만들어지므로, 놓지 않은 컨텍스트가 브라우저의 동시 WebGL 컨텍스트
+        // 한도(크롬 기준 16개 남짓)까지 쌓이고 그 사이 GPU 메모리도 물고 있는다. 명시적으로 끊는다.
+        //
+        // 두 번째 인자 noReturn=true는 Phaser가 재시작용으로 게임 인스턴스를 붙들고 있지 않게 한다.
+        // noReturn=true. 기본값(false)은 Phaser가 재시작용으로 게임 인스턴스를 붙들고 있게 한다.
+        // 이 엔진은 로비→인게임→결과를 오갈 때마다 새로 만들어지고 재시작하는 일이 없다.
+        //
+        // 남은 의심: 파괴한 뒤에도 WebGL 컨텍스트가 브라우저에 계속 잡혀 있는 것으로 보인다.
+        // `WEBGL_lose_context`로 명시적으로 끊는 것을 시도했지만, 끊는 시점을 Phaser의 지연된
+        // `runDestroy()`와 맞추는 데 실패했다(먼저 끊으면 캔버스가 DOM에 남고, 직접 `runDestroy()`를
+        // 부르면 StrictMode의 즉시 언마운트에서 SceneManager가 터진다). 확인되지 않은 채로 넣지 않는다.
+        this.game.destroy(true, true);
         this.scene = null;
         this.pendingOps = [];
         this.pendingSnapshot = null;

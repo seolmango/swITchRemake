@@ -78,8 +78,15 @@ export class GameLifecycle implements RoomLifecyclePort {
                 mapBundleHash: this.#options.bundle.mapBundleHash,
             },
             onFinished: (finished, result) => {
-                this.#sessions.delete(finished.id);
-                this.#options.scheduler.remove(finished.id);
+                // `finished.id`는 방 id다. 그런데 이 콜백은 리플레이 저장(await)이 끝난 뒤에 오므로,
+                // 저장이 post-game + 카운트다운보다 오래 걸리면 그 사이 같은 방에서 **다음 경기가
+                // 이미 시작**돼 있다. 그때 방 id로 지우면 끝난 경기가 아니라 지금 돌아가는 경기를
+                // 스케줄러에서 빼 버린다 — world가 멈추니 아무도 잡히지 않고 경기가 끝나지도 않는다.
+                // 등록된 것이 이 세션 본인일 때만 지운다.
+                if (this.#sessions.get(finished.id) === finished) {
+                    this.#sessions.delete(finished.id);
+                    this.#options.scheduler.remove(finished.id);
+                }
                 this.#options.onMatchFinished?.(finished, result);
             },
         });
