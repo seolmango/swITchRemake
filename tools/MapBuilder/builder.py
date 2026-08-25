@@ -6,7 +6,99 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-MAP_BUNDLE_SCHEMA_VERSION = 1
+MAP_BUNDLE_SCHEMA_VERSION = 2
+
+MAP_MARKER_KINDS = frozenset({
+    'skill.dash',
+    'skill.flash',
+    'skill.exhaust',
+    'tagger',
+    'reset',
+    'training.chaseMode',
+})
+MAP_ZONE_KINDS = frozenset({
+    'training.course',
+    'training.chase',
+})
+
+
+def map_error(map_info, map_file, layer, index, coordinate, message):
+    map_name = map_info.get('name', map_file.stem)
+    return ValueError(
+        f"map {map_name} ({map_file.name}) {layer}[{index}] at {coordinate}: {message}"
+    )
+
+
+def tile_coordinate(value):
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def validate_map_layers(map_info, map_file, initial_map, tile_store):
+    """Validate and normalize the optional JSON-authored marker/zone layers.
+
+    These live in the map JSON instead of the CSV so a tile cell keeps describing only
+    tile/timeline data. The short object lists are easier to hand-edit and review as an
+    independent gameplay layer, without changing the existing tile authoring workflow.
+    """
+    map_name = map_info.get('name', map_file.stem)
+    map_size = map_info['size']
+    markers_raw = map_info.get('markers', [])
+    zones_raw = map_info.get('zones', [])
+
+    if not isinstance(markers_raw, list):
+        raise ValueError(f"map {map_name} ({map_file.name}) markers must be an array")
+    if not isinstance(zones_raw, list):
+        raise ValueError(f"map {map_name} ({map_file.name}) zones must be an array")
+
+    markers = []
+    occupied_marker_tiles = set()
+    for index, marker in enumerate(markers_raw):
+        if not isinstance(marker, dict):
+            raise map_error(map_info, map_file, 'markers', index, '(?, ?)', 'must be an object')
+        x = marker.get('x')
+        y = marker.get('y')
+        coordinate = f"({x if x is not None else '?'}, {y if y is not None else '?'})"
+        kind = marker.get('kind')
+        if not isinstance(kind, str) or kind not in MAP_MARKER_KINDS:
+            raise map_error(map_info, map_file, 'markers', index, coordinate, f"unknown kind {kind!r}")
+        if not tile_coordinate(x) or not tile_coordinate(y):
+            raise map_error(map_info, map_file, 'markers', index, coordinate, 'x and y must be integer tile coordinates')
+        if x < 0 or y < 0 or x >= map_size or y >= map_size:
+            raise map_error(map_info, map_file, 'markers', index, coordinate, 'is outside the map')
+        if (x, y) in occupied_marker_tiles:
+            raise map_error(map_info, map_file, 'markers', index, coordinate, 'another marker already occupies this tile')
+        if tile_store[initial_map[y][x]]['physics'] == 1:
+            raise map_error(map_info, map_file, 'markers', index, coordinate, 'marker is on a wall tile')
+        occupied_marker_tiles.add((x, y))
+        markers.append({'kind': kind, 'x': x, 'y': y})
+
+    zones = []
+    for index, zone in enumerate(zones_raw):
+        if not isinstance(zone, dict):
+            raise map_error(map_info, map_file, 'zones', index, '(?, ?)', 'must be an object')
+        x = zone.get('x')
+        y = zone.get('y')
+        coordinate = f"({x if x is not None else '?'}, {y if y is not None else '?'})"
+        kind = zone.get('kind')
+        if not isinstance(kind, str) or kind not in MAP_ZONE_KINDS:
+            raise map_error(map_info, map_file, 'zones', index, coordinate, f"unknown kind {kind!r}")
+        width = zone.get('width')
+        height = zone.get('height')
+        if not all(tile_coordinate(value) for value in (x, y, width, height)):
+            raise map_error(
+                map_info, map_file, 'zones', index, coordinate,
+                'x, y, width, and height must be integer tile units',
+            )
+        if width <= 0 or height <= 0:
+            raise map_error(map_info, map_file, 'zones', index, coordinate, 'width and height must be positive')
+        if x < 0 or y < 0 or x + width > map_size or y + height > map_size:
+            raise map_error(
+                map_info, map_file, 'zones', index, coordinate,
+                f"{width}x{height} zone is outside the {map_size}x{map_size} map",
+            )
+        zones.append({'kind': kind, 'x': x, 'y': y, 'width': width, 'height': height})
+
+    return markers, zones
 
 
 def positive_integer_setting(value, name):
@@ -125,6 +217,7 @@ for i, map_file in enumerate(map_files):
         for x in range(map_info["size"]):
             crt_map[y].append(data[y][x][0][1])
     initial_map = copy.deepcopy(crt_map)
+    markers, zones = validate_map_layers(map_info, map_file, initial_map, tile_store)
     timeline = {}
     while barrier_index < endpoint:
         crt_tick += 1
@@ -210,6 +303,8 @@ for i, map_file in enumerate(map_files):
         "initial_map": initial_map,
         "timeline": timeline,
         "start_pos": start_positions,
+        "markers": markers,
+        "zones": zones,
     })
     print(f"[맵 시뮬레이션] - {map_info['name']} 완료(총 {crt_tick}틱)")
 
@@ -260,7 +355,8 @@ if args.task == "build":
         server_maps[m_name] = {
             "size": m_size, "barrier_speed": b_speed,
             "initial_map": srv_init_map, "timeline": srv_timeline,
-            "start_pos": temp_map["start_pos"]
+            "start_pos": temp_map["start_pos"],
+            "markers": temp_map["markers"], "zones": temp_map["zones"],
         }
         client_maps[m_name] = {
             "s": m_size, "b": b_speed,
@@ -292,6 +388,69 @@ elif args.task == "preview":
         7: ((175, 82, 222, 255), 80),  # 보라
         8: ((0, 200, 255, 255), 70)  # 하늘색
     }
+
+    marker_preview_styles = {
+        'skill.dash': ((0, 122, 255, 235), 'DASH'),
+        'skill.flash': ((255, 204, 0, 235), 'FLASH'),
+        'skill.exhaust': ((175, 82, 222, 235), 'EXH'),
+        'tagger': ((255, 59, 48, 235), 'TAG'),
+        'reset': ((52, 199, 89, 235), 'RESET'),
+        'training.chaseMode': ((255, 149, 0, 235), 'CHASE'),
+    }
+    zone_preview_styles = {
+        'training.course': ((255, 149, 0), 'COURSE'),
+        'training.chase': ((0, 199, 190), 'CHASE ZONE'),
+    }
+
+    def draw_preview_label(draw, position, label, fill, anchor='lt'):
+        x, y = position
+        text_box = draw.textbbox((x, y), label, anchor=anchor)
+        padding = max(2, tile_size // 100)
+        draw.rectangle(
+            [text_box[0] - padding, text_box[1] - padding, text_box[2] + padding, text_box[3] + padding],
+            fill=(0, 0, 0, 210),
+        )
+        draw.text((x, y), label, fill=fill, anchor=anchor)
+
+    def overlay_map_layers(base_img, markers, zones):
+        overlay = Image.new('RGBA', base_img.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        outline_width = max(2, tile_size // 48)
+
+        for zone in zones:
+            color, label = zone_preview_styles[zone['kind']]
+            x1 = zone['x'] * tile_size
+            y1 = zone['y'] * tile_size
+            x2 = (zone['x'] + zone['width']) * tile_size - 1
+            y2 = (zone['y'] + zone['height']) * tile_size - 1
+            draw.rectangle(
+                [x1, y1, x2, y2],
+                fill=color + (45,),
+                outline=color + (235,),
+                width=outline_width,
+            )
+            inset = max(6, tile_size // 32)
+            draw_preview_label(draw, (x1 + inset, y1 + inset), label, color + (255,))
+
+        marker_radius = max(8, int(tile_size * 0.28))
+        for marker in markers:
+            color, label = marker_preview_styles[marker['kind']]
+            center_x = int((marker['x'] + 0.5) * tile_size)
+            center_y = int((marker['y'] + 0.5) * tile_size)
+            draw.ellipse(
+                [
+                    center_x - marker_radius,
+                    center_y - marker_radius,
+                    center_x + marker_radius,
+                    center_y + marker_radius,
+                ],
+                fill=color,
+                outline=(255, 255, 255, 255),
+                width=outline_width,
+            )
+            draw_preview_label(draw, (center_x, center_y), label, (255, 255, 255, 255), anchor='mm')
+
+        return Image.alpha_composite(base_img.copy(), overlay)
 
     def overlay_start_positions(base_img, start_pos_data, m_size):
         canvas_copy = base_img.copy()
@@ -334,6 +493,7 @@ elif args.task == "preview":
                 preview_img.paste(tile_store[t_id]["image"], (x * tile_size, y * tile_size))
 
         initial_dotted = overlay_start_positions(preview_img, temp_map["start_pos"], m_size)
+        initial_dotted = overlay_map_layers(initial_dotted, temp_map["markers"], temp_map["zones"])
         initial_dotted.save(map_out_dir / "initial.png", format="PNG", lossless=True, quality=100)
 
         for tick in sorted(temp_map["timeline"].keys()):
@@ -341,7 +501,8 @@ elif args.task == "preview":
             for x, y, new_tile_id in changes:
                 preview_img.paste(tile_store[new_tile_id]["image"], (x * tile_size, y * tile_size))
 
-            preview_img.save(map_out_dir / f"{tick}tick.png", format="PNG", lossless=True, quality=100)
+            preview_with_layers = overlay_map_layers(preview_img, temp_map["markers"], temp_map["zones"])
+            preview_with_layers.save(map_out_dir / f"{tick}tick.png", format="PNG", lossless=True, quality=100)
 
         print(f"[미리보기 생성] {m_name} 맵 폴더 내 틱별 이미지 생성 완료!")
 

@@ -1,4 +1,4 @@
-import { TilePhysics } from 'shared';
+import { TilePhysics, type MapMarker, type MapZone } from 'shared';
 import type { MapView } from './index.ts';
 
 export interface RuntimeMapBundle {
@@ -6,7 +6,19 @@ export interface RuntimeMapBundle {
     mapBundleHash: string;
     simulationHz: number;
     tileSize: number;
-    maps: Record<string, { size: number; initial_map: number[][] }>;
+    maps: Record<string, {
+        size: number;
+        initial_map: number[][];
+        /**
+         * 마커와 구역. **서버와 같은 번들에서 온다.**
+         *
+         * 별도 wire 메시지로 보내지 않는 이유는 이 번들이 이미 해시로 검증되기 때문이다 —
+         * 서버가 쓰는 것과 다른 데이터를 클라이언트가 볼 수가 없다. 메시지를 하나 더 만들면
+         * 두 경로가 갈라질 자리가 생긴다.
+         */
+        markers?: MapMarker[];
+        zones?: MapZone[];
+    }>;
 }
 
 const bundleCache = new Map<string, Promise<RuntimeMapBundle>>();
@@ -18,7 +30,8 @@ async function fetchVerifiedMapBundle(expectedHash: string, gameOrigin: string):
     const response = await fetch(`${gameOrigin}/map-bundles/${expectedHash}.json`, { cache: 'force-cache' });
     if (!response.ok) throw new Error(`map bundle request failed (${response.status})`);
     const bundle = await response.json() as RuntimeMapBundle;
-    if (bundle.mapBundleHash !== expectedHash || bundle.schemaVersion !== 1) throw new Error('map bundle identity mismatch');
+    // 스키마는 서버(`map-loader.ts`)와 MapBuilder가 같이 올린다. 2에서 마커·구역이 들어왔다.
+    if (bundle.mapBundleHash !== expectedHash || bundle.schemaVersion !== 2) throw new Error('map bundle identity mismatch');
     const unsigned = JSON.stringify({
         schemaVersion: bundle.schemaVersion,
         simulationHz: bundle.simulationHz,

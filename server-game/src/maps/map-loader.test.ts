@@ -4,7 +4,7 @@ import { computeMapBundleHash, instantiateMap, MapBundleError, parseMapBundle } 
 
 function fixture(simulationHz = 60) {
     const unsigned = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         simulationHz,
         tileSize: 256,
         maps: {

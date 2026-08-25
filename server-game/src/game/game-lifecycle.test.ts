@@ -24,6 +24,8 @@ const bundle: ServerMapBundle = {
             startPositions: {
                 3: [[384, 384], [640, 384], [896, 384]],
             },
+        markers: [],
+        zones: [],
         },
     },
 };

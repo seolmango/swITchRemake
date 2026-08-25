@@ -1,8 +1,18 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { TilePhysics, type TilePhysics as TilePhysicsValue } from 'shared';
+import {
+    MAP_MARKER_KINDS,
+    MAP_ZONE_KINDS,
+    TilePhysics,
+    type MapMarker,
+    type MapMarkerKind,
+    type MapZone,
+    type MapZoneKind,
+    type TilePhysics as TilePhysicsValue,
+} from 'shared';
 
-export const MAP_BUNDLE_SCHEMA_VERSION = 1;
+/** 2에서 마커·구역 레이어가 들어왔다. MapBuilder(`tools/MapBuilder/builder.py`)와 같이 올린다. */
+export const MAP_BUNDLE_SCHEMA_VERSION = 2;
 
 export type MapChange = readonly [x: number, y: number, physics: TilePhysicsValue];
 
@@ -13,6 +23,10 @@ export interface ServerMap {
     readonly initialMap: readonly (readonly TilePhysicsValue[])[];
     readonly timeline: Readonly<Record<number, readonly MapChange[]>>;
     readonly startPositions: Readonly<Record<number, readonly (readonly [number, number])[]>>;
+    /** 밟으면 무슨 일이 일어나는 자리. 물리적 실체는 없다 — 자세한 것은 `shared`의 mapMarkers.ts. */
+    readonly markers: readonly MapMarker[];
+    /** 사각형 구역. 훈련장 표적이 자기 구역 안에서만 움직이는 데 쓴다. */
+    readonly zones: readonly MapZone[];
 }
 
 export interface ServerMapBundle {
@@ -128,7 +142,65 @@ function parseMap(mapId: string, value: unknown): ServerMap {
         initialMap: Object.freeze(initialMap),
         timeline: Object.freeze(timeline),
         startPositions: Object.freeze(startPositions),
+        markers: parseMarkers(mapId, raw['markers'], size, initialMap),
+        zones: parseZones(mapId, raw['zones'], size),
     });
+}
+
+/**
+ * 마커. MapBuilder가 이미 검사하지만 서버도 다시 본다 — 번들은 파일이고, 파일은 손으로 고칠 수 있다.
+ * 벽 위의 마커는 밟을 수 없으므로 잘못 만든 맵이다.
+ */
+function parseMarkers(
+    mapId: string,
+    value: unknown,
+    size: number,
+    initialMap: readonly (readonly TilePhysicsValue[])[],
+): readonly MapMarker[] {
+    if (value === undefined) return Object.freeze([]);
+    if (!Array.isArray(value)) throw new MapBundleError(`maps.${mapId}.markers must be an array`);
+    const seen = new Set<string>();
+    return Object.freeze(value.map((entry, index) => {
+        const where = `maps.${mapId}.markers[${index}]`;
+        const marker = object(entry, where);
+        const kind = marker['kind'];
+        if (typeof kind !== 'string' || !MAP_MARKER_KINDS.includes(kind as MapMarkerKind)) {
+            throw new MapBundleError(`${where} has an unknown kind: ${String(kind)}`);
+        }
+        const x = tileIndex(marker['x'], size, `${where}.x`);
+        const y = tileIndex(marker['y'], size, `${where}.y`);
+        if (initialMap[y]?.[x] === TilePhysics.Wall) throw new MapBundleError(`${where} sits on a wall`);
+        const key = `${x},${y}`;
+        if (seen.has(key)) throw new MapBundleError(`${where} shares a tile with another marker`);
+        seen.add(key);
+        return Object.freeze({ kind: kind as MapMarkerKind, x, y });
+    }));
+}
+
+function parseZones(mapId: string, value: unknown, size: number): readonly MapZone[] {
+    if (value === undefined) return Object.freeze([]);
+    if (!Array.isArray(value)) throw new MapBundleError(`maps.${mapId}.zones must be an array`);
+    return Object.freeze(value.map((entry, index) => {
+        const where = `maps.${mapId}.zones[${index}]`;
+        const zone = object(entry, where);
+        const kind = zone['kind'];
+        if (typeof kind !== 'string' || !MAP_ZONE_KINDS.includes(kind as MapZoneKind)) {
+            throw new MapBundleError(`${where} has an unknown kind: ${String(kind)}`);
+        }
+        const x = tileIndex(zone['x'], size, `${where}.x`);
+        const y = tileIndex(zone['y'], size, `${where}.y`);
+        const width = positiveInteger(zone['width'], `${where}.width`);
+        const height = positiveInteger(zone['height'], `${where}.height`);
+        if (x + width > size || y + height > size) throw new MapBundleError(`${where} extends past the map`);
+        return Object.freeze({ kind: kind as MapZoneKind, x, y, width, height });
+    }));
+}
+
+function tileIndex(value: unknown, size: number, where: string): number {
+    if (!Number.isInteger(value) || (value as number) < 0 || (value as number) >= size) {
+        throw new MapBundleError(`${where} must be a tile index inside the map`);
+    }
+    return value as number;
 }
 
 /** The hash covers all gameplay data and metadata except the hash field itself. */
