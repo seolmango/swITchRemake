@@ -39,7 +39,12 @@ export const SKILL_TUNING = Object.freeze({
     /** 감소군에 더해지는 값. 0.4면 0.6배. */
     EXHAUST_SPEED_DECREASE: 0.4,
     EXHAUST_DURATION_MS: 3_000,
-    EXHAUST_RANGE_TILES: 4,
+    /**
+     * 스위치와 **같은 사거리다.** 4타일이던 것을 사용자가 맞췄다 — 붙어야만 쓸 수 있는 스킬로
+     * 통일하면 "거리를 좁히는 것" 자체가 두 스킬의 공통 비용이 된다.
+     * 둘을 다시 벌리고 싶으면 여기 두 값을 따로 두면 된다.
+     */
+    EXHAUST_RANGE_TILES: 1.4,
 
     /** 술래와의 거리. 지목 대상까지의 거리는 상관없다. */
     SWITCH_RANGE_TILES: 1.4,

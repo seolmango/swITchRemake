@@ -264,7 +264,7 @@ const VIEWS: Record<DemoId, { col: number; row: number; cols: number; rows: numb
     tagger: { col: 3, row: 6, cols: 6, rows: 2.4 },
     dash: { col: 1.4, row: 5.6, cols: 12, rows: 3 },
     flash: { col: 3, row: 1.6, cols: 8, rows: 3.2 },
-    exhaust: { col: 0.6, row: 2.6, cols: 12, rows: 5.4 },
+    exhaust: { col: 1.4, row: 5.6, cols: 9, rows: 3 },
     switch: { col: 1, row: 0.6, cols: 14, rows: 7.6 },
 };
 

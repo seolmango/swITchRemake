@@ -17,7 +17,7 @@ import { NETWORK } from './network';
  */
 
 /** 밸런스가 바뀌면 올린다. 경기 결과와 리플레이에 함께 기록되어 "그 경기가 어떤 규칙이었는지"를 남긴다. */
-export const RULES_VERSION = '0.2.0-legacy-tuned';
+export const RULES_VERSION = '0.3.0-exhaust-range';
 
 const TILE_PX = SHARED_TILE_PX;
 
