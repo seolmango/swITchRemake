@@ -5,7 +5,7 @@
  * 이 파일이 두 담당자가 서로를 기다리지 않고 작업하기 위한 경계다. 바꾸려면 양쪽이 함께 바꾼다.
  */
 
-import type { RoomMode } from '../protocol/events';
+import type { LobbyStats, RoomMode } from '../protocol/events';
 
 export const CONTROL_VERSION = 1;
 
@@ -87,6 +87,8 @@ export interface CreateRoomPayload {
     password: string | null;
     ownerUserId: ActorId;
     ownerNickname: string;
+    /** 로비 카드에 띄울 전적. 게스트는 null. 인게임 서버는 DB를 모르므로 여기서 실어 보낸다. */
+    ownerStats: LobbyStats | null;
     capacity: number;
     mapId: string;
     /** 생략하면 일반 경기. 훈련장은 방 목록에도 빠른 참가에도 나오지 않는다. */
@@ -97,6 +99,8 @@ export interface ReserveJoinPayload {
     roomId: string;
     userId: ActorId;
     nickname: string;
+    /** 로비 카드에 띄울 전적. 게스트는 null. */
+    stats: LobbyStats | null;
     password: string | null;
 }
 

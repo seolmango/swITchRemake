@@ -73,6 +73,7 @@ export const LobbyPage: React.FC = () => {
                 skill: player.skills.find(
                     (candidate): candidate is PlayerSkill => isLoadoutSkill(candidate) && candidate !== SkillId.Switch,
                 ) ?? SkillId.Dash,
+                stats: player.stats,
             })),
         };
     }, [currentRoomId, live, liveLockElapsedMs, session.isPrivate, session.lobby, session.selfId]);

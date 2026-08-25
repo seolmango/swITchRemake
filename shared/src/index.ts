@@ -86,6 +86,7 @@ export {
     type ClientMessageType,
     type ServerMessage,
     type ServerMessageType,
+    type LobbyStats,
     type LobbyPlayer,
     type SkillRejectedMessage,
     type ViolationSignal,

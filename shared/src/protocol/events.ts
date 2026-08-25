@@ -162,6 +162,22 @@ interface ServerEnvelope<T extends string, P> {
     payload: P;
 }
 
+/**
+ * 로비 카드에 띄우는 전적 요약. 게스트는 `null`이다 — 게스트는 전적이 남지 않는다.
+ *
+ * 비율을 이미 계산해서 싣는다. games/wins만 보내고 클라이언트가 나누면 같은 사람의 승률이
+ * 프로필 화면(`GET /users/me/stats`)과 로비에서 다르게 반올림되는 날이 온다. 계산은
+ * 매칭 서버 한 곳에서만 한다.
+ */
+export interface LobbyStats {
+    games: number;
+    wins: number;
+    /** 백분율, 소수 한 자리(예: 66.7). */
+    winRate: number;
+    /** 백분율, 소수 한 자리. 시도가 없으면 0이다. */
+    switchSuccessRate: number;
+}
+
 export interface LobbyPlayer {
     playerId: number;
     /** 대기실 자리 번호(1..capacity). playerId와 다르다 — 자리를 옮겨도 playerId는 그대로다. */
@@ -178,6 +194,13 @@ export interface LobbyPlayer {
      * 대상이 아니라서 여기 없다.
      */
     skills: SkillId[];
+    /**
+     * 전적 요약. 게스트와, 전적을 아직 못 받은 사람은 `null`이다.
+     *
+     * 인게임 서버는 DB를 모른다. 이 값은 매칭 서버가 자리를 예약할 때 실어 보낸 것을 그대로
+     * 돌려주는 것이다 — 인게임 서버가 직접 조회하면 로비를 그릴 때마다 DB를 두드리게 된다.
+     */
+    stats: LobbyStats | null;
 }
 
 export type AuthOkMessage = ServerEnvelope<'auth.ok', {

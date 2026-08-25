@@ -1,12 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
-import type { ActorId } from 'shared';
+import type { ActorId, LobbyStats } from 'shared';
 import { NETWORK } from '../config/network';
-
-export interface LobbyStats {
-    games: number;
-    wins: number;
-    switchSuccessRate: number;
-}
 
 export interface SeatReservation {
     userId: ActorId;

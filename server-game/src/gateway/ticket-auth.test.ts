@@ -9,7 +9,7 @@ function reservation(now: number, userId: number | string = 7): SeatReservation 
     return {
         userId,
         nickname: 'player',
-        lobbyStats: { games: 2, wins: 1, switchSuccessRate: 0.5 },
+        lobbyStats: { games: 2, wins: 1, winRate: 50, switchSuccessRate: 50 },
         roomId: 'room-1',
         serverId: 'game-1',
         issuedAt: now,

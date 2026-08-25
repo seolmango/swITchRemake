@@ -52,7 +52,7 @@ function seat(userId: number, now: number, resume = false): SeatReservation {
     return {
         userId,
         nickname: `p${userId}`,
-        lobbyStats: { games: userId, wins: 0, switchSuccessRate: 0 },
+        lobbyStats: { games: userId, wins: 0, winRate: 0, switchSuccessRate: 0 },
         roomId: 'room-1',
         serverId: 'game-1',
         issuedAt: now,
@@ -290,4 +290,27 @@ test('경기 방에서는 훈련장 부활이 거부된다', () => {
     const context = setup();
     context.connect(context.owner);
     assert.equal(context.room.reviveForTraining(1), false);
+});
+
+test('lobby.state는 자리 예약에 실려 온 전적을 그대로 돌려준다', () => {
+    const context = setup();
+    const connection = context.connect(context.owner);
+    context.room.broadcastLobbyState();
+
+    const lobby = connection.messages.filter((message) => message.type === 'lobby.state').at(-1);
+    assert.notEqual(lobby, undefined);
+    assert.deepEqual(lobby?.payload.players[0]?.stats, context.owner.lobbyStats);
+});
+
+test('전적 없이 예약한 사람(게스트)은 lobby.state에서도 null이다', () => {
+    const context = setup();
+    context.connect(context.owner);
+    const guest: SeatReservation = { ...seat(2, context.getNow()), lobbyStats: null };
+    assert.equal(context.room.reserveJoin(guest, 'secret'), null);
+    const connection = context.connect(guest);
+    context.room.broadcastLobbyState();
+
+    const lobby = connection.messages.filter((message) => message.type === 'lobby.state').at(-1);
+    const seen = lobby?.payload.players.find((player) => player.nickname === guest.nickname);
+    assert.equal(seen?.stats, null);
 });

@@ -43,11 +43,11 @@ class FakeRedis {
     }
 }
 
-function makeService(redis = new FakeRedis()): RoomsService {
+function makeService(redis = new FakeRedis(), stats: unknown = null): RoomsService {
     const db = {
         select: () => ({
             from: () => ({
-                where: async () => [{ id: 1, nickname: 'Alice', accountStatus: 'ACTIVE' }],
+                where: async () => [{ id: 1, nickname: 'Alice', accountStatus: 'ACTIVE', stats }],
             }),
         }),
     };
@@ -254,4 +254,50 @@ test('six-character room code resolves to the internal room id', async () => {
     if ('alreadyAssigned' in result) throw new Error('unexpected existing assignment');
     assert.equal(result.roomId, roomId);
     assert.equal(result.roomCode, 'ABC234');
+});
+
+test('계정 사용자의 전적이 자리 예약 명령에 실린다', async () => {
+    const redis = new FakeRedis();
+    addLiveRoom(redis, 'room-1');
+    // 인게임 서버는 DB를 모른다. 여기서 안 실어 보내면 로비 카드가 영원히 비어 있다.
+    const service = makeService(redis, { games: 3, wins: 2, sw_try: 3, sw_su: 2 });
+    let command: ControlCommand | undefined;
+    (service as any).sendCommand = async (_serverId: string, value: ControlCommand): Promise<ControlReply> => {
+        command = value;
+        return {
+            v: CONTROL_VERSION, requestId: value.requestId, serverId: 'game-a', ok: true, code: null,
+            payload: { wsPath: '/game/game-a', ticket: 'ticket', expiresAt: 1 },
+        };
+    };
+
+    await service.join(1, 'room-1');
+
+    assert.deepEqual((command!.payload as { stats: unknown }).stats, {
+        games: 3,
+        wins: 2,
+        winRate: 66.7,
+        switchSuccessRate: 66.7,
+    });
+});
+
+test('게스트는 전적 없이 예약한다', async () => {
+    const redis = new FakeRedis();
+    addLiveRoom(redis, 'room-1');
+    const service = makeService(redis, { games: 3, wins: 2, sw_try: 3, sw_su: 2 });
+    let command: ControlCommand | undefined;
+    (service as any).sendCommand = async (_serverId: string, value: ControlCommand): Promise<ControlReply> => {
+        command = value;
+        return {
+            v: CONTROL_VERSION, requestId: value.requestId, serverId: 'game-a', ok: true, code: null,
+            payload: { wsPath: '/game/game-a', ticket: 'ticket', expiresAt: 1 },
+        };
+    };
+
+    await service.join({
+        id: 'g:11111111-1111-4111-8111-111111111111',
+        nickname: 'Guest_7KPW2M',
+        guest: true,
+    }, 'room-1', undefined, '203.0.113.9');
+
+    assert.equal((command!.payload as { stats: unknown }).stats, null);
 });

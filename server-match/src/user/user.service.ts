@@ -9,17 +9,7 @@ import { and, desc, eq, isNotNull, lt, or } from 'drizzle-orm';
 import { SanctionService } from '../sanction/sanction.service';
 import { SessionService } from '../session/session.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
-
-interface StoredStats {
-    level: number;
-    xp: number;
-    games: number;
-    wins: number;
-    sw_try: number;
-    sw_su: number;
-    kill: number;
-    death_order: number;
-}
+import { DEFAULT_STATS, nonNegativeInteger, percentage, readStoredStats, type StoredStats } from './stored-stats';
 
 export interface UserStatsResponse {
     level: number;
@@ -56,24 +46,8 @@ interface MatchCursor {
     matchId: string;
 }
 
-const DEFAULT_STATS: StoredStats = {
-    level: 0,
-    xp: 0,
-    games: 0,
-    wins: 0,
-    sw_try: 0,
-    sw_su: 0,
-    kill: 0,
-    death_order: 0,
-};
 const MAX_MATCH_HISTORY_LIMIT = 50;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const nonNegativeInteger = (value: unknown): number =>
-    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
-
-const percentage = (numerator: number, denominator: number): number =>
-    denominator === 0 ? 0 : Math.round(numerator / denominator * 1_000) / 10;
 
 const decodeCursor = (cursor: string): MatchCursor => {
     try {
@@ -196,9 +170,7 @@ export class UserService {
             .where(eq(schema.users.id, userId));
         if (!row) throw new NotFoundException('User not found');
 
-        const stored = typeof row.stats === 'object' && row.stats !== null
-            ? row.stats as Partial<StoredStats>
-            : DEFAULT_STATS;
+        const stored = readStoredStats(row.stats);
         const games = nonNegativeInteger(stored.games);
         const wins = nonNegativeInteger(stored.wins);
         const switchTry = nonNegativeInteger(stored.sw_try);

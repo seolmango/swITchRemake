@@ -4,9 +4,10 @@ import {
     PlayerRole,
     type ActorId,
     type InputState,
+    type LobbyStats,
     type PlayerRole as PlayerRoleValue,
 } from 'shared';
-import type { LobbyStats, SeatReservation } from '../gateway/ticket-store';
+import type { SeatReservation } from '../gateway/ticket-store';
 import type { Connection } from '../transport/game-transport';
 
 export interface SeatHold {

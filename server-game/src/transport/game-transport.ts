@@ -8,7 +8,7 @@
  * 이 파일은 B(전송·게이트웨이)와 D(방·대기실)가 만나는 지점이다. 양쪽이 함께 바꾼다.
  */
 
-import type { ClientMessage, ServerMessage } from 'shared';
+import type { ClientMessage, LobbyStats, ServerMessage } from 'shared';
 
 type ServerMessageBody = ServerMessage extends infer Message
     ? Message extends ServerMessage
@@ -23,7 +23,7 @@ export interface Connection {
     readonly userId: number | string;
     readonly nickname: string;
     readonly isGuest: boolean;
-    readonly lobbyStats: { games: number; wins: number; switchSuccessRate: number } | null;
+    readonly lobbyStats: LobbyStats | null;
     readonly roomId: string;
     /** true면 D가 끊긴 slot/state를 복구하고, false면 새 참가를 확정한다. */
     readonly resume: boolean;

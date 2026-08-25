@@ -650,6 +650,7 @@ export class Room {
             guest: member.guest,
             role: member.role,
             skills: [member.loadout],
+            stats: member.stats,
         }));
         this.#broadcast({
             type: 'lobby.state',

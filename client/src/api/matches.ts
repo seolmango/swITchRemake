@@ -1,17 +1,10 @@
 import { apiRequest } from './http.ts';
-import type { PlayerRole, SkillId } from 'shared';
+import type { LobbyStats, PlayerRole, SkillId } from 'shared';
 
 /** Local presentation-only room model used by the demo lobby and lobby cards. */
 export type LobbyMap = string;
 export type PlayerControl = 'keyboard' | 'touch' | 'gamepad';
 export type PlayerSkill = Exclude<SkillId, 'switch'>;
-
-export interface LobbyViewPlayerStats {
-    games: number;
-    wins: number;
-    winRate: number;
-    switchSuccessRate: number;
-}
 
 export interface LobbyViewPlayer {
     playerId: string;
@@ -24,7 +17,8 @@ export interface LobbyViewPlayer {
     role: PlayerRole;
     control: PlayerControl;
     skill: PlayerSkill;
-    stats?: LobbyViewPlayerStats;
+    /** 게스트와 전적이 안 온 사람은 null이다. 계산은 매칭 서버가 한다. */
+    stats: LobbyStats | null;
 }
 
 /**

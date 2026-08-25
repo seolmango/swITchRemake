@@ -9,6 +9,7 @@ import {
     type CreateRoomPayload,
     type CreateRoomResult,
     type KickUserPayload,
+    type LobbyStats,
     type RedisKeys,
     type ReleaseSeatPayload,
     type ReserveJoinPayload,
@@ -269,12 +270,18 @@ export class CommandConsumer {
         }
     }
 
-    #reservation(userId: SeatReservation['userId'], nickname: string, roomId: string, resume: boolean): SeatReservation {
+    #reservation(
+        userId: SeatReservation['userId'],
+        nickname: string,
+        roomId: string,
+        resume: boolean,
+        lobbyStats: LobbyStats | null = null,
+    ): SeatReservation {
         const issuedAt = this.#now();
         return {
             userId,
             nickname,
-            lobbyStats: null,
+            lobbyStats,
             roomId,
             serverId: this.#options.serverId,
             issuedAt,
@@ -285,7 +292,7 @@ export class CommandConsumer {
 
     #createRoom(command: ControlCommand, payload: CreateRoomPayload): ControlReply<CreateRoomResult> {
         const roomId = this.#roomIdFactory();
-        const reservation = this.#reservation(payload.ownerUserId, payload.ownerNickname, roomId, false);
+        const reservation = this.#reservation(payload.ownerUserId, payload.ownerNickname, roomId, false, payload.ownerStats);
         const mapId = this.#options.resolveMapId ? this.#options.resolveMapId(payload.mapId) : payload.mapId;
         const created = this.#options.rooms.createRoom({
             id: roomId,
@@ -324,7 +331,7 @@ export class CommandConsumer {
         if (cooldown !== null) return failure(this.#options.serverId, command, ControlErrorCode.RejoinCooldown);
         if (kicked !== null) return failure(this.#options.serverId, command, ControlErrorCode.KickedFromRoom);
 
-        const reservation = this.#reservation(payload.userId, payload.nickname, payload.roomId, false);
+        const reservation = this.#reservation(payload.userId, payload.nickname, payload.roomId, false, payload.stats);
         const reserved = this.#options.rooms.reserveJoin(reservation, payload.password);
         if (!reserved.ok) return failure(this.#options.serverId, command, reserved.code);
         try {

@@ -27,6 +27,7 @@ import {
     type ControlReply,
     type CreateRoomResult,
     type GameServerHeartbeat,
+    type LobbyStats,
     type SeatGrant,
 } from 'shared';
 import { DRIZZLE } from '../database/database.module';
@@ -37,6 +38,7 @@ import { CONTROL_STREAM_FIELDS, decodeReply, encodeCommand } from './control-str
 import { CreateRoomDto } from './dto/create-room.dto';
 import { ResultService } from '../results/result.service';
 import { SessionSecurityService } from '../session/session-security.service';
+import { lobbyStatsFrom } from '../user/stored-stats';
 
 const COMMAND_RETRY_INTERVAL_MS = 2_000;
 const COMMAND_DEADLINE_MS = 6_000;
@@ -51,6 +53,13 @@ interface Actor {
     id: ActorId;
     nickname: string;
     guest: boolean;
+    /**
+     * 로비 카드에 띄울 전적. 게스트는 null이다.
+     *
+     * `requireActor`가 어차피 읽는 사용자 행에 딸려 온다. 자리를 예약할 때 인게임 서버로 실어
+     * 보내기 위한 값이다 — 인게임 서버는 DB를 모르므로 스스로 채울 수 없다.
+     */
+    stats: LobbyStats | null;
 }
 
 export interface RoomPrincipal {
@@ -173,6 +182,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                     password: dto.password?.length ? dto.password : null,
                     ownerUserId: actor.id,
                     ownerNickname: actor.nickname,
+                    ownerStats: actor.stats,
                     capacity: dto.capacity ?? (training ? 1 : MAX_PLAYERS_PER_ROOM),
                     mapId: dto.mapId ?? 'random',
                     ...(training ? { mode: RoomMode.Training } : {}),
@@ -225,7 +235,13 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                 type: CommandType.ReserveJoin,
                 issuedAt: Date.now(),
                 deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
-                payload: { roomId, userId: actor.id, nickname: actor.nickname, password: password?.length ? password : null },
+                payload: {
+                    roomId,
+                    userId: actor.id,
+                    nickname: actor.nickname,
+                    stats: actor.stats,
+                    password: password?.length ? password : null,
+                },
             });
             if (!reply.ok || !reply.payload) {
                 await this.redis.compareAndDelete(this.keys.userActiveRoom(actor.id), claim);
@@ -282,7 +298,13 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                     type: CommandType.ReserveJoin,
                     issuedAt: Date.now(),
                     deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
-                    payload: { roomId: candidate.roomId, userId: actor.id, nickname: actor.nickname, password: null },
+                    payload: {
+                        roomId: candidate.roomId,
+                        userId: actor.id,
+                        nickname: actor.nickname,
+                        stats: actor.stats,
+                        password: null,
+                    },
                 });
                 if (reply.ok && reply.payload) {
                     await this.assignActiveRoom(actor.id, claim, requestId, reply.serverId, candidate.roomId);
@@ -359,13 +381,14 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                 || !/^Guest_[A-HJ-NP-Z2-9]{6}$/.test(identity.nickname)) {
                 throw new ForbiddenException('Guest identity is invalid');
             }
-            return { id: identity.id, nickname: identity.nickname, guest: true };
+            return { id: identity.id, nickname: identity.nickname, guest: true, stats: null };
         }
         const userId = identity.id;
         const [user] = await this.db.select({
             id: schema.users.id,
             nickname: schema.users.nickname,
             accountStatus: schema.users.accountStatus,
+            stats: schema.users.stats,
         }).from(schema.users).where(eq(schema.users.id, userId));
         if (!user) {
             throw new ForbiddenException('Account is not active');
@@ -374,7 +397,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         if (status !== 'ACTIVE') {
             throw new ForbiddenException('Account is not active');
         }
-        return { id: user.id, nickname: user.nickname, guest: false };
+        return { id: user.id, nickname: user.nickname, guest: false, stats: lobbyStatsFrom(user.stats) };
     }
 
     private async enforceJoinAbuseLimits(actor: Actor, roomId: string, clientIp?: string): Promise<void> {
