@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { MapLayer } from './MapLayer.ts';
 import { PlayerSprite, type PlayerVisualState } from './PlayerSprite.ts';
 import { BlinkFxLayer } from './BlinkFxLayer.ts';
+import { SwitchFxLayer } from './SwitchFxLayer.ts';
 import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EffectType, EngineMode, type DisplayOptions, type EngineSettings, type FloorVariant, type MapView, type PlayerInit, type StormRect, type Theme, type TilePhysics } from '../types.ts';
 import { applyColorVision, Palette } from '../palette.ts';
 import { CAMERA, CAMERA_FX, CULL_MARGIN, MOTION_PRESETS, QUALITY_PRESETS, TILE_SIZE, type RenderOptions } from '../constants.ts';
@@ -58,6 +59,7 @@ export class WorldScene extends Phaser.Scene {
 
     private mapLayer!: MapLayer;
     private blinkFx!: BlinkFxLayer;
+    private switchFx!: SwitchFxLayer;
     private readonly players = new Map<number, PlayerSprite>();
     private taggerId: number | null = null;
     private selfId: number | null = null;
@@ -123,6 +125,7 @@ export class WorldScene extends Phaser.Scene {
         this.mapLayer = new MapLayer(this, this.theme);
         this.mapLayer.setRenderOptions(this.renderOptions);
         this.blinkFx = new BlinkFxLayer(this);
+        this.switchFx = new SwitchFxLayer(this);
         this.setupCameraInput();
         this.onReadyCb?.(this);
     }
@@ -147,6 +150,7 @@ export class WorldScene extends Phaser.Scene {
 
         this.mapLayer.update(this.animClock, { minX, minY, maxX, maxY });
         this.blinkFx.update(this.clock, this.animClock, this.theme, this.renderOptions);
+        this.switchFx.update(this.clock, this.theme, this.renderOptions);
 
         for (const sprite of this.players.values()) {
             const s = sprite.state;
@@ -586,6 +590,19 @@ export class WorldScene extends Phaser.Scene {
             state.x = position.x;
             state.y = position.y;
         }
+    }
+
+    /**
+     * 스위치 시도 연출. **시전자가 지금 보이는 경우에만** 그린다 — 수풀에 숨은 사람의 위치가
+     * 연출로 새면 안 된다. 서버는 방 전체에 보내므로 거르는 책임이 여기 있다.
+     */
+    playSwitchAttempt(playerId: number, x: number, y: number, targetPlayerId: number, rangePx: number): void {
+        const caster = this.players.get(playerId);
+        if (caster === undefined || rangePx <= 0) return;
+        const target = this.players.get(targetPlayerId);
+        // 대상이 안 보여도 색은 번호에서 나온다. playerId는 1부터, colorIndex는 0부터다.
+        const colorIndex = target?.state.colorIndex ?? targetPlayerId - 1;
+        this.switchFx.play(x, y, rangePx, colorIndex, this.clock);
     }
 
     markPlayerBlinked(id: number, fromX: number, fromY: number): void {

@@ -211,6 +211,14 @@ export class SwitchEngine {
         this._accessor.withScene((s) => s.markPlayerBlinked(playerId, fromX, fromY));
     }
 
+    /**
+     * 스위치 시도 연출. `rangePx`는 서버가 `game.starting`으로 알려 준 `switchRangePx`를 그대로
+     * 넘긴다 — 클라이언트가 사거리를 따로 알고 있으면 밸런스를 고칠 때 조용히 어긋난다.
+     */
+    playSwitchAttempt(playerId: number, x: number, y: number, targetPlayerId: number, rangePx: number): void {
+        this._accessor.withScene((s) => s.playSwitchAttempt(playerId, x, y, targetPlayerId, rangePx));
+    }
+
     /** Local view preferences (in-body number, nickname above head). Never leaves the client. */
     setDisplayOptions(options: Partial<DisplayOptions>): void {
         this._accessor.withScene((s) => s.setDisplayOptions(options));

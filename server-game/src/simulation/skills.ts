@@ -197,6 +197,18 @@ function useSwitch(world: World, caster: PlayerState, targetPlayerId: number | u
     startCooldown(world, caster, SkillId.Switch, SKILLS.SWITCH.COOLDOWN_MS);
     caster.stats.switchTry += 1;
 
+    // 사거리 판정보다 먼저 남긴다. 실패한 시도도 화면에 보여야 한다 — 어디서 누구를 노렸는지가
+    // 주변 사람에게 정보이고, 레거시도 누를 때마다 원을 그렸다(Engine.js의 skill.type 1~8).
+    if (targetPlayerId !== undefined) {
+        events.push({
+            kind: 'switchAttempted',
+            playerId: caster.playerId,
+            fromX: caster.x,
+            fromY: caster.y,
+            targetPlayerId,
+        });
+    }
+
     if (distance(caster, tagger) > SKILLS.SWITCH.RANGE_PX) return { ok: false, reason: 'OUT_OF_RANGE' };
     if (!targetValid) return { ok: false, reason: 'NO_TARGET' };
 

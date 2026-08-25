@@ -227,6 +227,23 @@ export type PlayerBlinkedMessage = ServerEnvelope<'player.blinked', {
     fromY: number;
 }>;
 
+/**
+ * 스위치를 **시도했다**. 성공 여부와 무관하게 나간다 — 사거리 밖이었다는 사실도 보는 사람에게는
+ * 정보다(레거시도 시도할 때마다 원을 그렸다).
+ *
+ * 클라이언트는 시전자가 지금 보이는 경우에만 그린다. 수풀에 숨은 사람의 위치가 연출로 새면 안 된다.
+ * 이 메시지 자체는 방 전체에 나가므로 정직하지 않은 클라이언트는 알 수 있다 — `player.blinked`와
+ * 같은 수준의 타협이고, 고치려면 연출 이벤트 전체를 시야로 걸러야 한다.
+ */
+export type PlayerSwitchAttemptedMessage = ServerEnvelope<'player.switchAttempted', {
+    playerId: number;
+    /** 시도한 순간의 시전자 위치. 원은 여기에 그린다. */
+    x: number;
+    y: number;
+    /** 바꾸려고 지목한 상대. 원의 색이 이 사람의 색이다. */
+    targetPlayerId: number;
+}>;
+
 export type GameEndedMessage = ServerEnvelope<'game.ended', {
     /**
      * 방금 끝난 경기의 식별자. 결과 화면(`/matches/{matchId}/result`)으로 가려면 이 값이 필요하다.
@@ -265,6 +282,7 @@ export type ServerMessage =
     | PlayerReconnectingMessage
     | SpectateChangedMessage
     | PlayerBlinkedMessage
+    | PlayerSwitchAttemptedMessage
     | GameEndedMessage
     | ErrorMessage
     | PongMessage;

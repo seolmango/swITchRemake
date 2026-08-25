@@ -281,6 +281,30 @@ test('지목 대상까지의 거리는 상관없다', () => {
     assert.equal(use(world, { playerId: 2, slot: 1, targetPlayerId: 3 }).outcome.ok, true);
 });
 
+test('스위치 시도는 성공하든 실패하든 연출 이벤트를 남긴다', () => {
+    // 연출의 색이 지목당한 사람에게서 나오므로 targetPlayerId가 반드시 실려야 한다.
+    // 실패한 시도도 남는 이유는 주변 사람에게 "저기서 누굴 노렸다"가 정보이기 때문이다.
+    const ok = switchWorld();
+    const caster = ok.players[1]!;
+    const success = use(ok, { playerId: 2, slot: 1, targetPlayerId: 3 }).events
+        .find((e) => e.kind === 'switchAttempted');
+    assert.deepEqual(success, {
+        kind: 'switchAttempted', playerId: 2, fromX: caster.x, fromY: caster.y, targetPlayerId: 3,
+    });
+
+    const far = makeWorld(mapFromRows(OPEN), [
+        makePlayer(1, 1, 1, { isTagger: true }),
+        makePlayer(2, 6, 5),
+        makePlayer(3, 6, 1),
+    ]);
+    const outOfRange = use(far, { playerId: 2, slot: 1, targetPlayerId: 3 });
+    assert.equal(outOfRange.outcome.ok, false);
+    assert.ok(
+        outOfRange.events.some((e) => e.kind === 'switchAttempted' && e.targetPlayerId === 3),
+        '사거리 밖 시도도 화면에 보여야 한다',
+    );
+});
+
 test('술래에게서 멀면 스위치가 실패하고 쿨타임만 먹는다', () => {
     const world = makeWorld(mapFromRows(OPEN), [
         makePlayer(1, 1, 1, { isTagger: true }),

@@ -243,6 +243,11 @@ export class GameSession implements SchedulerTarget {
                 case 'blinked':
                     this.#room.broadcastBlinked(event.playerId, event.fromX ?? 0, event.fromY ?? 0);
                     break;
+                case 'switchAttempted':
+                    this.#room.broadcastSwitchAttempted(
+                        event.playerId, event.fromX ?? 0, event.fromY ?? 0, event.targetPlayerId ?? 0,
+                    );
+                    break;
                 case 'skillUsed':
                     break;
             }

@@ -35,12 +35,13 @@ export class ReplayDecodeError extends Error {
 }
 
 export interface ReplayEvent {
-    kind: 'tagged' | 'eliminated' | 'blinked' | 'skillUsed';
+    kind: 'tagged' | 'eliminated' | 'blinked' | 'skillUsed' | 'switchAttempted';
     playerId: number;
     by?: number;
     fromX?: number;
     fromY?: number;
     slot?: number;
+    targetPlayerId?: number;
 }
 
 export interface RecordedFrame {

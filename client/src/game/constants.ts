@@ -114,6 +114,18 @@ export const BLINK_FX = {
     ringGrow: px(22),
 };
 
+/**
+ * 스위치 시도 연출. 레거시는 0.5 알파에서 500ms에 걸쳐 0으로 갔다(Engine.js).
+ * 반지름은 상수가 아니라 서버가 알려 준 `switchRangePx`를 쓴다 — 사거리가 바뀌면 원도 따라가야
+ * 하고, 여기 숫자를 박아 두면 밸런스를 고칠 때 조용히 거짓말이 된다.
+ */
+export const SWITCH_FX = {
+    life: 0.5,
+    alpha: 0.5,
+    reducedAlpha: 0.25,
+    lineWidth: px(3),
+};
+
 export const WALL = {
     strokeWidth: px(2),
 };

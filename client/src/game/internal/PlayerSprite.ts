@@ -14,6 +14,8 @@ export const DEPTH = {
     smoke: 2,
     stormFill: 3,
     stormBorder: 4,
+    /** 점멸 궤적보다 아래. 사거리 원이 궤적을 덮으면 어느 쪽이 무슨 스킬인지 안 읽힌다. */
+    switchFx: 4.5,
     blinkFx: 5,
     playerBody: 6,
     playerLabel: 6.1,

@@ -48,6 +48,7 @@ export class SessionReplayRecorder {
             if (event.fromX !== undefined) replayEvent.fromX = event.fromX;
             if (event.fromY !== undefined) replayEvent.fromY = event.fromY;
             if (event.slot !== undefined) replayEvent.slot = event.slot;
+            if (event.targetPlayerId !== undefined) replayEvent.targetPlayerId = event.targetPlayerId;
             this.#recorder.writeEvent(tick, replayEvent);
         }
     }

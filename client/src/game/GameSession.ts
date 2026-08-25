@@ -10,6 +10,7 @@ type GameEndedMessage = Extract<ServerMessage, { type: 'game.ended' }>;
 type ErrorMessage = Extract<ServerMessage, { type: 'error' }>;
 type SkillRejectedMessage = Extract<ServerMessage, { type: 'skill.rejected' }>;
 type PlayerBlinkedMessage = Extract<ServerMessage, { type: 'player.blinked' }>;
+type PlayerSwitchAttemptedMessage = Extract<ServerMessage, { type: 'player.switchAttempted' }>;
 type ClientMessageBody = ClientMessage extends infer Message
     ? Message extends ClientMessage ? Omit<Message, 'v' | 'requestId'> : never
     : never;
@@ -107,6 +108,7 @@ class GameSession {
     private readonly listeners = new Set<() => void>();
     private readonly snapshotListeners = new Set<(frame: ArrayBuffer) => void>();
     private readonly blinkListeners = new Set<(payload: PlayerBlinkedMessage['payload']) => void>();
+    private readonly switchAttemptListeners = new Set<(payload: PlayerSwitchAttemptedMessage['payload']) => void>();
     private pageUnloading = false;
     private pingTimer: number | null = null;
     private reconnectTimer: number | null = null;
@@ -139,6 +141,11 @@ class GameSession {
     subscribeBlinks = (listener: (payload: PlayerBlinkedMessage['payload']) => void): (() => void) => {
         this.blinkListeners.add(listener);
         return () => this.blinkListeners.delete(listener);
+    };
+
+    subscribeSwitchAttempts = (listener: (payload: PlayerSwitchAttemptedMessage['payload']) => void): (() => void) => {
+        this.switchAttemptListeners.add(listener);
+        return () => this.switchAttemptListeners.delete(listener);
     };
 
     /**
@@ -318,6 +325,9 @@ class GameSession {
                 break;
             case 'player.blinked':
                 for (const listener of this.blinkListeners) listener(message.payload);
+                break;
+            case 'player.switchAttempted':
+                for (const listener of this.switchAttemptListeners) listener(message.payload);
                 break;
             case 'player.left':
                 if (message.payload.playerId === this.state.selfId) sessionStorage.removeItem(ACTIVE_ROOM_KEY);

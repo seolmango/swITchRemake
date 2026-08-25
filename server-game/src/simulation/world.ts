@@ -112,12 +112,14 @@ export interface World {
  * 전송 계층은 이걸 JSON 이벤트로 바꾸고, 리플레이 레코더는 그대로 기록한다.
  */
 export interface WorldEvent {
-    kind: 'tagged' | 'eliminated' | 'blinked' | 'skillUsed';
+    kind: 'tagged' | 'eliminated' | 'blinked' | 'skillUsed' | 'switchAttempted';
     playerId: number;
     by?: number;
     fromX?: number;
     fromY?: number;
     slot?: number;
+    /** `switchAttempted`에서 지목한 상대. 연출의 색이 이 사람에게서 나온다. */
+    targetPlayerId?: number;
 }
 
 /**
