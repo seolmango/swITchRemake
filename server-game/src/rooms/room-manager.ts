@@ -45,6 +45,8 @@ export type ManagerResult<T> =
 export interface RoomManagerOptions {
     readonly lifecycle: RoomLifecyclePort;
     readonly isKnownMap: (mapId: string, mode: RoomMode) => boolean;
+    /** 결과 outbox가 가득 차면 새 경기를 시작하지 않는다. 생략하면 항상 시작할 수 있다. */
+    readonly canStartGame?: () => boolean;
     readonly getServerTick: () => number;
     readonly violationSink: (signal: ViolationSignal) => void;
     /** resume 인증 직후 full snapshot을 보낼 외부 publisher 경계. */
@@ -137,6 +139,7 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                     : this.#timing,
                 lifecycle: this.#options.lifecycle,
                 isKnownMap: this.#options.isKnownMap,
+                ...(this.#options.canStartGame === undefined ? {} : { canStartGame: this.#options.canStartGame }),
                 getServerTick: this.#options.getServerTick,
                 ...(this.#options.onDirectoryChanged === undefined
                     ? {}

@@ -79,6 +79,14 @@ export interface RoomOptions {
     readonly mapId: string;
     readonly ownerReservation: Readonly<SeatReservation>;
     readonly minPlayersToStart: number;
+    /**
+     * 지금 새 경기를 시작해도 되는가. 결과 outbox가 가득 차면 false다.
+     *
+     * 결과를 내보낼 자리가 없는데 경기를 시작하면 끝나는 순간 전적이 조용히 사라진다.
+     * 시작을 거절하는 쪽이 낫다 — 사람이 다시 누를 수 있고, outbox는 Redis가 살아나면 비워진다.
+     * 생략하면 항상 시작할 수 있다(테스트 기본값).
+     */
+    readonly canStartGame?: () => boolean;
     readonly simulationHz: number;
     readonly rules: Readonly<Record<string, number | string | boolean>>;
     readonly hudGameplay: Readonly<Record<string, number>>;
@@ -440,6 +448,7 @@ export class Room {
         if (this.#startLock.remainingMs(now) > 0) return ErrorCode.StartLocked;
         const participants = this.#roster.members().filter((member) => member.connection !== null);
         if (participants.length < this.#options.minPlayersToStart) return ErrorCode.BadState;
+        if (this.#options.canStartGame?.() === false) return ErrorCode.Internal;
 
         // 첫 경기는 매칭 서버가 발급해 둔 id를 그대로 쓴다. 재경기부터 새로 만든다.
         if (this.#playedGames > 0) this.#matchId = (this.#options.newMatchId ?? randomUUID)();

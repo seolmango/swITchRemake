@@ -102,7 +102,8 @@ async function main(): Promise<void> {
                 outbox.enqueue(result);
             } catch (error) {
                 // outbox가 가득 찼다. 던지게 두면 게임 루프 안에서 터진다.
-                // TODO(R): 이 상태에서는 신규 게임 시작도 막아야 한다(outbox.canStartNewGame).
+                // 여기까지 왔다는 것은 이 경기의 전적이 이미 유실됐다는 뜻이다. 다음 경기부터는
+                // RoomManager의 canStartGame이 시작을 막아 유실을 더 늘리지 않는다.
                 console.error('[swITch] 경기 결과 적재 실패. 이 경기의 전적이 유실된다.', error);
             }
         },
@@ -111,6 +112,7 @@ async function main(): Promise<void> {
     rooms = new RoomManager({
         lifecycle,
         isKnownMap: (mapId, mode) => isPlayableMap(bundle, mapId, mode),
+        canStartGame: () => outbox.canStartNewGame(),
         getServerTick: () => serverTick,
         violationSink,
         skillSink: (roomId, request) => lifecycle.queueSkill(roomId, request),

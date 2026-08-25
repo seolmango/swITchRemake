@@ -61,7 +61,7 @@ function seat(userId: number, now: number, resume = false): SeatReservation {
     };
 }
 
-function setup(mode: RoomMode = RoomMode.Match) {
+function setup(overrides: Partial<RoomOptions> = {}, mode: RoomMode = RoomMode.Match) {
     let now = 0;
     let tick = 10;
     const lifecycle = new FakeLifecycle();
@@ -94,7 +94,7 @@ function setup(mode: RoomMode = RoomMode.Match) {
         getServerTick: () => tick,
         now: () => now,
     };
-    const room = new Room(options);
+    const room = new Room({ ...options, ...overrides });
     const connect = (reservation: SeatReservation) => {
         const admission = room.admitReservation(reservation)!;
         const connection = new FakeConnection(
@@ -265,7 +265,7 @@ test('강퇴한 사용자는 방이 살아 있는 동안 다시 예약할 수 �
 test('훈련장 부활은 관전자를 다시 플레이어로 돌린다', () => {
     // 시뮬레이션의 alive만 되돌리면 resolvedInputs가 관전자 입력을 버려서
     // 화면에는 살아 있는데 움직이지 않는 상태가 된다.
-    const context = setup(RoomMode.Training);
+    const context = setup({}, RoomMode.Training);
     context.connect(context.owner);
     const second = seat(2, 0);
     assert.equal(context.room.reserveJoin(second, 'secret'), null);
@@ -313,4 +313,26 @@ test('전적 없이 예약한 사람(게스트)은 lobby.state에서도 null이�
     const lobby = connection.messages.filter((message) => message.type === 'lobby.state').at(-1);
     const seen = lobby?.payload.players.find((player) => player.nickname === guest.nickname);
     assert.equal(seen?.stats, null);
+});
+
+test('결과를 내보낼 자리가 없으면 새 경기를 시작하지 않는다', () => {
+    // outbox가 가득 찬 채로 경기를 시작하면 끝나는 순간 전적이 조용히 사라진다.
+    // 거절하는 쪽이 낫다 — 사람이 다시 누를 수 있고, outbox는 Redis가 살아나면 비워진다.
+    let outboxHasRoom = false;
+    const context = setup({ canStartGame: () => outboxHasRoom });
+    context.connect(context.owner);
+    const r2 = seat(2, 0);
+    const r3 = seat(3, 0);
+    assert.equal(context.room.reserveJoin(r2, 'secret'), null);
+    assert.equal(context.room.reserveJoin(r3, 'secret'), null);
+    context.connect(r2);
+    context.connect(r3);
+    context.setNow(5_001);
+
+    assert.equal(context.room.requestStart(1), ErrorCode.Internal);
+    assert.equal(context.room.state, RoomState.Waiting);
+
+    outboxHasRoom = true;
+    assert.equal(context.room.requestStart(1), null);
+    assert.equal(context.room.state, RoomState.Countdown);
 });
