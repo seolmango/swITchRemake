@@ -10,8 +10,11 @@ import { HELP_DEMO_IDS, type HelpDemoId } from './howToPlay/tutorialSnapshots.ts
 
 /**
  * 스킬 이름은 로비가 쓰는 키를 그대로 읽는다. 도움말이 자기 이름표를 따로 들면 같은 스킬이
- * 화면마다 다르게 불린다 — 실제로 로비의 "순간 이동"이 도움말에서는 "점멸"이 될 뻔했다.
- * 이름을 바꾸고 싶으면 `lobby.skills.*` 한 곳만 고치면 된다.
+ * 화면마다 다르게 불린다 — 실제로 한 스킬이 코드에서는 `dash`, 주석에서는 유체화, 화면에서는
+ * 대시로 세 갈래였다. 이름을 바꾸려면 `lobby.skills.*` 한 곳만 고친다.
+ *
+ * 이름은 롤 소환사 주문에서 왔다(유체화/점멸/탈진). 코드 id(`SkillId`)는 와이어 계약이라
+ * 그대로 두고 표시 이름만 맞춘다 — id를 바꾸면 리플레이 파일에 박힌 값까지 따라와야 한다.
  */
 const SKILL_NAME_KEYS: Record<HelpDemoId, string> = {
     dash: 'lobby.skills.dash',

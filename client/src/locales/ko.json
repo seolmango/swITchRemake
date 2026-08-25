@@ -95,8 +95,8 @@
       "gamepad": "게임패드"
     },
     "skills": {
-      "dash": "대시",
-      "flash": "순간 이동",
+      "dash": "유체화",
+      "flash": "점멸",
       "exhaust": "탈진"
     },
     "startRequirement": "게임을 시작하려면 {{count}}명 이상 필요해요.",
