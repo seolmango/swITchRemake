@@ -37,11 +37,22 @@ test('레거시 기준 속도가 유지된다', () => {
     assert.ok(Math.abs(BASE - 445.44) < 0.01, `기준 속도가 레거시와 다르다: ${BASE}`);
 });
 
-test('유체화는 레거시 boost와 같은 3배다', () => {
+test('유체화는 설정된 배율만큼 빠르다', () => {
+    // 배율을 숫자로 박지 않는다. 밸런스는 tuning.ts가 정하고 여기서는 "그 값이 실제로 적용되는가"만 본다.
     const world = makeWorld(mapFromRows(OPEN), [makePlayer(1, 2, 2)]);
     const p = world.players[0]!;
     applyEffect(world, p, EffectType.Dash, SKILLS.DASH.SPEED_INCREASE, SKILLS.DASH.DURATION_MS);
-    assert.ok(Math.abs(currentSpeed(p) - BASE * 3) < 0.01, `${currentSpeed(p)} != ${BASE * 3}`);
+    const expected = BASE * (1 + SKILLS.DASH.SPEED_INCREASE);
+    assert.ok(Math.abs(currentSpeed(p) - expected) < 0.01, `${currentSpeed(p)} != ${expected}`);
+});
+
+test('유체화가 점멸보다 멀리 간다', () => {
+    // 설계 조건이다. 이게 깨지면 점멸을 고를 이유가 없어지는 게 아니라, 유체화를 고를 이유가 없어진다.
+    const gained = SKILLS.DASH.SPEED_INCREASE * BASE * (SKILLS.DASH.DURATION_MS / 1_000);
+    assert.ok(
+        gained > SKILLS.FLASH.DISTANCE_PX,
+        `유체화 순이득 ${(gained / 256).toFixed(2)}타일이 점멸 ${SKILLS.FLASH.DISTANCE_PX / 256}타일보다 커야 한다`,
+    );
 });
 
 test('증가군과 감소군은 더해진 뒤 곱해진다', () => {
@@ -92,22 +103,45 @@ test('쿨타임 중에는 다시 쓸 수 없다', () => {
     assert.deepEqual(use(world, { playerId: 1, slot: 2 }).outcome, { ok: false, reason: 'ON_COOLDOWN' });
 });
 
-test('술래는 쿨타임이 두 배로 빨리 찬다', () => {
-    // 레거시가 매 tick 2씩 깎았다. 쫓는 쪽이 더 자주 써야 추격이 성립한다.
-    const runnerWorld = makeWorld(mapFromRows(OPEN), [makePlayer(1, 2, 2, { loadout: SkillId.Dash })]);
-    const taggerWorld = makeWorld(mapFromRows(OPEN), [makePlayer(1, 2, 2, { loadout: SkillId.Dash, isTagger: true })]);
+test('술래 근처의 러너는 쿨타임이 빨리 찬다', () => {
+    // 보상이 위험 쪽으로 간다. 도망만 다니는 것이 최선이 되지 않게 하는 장치다.
+    const near = makeWorld(mapFromRows(OPEN), [
+        makePlayer(1, 2, 2, { loadout: SkillId.Dash }),
+        makePlayer(2, 3, 2, { isTagger: true }),
+    ]);
+    const far = makeWorld(mapFromRows(OPEN), [
+        makePlayer(1, 1, 1, { loadout: SkillId.Dash }),
+        makePlayer(2, 8, 5, { isTagger: true }),
+    ]);
+    use(near, { playerId: 1, slot: 2 });
+    use(far, { playerId: 1, slot: 2 });
 
-    use(runnerWorld, { playerId: 1, slot: 2 });
-    use(taggerWorld, { playerId: 1, slot: 2 });
-
-    const half = Math.ceil(msToTicks(SKILLS.DASH.COOLDOWN_MS, runnerWorld.simulationHz) / 2) + 1;
-    for (let i = 0; i < half; i++) {
-        stepWorld(runnerWorld, []);
-        stepWorld(taggerWorld, []);
+    for (let i = 0; i < 60; i++) {
+        stepWorld(near, []);
+        stepWorld(far, []);
     }
+    assert.ok(
+        (near.players[0]!.cooldowns[SkillId.Dash] ?? 0) < (far.players[0]!.cooldowns[SkillId.Dash] ?? 0),
+        '술래 옆에 있는데 쿨타임이 더 빨리 차지 않았다',
+    );
+});
 
-    assert.equal(taggerWorld.players[0]!.cooldowns[SkillId.Dash], undefined, '술래 쿨타임이 안 찼다');
-    assert.ok((runnerWorld.players[0]!.cooldowns[SkillId.Dash] ?? 0) > 0, '러너가 술래만큼 빨리 찼다');
+test('술래 자신은 쿨타임 보너스를 받지 않는다', () => {
+    // 거리 0이라 그냥 두면 예전의 "술래 쿨타임 2배"가 이름만 바꿔 돌아온다.
+    const taggerWorld = makeWorld(mapFromRows(OPEN), [makePlayer(1, 2, 2, { loadout: SkillId.Dash, isTagger: true })]);
+    const aloneWorld = makeWorld(mapFromRows(OPEN), [makePlayer(1, 2, 2, { loadout: SkillId.Dash })]);
+    use(taggerWorld, { playerId: 1, slot: 2 });
+    use(aloneWorld, { playerId: 1, slot: 2 });
+
+    for (let i = 0; i < 60; i++) {
+        stepWorld(taggerWorld, []);
+        stepWorld(aloneWorld, []);
+    }
+    assert.equal(
+        taggerWorld.players[0]!.cooldowns[SkillId.Dash],
+        aloneWorld.players[0]!.cooldowns[SkillId.Dash],
+        '술래가 혼자 있는 러너보다 빨리 찼다',
+    );
 });
 
 /* ────────────────────────── 점멸 ────────────────────────── */
@@ -296,7 +330,12 @@ test('탈진은 사거리 안의 모두에게 걸린다', () => {
     assert.ok(world.players[1]!.effects[EffectType.Exhaust], '2번이 안 걸렸다');
     assert.ok(world.players[2]!.effects[EffectType.Exhaust], '3번이 안 걸렸다');
     assert.equal(world.players[3]!.effects[EffectType.Exhaust], undefined, '사거리 밖까지 걸렸다');
-    assert.equal(world.players[0]!.effects[EffectType.Exhaust], undefined, '시전자 자신이 걸렸다');
+
+    // 광역기의 대가. 시전자도 느려지되 남에게 건 것보다는 얕다 — 그래야 "쓰고 빠지는" 선택이 남는다.
+    const self = world.players[0]!.effects[EffectType.Exhaust];
+    assert.ok(self, '시전자가 대가를 안 치렀다');
+    assert.equal(self.magnitude, SKILLS.EXHAUST.SELF_DECREASE);
+    assert.ok(self.magnitude < SKILLS.EXHAUST.SPEED_DECREASE, '자기 감속이 남에게 건 것보다 깊다');
 
     // 원은 시전자 자리에 그려지고 지목한 상대가 없다 — 한 사람 색으로 칠하면 안 된다.
     const area = events.find((e) => e.kind === 'skillArea');
@@ -443,5 +482,10 @@ test('유체화를 쓴 tick부터 실제로 빨라진다', () => {
     stepWorld(world, [input], [{ playerId: 1, slot: 2 }]);
     const dashStep = world.players[0]!.x - dashBefore;
 
-    assert.ok(dashStep > normalStep * 2.5, `눌렀는데 다음 tick부터 빨라졌다: ${normalStep} -> ${dashStep}`);
+    // 배율을 숫자로 박지 않는다. "눌렀을 때 그 tick부터" 빨라지는지가 이 테스트의 요점이다.
+    const expected = normalStep * (1 + SKILLS.DASH.SPEED_INCREASE);
+    assert.ok(
+        Math.abs(dashStep - expected) < 0.01,
+        `눌렀는데 다음 tick부터 빨라졌다: ${normalStep} -> ${dashStep} (기대 ${expected})`,
+    );
 });

@@ -9,8 +9,9 @@
  *     이 함수가 끝난 뒤 시야 코어가 뷰어별로 판단한다.
  */
 
+import { EffectType } from 'shared';
 import { EMOJI_DISPLAY_MS, GAMEPLAY, SKILLS } from '../config/gameplay';
-import { expireEffects, msToTicks, tickCooldowns } from './effects';
+import { applyEffect, expireEffects, msToTicks, tickCooldowns } from './effects';
 import { integrate, substepCount } from './movement';
 import { grantTaggerFrenzy, rotationCandidates, useSkill, type SkillRequest } from './skills';
 import { resolvePlayerCollisions, type CollisionPair } from './player-collision';
@@ -42,6 +43,23 @@ function applyMapTimeline(world: World): void {
  * **최종 분리 거리를 보지 않고 이번 tick에 발생한 collision pair를 본다.** 충돌 해결이 두 원을
  * 정확히 떼어놓은 뒤 거리를 재면 항상 "닿지 않음"이 나온다. 그러면 술래가 아무도 잡지 못한다.
  */
+/**
+ * 광란 중에 아웃시키면 광란이 길어지고 속도가 더 붙는다.
+ *
+ * 잘 잡는 술래가 점점 빨라져서 추격이 늘어지지 않게 하는 장치다. **광란이 이미 붙어 있을 때만**
+ * 누적된다 — 광란이 끊긴 뒤에 잡았다면 그건 이어 온 추격이 아니라 새로 시작한 추격이다.
+ */
+function extendFrenzyOnTag(world: World, tagger: PlayerState): void {
+    const current = tagger.effects[EffectType.Frenzy];
+    if (current === undefined) return;
+    const remainingMs = Math.max(0, current.endTick - world.tick) * (1_000 / world.simulationHz);
+    applyEffect(
+        world, tagger, EffectType.Frenzy,
+        current.magnitude + SKILLS.FRENZY.TAG_BONUS_INCREASE,
+        remainingMs + SKILLS.FRENZY.TAG_BONUS_MS,
+    );
+}
+
 function resolveTagging(world: World, pairs: readonly CollisionPair[], events: WorldEvent[]): void {
     const tagger = world.players.find((p) => p.isTagger && p.alive);
     if (!tagger) return;
@@ -58,6 +76,7 @@ function resolveTagging(world: World, pairs: readonly CollisionPair[], events: W
         victim.stats.eliminatedAtTick = world.tick;
         tagger.stats.tagCount += 1;
         world.taggerChangedAtTick = world.tick;
+        extendFrenzyOnTag(world, tagger);
         events.push({ kind: 'eliminated', playerId: victim.playerId, by: tagger.playerId });
     }
 }
@@ -82,6 +101,22 @@ function rotateTaggerIfStale(world: World, events: WorldEvent[]): void {
     events.push({ kind: 'tagged', playerId: picked.playerId });
 }
 
+/**
+ * 쿨타임 회복 배수.
+ *
+ * 술래에게 붙어 있는 **러너**만 빨라진다. 위험한 자리에 있을수록 스킬을 자주 쓸 수 있게 해서
+ * 도망만 다니는 것이 최선이 되지 않게 한다. 술래 자신은 거리 0이므로 명시적으로 제외한다 —
+ * 안 그러면 예전의 "술래 쿨타임 2배"가 이름만 바꿔 돌아온다.
+ */
+function cooldownRate(player: PlayerState, tagger: PlayerState | null): number {
+    if (player.isTagger || tagger === null || !player.alive) return 1;
+    const dx = tagger.x - player.x;
+    const dy = tagger.y - player.y;
+    const radius = SKILLS.NEAR_TAGGER_RADIUS_PX;
+    if (dx * dx + dy * dy > radius * radius) return 1;
+    return 1 + SKILLS.NEAR_TAGGER_COOLDOWN_BONUS;
+}
+
 function survivors(world: World): PlayerState[] {
     return world.players.filter((p) => p.alive);
 }
@@ -103,9 +138,10 @@ export function stepWorld(
     world.tileChanges = [];
 
     // 1. 효과 만료와 쿨타임 회복. 이동 계산 전에 처리해야 이번 tick 속도에 반영된다.
+    const tagger = world.players.find((p) => p.isTagger && p.alive) ?? null;
     for (const player of world.players) {
         expireEffects(world, player);
-        tickCooldowns(player, SKILLS.TAGGER_COOLDOWN_RATE);
+        tickCooldowns(player, cooldownRate(player, tagger));
         if (player.emoji !== null && player.emoji.expiresAtTick <= world.tick) player.emoji = null;
     }
 

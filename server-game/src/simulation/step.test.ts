@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { GAMEPLAY } from '../config/gameplay';
+import { EffectType } from 'shared';
+import { GAMEPLAY, SKILLS } from '../config/gameplay';
+import { grantTaggerFrenzy } from './skills';
 import { isFinished, stepWorld } from './step';
 import { mapFromRows, makePlayer, makeWorld, TEST_TILE_SIZE, worldFingerprint } from './testing';
 import type { ResolvedInput } from './world';
@@ -229,4 +231,35 @@ test('탈락한 플레이어는 더 이상 움직이지 않는다', () => {
     const startX = world.players[0]!.x;
     for (let i = 0; i < 10; i++) stepWorld(world, [input(1, 1, 0)]);
     assert.equal(world.players[0]!.x, startX);
+});
+
+test('광란 중에 아웃시키면 광란이 길어지고 더 빨라진다', () => {
+    // 잘 잡는 술래가 점점 빨라져서 추격이 늘어지지 않게 하는 장치다.
+    const world = makeWorld(mapFromRows(OPEN_MAP), [
+        makePlayer(1, 3, 3, { isTagger: true }),
+        makePlayer(2, 3, 3),
+    ]);
+    const tagger = world.players[0]!;
+    grantTaggerFrenzy(world, tagger);
+    const before = tagger.effects[EffectType.Frenzy]!;
+    const beforeMagnitude = before.magnitude;
+    const beforeEnd = before.endTick;
+
+    // 겹쳐 있으므로 다음 tick에 태그가 성립한다.
+    stepWorld(world, []);
+
+    const after = tagger.effects[EffectType.Frenzy]!;
+    assert.ok(after, '광란이 사라졌다');
+    assert.equal(after.magnitude, beforeMagnitude + SKILLS.FRENZY.TAG_BONUS_INCREASE);
+    assert.ok(after.endTick > beforeEnd, '광란이 길어지지 않았다');
+});
+
+test('광란이 없을 때 아웃시키면 광란이 새로 붙지는 않는다', () => {
+    // 누적은 "이어 온 추격"에 주는 보상이다. 끊긴 뒤에 잡은 것은 새로 시작한 추격이다.
+    const world = makeWorld(mapFromRows(OPEN_MAP), [
+        makePlayer(1, 3, 3, { isTagger: true }),
+        makePlayer(2, 3, 3),
+    ]);
+    stepWorld(world, []);
+    assert.equal(world.players[0]!.effects[EffectType.Frenzy], undefined);
 });

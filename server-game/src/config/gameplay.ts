@@ -17,7 +17,7 @@ import { NETWORK } from './network';
  */
 
 /** 밸런스가 바뀌면 올린다. 경기 결과와 리플레이에 함께 기록되어 "그 경기가 어떤 규칙이었는지"를 남긴다. */
-export const RULES_VERSION = '0.3.0-exhaust-range';
+export const RULES_VERSION = '0.4.0-speed-rework';
 
 const TILE_PX = SHARED_TILE_PX;
 
@@ -80,25 +80,30 @@ export const SPEED = Object.freeze({
  * (`legacy/public/main.js:275`). 쫓는 쪽이 더 자주 쓸 수 있어야 추격이 성립한다.
  */
 export const SKILLS = Object.freeze({
-    /** 술래의 쿨타임 회복 배수. */
-    TAGGER_COOLDOWN_RATE: SKILL_TUNING.TAGGER_COOLDOWN_RATE,
+    /**
+     * 술래 근처에 있는 **러너**의 쿨타임 회복 보너스. 위험한 자리에 있을수록 스킬을 자주 쓴다.
+     * 예전에는 반대로 술래 쪽을 2배로 돌렸는데, 그러면 도망치는 쪽이 위험을 무릅쓸 이유가 없었다.
+     */
+    NEAR_TAGGER_COOLDOWN_BONUS: SKILL_TUNING.NEAR_TAGGER_COOLDOWN_BONUS,
+    NEAR_TAGGER_RADIUS_PX: SKILL_TUNING.NEAR_TAGGER_RADIUS_TILES * TILE_PX,
 
     /**
      * 유체화. 레거시의 `Boost`가 이 스킬이다 — 이름은 점멸이었지만 실제 동작은 속도 버프였다.
-     * 174 / 58 = 정확히 3배, 30 tick = 1초, 쿨타임 600 tick = 20초.
+     * 레거시는 1초 3배였는데, 지금은 5초 1.5배다. 순간 폭발보다 "계속 빠른 상태"가 이 스킬의
+     * 성격에 맞고, 점멸보다 멀리 간다는 조건도 그래야 성립한다(tuning.ts의 표 참고).
      */
     DASH: {
         SPEED_INCREASE: SKILL_TUNING.DASH_SPEED_INCREASE,
         DURATION_MS: SKILL_TUNING.DASH_DURATION_MS,
-        COOLDOWN_MS: 20_000,
+        COOLDOWN_MS: SKILL_TUNING.DASH_COOLDOWN_MS,
     },
 
     /**
      * 점멸. 레거시에는 없던 신규 스킬이라 기준 삼을 값이 없다.
      *
-     * **벽을 넘는다.** 이게 없으면 유체화와 밸런스가 맞지 않는다. 유체화는 1초 동안 계속 달려
-     * 더 먼 거리(약 5.2타일)를 벌 수 있으므로, 점멸의 값어치는 거리가 아니라 벽 너머로 간다는 데
-     * 있어야 한다.
+     * **벽을 넘는다.** 이게 없으면 유체화와 밸런스가 맞지 않는다. 유체화가 5초 동안 4.35타일을
+     * 더 벌기 때문에, 점멸의 값어치는 거리가 아니라 "벽 너머로 즉시" 간다는 데 있어야 한다.
+     * 대신 쿨타임이 셋 중 가장 짧다.
      *
      * 착지점이 벽 속이면 진행 방향으로 밀어 바깥으로 내보낸다. 뒤로 되돌리면 "썼는데 제자리"가
      * 되어 불쾌하다. 애매한 상황은 쓴 사람에게 유리하게 푼다.
@@ -107,11 +112,12 @@ export const SKILLS = Object.freeze({
         DISTANCE_PX: SKILL_TUNING.FLASH_DISTANCE_TILES * TILE_PX,
         /** 벽 속에 착지했을 때 진행 방향으로 더 밀어볼 수 있는 최대 거리. 두꺼운 벽도 넘을 만큼. */
         WALL_EXIT_MAX_PX: 2 * TILE_PX,
-        COOLDOWN_MS: 20_000,
+        COOLDOWN_MS: SKILL_TUNING.FLASH_COOLDOWN_MS,
     },
 
     /**
-     * 탈진. 사거리 안의 **가장 가까운 한 명**을 느리게 만든다.
+     * 탈진. 사거리 안의 **모두**를 느리게 만든다. 광역기라 쿨타임이 셋 중 가장 길고,
+     * **시전자도 함께 느려진다.** 대가가 없으면 붙어서 누르는 것이 언제나 이득이라 판단이 사라진다.
      *
      * 진영 판정을 하지 않는다. 러너가 다른 러너를 탈진시킬 수 있다. 이 게임은 팀 게임이 아니라
      * 개인전이며, 곰이 달려올 때 옆사람보다만 빠르면 되기 때문이다. 의도된 설계다.
@@ -120,7 +126,9 @@ export const SKILLS = Object.freeze({
         SPEED_DECREASE: SKILL_TUNING.EXHAUST_SPEED_DECREASE,
         DURATION_MS: SKILL_TUNING.EXHAUST_DURATION_MS,
         RANGE_PX: SKILL_TUNING.EXHAUST_RANGE_TILES * TILE_PX,
-        COOLDOWN_MS: 15_000,
+        COOLDOWN_MS: SKILL_TUNING.EXHAUST_COOLDOWN_MS,
+        SELF_DECREASE: SKILL_TUNING.EXHAUST_SELF_DECREASE,
+        SELF_DURATION_MS: SKILL_TUNING.EXHAUST_SELF_DURATION_MS,
     },
 
     /**
@@ -137,7 +145,7 @@ export const SKILLS = Object.freeze({
      */
     SWITCH: {
         RANGE_PX: SKILL_TUNING.SWITCH_RANGE_TILES * TILE_PX,
-        COOLDOWN_MS: 5_000,
+        COOLDOWN_MS: SKILL_TUNING.SWITCH_COOLDOWN_MS,
     },
 
     /**
@@ -148,6 +156,9 @@ export const SKILLS = Object.freeze({
     FRENZY: {
         SPEED_INCREASE: SKILL_TUNING.FRENZY_SPEED_INCREASE,
         DURATION_MS: SKILL_TUNING.FRENZY_DURATION_MS,
+        /** 광란 중에 아웃시키면 붙는 추가분. 잘 잡는 술래가 점점 빨라진다. */
+        TAG_BONUS_INCREASE: SKILL_TUNING.FRENZY_TAG_BONUS_INCREASE,
+        TAG_BONUS_MS: SKILL_TUNING.FRENZY_TAG_BONUS_MS,
     },
 
     /**
@@ -182,7 +193,8 @@ export function hudGameplayPayload(): Record<string, number> {
         switchCooldownMs: SKILLS.SWITCH.COOLDOWN_MS,
         switchRangePx: SKILLS.SWITCH.RANGE_PX,
         frenzyDurationMs: SKILLS.FRENZY.DURATION_MS,
-        taggerCooldownRate: SKILLS.TAGGER_COOLDOWN_RATE,
+        nearTaggerCooldownBonus: SKILLS.NEAR_TAGGER_COOLDOWN_BONUS,
+        nearTaggerRadiusPx: SKILLS.NEAR_TAGGER_RADIUS_PX,
     };
 }
 

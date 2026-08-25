@@ -29,7 +29,10 @@ const TAGGER_RULE_VALUES = {
     frenzySeconds: SKILL_TUNING.FRENZY_DURATION_MS / 1_000,
     demotedPercent: Math.round(SKILL_TUNING.SWITCH_VICTIM_SPEED_DECREASE * 100),
     demotedSeconds: SKILL_TUNING.SWITCH_VICTIM_DURATION_MS / 1_000,
-    cooldownRate: SKILL_TUNING.TAGGER_COOLDOWN_RATE,
+    nearBonusPercent: Math.round(SKILL_TUNING.NEAR_TAGGER_COOLDOWN_BONUS * 100),
+    nearRadiusTiles: SKILL_TUNING.NEAR_TAGGER_RADIUS_TILES,
+    tagBonusPercent: Math.round(SKILL_TUNING.FRENZY_TAG_BONUS_INCREASE * 100),
+    tagBonusSeconds: SKILL_TUNING.FRENZY_TAG_BONUS_MS / 1_000,
     rotateSeconds: SKILL_TUNING.TAGGER_CHANGE_COOLDOWN_MS / 1_000,
 };
 
@@ -188,7 +191,7 @@ export const HowToPlayPage: React.FC = () => {
                         <div className="guide-demo-copy">
                             <p>{t('guide.demo.items.tagger.body')}</p>
                             <ul className="guide-tagger-rules">
-                                {(['becomeTagger', 'switchBonus', 'demoted', 'cooldown', 'rotate'] as const).map((rule) => (
+                                {(['becomeTagger', 'chainTag', 'switchBonus', 'demoted', 'nearCooldown', 'rotate'] as const).map((rule) => (
                                     <li key={rule}>{t(`guide.tagger.rules.${rule}`, TAGGER_RULE_VALUES)}</li>
                                 ))}
                             </ul>

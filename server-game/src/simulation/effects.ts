@@ -75,8 +75,14 @@ export function currentSpeed(player: PlayerState): number {
  * 술래는 두 배로 빨리 찬다. 레거시가 매 tick 2씩 깎았고(`legacy/public/main.js:275`),
  * 쫓는 쪽이 스킬을 더 자주 써야 추격이 성립한다.
  */
-export function tickCooldowns(player: PlayerState, taggerRate: number): void {
-    const step = player.isTagger ? taggerRate : 1;
+/**
+ * 쿨타임을 tick 단위로 깎는다.
+ *
+ * `rate`는 회복 배수다. 호출자가 "이 사람이 지금 얼마나 빨리 회복하는가"를 정해서 넘긴다 —
+ * 술래인지 근처에 누가 있는지는 효과 계층이 알 일이 아니다.
+ */
+export function tickCooldowns(player: PlayerState, rate = 1): void {
+    const step = rate;
     for (const key of Object.keys(player.cooldowns)) {
         const remaining = (player.cooldowns[key] ?? 0) - step;
         if (remaining <= 0) delete player.cooldowns[key];

@@ -171,6 +171,8 @@ function useExhaust(world: World, caster: PlayerState, events: WorldEvent[]): Sk
     for (const hit of hits) {
         applyEffect(world, hit, EffectType.Exhaust, SKILLS.EXHAUST.SPEED_DECREASE, SKILLS.EXHAUST.DURATION_MS);
     }
+    // 광역기의 대가. 시전자도 느려진다 — 얕고 짧아서 "쓰고 빠지는" 선택은 여전히 성립한다.
+    applyEffect(world, caster, EffectType.Exhaust, SKILLS.EXHAUST.SELF_DECREASE, SKILLS.EXHAUST.SELF_DURATION_MS);
     return { ok: true, skill: SkillId.Exhaust };
 }
 
