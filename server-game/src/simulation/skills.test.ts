@@ -281,32 +281,39 @@ test('지목 대상까지의 거리는 상관없다', () => {
     assert.equal(use(world, { playerId: 2, slot: 1, targetPlayerId: 3 }).outcome.ok, true);
 });
 
-test('탈진도 사거리 원을 남기고, 빗나가면 대상 없이 남긴다', () => {
-    // 색이 "누구에게 갔는가"를 말하므로 빗나간 것도 나가야 한다 — 갈 곳이 없었다는 것도 정보다.
-    const hitWorld = makeWorld(mapFromRows(OPEN), [
+test('탈진은 사거리 안의 모두에게 걸린다', () => {
+    // 지목기가 아니라 범위기다. 가장 가까운 한 명만 걸리면 "위치 선정"이 기술이 되지 않는다.
+    const world = makeWorld(mapFromRows(OPEN), [
         makePlayer(1, 2, 2, { loadout: SkillId.Exhaust }),
         makePlayer(2, 3, 2),
+        makePlayer(3, 2, 3),
+        // 사거리(1.4타일) 밖. 이 사람은 걸리면 안 된다.
+        makePlayer(4, 7, 5),
     ]);
-    const hit = use(hitWorld, { playerId: 1, slot: 2 });
-    assert.equal(hit.outcome.ok, true);
-    assert.deepEqual(hit.events.find((e) => e.kind === 'skillArea'), {
-        kind: 'skillArea',
-        skillId: SkillId.Exhaust,
-        playerId: 1,
-        fromX: hitWorld.players[0]!.x,
-        fromY: hitWorld.players[0]!.y,
-        targetPlayerId: 2,
-    });
+    const { outcome, events } = use(world, { playerId: 1, slot: 2 });
 
-    const missWorld = makeWorld(mapFromRows(OPEN), [
+    assert.equal(outcome.ok, true);
+    assert.ok(world.players[1]!.effects[EffectType.Exhaust], '2번이 안 걸렸다');
+    assert.ok(world.players[2]!.effects[EffectType.Exhaust], '3번이 안 걸렸다');
+    assert.equal(world.players[3]!.effects[EffectType.Exhaust], undefined, '사거리 밖까지 걸렸다');
+    assert.equal(world.players[0]!.effects[EffectType.Exhaust], undefined, '시전자 자신이 걸렸다');
+
+    // 원은 시전자 자리에 그려지고 지목한 상대가 없다 — 한 사람 색으로 칠하면 안 된다.
+    const area = events.find((e) => e.kind === 'skillArea');
+    assert.ok(area);
+    assert.equal(area.targetPlayerId, undefined, '범위기에는 지목 대상이 없다');
+});
+
+test('탈진은 아무도 없어도 사거리 원을 남기고 쿨타임을 먹는다', () => {
+    const world = makeWorld(mapFromRows(OPEN), [
         makePlayer(1, 1, 1, { loadout: SkillId.Exhaust }),
         makePlayer(2, 7, 5),
     ]);
-    const miss = use(missWorld, { playerId: 1, slot: 2 });
-    assert.deepEqual(miss.outcome, { ok: false, reason: 'OUT_OF_RANGE' });
-    const area = miss.events.find((e) => e.kind === 'skillArea');
-    assert.ok(area, '빗나가도 원은 그려야 한다');
-    assert.equal(area.targetPlayerId, undefined, '아무에게도 안 닿았으면 대상이 없다');
+    const { outcome, events } = use(world, { playerId: 1, slot: 2 });
+
+    assert.deepEqual(outcome, { ok: false, reason: 'OUT_OF_RANGE' });
+    assert.ok(events.some((e) => e.kind === 'skillArea'), '빗나가도 원은 그려야 한다');
+    assert.ok((world.players[0]!.cooldowns[SkillId.Exhaust] ?? 0) > 0);
 });
 
 test('스위치 시도는 성공하든 실패하든 연출 이벤트를 남긴다', () => {

@@ -429,7 +429,7 @@
           "body": "Teleports you in the direction you face. It crosses walls — walls along the path are ignored and only the landing spot matters. Landing inside a wall pushes you onward until you are clear of it."
         },
         "exhaust": {
-          "body": "Cast it on a fellow runner while the tagger is on you. Only they slow down, which makes them the easier target — and you gain ground while it happens. The range is short, so you have to be close."
+          "body": "Slows everyone inside the circle, not one chosen target — positioning matters more than aim. Cast it while the tagger is on you and the runners beside you become the easier catch while you pull away."
         },
         "switch": {
           "body": "Only works near the current tagger. The runner you pick becomes the new tagger; you stay a runner."
@@ -464,7 +464,14 @@
     },
     "tagger": {
       "eyebrow": "The tagger",
-      "title": "Spotting the tagger"
+      "title": "Spotting the tagger",
+      "rules": {
+        "becomeTagger": "Becoming the tagger grants {{frenzyPercent}}% extra move speed for {{frenzySeconds}}s (Frenzy) — at match start, when switched onto you, and on a forced rotation alike.",
+        "switchBonus": "Landing a switch grants the caster the same Frenzy, so you have a moment to run after handing the role off.",
+        "demoted": "Losing the tagger role to a switch slows you by {{demotedPercent}}% for {{demotedSeconds}}s, so you cannot immediately switch it straight back.",
+        "cooldown": "The tagger recovers skill cooldowns {{cooldownRate}}x faster. The chaser has to use skills more often for a chase to work.",
+        "rotate": "If the tagger has not changed for {{rotateSeconds}}s, a random runner becomes the tagger. It keeps a stalled match moving."
+      }
     }
   }
 }

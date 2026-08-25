@@ -187,31 +187,46 @@ function flashPlayers(frame: number): SnapshotPlayer[] {
  * 술래에게 걸려면 잡히기 직전까지 붙어야 한다. 이 스킬의 값어치는 **남을 나보다 느리게
  * 만드는 것**에 있다.
  */
+const EXHAUST_CHASER_START = at(1.8, 7).x;
+const EXHAUST_VICTIM_START = at(3.4, 7).x;
+const EXHAUST_CASTER_START = at(4.6, 7).x;
+
+/**
+ * 술래가 느려진 러너를 따라잡는 데 걸리는 시간은 **속도 차이가 정한다.** 프레임 수를 손으로
+ * 박아 두면 밸런스를 바꿨을 때 "닿지도 않았는데 잡히는" 장면이 된다.
+ */
+const EXHAUST_CATCH_FRAME = SKILL_FRAME + Math.ceil(
+    (EXHAUST_VICTIM_START - EXHAUST_CHASER_START - BODY_GAP) / (BASE_STEP - EXHAUST_STEP),
+);
+
 function exhaustPlayers(frame: number): SnapshotPlayer[] {
     const lane = at(0, 7).y;
     const slowed = frame >= SKILL_FRAME && frame < SKILL_FRAME + EXHAUST_FRAMES;
 
     // 건 사람. 처음부터 끝까지 기본 속도로 달린다.
-    const casterX = at(4.6, 7).x + walked(frame, RUN_UP_START, FRAME_COUNT, BASE_STEP);
+    const casterX = EXHAUST_CASTER_START + walked(frame, RUN_UP_START, FRAME_COUNT, BASE_STEP);
     // 맞은 사람. 스킬 순간부터 0.6배로 떨어져 뒤처진다.
-    const victimX = at(3.4, 7).x
+    const victimX = EXHAUST_VICTIM_START
         + walked(frame, RUN_UP_START, SKILL_FRAME, BASE_STEP)
-        + walked(frame, SKILL_FRAME, SKILL_FRAME + EXHAUST_FRAMES, EXHAUST_STEP)
-        + walked(frame, SKILL_FRAME + EXHAUST_FRAMES, FRAME_COUNT, BASE_STEP);
-    // 술래. 기본 속도로 계속 쫓다가 느려진 쪽을 따라잡는다. 몸이 겹치기 직전에 멈춘다 —
-    // 실제로는 겹치기 전에 태그 판정이 난다.
+        + walked(frame, SKILL_FRAME, EXHAUST_CATCH_FRAME, EXHAUST_STEP);
+    // 술래. 기본 속도로 쫓아와 따라잡는다. 몸이 겹치기 직전에 멈춘다.
     const chaserX = Math.min(
-        at(1.8, 7).x + walked(frame, RUN_UP_START, FRAME_COUNT, BASE_STEP),
+        EXHAUST_CHASER_START + walked(frame, RUN_UP_START, FRAME_COUNT, BASE_STEP),
         victimX - BODY_GAP,
     );
 
-    return [
+    const players = [
         player(1, casterX, lane),
         player(2, chaserX, lane, { isTagger: true }),
-        player(3, victimX, lane, {
-            effects: slowed ? { [EffectType.Exhaust]: remaining(frame, SKILL_FRAME, EXHAUST_FRAMES) } : {},
-        }),
     ];
+    // 잡히면 탈락이다. 탈락한 사람은 스냅샷에서 빠진다 — 서버도 살아 있는 사람만 보낸다.
+    // 여기서 안 지우면 "닿았는데 둘 다 그냥 지나간다"가 되어 태그가 뭘 하는지 안 보인다.
+    if (frame < EXHAUST_CATCH_FRAME) {
+        players.push(player(3, victimX, lane, {
+            effects: slowed ? { [EffectType.Exhaust]: remaining(frame, SKILL_FRAME, EXHAUST_FRAMES) } : {},
+        }));
+    }
+    return players;
 }
 
 /** 스위치. 술래에게 쫓기다 사거리 안에서 맵 반대편의 러너를 지목한다. */
@@ -268,7 +283,7 @@ const posterFrames: Record<DemoId, number> = {
     tagger: 70,
     dash: SKILL_FRAME + 8,
     flash: SKILL_FRAME + 4,
-    exhaust: SKILL_FRAME + 20,
+    exhaust: SKILL_FRAME + 24,
     switch: SKILL_FRAME + 12,
 };
 
@@ -321,10 +336,10 @@ function eventAt(id: DemoId, frame: number): DemoEvent | undefined {
     }
     if (id === 'exhaust') {
         const from = exhaustPlayers(SKILL_FRAME)[0]!;
-        // 원의 색은 맞은 사람(옆 러너)에게서 온다. 술래가 아니다.
+        // 탈진은 지목이 없다. 원은 시전자 색으로 그려진다.
         return {
             skillArea: {
-                playerId: 1, x: from.x, y: from.y, affectedPlayerId: 3,
+                playerId: 1, x: from.x, y: from.y, affectedPlayerId: null,
                 rangePx: SKILL_TUNING.EXHAUST_RANGE_TILES * TILE_PX,
             },
         };

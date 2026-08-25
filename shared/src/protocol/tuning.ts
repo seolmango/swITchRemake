@@ -52,6 +52,20 @@ export const SKILL_TUNING = Object.freeze({
     /** 술래가 된 직후와 스위치를 성공시킨 시전자에게 붙는다. */
     FRENZY_SPEED_INCREASE: 0.1,
     FRENZY_DURATION_MS: 5_000,
+
+    /**
+     * 스위치로 술래에서 벗어난 사람에게 붙는 감속.
+     *
+     * 별도 효과 타입을 만들지 않고 탈진과 같은 타입을 쓴다. 클라이언트가 받는 것은 "느려졌다"와
+     * 남은 시간 비율뿐이고 크기는 서버만 안다.
+     */
+    SWITCH_VICTIM_SPEED_DECREASE: 0.1,
+    SWITCH_VICTIM_DURATION_MS: 5_000,
+
+    /** 술래의 쿨타임 회복 배수. 쫓는 쪽이 더 자주 써야 추격이 성립한다. */
+    TAGGER_COOLDOWN_RATE: 2,
+    /** 이 시간 동안 술래가 안 바뀌면 무작위로 강제 교체한다. 경기가 정체되는 것을 막는다. */
+    TAGGER_CHANGE_COOLDOWN_MS: 20_000,
 });
 
 /** 감소군 바닥. 이게 없으면 효과가 겹칠 때 속도가 0이나 음수가 된다. */

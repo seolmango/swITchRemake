@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PageLayout } from '../components/layout/PageLayout.tsx';
 import { HUD_METRICS } from '../game/hud/hudTheme.ts';
+import { SKILL_TUNING } from 'shared';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../theme/color.ts';
 import { formatKeyBindings } from '../utils/keyBinding.ts';
@@ -18,6 +19,19 @@ import { HELP_DEMO_IDS, TAGGER_DEMO_ID, type HelpDemoId } from './howToPlay/tuto
  */
 /** 술래 데모는 재생 상태 배지를 쓰지 않는다. 화면에 없는 값을 위해 상태를 들 이유가 없다. */
 const noop = (): void => {};
+
+/**
+ * 술래 관련 수치. 문구에 숫자를 박지 않고 `shared`의 값에서 만든다 — 밸런스를 고쳤을 때
+ * 도움말만 옛날 숫자로 남는 것을 막는다.
+ */
+const TAGGER_RULE_VALUES = {
+    frenzyPercent: Math.round(SKILL_TUNING.FRENZY_SPEED_INCREASE * 100),
+    frenzySeconds: SKILL_TUNING.FRENZY_DURATION_MS / 1_000,
+    demotedPercent: Math.round(SKILL_TUNING.SWITCH_VICTIM_SPEED_DECREASE * 100),
+    demotedSeconds: SKILL_TUNING.SWITCH_VICTIM_DURATION_MS / 1_000,
+    cooldownRate: SKILL_TUNING.TAGGER_COOLDOWN_RATE,
+    rotateSeconds: SKILL_TUNING.TAGGER_CHANGE_COOLDOWN_MS / 1_000,
+};
 
 const SKILL_NAME_KEYS: Record<HelpDemoId, string> = {
     dash: 'lobby.skills.dash',
@@ -173,6 +187,11 @@ export const HowToPlayPage: React.FC = () => {
                         </div>
                         <div className="guide-demo-copy">
                             <p>{t('guide.demo.items.tagger.body')}</p>
+                            <ul className="guide-tagger-rules">
+                                {(['becomeTagger', 'switchBonus', 'demoted', 'cooldown', 'rotate'] as const).map((rule) => (
+                                    <li key={rule}>{t(`guide.tagger.rules.${rule}`, TAGGER_RULE_VALUES)}</li>
+                                ))}
+                            </ul>
                         </div>
                     </div>
                 </section>

@@ -100,9 +100,15 @@ describe('help demo snapshot timelines', () => {
             const area = HELP_DEMO_TIMELINES[id].frames.find((f) => f.event?.skillArea)?.event?.skillArea;
             expect(area, `${id}는 사거리 원이 있어야 한다`).toBeDefined();
             expect(area!.rangePx).toBeGreaterThan(0);
-            // 색이 "누구에게 갔는가"를 말한다. 대상이 없으면 설명이 반쪽이다.
-            expect(area!.affectedPlayerId).not.toBeNull();
         }
+    });
+
+    it('colours the switch circle by the designated player and the exhaust circle by nobody', () => {
+        // 탈진은 범위기라 한 사람을 가리킬 수 없다. 한 사람 색으로 칠하면 "저 사람만 걸렸다"로 읽힌다.
+        const switchArea = HELP_DEMO_TIMELINES.switch.frames.find((f) => f.event?.skillArea)!.event!.skillArea!;
+        expect(switchArea.affectedPlayerId).not.toBeNull();
+        const exhaustArea = HELP_DEMO_TIMELINES.exhaust.frames.find((f) => f.event?.skillArea)!.event!.skillArea!;
+        expect(exhaustArea.affectedPlayerId).toBeNull();
     });
 
     it('keeps the storm off the demo view', () => {

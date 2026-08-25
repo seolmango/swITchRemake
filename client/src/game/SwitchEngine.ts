@@ -219,10 +219,10 @@ export class SwitchEngine {
      * 사거리 스킬(스위치·탈진) 연출. `rangePx`는 서버가 `game.starting`으로 알려 준 값을 그대로
      * 넘긴다 — 클라이언트가 사거리를 따로 알고 있으면 밸런스를 고칠 때 조용히 어긋난다.
      *
-     * `affectedPlayerId`가 null이면 아무에게도 닿지 않은 것이라 시전자 색으로 그린다.
+     * `targetPlayerId`는 스위치에만 있다. 없으면 시전자 색으로 그린다.
      */
-    playSkillArea(playerId: number, x: number, y: number, affectedPlayerId: number | null, rangePx: number): void {
-        this._accessor.withScene((s) => s.playSkillArea(playerId, x, y, affectedPlayerId, rangePx));
+    playSkillArea(playerId: number, x: number, y: number, targetPlayerId: number | null, rangePx: number): void {
+        this._accessor.withScene((s) => s.playSkillArea(playerId, x, y, targetPlayerId, rangePx));
     }
 
     /** Local view preferences (in-body number, nickname above head). Never leaves the client. */

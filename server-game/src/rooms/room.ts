@@ -566,9 +566,9 @@ export class Room {
      * 알아야 하는데, 그건 지금 스냅샷 인코더만 안다.
      */
     public broadcastSkillArea(
-        skill: string, playerId: number, x: number, y: number, affectedPlayerId: number | null,
+        skill: string, playerId: number, x: number, y: number, targetPlayerId: number | null,
     ): void {
-        this.#broadcast({ type: 'player.skillArea', payload: { skill, playerId, x, y, affectedPlayerId } });
+        this.#broadcast({ type: 'player.skillArea', payload: { skill, playerId, x, y, targetPlayerId } });
     }
 
     /** Skill failures contain private tactical information, so they never use the room broadcaster. */

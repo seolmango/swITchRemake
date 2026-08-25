@@ -24,6 +24,7 @@ import type { SchedulerTarget } from '../simulation/scheduler';
 import { isFinished, stepWorld, type EmojiRequest } from '../simulation/step';
 import type { SkillRequest } from '../simulation/skills';
 import type { AuthoritativeFrame, World, WorldEvent } from '../simulation/world';
+import type { TrainingGround } from '../training/training-ground';
 import { SessionReplayRecorder } from './session-recorder';
 import { encodeForViewer, type RosterEntry, type SnapshotTileChange } from './snapshot-view';
 
@@ -37,6 +38,7 @@ export interface GameSessionOptions {
      */
     readonly mode: RoomMode;
     readonly roster: readonly RosterEntry[];
+    readonly trainingGround?: TrainingGround;
     readonly violationSink: (signal: ViolationSignal) => void;
     readonly onFinished: (session: GameSession, result: MatchResultMessage) => void;
     /** 기록을 켜지 않은 호출자(테스트 등)는 생략할 수 있다. 기본은 아무것도 안 하는 레코더다. */
@@ -171,7 +173,10 @@ export class GameSession implements SchedulerTarget {
     public step(): AuthoritativeFrame | null {
         if (this.#finished) return null;
 
-        const inputs = this.#room.resolvedInputs();
+        const inputs = [
+            ...this.#room.resolvedInputs(),
+            ...(this.#options.trainingGround?.resolveInputs(this.world) ?? []),
+        ];
         const skills = this.#pendingSkills.splice(0, this.#pendingSkills.length);
         const emojis = [...this.#pendingEmojis.values()];
         this.#pendingEmojis.clear();
@@ -182,6 +187,7 @@ export class GameSession implements SchedulerTarget {
             this.#room.sendSkillRejected(rejection.playerId, rejection.slot, rejection.reason);
         }
         this.#applyEvents(frame.events);
+        this.#options.trainingGround?.afterStep(this.world);
         this.#replay.recordEvents(frame.tick, frame.events);
 
         if (this.#options.mode === RoomMode.Match && isFinished(this.world)) {
@@ -241,7 +247,10 @@ export class GameSession implements SchedulerTarget {
         for (const event of events) {
             switch (event.kind) {
                 case 'eliminated':
-                    this.#room.markEliminated(event.playerId, event.by ?? event.playerId);
+                    // 더미는 world 액터일 뿐 로비 참가자가 아니므로 강퇴ㆍ관전 전환 흐름에 넘기지 않는다.
+                    if (!this.#options.trainingGround?.isDummy(event.playerId)) {
+                        this.#room.markEliminated(event.playerId, event.by ?? event.playerId);
+                    }
                     break;
                 case 'tagged':
                     this.#room.broadcastTagged(event.playerId, event.by ?? null);
@@ -268,7 +277,7 @@ export class GameSession implements SchedulerTarget {
      */
     async #finish(): Promise<void> {
         const survivors = this.world.players
-            .filter((player) => player.alive)
+            .filter((player) => player.alive && this.#identities.has(player.playerId))
             .sort((a, b) => a.playerId - b.playerId)
             .map((player) => player.playerId);
 
@@ -289,7 +298,10 @@ export class GameSession implements SchedulerTarget {
         const msPerTick = 1000 / this.world.simulationHz;
         const identities = this.#identities;
 
-        const players: MatchParticipantResult[] = this.world.players.map((player) => {
+        // world에는 로스터 밖 연습 액터가 있을 수 있어도 결과ㆍ전적의 행은 실제 참가자에게만 만든다.
+        const players: MatchParticipantResult[] = this.world.players
+            .filter((player) => identities.has(player.playerId))
+            .map((player) => {
             const identity = identities.get(player.playerId);
             const endTick = player.stats.eliminatedAtTick ?? this.world.tick;
             const guest = identity?.guest ?? true;
@@ -306,7 +318,7 @@ export class GameSession implements SchedulerTarget {
                 switchSuccess: player.stats.switchSuccess,
                 survivedMs: Math.round(endTick * msPerTick),
             };
-        });
+            });
 
         return {
             v: MATCH_RESULT_VERSION,

@@ -261,13 +261,13 @@ export type PlayerSkillAreaMessage = ServerEnvelope<'player.skillArea', {
     x: number;
     y: number;
     /**
-     * 이 스킬이 향한 상대. 원의 색이 이 사람의 색이다.
+     * 지목한 상대. **스위치에만 있다.**
      *
-     * 스위치는 지목한 사람(빗나가도 지목은 있었다), 탈진은 실제로 맞은 사람이다.
-     * `null`이면 아무에게도 닿지 않았다는 뜻이고, 그때는 시전자 색으로 그린다 — 원의 색이
-     * "누구에게 갔는가"를 말하므로 갈 곳이 없었다는 것도 보여야 한다.
+     * 탈진은 지목기가 아니라 범위기여서 사거리 안의 모두가 걸린다 — 한 사람을 가리킬 수 없으므로
+     * 항상 `null`이다. 원을 무슨 색으로 그릴지는 이 값이 아니라 스킬 종류가 정하고, 그 판단은
+     * 클라이언트가 한다(스위치는 지목한 사람 색, 탈진은 시전자 색).
      */
-    affectedPlayerId: number | null;
+    targetPlayerId: number | null;
 }>;
 
 export type GameEndedMessage = ServerEnvelope<'game.ended', {

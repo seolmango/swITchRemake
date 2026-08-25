@@ -608,14 +608,15 @@ export class WorldScene extends Phaser.Scene {
      * 사거리 스킬 연출. **시전자가 지금 보이는 경우에만** 그린다 — 수풀에 숨은 사람의 위치가
      * 연출로 새면 안 된다. 서버는 방 전체에 보내므로 거르는 책임이 여기 있다.
      */
-    playSkillArea(playerId: number, x: number, y: number, affectedPlayerId: number | null, rangePx: number): void {
+    playSkillArea(playerId: number, x: number, y: number, targetPlayerId: number | null, rangePx: number): void {
         const caster = this.players.get(playerId);
         if (caster === undefined || rangePx <= 0) return;
-        // 색은 "누구에게 갔는가"를 말한다. 닿은 사람이 없으면 시전자 자신의 색이다.
+        // 지목한 상대가 있으면 그 사람 색(스위치), 없으면 시전자 색(탈진)이다.
+        // 탈진은 범위 안의 모두가 걸리므로 한 사람의 색으로 칠하면 "저 사람만 걸렸다"로 읽힌다.
         // 대상이 안 보여도 번호로 색을 안다 — playerId는 1부터, colorIndex는 0부터다.
-        const colorIndex = affectedPlayerId === null
+        const colorIndex = targetPlayerId === null
             ? caster.state.colorIndex
-            : this.players.get(affectedPlayerId)?.state.colorIndex ?? affectedPlayerId - 1;
+            : this.players.get(targetPlayerId)?.state.colorIndex ?? targetPlayerId - 1;
         this.switchFx.play(x, y, rangePx, colorIndex, this.clock);
     }
 

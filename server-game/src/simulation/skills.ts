@@ -140,49 +140,37 @@ function findFlashLanding(
 }
 
 /**
- * 탈진. 사거리 안의 가장 가까운 한 명을 느리게 만든다.
+ * 탈진. 사거리 안의 **모두**를 느리게 만든다.
  *
  * **진영을 보지 않는다.** 러너가 다른 러너를 탈진시킬 수 있다. 팀 게임이 아니라 개인전이며,
  * 옆사람을 느리게 만드는 것이 나에게 이득인 구조가 의도된 설계다. 여기에 팀 필터를 넣지 않는다.
  *
- * 동률일 때는 `playerId`가 작은 쪽을 고른다. 결정론을 위해 순서가 고정돼야 한다.
+ * 사거리 안의 **모두**가 걸린다. 지목이 없으므로 조준이 아니라 위치 선정이 이 스킬의 기술이다.
  */
 function useExhaust(world: World, caster: PlayerState, events: WorldEvent[]): SkillOutcome {
-    const candidates = world.players
-        .filter((p) => p.alive && p.playerId !== caster.playerId)
+    // 지목기가 아니라 **범위기**다. 사거리 안의 사람은 술래든 러너든 전부 걸린다.
+    // playerId 오름차순으로 도는 것은 결정론 때문이다 — 효과 적용 순서가 바뀌면 리플레이가 달라진다.
+    const hits = world.players
+        .filter((p) => p.alive && p.playerId !== caster.playerId && distance(caster, p) <= SKILLS.EXHAUST.RANGE_PX)
         .sort((a, b) => a.playerId - b.playerId);
 
-    let nearest: PlayerState | null = null;
-    let nearestDist = Infinity;
-    for (const candidate of candidates) {
-        const d = distance(caster, candidate);
-        if (d < nearestDist) {
-            nearest = candidate;
-            nearestDist = d;
-        }
-    }
-
-    const hit = nearest !== null && nearestDist <= SKILLS.EXHAUST.RANGE_PX ? nearest : null;
-
-    // 사거리 원은 맞았든 빗나갔든 그린다. 스위치와 같은 규칙이다 — 어디서 얼마만큼의 범위를
-    // 폈는지가 주변 사람에게 정보다. 색은 맞은 사람에게서 오고, 아무도 없으면 시전자 색이다.
+    // 사거리 원은 아무도 안 걸려도 그린다. 어디서 얼마만큼의 범위를 폈는지가 주변 사람에게 정보다.
+    // 지목한 상대가 없으므로 대상도 싣지 않는다 — 원의 색은 시전자에게서 온다.
     events.push({
         kind: 'skillArea',
         skillId: SkillId.Exhaust,
         playerId: caster.playerId,
         fromX: caster.x,
         fromY: caster.y,
-        ...(hit === null ? {} : { targetPlayerId: hit.playerId }),
     });
 
-    if (hit === null) {
-        // 빗나가도 쿨타임은 돈다. 아무 데서나 눌러보는 것을 막는다.
-        startCooldown(world, caster, SkillId.Exhaust, SKILLS.EXHAUST.COOLDOWN_MS);
-        return { ok: false, reason: 'OUT_OF_RANGE' };
-    }
-
-    applyEffect(world, hit, EffectType.Exhaust, SKILLS.EXHAUST.SPEED_DECREASE, SKILLS.EXHAUST.DURATION_MS);
     startCooldown(world, caster, SkillId.Exhaust, SKILLS.EXHAUST.COOLDOWN_MS);
+    // 빗나가도 쿨타임은 돈다. 아무 데서나 눌러보는 것을 막는다.
+    if (hits.length === 0) return { ok: false, reason: 'OUT_OF_RANGE' };
+
+    for (const hit of hits) {
+        applyEffect(world, hit, EffectType.Exhaust, SKILLS.EXHAUST.SPEED_DECREASE, SKILLS.EXHAUST.DURATION_MS);
+    }
     return { ok: true, skill: SkillId.Exhaust };
 }
 

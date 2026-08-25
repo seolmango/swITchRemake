@@ -48,7 +48,7 @@ export const GAMEPLAY = Object.freeze({
 
     // ── 술래 ──
     /** 레거시와 동일. 술래가 오래 안 바뀌면 경기가 정체된다. */
-    TAGGER_CHANGE_COOLDOWN_MS: 20_000,
+    TAGGER_CHANGE_COOLDOWN_MS: SKILL_TUNING.TAGGER_CHANGE_COOLDOWN_MS,
 
     // ── 방 ──
     MIN_PLAYERS_TO_START: 3,
@@ -81,7 +81,7 @@ export const SPEED = Object.freeze({
  */
 export const SKILLS = Object.freeze({
     /** 술래의 쿨타임 회복 배수. */
-    TAGGER_COOLDOWN_RATE: 2,
+    TAGGER_COOLDOWN_RATE: SKILL_TUNING.TAGGER_COOLDOWN_RATE,
 
     /**
      * 유체화. 레거시의 `Boost`가 이 스킬이다 — 이름은 점멸이었지만 실제 동작은 속도 버프였다.
@@ -158,8 +158,8 @@ export const SKILLS = Object.freeze({
      * 늘릴 이유가 없다.
      */
     SWITCH_VICTIM: {
-        SPEED_DECREASE: 0.1,
-        DURATION_MS: 5_000,
+        SPEED_DECREASE: SKILL_TUNING.SWITCH_VICTIM_SPEED_DECREASE,
+        DURATION_MS: SKILL_TUNING.SWITCH_VICTIM_DURATION_MS,
     },
 });
 

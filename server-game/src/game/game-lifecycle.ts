@@ -12,6 +12,7 @@ import type { GameStartInfo, Room, RoomLifecyclePort, RoomStartSnapshot } from '
 import type { Scheduler } from '../simulation/scheduler';
 import { grantTaggerFrenzy, SkillId, type SkillRequest } from '../simulation/skills';
 import { createWorld, emptyStats, type PlayerState } from '../simulation/world';
+import { TrainingGround } from '../training/training-ground';
 import { GameSession } from './game-session';
 import type { RosterEntry } from './snapshot-view';
 
@@ -52,6 +53,10 @@ export class GameLifecycle implements RoomLifecyclePort {
         const trainingMap = snapshot.mode === RoomMode.Training ? { ...map, barrierSpeed: 0 } : map;
         const seed = this.#options.makeSeed?.(snapshot) ?? Date.now();
         const players = this.#placePlayers(snapshot, map.tileSize, map.cols);
+        const trainingGround = snapshot.mode === RoomMode.Training
+            ? new TrainingGround(trainingMap, players.map((player) => player.playerId))
+            : undefined;
+        if (trainingGround !== undefined) players.push(...trainingGround.players);
 
         const world = createWorld({ map: trainingMap, players, seed });
 
@@ -66,6 +71,7 @@ export class GameLifecycle implements RoomLifecyclePort {
             playerId: player.playerId,
             nickname: room.nicknameOf(player.playerId) ?? `P${player.playerId}`,
         }));
+        if (trainingGround !== undefined) roster.push(...trainingGround.roster);
 
         const session = new GameSession({
             room,
@@ -73,6 +79,7 @@ export class GameLifecycle implements RoomLifecyclePort {
             matchId: snapshot.matchId,
             mode: snapshot.mode,
             roster,
+            ...(trainingGround === undefined ? {} : { trainingGround }),
             violationSink: this.#options.violationSink,
             recorder: (this.#options.replayRecorderFactory ?? (() => new NullReplayRecorder()))(),
             meta: {

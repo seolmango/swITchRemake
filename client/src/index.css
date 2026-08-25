@@ -1320,3 +1320,30 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: #FFBDBD; }
   from { transform: translateX(-10%); }
   to { transform: translateX(135%); }
 }
+
+.guide-tagger-rules {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.guide-tagger-rules li {
+  position: relative;
+  padding-left: 26px;
+  color: var(--guide-text);
+  font-size: var(--guide-body-font);
+  line-height: 1.45;
+}
+
+.guide-tagger-rules li::before {
+  content: '';
+  position: absolute;
+  top: 0.55em;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--guide-red);
+}
