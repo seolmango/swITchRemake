@@ -375,9 +375,10 @@ export class AuthService {
             jti: session.jti,
             type: 'guest-refresh',
         }, {
-            // Keep a fallback for existing local installations; deployments should set the dedicated secret.
-            secret: this.configService.get<string>('JWT_GUEST_REFRESH_SECRET')
-                ?? this.configService.get<string>('JWT_REFRESH_SECRET'),
+            // 대체값을 두지 않는다. `JWT_REFRESH_SECRET`으로 조용히 넘어가면 게스트 refresh 토큰과
+            // 계정 refresh 토큰이 같은 키로 서명되어, 두 종류를 나눈 이유가 사라진다.
+            // 값이 없으면 부팅이 실패한다(main.ts의 assertDistinctJwtSecrets).
+            secret: this.configService.get<string>('JWT_GUEST_REFRESH_SECRET'),
             expiresIn: refreshExpiresIn,
         });
         return { accessToken, refreshToken, expiresIn, refreshExpiresIn };
@@ -386,8 +387,7 @@ export class AuthService {
     private verifyGuestRefreshToken(refreshToken: string): GuestRefreshPayload {
         try {
             const payload = this.jwtService.verify<GuestRefreshPayload>(refreshToken, {
-                secret: this.configService.get<string>('JWT_GUEST_REFRESH_SECRET')
-                    ?? this.configService.get<string>('JWT_REFRESH_SECRET'),
+                secret: this.configService.get<string>('JWT_GUEST_REFRESH_SECRET'),
             });
             if (
                 payload.type !== 'guest-refresh'
