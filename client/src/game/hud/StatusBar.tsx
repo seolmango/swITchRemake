@@ -49,7 +49,7 @@ export const StatusBar: React.FC<Props> = ({ theme, spectating, compact, elapsed
                 </span>
                 {watching && (
                     <span style={{ color: bodyText(theme), fontSize: compact ? HUD_METRICS.bodyFontCompact : HUD_METRICS.bodyFont, fontWeight: 800 }}>
-                        {watching.nickname || `Player ${watching.id + 1}`}
+                        {watching.nickname || `Player ${watching.id}`}
                     </span>
                 )}
             </div>

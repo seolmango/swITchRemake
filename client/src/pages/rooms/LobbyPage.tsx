@@ -164,6 +164,9 @@ export const LobbyPage: React.FC = () => {
     })), [room]);
     const self = room?.players.find((player) => player.isSelf);
     const isOwner = Boolean(self?.isHost);
+    // 경기가 끝나고 방으로 돌아온 뒤(PostGame, 30초)도 로비 화면이다. 여기서 자리와 스킬이 안 바뀌면
+    // 사용자에게는 고장으로 보인다. 서버도 같은 기준으로 받아 준다(Room#lobbyEditable).
+    const lobbyEditable = session.roomState === RoomState.Waiting || session.roomState === RoomState.PostGame;
     const startLockSeconds = Math.ceil((room?.startLockMs ?? 0) / 1000);
     const hasEnoughPlayers = (room?.players.filter((player) => player.role === 'player').length ?? 0) >= MIN_PLAYERS_TO_START;
     const canStart = isOwner && hasEnoughPlayers && (room?.startLockMs ?? 0) <= 0;
@@ -210,7 +213,7 @@ export const LobbyPage: React.FC = () => {
     };
 
     const changeOwnSlot = (nextSlot: number) => {
-        if (!self || !room || session.roomState !== RoomState.Waiting || self.slot === nextSlot || room.players.some((player) => player.slot === nextSlot)) return;
+        if (!self || !room || !lobbyEditable || self.slot === nextSlot || room.players.some((player) => player.slot === nextSlot)) return;
         gameSession.send({ type: 'lobby.setSlot', payload: { slot: nextSlot } });
         setMessage('');
     };
@@ -301,8 +304,8 @@ export const LobbyPage: React.FC = () => {
                             slot={slot}
                             player={player}
                             viewerIsHost={isOwner}
-                            canSelectEmptySlot={Boolean(self) && session.roomState === RoomState.Waiting}
-                            canChangeSkill={session.roomState === RoomState.Waiting}
+                            canSelectEmptySlot={Boolean(self) && lobbyEditable}
+                            canChangeSkill={lobbyEditable}
                             onSelectEmptySlot={() => changeOwnSlot(slot)}
                             onChangeSkill={() => setSkillPickerOpen(true)}
                             onPassHost={() => player && setHostAction({ type: 'passHost', playerId: player.playerId })}

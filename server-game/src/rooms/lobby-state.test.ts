@@ -18,7 +18,7 @@ function reservation(userId: number, player = userId): SeatReservation {
     };
 }
 
-test('roster가 예약까지 정원에 포함하고 playerId와 slot을 분리한다', () => {
+test('roster가 예약까지 정원에 포함하고 자리를 옮기면 번호와 색이 함께 간다', () => {
     const roster = new LobbyRoster(3);
     assert.deepEqual(roster.hold(reservation(10)), { ok: true, playerId: 1 });
     assert.deepEqual(roster.hold(reservation(20)), { ok: true, playerId: 2 });
@@ -33,8 +33,11 @@ test('roster가 예약까지 정원에 포함하고 playerId와 slot을 분리�
 
     roster.releaseHold(30);
     assert.equal(roster.moveSlot(10, 3), 'moved');
-    assert.equal(first.playerId, 1, 'slot 이동이 안정적인 playerId를 바꾸면 안 된다');
+    // 대기실에서 보이는 숫자, 몸에 찍히는 숫자, 남이 스위치하려고 누르는 숫자가 전부 같아야 한다.
+    // 예전에는 playerId를 고정하고 slot만 옮겨서, 6번을 고른 사람이 인게임에서 3번으로 나왔다.
     assert.equal(first.slot, 3);
+    assert.equal(first.playerId, 3, '자리를 옮기면 인게임 번호도 따라간다');
+    assert.equal(first.colorIndex, 2, '색도 번호를 따라간다');
 
     assert.equal(roster.passHost(10, second.playerId), true);
     assert.equal(roster.hostId, second.playerId);

@@ -265,19 +265,18 @@ export class SwitchEngine {
     }
 
     destroy(): void {
-        // Phaser는 GL 자원을 하나씩 지우기는 해도 컨텍스트 자체는 놓지 않는다. 로비→인게임→결과를
-        // 오갈 때마다 엔진이 새로 만들어지므로, 놓지 않은 컨텍스트가 브라우저의 동시 WebGL 컨텍스트
-        // 한도(크롬 기준 16개 남짓)까지 쌓이고 그 사이 GPU 메모리도 물고 있는다. 명시적으로 끊는다.
-        //
-        // 두 번째 인자 noReturn=true는 Phaser가 재시작용으로 게임 인스턴스를 붙들고 있지 않게 한다.
-        // noReturn=true. 기본값(false)은 Phaser가 재시작용으로 게임 인스턴스를 붙들고 있게 한다.
-        // 이 엔진은 로비→인게임→결과를 오갈 때마다 새로 만들어지고 재시작하는 일이 없다.
+        // 두 번째 인자(noReturn)는 반드시 false여야 한다. true면 Phaser가 `PluginCache`의
+        // **코어 플러그인을 전역에서** 지워 버려서, 그 뒤로 이 페이지에서 만드는 모든 Phaser.Game이
+        // 부팅 중에 죽는다(`Cannot read properties of undefined (reading 'emit')`).
+        // 이 엔진은 로비→인게임→결과를 오갈 때마다 새로 만들어지므로 두 번째 경기부터 화면이 안 뜬다.
+        // 메모리를 아끼려고 켰다가 그렇게 됐다. Phaser 문서에도 "같은 페이지에서 다시 만들 수 없다"고
+        // 적혀 있다.
         //
         // 남은 의심: 파괴한 뒤에도 WebGL 컨텍스트가 브라우저에 계속 잡혀 있는 것으로 보인다.
         // `WEBGL_lose_context`로 명시적으로 끊는 것을 시도했지만, 끊는 시점을 Phaser의 지연된
         // `runDestroy()`와 맞추는 데 실패했다(먼저 끊으면 캔버스가 DOM에 남고, 직접 `runDestroy()`를
         // 부르면 StrictMode의 즉시 언마운트에서 SceneManager가 터진다). 확인되지 않은 채로 넣지 않는다.
-        this.game.destroy(true, true);
+        this.game.destroy(true);
         this.scene = null;
         this.pendingOps = [];
         this.pendingSnapshot = null;

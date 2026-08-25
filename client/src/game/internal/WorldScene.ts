@@ -390,7 +390,9 @@ export class WorldScene extends Phaser.Scene {
         s.facingX = init.facingX ?? 0;
         s.facingY = init.facingY ?? 1;
         s.colorIndex = init.colorIndex;
-        s.label = init.label ?? String(id + 1);
+        // playerId는 1부터다. 여기서 +1을 하면 로비에서 고른 자리 번호와 몸에 찍히는 숫자가 어긋나고,
+        // 스위치 키(1~8)가 가리키는 사람과도 달라진다.
+        s.label = init.label ?? String(id);
         s.nickname = init.nickname ?? s.nickname;
         s.isTagger = this.taggerId === id;
         s.isSelf = this.selfId === id;

@@ -58,7 +58,9 @@ export function PerformanceStats({ theme, engine, latencyMs, estimatedTps }: Pro
         >
             {showLatency && <span title="Round-trip time">RTT {latencyMs === null ? '--' : `${latencyMs} ms`}</span>}
             {showFps && <span>FPS {fps ?? '--'}</span>}
-            {showTps && <span title="Estimated from snapshot tick arrivals">TPS≈ {estimatedTps?.toFixed(1) ?? '--'}</span>}
+            {/* 시뮬레이션 tick/초다. 스냅샷은 초당 30번 오지만 그 안의 tick 번호가 2씩 오르므로
+                정상값은 60이다. 라벨만 보면 "스냅샷 초당 횟수"로 읽혀서 실제로 오해가 있었다. */}
+            {showTps && <span title="Server simulation ticks per second (60). Snapshots arrive at 30/s, two ticks apart.">TPS≈ {estimatedTps?.toFixed(1) ?? '--'}</span>}
         </div>
     );
 }

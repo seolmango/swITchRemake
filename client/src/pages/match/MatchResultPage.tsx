@@ -116,7 +116,7 @@ export const MatchResultPage: React.FC = () => {
                 noWinner: t('result.noWinner'),
                 noWinnerDetail: t('result.noWinnerDetail'),
                 victory: t(winners.length === 1 ? 'result.victorySingle' : 'result.victory'),
-                map: t(`lobby.maps.${result.map}`),
+                map: t(`lobby.maps.${result.map}`, { defaultValue: result.map }),
                 duration: formatDuration(result.durationMs),
                 player: t('result.player'),
                 switchRate: t('result.switchShort'),
@@ -193,7 +193,7 @@ export const MatchResultPage: React.FC = () => {
                             ))}
                         </div>
                         <div className="result-summary-grid">
-                            <div><span>{t('lobby.map')}</span><strong>{t(`lobby.maps.${result.map}`)}</strong></div>
+                            <div><span>{t('lobby.map')}</span><strong>{t(`lobby.maps.${result.map}`, { defaultValue: result.map })}</strong></div>
                             <div><span>{t('result.duration')}</span><strong>{formatDuration(result.durationMs)}</strong></div>
                             <div><span>{t('result.players')}</span><strong>{result.players.length}</strong></div>
                         </div>

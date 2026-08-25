@@ -48,7 +48,7 @@ export interface PlayerInit {
     facingY?: number;
     /** Index into Color.user — which of the 8 palette slots this player renders as. */
     colorIndex: number;
-    /** In-body number. Defaults to `id + 1`. */
+    /** In-body number. Defaults to the playerId itself — playerId is already 1-based. */
     label?: string;
     /** Display name from the roster. Only rendered when `DisplayOptions.showNickname` is on. */
     nickname?: string;

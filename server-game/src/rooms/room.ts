@@ -391,8 +391,18 @@ export class Room {
         return null;
     }
 
+    /**
+     * 로비 화면에서 만질 수 있는 상태인가. 경기가 끝나고 방으로 돌아온 30초(POST_GAME_MS) 동안
+     * 화면은 로비인데 자리도 스킬도 안 바뀌면 사용자에게는 그냥 고장 난 것으로 보인다. 자리와
+     * 로드아웃은 다음 `requestStart`에서야 쓰이고 그쪽은 Waiting을 따로 확인하므로, 여기서
+     * PostGame을 막을 이유가 없다.
+     */
+    #lobbyEditable(): boolean {
+        return this.state === RoomState.Waiting || this.state === RoomState.PostGame;
+    }
+
     public setLoadout(userId: ActorId, loadout: SkillId): ErrorCodeValue | null {
-        if (this.state !== RoomState.Waiting) return ErrorCode.BadState;
+        if (!this.#lobbyEditable()) return ErrorCode.BadState;
         const member = this.#roster.getByUser(userId);
         if (member === null || member.role !== PlayerRole.Player) return ErrorCode.BadState;
         if (member.loadout !== loadout) {
@@ -404,7 +414,7 @@ export class Room {
 
     /** shared에 lobby.setSlot이 추가되기 전에도 검증 가능한 순수 roster 동작을 제공한다. */
     public moveSlot(userId: ActorId, slot: number): MoveSlotResult | 'bad-state' {
-        if (this.state !== RoomState.Waiting) return 'bad-state';
+        if (!this.#lobbyEditable()) return 'bad-state';
         const result = this.#roster.moveSlot(userId, slot);
         if (result === 'moved') this.broadcastLobbyState();
         return result;

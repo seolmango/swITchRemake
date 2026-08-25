@@ -263,10 +263,8 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 error = room.setSpectating(connection.userId, message.payload.spectate);
                 break;
             case 'lobby.setLoadout':
-                if (room.state !== RoomState.Waiting) {
-                    error = ErrorCode.BadState;
-                    break;
-                }
+                // 상태 판정은 Room이 한다(경기 후 30초 동안도 로비에서 바꿀 수 있어야 한다).
+                // 여기서는 payload 모양만 본다.
                 if (message.payload.skills.length !== 1 || !isLoadoutSkill(message.payload.skills[0]!)) {
                     error = ErrorCode.InvalidPayload;
                     break;

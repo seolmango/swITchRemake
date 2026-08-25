@@ -17,7 +17,12 @@ export interface SeatHold {
 
 export interface LobbyMember {
     readonly userId: ActorId;
-    readonly playerId: number;
+    /**
+     * 대기실에서 고르는 자리 번호이자 인게임 번호다. `slot`과 항상 같은 값이며 둘을 따로 두지 않는다.
+     * 예전에는 "playerId는 고정하고 대기실 자리만 옮긴다"였는데, 그러면 대기실에서 6번을 고른 사람이
+     * 인게임에서 3번으로 나오고 다른 사람이 스위치하려고 누르는 숫자도 달라진다. 실제로 그랬다.
+     */
+    playerId: number;
     slot: number;
     readonly nickname: string;
     readonly guest: boolean;
@@ -104,11 +109,10 @@ export class LobbyRoster {
 
     public hold(reservation: Readonly<SeatReservation>): HoldResult {
         if (this.hasUser(reservation.userId)) return { ok: false, reason: 'duplicate' };
-        const slot = this.#firstFreeSlot();
-        const playerId = this.#firstFreePlayerId();
-        if (slot === null || playerId === null) return { ok: false, reason: 'full' };
-        this.#holds.set(reservation.userId, { reservation, playerId, slot });
-        return { ok: true, playerId };
+        const seat = this.#firstFreeSeat();
+        if (seat === null) return { ok: false, reason: 'full' };
+        this.#holds.set(reservation.userId, { reservation, playerId: seat, slot: seat });
+        return { ok: true, playerId: seat };
     }
 
     public heldSeat(userId: ActorId): SeatHold | null {
@@ -188,8 +192,11 @@ export class LobbyRoster {
     }
 
     /**
-     * playerId는 연결과 시뮬레이션에서 안정적으로 유지하고, 대기실 자리만 옮긴다.
-     * 현재 shared LobbyPlayer에는 slot 필드가 없어 직렬화 경계에는 아직 노출할 수 없다.
+     * 자리를 옮기면 인게임 번호와 색도 같이 간다. 대기실에서 보이는 숫자, 몸에 찍히는 숫자,
+     * 남이 스위치하려고 누르는 숫자가 전부 같아야 한다.
+     *
+     * 경기 중에는 호출되지 않는다(Room이 Waiting/PostGame에서만 받는다). 그래서 시뮬레이션이
+     * 도는 도중에 playerId가 바뀌는 일은 없다.
      */
     public moveSlot(userId: ActorId, target: number): MoveSlotResult {
         const member = this.#members.get(userId);
@@ -197,22 +204,17 @@ export class LobbyRoster {
         if (!Number.isInteger(target) || target < 1 || target > this.#capacity) return 'out-of-range';
         if (this.#slotOccupied(target, userId)) return 'occupied';
         member.slot = target;
+        member.playerId = target;
+        // playerId is 1..8; palette colorIndex is intentionally 0..7.
+        member.colorIndex = target - 1;
         return 'moved';
     }
 
-    #firstFreeSlot(): number | null {
-        for (let slot = 1; slot <= this.#capacity; slot += 1) {
-            if (!this.#slotOccupied(slot)) return slot;
-        }
-        return null;
-    }
-
-    #firstFreePlayerId(): number | null {
-        for (let playerId = 1; playerId <= MAX_PLAYERS_PER_ROOM; playerId += 1) {
-            if (![...this.#holds.values()].some((hold) => hold.playerId === playerId)
-                && ![...this.#members.values()].some((member) => member.playerId === playerId)) {
-                return playerId;
-            }
+    /** 자리 번호는 playerId이기도 하므로 탐색이 하나다. 둘로 나뉘어 있을 때 서로 어긋났다. */
+    #firstFreeSeat(): number | null {
+        const limit = Math.min(this.#capacity, MAX_PLAYERS_PER_ROOM);
+        for (let seat = 1; seat <= limit; seat += 1) {
+            if (!this.#slotOccupied(seat)) return seat;
         }
         return null;
     }
