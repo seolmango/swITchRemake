@@ -158,11 +158,12 @@ export const GamePage: React.FC = () => {
         engineRef.current?.applyPlayerBlinked(playerId, fromX, fromY);
     }), []);
 
-    useEffect(() => gameSession.subscribeSwitchAttempts(({ playerId, x, y, targetPlayerId }) => {
+    useEffect(() => gameSession.subscribeSkillAreas(({ skill, playerId, x, y, affectedPlayerId }) => {
         // 사거리는 서버가 game.starting으로 알려 준 값을 쓴다. 아직 못 받았으면 그리지 않는다 —
-        // 임의의 반지름으로 그리면 "저 원 안이면 잡힌다"는 잘못된 정보를 준다.
-        const rangePx = gameSession.getSnapshot().starting?.gameplay.switchRangePx ?? 0;
-        engineRef.current?.playSwitchAttempt(playerId, x, y, targetPlayerId, rangePx);
+        // 임의의 반지름으로 그리면 "저 원 안이면 닿는다"는 잘못된 정보를 준다.
+        const gameplay = gameSession.getSnapshot().starting?.gameplay;
+        const rangePx = (skill === SkillId.Exhaust ? gameplay?.exhaustRangePx : gameplay?.switchRangePx) ?? 0;
+        engineRef.current?.playSkillArea(playerId, x, y, affectedPlayerId, rangePx);
     }), []);
 
     useEffect(() => {

@@ -1,3 +1,4 @@
+import { MOVEMENT, SKILL_TUNING, SPEED_DECREASE_FLOOR, TILE_PX as SHARED_TILE_PX } from 'shared';
 import { NETWORK } from './network';
 
 /**
@@ -18,17 +19,15 @@ import { NETWORK } from './network';
 /** 밸런스가 바뀌면 올린다. 경기 결과와 리플레이에 함께 기록되어 "그 경기가 어떤 규칙이었는지"를 남긴다. */
 export const RULES_VERSION = '0.2.0-legacy-tuned';
 
-const TILE_PX = 256;
+const TILE_PX = SHARED_TILE_PX;
 
 /** How long an accepted emoji remains visible in authoritative snapshots. */
 export const EMOJI_DISPLAY_MS = 3_000;
 
 export const GAMEPLAY = Object.freeze({
     // ── 이동 ──
-    /** 레거시 `CharRad = 0.4` 타일. */
-    PLAYER_RADIUS_PX: 0.4 * TILE_PX,
-    /** 레거시 `Speed = 58` milli-tile/tick @ 30Hz. */
-    BASE_MOVE_SPEED_PX_PER_SEC: 1.74 * TILE_PX,
+    PLAYER_RADIUS_PX: MOVEMENT.PLAYER_RADIUS_TILES * TILE_PX,
+    BASE_MOVE_SPEED_PX_PER_SEC: MOVEMENT.BASE_SPEED_TILES_PER_SEC * TILE_PX,
     /** 한 tick 이동량이 이보다 크면 sub-step으로 쪼갠다. 대시가 벽을 통과하는 것을 막는다. */
     MAX_SUBSTEP_DISTANCE_PX: 48,
 
@@ -68,8 +67,7 @@ export const GAMEPLAY = Object.freeze({
  * 군을 곱하면 둘 다 걸렸을 때 기본보다 느리되 완전 상쇄는 아닌 상태가 된다.
  */
 export const SPEED = Object.freeze({
-    /** 감소군 바닥. 이게 없으면 효과가 겹칠 때 속도가 0이나 음수가 된다. */
-    DECREASE_FLOOR: 0.3,
+    DECREASE_FLOOR: SPEED_DECREASE_FLOOR,
 });
 
 /**
@@ -90,9 +88,8 @@ export const SKILLS = Object.freeze({
      * 174 / 58 = 정확히 3배, 30 tick = 1초, 쿨타임 600 tick = 20초.
      */
     DASH: {
-        /** 증가군에 더해지는 값. 0.5면 1.5배, 2.0이면 3배. */
-        SPEED_INCREASE: 2.0,
-        DURATION_MS: 1_000,
+        SPEED_INCREASE: SKILL_TUNING.DASH_SPEED_INCREASE,
+        DURATION_MS: SKILL_TUNING.DASH_DURATION_MS,
         COOLDOWN_MS: 20_000,
     },
 
@@ -107,7 +104,7 @@ export const SKILLS = Object.freeze({
      * 되어 불쾌하다. 애매한 상황은 쓴 사람에게 유리하게 푼다.
      */
     FLASH: {
-        DISTANCE_PX: 3 * TILE_PX,
+        DISTANCE_PX: SKILL_TUNING.FLASH_DISTANCE_TILES * TILE_PX,
         /** 벽 속에 착지했을 때 진행 방향으로 더 밀어볼 수 있는 최대 거리. 두꺼운 벽도 넘을 만큼. */
         WALL_EXIT_MAX_PX: 2 * TILE_PX,
         COOLDOWN_MS: 20_000,
@@ -120,10 +117,9 @@ export const SKILLS = Object.freeze({
      * 개인전이며, 곰이 달려올 때 옆사람보다만 빠르면 되기 때문이다. 의도된 설계다.
      */
     EXHAUST: {
-        /** 감소군에 더해지는 값. */
-        SPEED_DECREASE: 0.4,
-        DURATION_MS: 3_000,
-        RANGE_PX: 4 * TILE_PX,
+        SPEED_DECREASE: SKILL_TUNING.EXHAUST_SPEED_DECREASE,
+        DURATION_MS: SKILL_TUNING.EXHAUST_DURATION_MS,
+        RANGE_PX: SKILL_TUNING.EXHAUST_RANGE_TILES * TILE_PX,
         COOLDOWN_MS: 15_000,
     },
 
@@ -140,7 +136,7 @@ export const SKILLS = Object.freeze({
      * 사거리는 레거시 `CheckTouch(..., (TaggerChaRad + CharRad) * 1000)`에서 왔다. 1.0 + 0.4 타일.
      */
     SWITCH: {
-        RANGE_PX: 1.4 * TILE_PX,
+        RANGE_PX: SKILL_TUNING.SWITCH_RANGE_TILES * TILE_PX,
         COOLDOWN_MS: 5_000,
     },
 
@@ -150,8 +146,8 @@ export const SKILLS = Object.freeze({
      * 시전자는 러너로 남지만 도망칠 시간을 벌어야 하기 때문이다.
      */
     FRENZY: {
-        SPEED_INCREASE: 0.1,
-        DURATION_MS: 5_000,
+        SPEED_INCREASE: SKILL_TUNING.FRENZY_SPEED_INCREASE,
+        DURATION_MS: SKILL_TUNING.FRENZY_DURATION_MS,
     },
 
     /**

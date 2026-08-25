@@ -231,6 +231,9 @@ export class WorldScene extends Phaser.Scene {
     // panning/smoothing is handled by the camera itself rather than us re-centering it every frame).
 
     private setupCameraInput(): void {
+        // 도움말 데모는 정해진 화면을 보여 주는 것이 전부다. 휠로 줌하거나 끌어서 옮길 수 있으면
+        // 사용자가 화면을 잃어버리고 되돌릴 방법이 없다.
+        if (this.mode === EngineMode.Help) return;
         this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
             if (!this.freeCamera || !pointer.isDown) return;
             const cam = this.cameras.main;
@@ -286,14 +289,23 @@ export class WorldScene extends Phaser.Scene {
     fitMapToView(paddingPx = 0): void {
         const w = this.mapLayer.worldWidth, h = this.mapLayer.worldHeight;
         if (w <= 0 || h <= 0) return;
+        this.fitRectToView(0, 0, w, h, paddingPx);
+    }
+
+    /**
+     * 맵의 한 부분만 화면에 맞춘다. 도움말 데모가 맵 전체를 보여 주면 사방이 자기장 테두리로
+     * 둘러싸여 실제 경기와 전혀 다르게 보인다 — 경기 중에는 늘 맵의 일부만 보인다.
+     */
+    fitRectToView(x: number, y: number, width: number, height: number, paddingPx = 0): void {
+        if (width <= 0 || height <= 0) return;
         this.freeCamera = true;
         this.cameraInitialized = true;
         this.followedId = null;
         this.cameras.main.stopFollow();
-        this.cameras.main.centerOn(w / 2, h / 2);
+        this.cameras.main.centerOn(x + width / 2, y + height / 2);
         // scale.width는 렌더 해상도가 곱해진 게임 픽셀이라, 논리 줌을 구하려면 되나눠야 한다.
-        const zoomX = (this.scale.width / this.renderScale) / (w + paddingPx * 2);
-        const zoomY = (this.scale.height / this.renderScale) / (h + paddingPx * 2);
+        const zoomX = (this.scale.width / this.renderScale) / (width + paddingPx * 2);
+        const zoomY = (this.scale.height / this.renderScale) / (height + paddingPx * 2);
         this.baseZoom = Phaser.Math.Clamp(Math.min(zoomX, zoomY), CAMERA.minZoom, CAMERA.maxZoom);
     }
 
@@ -593,15 +605,17 @@ export class WorldScene extends Phaser.Scene {
     }
 
     /**
-     * 스위치 시도 연출. **시전자가 지금 보이는 경우에만** 그린다 — 수풀에 숨은 사람의 위치가
+     * 사거리 스킬 연출. **시전자가 지금 보이는 경우에만** 그린다 — 수풀에 숨은 사람의 위치가
      * 연출로 새면 안 된다. 서버는 방 전체에 보내므로 거르는 책임이 여기 있다.
      */
-    playSwitchAttempt(playerId: number, x: number, y: number, targetPlayerId: number, rangePx: number): void {
+    playSkillArea(playerId: number, x: number, y: number, affectedPlayerId: number | null, rangePx: number): void {
         const caster = this.players.get(playerId);
         if (caster === undefined || rangePx <= 0) return;
-        const target = this.players.get(targetPlayerId);
-        // 대상이 안 보여도 색은 번호에서 나온다. playerId는 1부터, colorIndex는 0부터다.
-        const colorIndex = target?.state.colorIndex ?? targetPlayerId - 1;
+        // 색은 "누구에게 갔는가"를 말한다. 닿은 사람이 없으면 시전자 자신의 색이다.
+        // 대상이 안 보여도 번호로 색을 안다 — playerId는 1부터, colorIndex는 0부터다.
+        const colorIndex = affectedPlayerId === null
+            ? caster.state.colorIndex
+            : this.players.get(affectedPlayerId)?.state.colorIndex ?? affectedPlayerId - 1;
         this.switchFx.play(x, y, rangePx, colorIndex, this.clock);
     }
 

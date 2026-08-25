@@ -44,6 +44,8 @@ export class SwitchEngine {
         isFree: () => boolean;
         centerOn: (x: number, y: number) => void;
         fitMap: (paddingPx?: number) => void;
+        /** 맵의 한 부분만 화면에 맞춘다. 도움말 데모가 쓴다. */
+        fitRect: (x: number, y: number, width: number, height: number, paddingPx?: number) => void;
     };
 
     private readonly game: Phaser.Game;
@@ -80,6 +82,8 @@ export class SwitchEngine {
             isFree: () => accessor.readScene((s) => s.isCameraFree(), true),
             centerOn: (x, y) => accessor.withScene((s) => s.cameraCenterOn(x, y)),
             fitMap: (paddingPx = 0) => accessor.withScene((s) => s.fitMapToView(paddingPx)),
+            fitRect: (x, y, width, height, paddingPx = 0) =>
+                accessor.withScene((s) => s.fitRectToView(x, y, width, height, paddingPx)),
         };
 
         this.settings = { ...DEFAULT_ENGINE_SETTINGS, ...options.settings };
@@ -212,11 +216,13 @@ export class SwitchEngine {
     }
 
     /**
-     * 스위치 시도 연출. `rangePx`는 서버가 `game.starting`으로 알려 준 `switchRangePx`를 그대로
+     * 사거리 스킬(스위치·탈진) 연출. `rangePx`는 서버가 `game.starting`으로 알려 준 값을 그대로
      * 넘긴다 — 클라이언트가 사거리를 따로 알고 있으면 밸런스를 고칠 때 조용히 어긋난다.
+     *
+     * `affectedPlayerId`가 null이면 아무에게도 닿지 않은 것이라 시전자 색으로 그린다.
      */
-    playSwitchAttempt(playerId: number, x: number, y: number, targetPlayerId: number, rangePx: number): void {
-        this._accessor.withScene((s) => s.playSwitchAttempt(playerId, x, y, targetPlayerId, rangePx));
+    playSkillArea(playerId: number, x: number, y: number, affectedPlayerId: number | null, rangePx: number): void {
+        this._accessor.withScene((s) => s.playSkillArea(playerId, x, y, affectedPlayerId, rangePx));
     }
 
     /** Local view preferences (in-body number, nickname above head). Never leaves the client. */

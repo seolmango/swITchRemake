@@ -559,14 +559,16 @@ export class Room {
     }
 
     /**
-     * 스위치 시도 연출. 실패한 시도도 나간다.
+     * 사거리 스킬(스위치·탈진) 연출. 빗나간 것도 나간다.
      *
      * 시야로 거르지 않고 방 전체에 보내는 것은 `player.blinked`와 같은 선택이다. 정직한 클라이언트는
      * 시전자가 보일 때만 그린다(WorldScene). 연출 이벤트를 시야로 거르려면 방이 뷰어별 가시성을
      * 알아야 하는데, 그건 지금 스냅샷 인코더만 안다.
      */
-    public broadcastSwitchAttempted(playerId: number, x: number, y: number, targetPlayerId: number): void {
-        this.#broadcast({ type: 'player.switchAttempted', payload: { playerId, x, y, targetPlayerId } });
+    public broadcastSkillArea(
+        skill: string, playerId: number, x: number, y: number, affectedPlayerId: number | null,
+    ): void {
+        this.#broadcast({ type: 'player.skillArea', payload: { skill, playerId, x, y, affectedPlayerId } });
     }
 
     /** Skill failures contain private tactical information, so they never use the room broadcaster. */

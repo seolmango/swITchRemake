@@ -112,14 +112,16 @@ export interface World {
  * 전송 계층은 이걸 JSON 이벤트로 바꾸고, 리플레이 레코더는 그대로 기록한다.
  */
 export interface WorldEvent {
-    kind: 'tagged' | 'eliminated' | 'blinked' | 'skillUsed' | 'switchAttempted';
+    kind: 'tagged' | 'eliminated' | 'blinked' | 'skillUsed' | 'skillArea';
     playerId: number;
     by?: number;
     fromX?: number;
     fromY?: number;
     slot?: number;
-    /** `switchAttempted`에서 지목한 상대. 연출의 색이 이 사람에게서 나온다. */
+    /** `skillArea`가 향한 상대. 연출의 색이 이 사람에게서 나온다. 아무에게도 안 닿았으면 없다. */
     targetPlayerId?: number;
+    /** `skillArea`를 일으킨 스킬. 클라이언트가 이 값으로 사거리를 고른다. */
+    skillId?: string;
 }
 
 /**

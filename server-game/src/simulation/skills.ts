@@ -147,7 +147,7 @@ function findFlashLanding(
  *
  * 동률일 때는 `playerId`가 작은 쪽을 고른다. 결정론을 위해 순서가 고정돼야 한다.
  */
-function useExhaust(world: World, caster: PlayerState): SkillOutcome {
+function useExhaust(world: World, caster: PlayerState, events: WorldEvent[]): SkillOutcome {
     const candidates = world.players
         .filter((p) => p.alive && p.playerId !== caster.playerId)
         .sort((a, b) => a.playerId - b.playerId);
@@ -162,13 +162,26 @@ function useExhaust(world: World, caster: PlayerState): SkillOutcome {
         }
     }
 
-    if (!nearest || nearestDist > SKILLS.EXHAUST.RANGE_PX) {
+    const hit = nearest !== null && nearestDist <= SKILLS.EXHAUST.RANGE_PX ? nearest : null;
+
+    // 사거리 원은 맞았든 빗나갔든 그린다. 스위치와 같은 규칙이다 — 어디서 얼마만큼의 범위를
+    // 폈는지가 주변 사람에게 정보다. 색은 맞은 사람에게서 오고, 아무도 없으면 시전자 색이다.
+    events.push({
+        kind: 'skillArea',
+        skillId: SkillId.Exhaust,
+        playerId: caster.playerId,
+        fromX: caster.x,
+        fromY: caster.y,
+        ...(hit === null ? {} : { targetPlayerId: hit.playerId }),
+    });
+
+    if (hit === null) {
         // 빗나가도 쿨타임은 돈다. 아무 데서나 눌러보는 것을 막는다.
         startCooldown(world, caster, SkillId.Exhaust, SKILLS.EXHAUST.COOLDOWN_MS);
         return { ok: false, reason: 'OUT_OF_RANGE' };
     }
 
-    applyEffect(world, nearest, EffectType.Exhaust, SKILLS.EXHAUST.SPEED_DECREASE, SKILLS.EXHAUST.DURATION_MS);
+    applyEffect(world, hit, EffectType.Exhaust, SKILLS.EXHAUST.SPEED_DECREASE, SKILLS.EXHAUST.DURATION_MS);
     startCooldown(world, caster, SkillId.Exhaust, SKILLS.EXHAUST.COOLDOWN_MS);
     return { ok: true, skill: SkillId.Exhaust };
 }
@@ -199,15 +212,14 @@ function useSwitch(world: World, caster: PlayerState, targetPlayerId: number | u
 
     // 사거리 판정보다 먼저 남긴다. 실패한 시도도 화면에 보여야 한다 — 어디서 누구를 노렸는지가
     // 주변 사람에게 정보이고, 레거시도 누를 때마다 원을 그렸다(Engine.js의 skill.type 1~8).
-    if (targetPlayerId !== undefined) {
-        events.push({
-            kind: 'switchAttempted',
-            playerId: caster.playerId,
-            fromX: caster.x,
-            fromY: caster.y,
-            targetPlayerId,
-        });
-    }
+    events.push({
+        kind: 'skillArea',
+        skillId: SkillId.Switch,
+        playerId: caster.playerId,
+        fromX: caster.x,
+        fromY: caster.y,
+        ...(targetPlayerId === undefined ? {} : { targetPlayerId }),
+    });
 
     if (distance(caster, tagger) > SKILLS.SWITCH.RANGE_PX) return { ok: false, reason: 'OUT_OF_RANGE' };
     if (!targetValid) return { ok: false, reason: 'NO_TARGET' };
@@ -248,7 +260,7 @@ export function useSkill(world: World, request: SkillRequest, events: WorldEvent
     switch (skill) {
         case SkillId.Dash: return useDash(world, caster);
         case SkillId.Flash: return useFlash(world, caster, events);
-        case SkillId.Exhaust: return useExhaust(world, caster);
+        case SkillId.Exhaust: return useExhaust(world, caster, events);
         case SkillId.Switch: return useSwitch(world, caster, request.targetPlayerId, events);
     }
 }

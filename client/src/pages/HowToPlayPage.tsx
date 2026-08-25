@@ -6,7 +6,7 @@ import { useSettingsStore } from '../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../theme/color.ts';
 import { formatKeyBindings } from '../utils/keyBinding.ts';
 import { HelpDemoCanvas } from './howToPlay/HelpDemoCanvas.tsx';
-import { HELP_DEMO_IDS, type HelpDemoId } from './howToPlay/tutorialSnapshots.ts';
+import { HELP_DEMO_IDS, TAGGER_DEMO_ID, type HelpDemoId } from './howToPlay/tutorialSnapshots.ts';
 
 /**
  * 스킬 이름은 로비가 쓰는 키를 그대로 읽는다. 도움말이 자기 이름표를 따로 들면 같은 스킬이
@@ -16,6 +16,9 @@ import { HELP_DEMO_IDS, type HelpDemoId } from './howToPlay/tutorialSnapshots.ts
  * 이름은 롤 소환사 주문에서 왔다(유체화/점멸/탈진). 코드 id(`SkillId`)는 와이어 계약이라
  * 그대로 두고 표시 이름만 맞춘다 — id를 바꾸면 리플레이 파일에 박힌 값까지 따라와야 한다.
  */
+/** 술래 데모는 재생 상태 배지를 쓰지 않는다. 화면에 없는 값을 위해 상태를 들 이유가 없다. */
+const noop = (): void => {};
+
 const SKILL_NAME_KEYS: Record<HelpDemoId, string> = {
     dash: 'lobby.skills.dash',
     flash: 'lobby.skills.flash',
@@ -72,11 +75,13 @@ export const HowToPlayPage: React.FC = () => {
         '--guide-red-soft': theme === 0 ? Color.red[0] : 'transparent',
         '--guide-red': Color.red[2],
         '--guide-gray': Color.gray[2],
-        '--guide-corner': `${HUD_METRICS.corner}px`,
-        '--guide-corner-compact': `${HUD_METRICS.cornerCompact}px`,
-        '--guide-gap': `${HUD_METRICS.panelGap}px`,
-        '--guide-body-font': `${HUD_METRICS.bodyFont}px`,
-        '--guide-caption-font': `${HUD_METRICS.captionFont}px`,
+        // HUD 크기를 쓰면 안 된다. HUD는 게임 화면 위에 얹히는 물건이라 작아야 하는 것이고,
+        // 도움말은 전체 화면을 쓰는 페이지다. 타이틀·프로필 같은 다른 페이지의 눈금에 맞춘다.
+        '--guide-corner': `${HUD_METRICS.corner + 6}px`,
+        '--guide-corner-compact': `${HUD_METRICS.cornerCompact + 6}px`,
+        '--guide-gap': `${HUD_METRICS.panelGap + 6}px`,
+        '--guide-body-font': '24px',
+        '--guide-caption-font': '19px',
     } as CSSProperties;
 
     const selectDemo = (nextDemo: HelpDemoId) => {
@@ -93,66 +98,7 @@ export const HowToPlayPage: React.FC = () => {
             <div className="guide-page" style={pageStyle}>
                 <p className="guide-lead">{t('guide.intro')}</p>
 
-                <section className="guide-demo-section" aria-labelledby="guide-demo-heading">
-                    <div className="guide-section-heading">
-                        <div>
-                            <p className="guide-eyebrow">{t('guide.demo.eyebrow')}</p>
-                            <h2 id="guide-demo-heading">{t('guide.demo.title')}</h2>
-                        </div>
-                        <p className="guide-motion-note">
-                            {t(reducedPresentation ? 'guide.demo.manualMotion' : 'guide.demo.autoMotion')}
-                        </p>
-                    </div>
-
-                    <div className="guide-demo-tabs" role="tablist" aria-label={t('guide.demo.tabsLabel')}>
-                        {HELP_DEMO_IDS.map((id) => (
-                            <button
-                                key={id}
-                                type="button"
-                                role="tab"
-                                aria-selected={demo === id}
-                                className={demo === id ? 'is-active' : ''}
-                                onClick={() => selectDemo(id)}
-                            >
-                                {t(SKILL_NAME_KEYS[id])}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="guide-demo-stage">
-                        <div className="guide-demo-viewport">
-                            <HelpDemoCanvas
-                                demo={demo}
-                                autoplay={!reducedPresentation}
-                                replayToken={reducedPresentation ? manualReplayToken : autoReplayToken}
-                                onPlayingChange={setPlaying}
-                            />
-                            <span className="guide-live-badge" aria-hidden="true">
-                                {playing ? t('guide.demo.playing') : t('guide.demo.still')}
-                            </span>
-                        </div>
-                        <div className="guide-demo-copy" role="tabpanel">
-                            <p className="guide-demo-index">{t('guide.demo.index', { current: HELP_DEMO_IDS.indexOf(demo) + 1, total: HELP_DEMO_IDS.length })}</p>
-                            <h3>{t(SKILL_NAME_KEYS[demo])}</h3>
-                            <p>{t(`guide.demo.items.${demo}.body`)}</p>
-                            <button type="button" className="guide-replay" onClick={replayDemo}>
-                                {t('guide.demo.replay')}
-                            </button>
-                        </div>
-                    </div>
-                </section>
-
                 <div className="guide-info-grid">
-                    <section className="guide-rules" aria-labelledby="guide-rules-heading">
-                        <p className="guide-eyebrow">{t('guide.rules.eyebrow')}</p>
-                        <h2 id="guide-rules-heading">{t('guide.rules.title')}</h2>
-                        <ol>
-                            {(['tag', 'storm', 'switch', 'winners'] as const).map((rule) => (
-                                <li key={rule}><span>{t(`guide.rules.${rule}`)}</span></li>
-                            ))}
-                        </ol>
-                    </section>
-
                     <section className="guide-controls" aria-labelledby="guide-controls-heading">
                         <p className="guide-eyebrow">{t('guide.controls.eyebrow')}</p>
                         <h2 id="guide-controls-heading">{t('guide.controls.title')}</h2>
@@ -196,7 +142,89 @@ export const HowToPlayPage: React.FC = () => {
                             </div>
                         </div>
                     </section>
+
+                    <section className="guide-rules" aria-labelledby="guide-rules-heading">
+                        <p className="guide-eyebrow">{t('guide.rules.eyebrow')}</p>
+                        <h2 id="guide-rules-heading">{t('guide.rules.title')}</h2>
+                        <ol>
+                            {(['tag', 'storm', 'switch', 'winners'] as const).map((rule) => (
+                                <li key={rule}><span>{t(`guide.rules.${rule}`)}</span></li>
+                            ))}
+                        </ol>
+                    </section>
+
                 </div>
+
+                <section className="guide-demo-section" aria-labelledby="guide-tagger-heading">
+                    <div className="guide-section-heading">
+                        <div>
+                            <p className="guide-eyebrow">{t('guide.tagger.eyebrow')}</p>
+                            <h2 id="guide-tagger-heading">{t('guide.tagger.title')}</h2>
+                        </div>
+                    </div>
+                    <div className="guide-demo-stage">
+                        <div className="guide-demo-viewport">
+                            <HelpDemoCanvas
+                                demo={TAGGER_DEMO_ID}
+                                autoplay={!reducedPresentation}
+                                replayToken={reducedPresentation ? manualReplayToken : autoReplayToken}
+                                onPlayingChange={noop}
+                            />
+                        </div>
+                        <div className="guide-demo-copy">
+                            <p>{t('guide.demo.items.tagger.body')}</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section className="guide-demo-section" aria-labelledby="guide-demo-heading">
+                    <div className="guide-section-heading">
+                        <div>
+                            <p className="guide-eyebrow">{t('guide.demo.eyebrow')}</p>
+                            <h2 id="guide-demo-heading">{t('guide.demo.title')}</h2>
+                        </div>
+                        <p className="guide-motion-note">
+                            {t(reducedPresentation ? 'guide.demo.manualMotion' : 'guide.demo.autoMotion')}
+                        </p>
+                    </div>
+
+                    <div className="guide-demo-tabs" role="tablist" aria-label={t('guide.demo.tabsLabel')}>
+                        {HELP_DEMO_IDS.map((id) => (
+                            <button
+                                key={id}
+                                type="button"
+                                role="tab"
+                                aria-selected={demo === id}
+                                className={demo === id ? 'is-active' : ''}
+                                onClick={() => selectDemo(id)}
+                            >
+                                {t(SKILL_NAME_KEYS[id])}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="guide-demo-stage">
+                        <div className="guide-demo-viewport">
+                            <HelpDemoCanvas
+                                demo={demo}
+                                autoplay={!reducedPresentation}
+                                replayToken={reducedPresentation ? manualReplayToken : autoReplayToken}
+                                onPlayingChange={setPlaying}
+                            />
+                            <span className="guide-live-badge" aria-hidden="true">
+                                {playing ? t('guide.demo.playing') : t('guide.demo.still')}
+                            </span>
+                        </div>
+                        <div className="guide-demo-copy" role="tabpanel">
+                            <h3>{t(SKILL_NAME_KEYS[demo])}</h3>
+                            <p>{t(`guide.demo.items.${demo}.body`)}</p>
+                            <button type="button" className="guide-replay" onClick={replayDemo}>
+                                {t('guide.demo.replay')}
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
             </div>
         </PageLayout>
     );

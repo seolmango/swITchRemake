@@ -243,20 +243,31 @@ export type PlayerBlinkedMessage = ServerEnvelope<'player.blinked', {
 }>;
 
 /**
- * 스위치를 **시도했다**. 성공 여부와 무관하게 나간다 — 사거리 밖이었다는 사실도 보는 사람에게는
- * 정보다(레거시도 시도할 때마다 원을 그렸다).
+ * 사거리를 가진 스킬(스위치·탈진)을 **썼다**. 성공 여부와 무관하게 나간다 — 사거리 밖이었다는
+ * 사실도 보는 사람에게는 정보다(레거시도 시도할 때마다 원을 그렸다).
+ *
+ * 반지름은 싣지 않는다. `skill`에 대응하는 사거리는 `game.starting`의 `gameplay`가 이미
+ * 알려 줬고, 같은 값을 두 경로로 보내면 언젠가 갈라진다.
  *
  * 클라이언트는 시전자가 지금 보이는 경우에만 그린다. 수풀에 숨은 사람의 위치가 연출로 새면 안 된다.
  * 이 메시지 자체는 방 전체에 나가므로 정직하지 않은 클라이언트는 알 수 있다 — `player.blinked`와
  * 같은 수준의 타협이고, 고치려면 연출 이벤트 전체를 시야로 걸러야 한다.
  */
-export type PlayerSwitchAttemptedMessage = ServerEnvelope<'player.switchAttempted', {
+export type PlayerSkillAreaMessage = ServerEnvelope<'player.skillArea', {
+    /** `SkillId.Switch` 또는 `SkillId.Exhaust`. 클라이언트가 이 값으로 반지름을 고른다. */
+    skill: string;
     playerId: number;
-    /** 시도한 순간의 시전자 위치. 원은 여기에 그린다. */
+    /** 쓴 순간의 시전자 위치. 원은 여기에 그린다. */
     x: number;
     y: number;
-    /** 바꾸려고 지목한 상대. 원의 색이 이 사람의 색이다. */
-    targetPlayerId: number;
+    /**
+     * 이 스킬이 향한 상대. 원의 색이 이 사람의 색이다.
+     *
+     * 스위치는 지목한 사람(빗나가도 지목은 있었다), 탈진은 실제로 맞은 사람이다.
+     * `null`이면 아무에게도 닿지 않았다는 뜻이고, 그때는 시전자 색으로 그린다 — 원의 색이
+     * "누구에게 갔는가"를 말하므로 갈 곳이 없었다는 것도 보여야 한다.
+     */
+    affectedPlayerId: number | null;
 }>;
 
 export type GameEndedMessage = ServerEnvelope<'game.ended', {
@@ -297,7 +308,7 @@ export type ServerMessage =
     | PlayerReconnectingMessage
     | SpectateChangedMessage
     | PlayerBlinkedMessage
-    | PlayerSwitchAttemptedMessage
+    | PlayerSkillAreaMessage
     | GameEndedMessage
     | ErrorMessage
     | PongMessage;

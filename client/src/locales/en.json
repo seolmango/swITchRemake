@@ -413,15 +413,14 @@
     "title": "How to Play",
     "intro": "Stay alive inside the shrinking storm, evade the tagger, and pass the role to another runner at the decisive moment.",
     "demo": {
-      "eyebrow": "Skills in action",
-      "title": "Learn by watching",
+      "eyebrow": "Skills",
+      "title": "What each skill does",
       "tabsLabel": "Choose a skill demo",
       "autoMotion": "The demo loops automatically.",
       "manualMotion": "Reduced motion is enabled, so a still frame is shown. Press play to watch it once.",
       "playing": "Playing",
       "still": "Still frame",
       "replay": "Play from start",
-      "index": "{{current}} / {{total}}",
       "items": {
         "dash": {
           "body": "Moves you faster for a while. It is a speed boost, not a teleport, so walls still stop you."
@@ -434,16 +433,19 @@
         },
         "switch": {
           "body": "Only works near the current tagger. The runner you pick becomes the new tagger; you stay a runner."
+        },
+        "tagger": {
+          "body": "The tagger has a red body and a flag above their head. Getting caught by them knocks you out on the spot."
         }
       }
     },
     "rules": {
       "eyebrow": "Win condition",
       "title": "Survive to the end",
-      "tag": "When the tagger catches a runner, that runner is eliminated immediately.",
-      "storm": "The storm closes in over time. Stay outside it and you are eliminated.",
-      "switch": "swITch only works near the current tagger. Your chosen runner becomes the new tagger, while you remain a runner.",
-      "winners": "The final two survivors win together."
+      "tag": "The tagger catching you knocks you out on the spot. It is the only way anyone leaves a match.",
+      "storm": "The storm keeps closing in. You cannot step outside it — it pushes you back — so everyone is forced together.",
+      "switch": "Switch only works near the current tagger. The runner you pick becomes the new tagger; you stay a runner.",
+      "winners": "The last two players alive win together."
     },
     "controls": {
       "eyebrow": "Using your settings",
@@ -459,6 +461,10 @@
         "left": "Left",
         "right": "Right"
       }
+    },
+    "tagger": {
+      "eyebrow": "The tagger",
+      "title": "Spotting the tagger"
     }
   }
 }

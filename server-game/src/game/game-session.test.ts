@@ -28,6 +28,7 @@ test('a failed queued skill is returned to its requester at the tick boundary', 
         markEliminated: () => true,
         broadcastTagged: () => undefined,
         broadcastBlinked: () => undefined,
+        broadcastSkillArea: () => undefined,
         finishGame: () => true,
         snapshotTargets: () => [],
     } as unknown as Room;
@@ -72,6 +73,7 @@ test('queued emojis keep the last request per player and apply only for living p
         markEliminated: () => true,
         broadcastTagged: () => undefined,
         broadcastBlinked: () => undefined,
+        broadcastSkillArea: () => undefined,
         finishGame: () => true,
         snapshotTargets: () => [],
     } as unknown as Room;
@@ -133,6 +135,7 @@ test('publish 사이의 timeline tile 변경을 delta와 replay에 모두 한 �
         markEliminated: () => true,
         broadcastTagged: () => undefined,
         broadcastBlinked: () => undefined,
+        broadcastSkillArea: () => undefined,
         finishGame: () => true,
         snapshotTargets: () => [{
             playerId: 1,
@@ -184,6 +187,7 @@ test('full 및 delta 뷰어가 섞여도 delta가 누적 타일 변경을 잃지
         markEliminated: () => true,
         broadcastTagged: () => undefined,
         broadcastBlinked: () => undefined,
+        broadcastSkillArea: () => undefined,
         finishGame: () => true,
         snapshotTargets: () => [
             { playerId: 1, access: 'unfiltered' as const, connection: { bufferedBytes: () => 0, sendBinary: (payload: ArrayBuffer) => fullSent.push(payload) } },
@@ -229,7 +233,7 @@ test('훈련장은 혼자 있어도 첫 tick에 끝나지 않는다', () => {
         markEliminated: () => true,
         broadcastTagged: () => undefined,
         broadcastBlinked: () => undefined,
-        broadcastSwitchAttempted: () => undefined,
+        broadcastSkillArea: () => undefined,
         finishGame: () => { finished.push('finished'); return true; },
         snapshotTargets: () => [],
     } as unknown as Room;

@@ -565,10 +565,10 @@ html[data-motion='reduced'] .room-card {
 
 .guide-lead {
   max-width: 1250px;
-  margin: 0 auto 26px;
+  margin: 0 auto 30px;
   color: var(--guide-muted);
   text-align: center;
-  font-size: 25px;
+  font-size: 29px;
   font-weight: 500;
   line-height: 1.45;
 }
@@ -607,7 +607,7 @@ html[data-motion='reduced'] .room-card {
 .guide-controls h2 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: 44px;
   font-weight: normal;
   line-height: 1.1;
 }
@@ -640,7 +640,7 @@ html[data-motion='reduced'] .room-card {
 
 .guide-demo-tabs button {
   min-height: 55px;
-  font-size: 20px;
+  font-size: 24px;
 }
 
 .guide-demo-tabs button.is-active {
@@ -700,7 +700,7 @@ html[data-motion='reduced'] .room-card {
 
 .guide-demo-copy > p:not(.guide-demo-index) {
   margin: 0 0 30px;
-  font-size: 21px;
+  font-size: 24px;
   font-weight: 500;
   line-height: 1.6;
 }
@@ -710,7 +710,7 @@ html[data-motion='reduced'] .room-card {
   min-width: 180px;
   min-height: 55px;
   padding: 0 20px;
-  font-size: 18px;
+  font-size: 22px;
 }
 
 .guide-info-grid {
@@ -736,7 +736,7 @@ html[data-motion='reduced'] .room-card {
   gap: 14px;
   align-items: start;
   margin-top: 17px;
-  font-size: 18px;
+  font-size: 24px;
   line-height: 1.45;
   counter-increment: guide-rule;
 }
@@ -768,7 +768,7 @@ html[data-motion='reduced'] .room-card {
 
 .guide-control-row h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: 22px;
   line-height: 1.25;
 }
 
@@ -784,26 +784,26 @@ html[data-motion='reduced'] .room-card {
 
 .guide-keycap {
   display: flex;
-  min-height: 42px;
+  min-height: 58px;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 9px;
   box-sizing: border-box;
-  padding: 7px 10px;
+  padding: 9px 14px;
   overflow-wrap: anywhere;
-  border: 3px solid var(--guide-gray);
+  border: 4px solid var(--guide-gray);
   border-radius: var(--guide-corner-compact);
   background: var(--guide-canvas);
   color: var(--guide-text);
   text-align: center;
-  font-size: 15px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.15;
 }
 
 .guide-keycap small {
   color: var(--guide-muted);
-  font-size: 12px;
+  font-size: 17px;
   font-weight: 700;
 }
 

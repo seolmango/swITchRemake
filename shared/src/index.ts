@@ -53,6 +53,13 @@ export {
 } from './protocol/input';
 
 export {
+    TILE_PX,
+    MOVEMENT,
+    SKILL_TUNING,
+    SPEED_DECREASE_FLOOR,
+} from './protocol/tuning';
+
+export {
     JSON_MESSAGE_VERSION,
     RoomState,
     RoomMode,
