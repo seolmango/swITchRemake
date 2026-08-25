@@ -429,7 +429,7 @@
           "body": "Teleports you in the direction you face. It crosses walls — walls along the path are ignored and only the landing spot matters. Landing inside a wall pushes you onward until you are clear of it."
         },
         "exhaust": {
-          "body": "Slows the nearest other player. Only the player you hit gets the grey effect."
+          "body": "Cast it on a fellow runner while the tagger is on you. Only they slow down, which makes them the easier target — and you gain ground while it happens. The range is short, so you have to be close."
         },
         "switch": {
           "body": "Only works near the current tagger. The runner you pick becomes the new tagger; you stay a runner."

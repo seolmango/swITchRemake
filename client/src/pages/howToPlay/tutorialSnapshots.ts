@@ -177,19 +177,38 @@ function flashPlayers(frame: number): SnapshotPlayer[] {
     return [player(1, x, lane)];
 }
 
-/** 탈진. 나란히 달리다 맞은 쪽만 실제 배율(0.6배)로 느려진다. */
+/**
+ * 탈진. 실제 경기에서 이 스킬이 쓰이는 방식 그대로 보여 준다.
+ *
+ * 러너 둘이 술래에게 쫓기는 중이고, 한 명이 **옆의 러너에게** 탈진을 걸고 도망친다.
+ * 느려진 쪽이 술래에게 잡히기 쉬운 표적이 되고, 건 쪽은 그 사이에 벌어진다.
+ *
+ * 술래에게 거는 스킬로 그리면 "추격을 늦추는 스킬"로 읽히는데, 사거리가 1.4타일이라
+ * 술래에게 걸려면 잡히기 직전까지 붙어야 한다. 이 스킬의 값어치는 **남을 나보다 느리게
+ * 만드는 것**에 있다.
+ */
 function exhaustPlayers(frame: number): SnapshotPlayer[] {
     const lane = at(0, 7).y;
-    const casterX = at(2, 7).x + walked(frame, RUN_UP_START, FRAME_COUNT, BASE_STEP);
-    const victimX = at(2, 7).x + BODY_GAP * 1.6
+    const slowed = frame >= SKILL_FRAME && frame < SKILL_FRAME + EXHAUST_FRAMES;
+
+    // 건 사람. 처음부터 끝까지 기본 속도로 달린다.
+    const casterX = at(4.6, 7).x + walked(frame, RUN_UP_START, FRAME_COUNT, BASE_STEP);
+    // 맞은 사람. 스킬 순간부터 0.6배로 떨어져 뒤처진다.
+    const victimX = at(3.4, 7).x
         + walked(frame, RUN_UP_START, SKILL_FRAME, BASE_STEP)
         + walked(frame, SKILL_FRAME, SKILL_FRAME + EXHAUST_FRAMES, EXHAUST_STEP)
         + walked(frame, SKILL_FRAME + EXHAUST_FRAMES, FRAME_COUNT, BASE_STEP);
-    const slowed = frame >= SKILL_FRAME && frame < SKILL_FRAME + EXHAUST_FRAMES;
+    // 술래. 기본 속도로 계속 쫓다가 느려진 쪽을 따라잡는다. 몸이 겹치기 직전에 멈춘다 —
+    // 실제로는 겹치기 전에 태그 판정이 난다.
+    const chaserX = Math.min(
+        at(1.8, 7).x + walked(frame, RUN_UP_START, FRAME_COUNT, BASE_STEP),
+        victimX - BODY_GAP,
+    );
+
     return [
-        // 느려진 쪽을 시전자가 따라잡되 몸이 겹치지는 않게 한다.
-        player(1, Math.min(casterX, victimX - BODY_GAP), lane),
-        player(2, victimX, lane, {
+        player(1, casterX, lane),
+        player(2, chaserX, lane, { isTagger: true }),
+        player(3, victimX, lane, {
             effects: slowed ? { [EffectType.Exhaust]: remaining(frame, SKILL_FRAME, EXHAUST_FRAMES) } : {},
         }),
     ];
@@ -264,7 +283,7 @@ const VIEWS: Record<DemoId, { col: number; row: number; cols: number; rows: numb
     tagger: { col: 3, row: 6, cols: 6, rows: 2.4 },
     dash: { col: 1.4, row: 5.6, cols: 12, rows: 3 },
     flash: { col: 3, row: 1.6, cols: 8, rows: 3.2 },
-    exhaust: { col: 1.4, row: 5.6, cols: 9, rows: 3 },
+    exhaust: { col: 1.2, row: 5.6, cols: 12.5, rows: 3.2 },
     switch: { col: 1, row: 0.6, cols: 14, rows: 7.6 },
 };
 
@@ -302,10 +321,10 @@ function eventAt(id: DemoId, frame: number): DemoEvent | undefined {
     }
     if (id === 'exhaust') {
         const from = exhaustPlayers(SKILL_FRAME)[0]!;
-        // 탈진은 실제로 맞은 사람의 색으로 그린다. 사거리도 서버와 같은 값이다.
+        // 원의 색은 맞은 사람(옆 러너)에게서 온다. 술래가 아니다.
         return {
             skillArea: {
-                playerId: 1, x: from.x, y: from.y, affectedPlayerId: 2,
+                playerId: 1, x: from.x, y: from.y, affectedPlayerId: 3,
                 rangePx: SKILL_TUNING.EXHAUST_RANGE_TILES * TILE_PX,
             },
         };
