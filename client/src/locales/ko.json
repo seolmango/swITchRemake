@@ -236,6 +236,7 @@
     "switchRate": "스위치 성공률",
     "tags": "태그",
     "level": "레벨",
+    "levelProgress": "레벨 · {{into}}/{{next}}",
     "historyKicker": "MATCH HISTORY",
     "recentMatches": "최근 경기",
     "matchesLoading": "최근 경기를 불러오는 중…",

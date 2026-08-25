@@ -5,7 +5,7 @@ import { config as loadEnv } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import { MATCH_RESULT_VERSION, type MatchResultMessage } from 'shared';
+import { MATCH_RESULT_VERSION, matchXp, type MatchResultMessage } from 'shared';
 import * as schema from '../database/schema';
 import { ResultService } from './result.service';
 
@@ -73,6 +73,8 @@ test('stores one idempotent result transaction and excludes guest stats', { skip
             { games: stats.games, wins: stats.wins, sw_try: stats.sw_try, sw_su: stats.sw_su, kill: stats.kill },
             { games: 1, wins: 1, sw_try: 4, sw_su: 3, kill: 2 },
         );
+        // XP는 결과에서 오른다. 레벨은 저장하지 않는다 — 읽을 때 XP에서 센다.
+        assert.equal(stats.xp, matchXp({ won: true, tagCount: 2, switchSuccess: 3 }));
     } finally {
         await db.delete(schema.matches).where(eq(schema.matches.matchId, matchId));
         if (userId !== null) await db.delete(schema.users).where(eq(schema.users.id, userId));

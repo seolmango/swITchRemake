@@ -9,11 +9,16 @@ import { and, desc, eq, isNotNull, lt, or } from 'drizzle-orm';
 import { SanctionService } from '../sanction/sanction.service';
 import { SessionService } from '../session/session.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { levelFromXp } from 'shared';
 import { DEFAULT_STATS, nonNegativeInteger, percentage, readStoredStats, type StoredStats } from './stored-stats';
 
 export interface UserStatsResponse {
+    /** 누적 XP에서 센 값. 저장된 값이 아니다 — `shared`의 `levelFromXp`가 유일한 정의다. */
     level: number;
     xp: number;
+    /** 이번 레벨에서 모은 XP와 다음 레벨까지 필요한 총량. 진행도를 그리는 데 쓴다. */
+    xpIntoLevel: number;
+    xpForNextLevel: number;
     games: number;
     wins: number;
     switchTry: number;
@@ -175,9 +180,13 @@ export class UserService {
         const wins = nonNegativeInteger(stored.wins);
         const switchTry = nonNegativeInteger(stored.sw_try);
         const switchSuccess = nonNegativeInteger(stored.sw_su);
+        const xp = nonNegativeInteger(stored.xp);
+        const progress = levelFromXp(xp);
         return {
-            level: nonNegativeInteger(stored.level),
-            xp: nonNegativeInteger(stored.xp),
+            level: progress.level,
+            xp,
+            xpIntoLevel: progress.xpIntoLevel,
+            xpForNextLevel: progress.xpForNextLevel,
             games,
             wins,
             switchTry,

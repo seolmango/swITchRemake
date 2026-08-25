@@ -98,16 +98,20 @@ test('stats response includes server-derived rates with one decimal precision', 
     const db = {
         select: () => ({
             from: () => ({
+                // level은 일부러 거짓말을 넣었다. 응답은 저장된 값이 아니라 xp에서 세야 한다.
                 where: async () => [{ stats: {
-                    level: 2, xp: 75, games: 3, wins: 2, sw_try: 6, sw_su: 4, kill: 9, death_order: 5,
+                    level: 99, xp: 260, games: 3, wins: 2, sw_try: 6, sw_su: 4, kill: 9, death_order: 5,
                 } }],
             }),
         }),
     };
     const service = new UserService(db as never, {} as never, {} as never, {} as never);
+    // 100(1->2) + 150(2->3) = 250을 넘겼으므로 3레벨, 이번 레벨에서 10, 다음까지 200이다.
     assert.deepEqual(await service.getStats(7), {
-        level: 2,
-        xp: 75,
+        level: 3,
+        xp: 260,
+        xpIntoLevel: 10,
+        xpForNextLevel: 200,
         games: 3,
         wins: 2,
         switchTry: 6,

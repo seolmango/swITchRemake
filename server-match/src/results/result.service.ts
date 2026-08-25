@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import {
+    matchXp,
     statsEligible,
     winnerUserIds,
     type ActorId,
@@ -134,14 +135,19 @@ export class ResultService {
 
             const winningUsers = new Set(winnerUserIds(result));
             for (const player of statsEligible(result.players)) {
+                const won = winningUsers.has(player.userId!);
+                // 레벨은 쌓지 않는다. 누적 XP의 함수라서 두 군데 적으면 곡선을 바꾸는 순간 어긋난다.
+                // 세는 것은 읽을 때 한다(shared의 levelFromXp).
+                const xpGain = matchXp({ won, tagCount: player.tagCount, switchSuccess: player.switchSuccess });
                 await tx.execute(sql`
                     UPDATE ${schema.users}
                     SET stats = stats || jsonb_build_object(
                         'games', COALESCE((stats ->> 'games')::integer, 0) + 1,
-                        'wins', COALESCE((stats ->> 'wins')::integer, 0) + ${winningUsers.has(player.userId!) ? 1 : 0},
+                        'wins', COALESCE((stats ->> 'wins')::integer, 0) + ${won ? 1 : 0},
                         'sw_try', COALESCE((stats ->> 'sw_try')::integer, 0) + ${player.switchTry},
                         'sw_su', COALESCE((stats ->> 'sw_su')::integer, 0) + ${player.switchSuccess},
-                        'kill', COALESCE((stats ->> 'kill')::integer, 0) + ${player.tagCount}
+                        'kill', COALESCE((stats ->> 'kill')::integer, 0) + ${player.tagCount},
+                        'xp', COALESCE((stats ->> 'xp')::integer, 0) + ${xpGain}
                     ), updated_at = now()
                     WHERE id = ${player.userId!}
                 `);

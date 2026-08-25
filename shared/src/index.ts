@@ -66,6 +66,14 @@ export {
 } from './protocol/mapMarkers';
 
 export {
+    PROGRESSION,
+    matchXp,
+    levelFromXp,
+    type LevelProgress,
+    type MatchXpInput,
+} from './protocol/progression';
+
+export {
     TILE_PX,
     MOVEMENT,
     SKILL_TUNING,

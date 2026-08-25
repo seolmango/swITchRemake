@@ -3,6 +3,9 @@ import { apiRequest } from './http.ts';
 export interface UserStats {
     level: number;
     xp: number;
+    /** 이번 레벨에서 모은 XP와 다음 레벨까지 필요한 총량. 레벨 옆 진행도에 쓴다. */
+    xpIntoLevel: number;
+    xpForNextLevel: number;
     games: number;
     wins: number;
     switchTry: number;

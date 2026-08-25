@@ -192,7 +192,14 @@ export const ProfilePage: React.FC = () => {
                                 <span><strong>{records.stats.winRate}%</strong><small>{t('profile.winRate')}</small></span>
                                 <span><strong>{records.stats.switchSuccessRate}%</strong><small>{t('profile.switchRate')}</small></span>
                                 <span><strong>{formatNumber(records.stats.tagCount)}</strong><small>{t('profile.tags')}</small></span>
-                                <span><strong>{formatNumber(records.stats.level)}</strong><small>{t('profile.level')}</small></span>
+                                {/* 레벨 숫자만 있으면 다음까지 얼마인지 알 수 없다. 라벨에 진행도를 같이 적는다. */}
+                                <span>
+                                    <strong>{formatNumber(records.stats.level)}</strong>
+                                    <small>{t('profile.levelProgress', {
+                                        into: formatNumber(records.stats.xpIntoLevel),
+                                        next: formatNumber(records.stats.xpForNextLevel),
+                                    })}</small>
+                                </span>
                             </div>
                         )}
                     </section>
