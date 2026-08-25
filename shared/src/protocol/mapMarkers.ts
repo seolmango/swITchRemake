@@ -30,6 +30,16 @@ export const MapMarkerKind = {
     Reset: 'reset',
     /** 훈련장 추격 구역의 역할을 바꾼다(내가 쫓는가, 쫓기는가). */
     TrainingChaseMode: 'training.chaseMode',
+
+    /**
+     * 훈련 표적이 태어나는 자리. 무엇을 하는 표적인지는 종류가 정한다.
+     *
+     * 구역 안에 있는지로 성격을 추론하지 않는다 — 맵을 조금 옮겼을 때 표적이 조용히 다른 것으로
+     * 바뀌면 맵 제작자가 원인을 찾을 수 없다.
+     */
+    TrainingDummyStill: 'training.dummy.still',
+    TrainingDummyPatrol: 'training.dummy.patrol',
+    TrainingDummyChase: 'training.dummy.chase',
 } as const;
 export type MapMarkerKind = (typeof MapMarkerKind)[keyof typeof MapMarkerKind];
 

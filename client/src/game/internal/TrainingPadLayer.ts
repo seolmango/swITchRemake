@@ -12,6 +12,8 @@ const PAD_COLOR: Record<TrainingPadKind, () => number> = {
     [TrainingPadKind.SkillFlash]: () => Palette.user[5]![1],
     [TrainingPadKind.SkillExhaust]: () => Palette.grass[2],
     [TrainingPadKind.Reset]: () => Palette.gray[2],
+    // 추격 모드는 역할을 뒤집는 자리라 술래와 같은 붉은 계열로 묶는다.
+    [TrainingPadKind.ChaseMode]: () => Palette.red[1],
 };
 
 const SKILL_TEXTURE: Partial<Record<TrainingPadKind, string>> = {

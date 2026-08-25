@@ -129,7 +129,11 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 simulationHz: NETWORK.SIMULATION_HZ,
                 rules: gameplayRules(),
                 hudGameplay: hudGameplayPayload(),
-                timing: this.#timing,
+                // 훈련장은 시작 잠금이 없다. 참가 잠금은 "다른 사람이 들어오는 중에 시작하지 마라"는
+                // 규칙인데 훈련장에는 다른 사람이 없다. 잠겨 있으면 들어가고도 5초를 기다린다.
+                timing: specification.mode === RoomMode.Training
+                    ? { ...this.#timing, startLockOnJoinMs: 0, startLockOnMapChangeMs: 0, countdownMs: 0 }
+                    : this.#timing,
                 lifecycle: this.#options.lifecycle,
                 isKnownMap: this.#options.isKnownMap,
                 getServerTick: this.#options.getServerTick,

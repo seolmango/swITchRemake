@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { RoomMode } from 'shared';
+import { RoomMode, RoomState } from 'shared';
 import { createRoom, isAlreadyAssigned, resumeRoom } from '../api/rooms.ts';
+
+/** 훈련장 전용 맵. `tools/MapBuilder/map/training.json`이 원본이다. */
+const TRAINING_MAP_ID = 'TrainingGround';
 import { RoundBox } from '../components/common/RoundBox.tsx';
 import { RoundButton } from '../components/common/RoundButton.tsx';
 import { PageLayout } from '../components/layout/PageLayout.tsx';
@@ -32,6 +35,8 @@ export const TrainingPage: React.FC = () => {
             name: t('training.roomName'),
             capacity: 1,
             mode: RoomMode.Training,
+            // 훈련장 배치(구역·패드·표적 자리)는 맵이 들고 있다. 다른 맵으로 열면 아무것도 없다.
+            mapId: TRAINING_MAP_ID,
         })
             .then(async (assignment) => {
                 const grant = isAlreadyAssigned(assignment)
@@ -47,6 +52,18 @@ export const TrainingPage: React.FC = () => {
         if (!session.lobby || session.lobby.mode === RoomMode.Training || !session.roomId) return;
         navigate(`/rooms/${encodeURIComponent(session.roomId)}/lobby`, { replace: true });
     }, [navigate, session.lobby, session.roomId]);
+
+    /**
+     * 훈련장은 로비를 거치지 않는다. 혼자 들어가는 방이라 기다릴 사람이 없다.
+     *
+     * 이미 진행 중이면 보내지 않는다 — 재접속으로 돌아온 경우에도 이 효과가 도는데, 그때 다시
+     * 시작을 누르면 서버가 BAD_STATE로 거절하고 화면에 실패 알림이 뜬다.
+     */
+    useEffect(() => {
+        if (session.lobby?.mode !== RoomMode.Training) return;
+        if (session.roomState !== RoomState.Waiting) return;
+        gameSession.send({ type: 'lobby.start', payload: {} });
+    }, [session.lobby?.mode, session.roomState]);
 
     useEffect(() => () => {
         if (gameSession.getSnapshot().lobby?.mode === RoomMode.Training) gameSession.disconnect();

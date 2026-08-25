@@ -1,4 +1,14 @@
-import { MAX_PLAYERS_PER_ROOM, SkillId, TilePhysics, TrainingPadKind, type TrainingPad } from 'shared';
+import {
+    MAP_MARKER_RADIUS_TILES,
+    MAX_PLAYERS_PER_ROOM,
+    MapMarkerKind,
+    MapZoneKind,
+    SkillId,
+    TilePhysics,
+    TrainingPadKind,
+    type MapZone,
+    type TrainingPad,
+} from 'shared';
 import { GAMEPLAY } from '../config/gameplay';
 import { msToTicks } from '../simulation/effects';
 import type { PlayerState, ResolvedInput, World, WorldMap } from '../simulation/world';
@@ -8,39 +18,54 @@ import type { RosterEntry } from '../game/snapshot-view';
 
 export const TRAINING_DUMMY_RESPAWN_MS = 3_000;
 
-/**
- * 패드 반경. 지나가다 실수로 밟히지 않을 만큼 작고, 노리고 가면 확실히 밟히는 크기다.
- * 클라이언트가 그리는 크기도 이 값이라 "밟았는데 안 밟혔다"가 생기지 않는다.
- */
-const PAD_RADIUS_TILES = 0.75;
+/** 맵 마커 종류를 패드 종류로 옮긴다. 계약 두 벌이 아니라 한 벌만 늘어나게 하는 대응표다. */
+const PAD_KIND_BY_MARKER: Readonly<Record<string, TrainingPadKind>> = {
+    [MapMarkerKind.SkillDash]: TrainingPadKind.SkillDash,
+    [MapMarkerKind.SkillFlash]: TrainingPadKind.SkillFlash,
+    [MapMarkerKind.SkillExhaust]: TrainingPadKind.SkillExhaust,
+    [MapMarkerKind.Tagger]: TrainingPadKind.Tagger,
+    [MapMarkerKind.Reset]: TrainingPadKind.Reset,
+    [MapMarkerKind.TrainingChaseMode]: TrainingPadKind.ChaseMode,
+};
 
-/**
- * 패드 배치. 맵 비율 기준이라 맵이 달라도 같은 자리에 놓인다.
- *
- * 스킬 셋을 나란히 두는 이유는 갈아 끼우면서 바로 비교해 보라는 것이다. 술래 패드는 조금 떨어뜨려
- * 놓았다 — 스킬을 고르다 실수로 술래가 되면 흐름이 끊긴다.
- */
-const PAD_ANCHORS: readonly { kind: TrainingPadKind; at: readonly [number, number] }[] = [
-    { kind: TrainingPadKind.SkillDash, at: [0.34, 0.5] },
-    { kind: TrainingPadKind.SkillFlash, at: [0.44, 0.5] },
-    { kind: TrainingPadKind.SkillExhaust, at: [0.54, 0.5] },
-    { kind: TrainingPadKind.Reset, at: [0.64, 0.5] },
-    { kind: TrainingPadKind.Tagger, at: [0.5, 0.28] },
-];
+/** 구역 안에서 표적이 돌 네 귀퉁이. 구역을 벗어나지 않는 것이 이 함수의 유일한 책임이다. */
+function patrolCourse(map: WorldMap, home: TilePoint, zone: MapZone | null): TilePoint[] {
+    if (zone === null) return [home];
+    const inset = 1;
+    const left = zone.x + inset;
+    const top = zone.y + inset;
+    const right = zone.x + zone.width - 1 - inset;
+    const bottom = zone.y + zone.height - 1 - inset;
+    if (right <= left || bottom <= top) return [home];
+    const corners: TilePoint[] = [[left, top], [right, top], [right, bottom], [left, bottom]];
+    return [home, ...corners.map((corner) => nearestWalkable(map, corner))];
+}
+
+function zoneContaining(map: WorldMap, x: number, y: number, role: DummyRole): MapZone | null {
+    const wanted = role === 'chase' ? MapZoneKind.TrainingChase : MapZoneKind.TrainingCourse;
+    return map.zones.find((zone) => zone.kind === wanted
+        && x >= zone.x && x < zone.x + zone.width
+        && y >= zone.y && y < zone.y + zone.height) ?? null;
+}
+
+function insideZone(zone: MapZone, tileSize: number, x: number, y: number): boolean {
+    return x >= zone.x * tileSize && x < (zone.x + zone.width) * tileSize
+        && y >= zone.y * tileSize && y < (zone.y + zone.height) * tileSize;
+}
 
 type Point = readonly [x: number, y: number];
 type TilePoint = readonly [x: number, y: number];
 
-interface CourseDefinition {
-    readonly nickname: string;
-    readonly kind: 'stationary' | 'shuttle' | 'circuit';
-    readonly anchors: readonly Point[];
-}
+type DummyRole = 'still' | 'patrol' | 'chase';
 
 interface DummyState {
     readonly player: PlayerState;
     readonly course: readonly TilePoint[];
-    readonly kind: CourseDefinition['kind'];
+    readonly kind: DummyRole;
+    /** 이 표적이 사는 구역. 없으면 맵 전체가 아니라 **제자리**다 — 표적은 구역 밖으로 안 나간다. */
+    readonly zone: MapZone | null;
+    /** 태어난 자리. 구역을 떠났거나 초기화될 때 여기로 돌아온다. */
+    readonly home: TilePoint;
     targetIndex: number;
     respawnAtTick: number | null;
     /**
@@ -59,16 +84,6 @@ interface RouteResult {
     readonly tiles: readonly TilePoint[];
     readonly reachedTarget: boolean;
 }
-
-const COURSE_DEFINITIONS: readonly CourseDefinition[] = [
-    { nickname: '[더미] 고정', kind: 'stationary', anchors: [[0.50, 0.38]] },
-    { nickname: '[더미] 왕복', kind: 'shuttle', anchors: [[0.25, 0.68], [0.75, 0.68]] },
-    {
-        nickname: '[더미] 순환',
-        kind: 'circuit',
-        anchors: [[0.22, 0.22], [0.78, 0.22], [0.78, 0.78], [0.22, 0.78]],
-    },
-];
 
 const CARDINAL_DIRECTIONS: readonly TilePoint[] = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
@@ -151,11 +166,6 @@ function routeToward(map: WorldMap, from: TilePoint, target: TilePoint): RouteRe
     return { tiles: reversed.reverse(), reachedTarget: bestDistance === 0 };
 }
 
-function resolveCourse(map: WorldMap, definition: CourseDefinition): TilePoint[] {
-    const anchors = definition.anchors.map((point) => nearestWalkable(map, desiredTile(map, point)));
-    return definition.kind === 'stationary' ? [anchors[0]!] : anchors;
-}
-
 function makeDummy(playerId: number, colorIndex: number, map: WorldMap, start: TilePoint): PlayerState {
     const [x, y] = tileCenter(map, start);
     return {
@@ -181,6 +191,27 @@ function makeDummy(playerId: number, colorIndex: number, map: WorldMap, start: T
 }
 
 /** 훈련 입력과 부활만 맡는다. 로비 명단이나 연결 수명 주기에는 참여하지 않는다. */
+/** 추격 구역의 역할. 마커를 밟으면 뒤집힌다. */
+export const ChaseMode = {
+    /** 내가 술래다. 표적을 쫓아 잡는 연습. */
+    PlayerHunts: 'hunt',
+    /** 표적이 술래다. 쫓기면서 도망치고 스위치로 떠넘기는 연습. */
+    PlayerFlees: 'flee',
+} as const;
+export type ChaseMode = (typeof ChaseMode)[keyof typeof ChaseMode];
+
+const DUMMY_ROLE_BY_MARKER: Readonly<Record<string, DummyRole>> = {
+    [MapMarkerKind.TrainingDummyStill]: 'still',
+    [MapMarkerKind.TrainingDummyPatrol]: 'patrol',
+    [MapMarkerKind.TrainingDummyChase]: 'chase',
+};
+
+const ROLE_NICKNAME: Readonly<Record<DummyRole, string>> = {
+    still: '[표적] 정지',
+    patrol: '[표적] 순찰',
+    chase: '[표적] 추격',
+};
+
 export class TrainingGround {
     readonly players: readonly PlayerState[];
     readonly roster: readonly RosterEntry[];
@@ -189,23 +220,35 @@ export class TrainingGround {
     readonly pads: readonly TrainingPad[];
     /** 지금 밟고 있는 패드. 서 있는 동안 매 tick 발동하면 스킬이 계속 바뀐다. */
     readonly #standingOn = new Map<number, TrainingPadKind>();
+    #chaseMode: ChaseMode = ChaseMode.PlayerHunts;
+    /** 추격 구역이 지금 깨어 있는가. 사람이 들어와야 표적이 움직인다. */
+    #chaseActive = false;
 
     public constructor(map: WorldMap, occupiedPlayerIds: readonly number[]) {
         const availableIds = Array.from({ length: MAX_PLAYERS_PER_ROOM }, (_, index) => index + 1)
             .filter((playerId) => !occupiedPlayerIds.includes(playerId));
 
-        // 세 개면 혼자 연습할 때 화면을 과하게 채우지 않으면서 고정 사거리, 1차원 추적, 2차원 회전을
-        // 각각 한 표적으로 익힐 수 있다. 훈련장 정원이 1명이므로 프로토콜의 8개 id 안에도 여유가 있다.
-        if (availableIds.length < COURSE_DEFINITIONS.length) throw new Error('not enough player ids for training dummies');
+        // 표적 자리는 **맵이 정한다.** 구역 안에 있는지로 성격을 추론하지 않는다 —
+        // 맵을 조금 옮겼을 때 표적이 조용히 다른 것으로 바뀌면 원인을 찾을 수 없다.
+        // playerId는 1..8이고(시야 bitmask가 1바이트다) 사람이 쓰는 자리를 뺀 만큼만 남는다.
+        // 맵이 더 요구하면 **앞에서부터 자른다.** 여기서 던지면 맵 하나 때문에 서버가 죽는다.
+        const spawns = map.markers
+            .filter((marker) => marker.kind in DUMMY_ROLE_BY_MARKER)
+            .slice(0, availableIds.length);
 
-        const states = COURSE_DEFINITIONS.map((definition, index): DummyState => {
-            const course = resolveCourse(map, definition);
+        const states = spawns.map((marker, index): DummyState => {
+            const role = DUMMY_ROLE_BY_MARKER[marker.kind]!;
+            const home: TilePoint = [marker.x, marker.y];
+            const zone = zoneContaining(map, marker.x, marker.y, role);
             const playerId = availableIds[index]!;
             return {
-                player: makeDummy(playerId, playerId - 1, map, course[0]!),
-                course,
-                kind: definition.kind,
-                targetIndex: definition.kind === 'stationary' ? 0 : 1,
+                player: makeDummy(playerId, playerId - 1, map, home),
+                course: role === 'still' ? [home] : patrolCourse(map, home, zone),
+                kind: role,
+                zone,
+                home,
+                // 구역이 좁으면 코스가 집 한 곳뿐이다. 그때 1을 넣으면 없는 목표를 가리킨다.
+                targetIndex: role === 'still' ? 0 : (patrolCourse(map, home, zone).length > 1 ? 1 : 0),
                 respawnAtTick: null,
                 cachedRoute: null,
                 cachedFromKey: '',
@@ -215,16 +258,23 @@ export class TrainingGround {
 
         this.#states = states;
         this.players = states.map((state) => state.player);
-        this.roster = states.map((state, index) => ({
+        this.roster = states.map((state) => ({
             playerId: state.player.playerId,
-            nickname: COURSE_DEFINITIONS[index]!.nickname,
+            nickname: ROLE_NICKNAME[state.kind],
         }));
         this.#dummyIds = new Set(this.players.map((player) => player.playerId));
-        const radius = PAD_RADIUS_TILES * map.tileSize;
-        this.pads = PAD_ANCHORS.map(({ kind, at }) => {
-            const [x, y] = tileCenter(map, nearestWalkable(map, desiredTile(map, at)));
-            return { kind, x, y, radius };
-        });
+
+        const radius = MAP_MARKER_RADIUS_TILES * map.tileSize;
+        this.pads = map.markers
+            .filter((marker) => marker.kind in PAD_KIND_BY_MARKER)
+            .map((marker) => {
+                const [x, y] = tileCenter(map, [marker.x, marker.y]);
+                return { kind: PAD_KIND_BY_MARKER[marker.kind]!, x, y, radius };
+            });
+    }
+
+    public get chaseMode(): ChaseMode {
+        return this.#chaseMode;
     }
 
     public isDummy(playerId: number): boolean {
@@ -233,11 +283,109 @@ export class TrainingGround {
 
     public resolveInputs(world: World): ResolvedInput[] {
         this.#respawnDue(world);
+        this.#updateChaseZone(world);
         return this.#states.flatMap((state) => {
             if (!state.player.alive) return [];
-            if (state.kind === 'stationary') return [this.#input(state.player.playerId, 0, 0)];
+            if (state.kind === 'still') return [this.#input(state.player.playerId, 0, 0)];
+            // 추격 표적은 사람이 구역에 들어오기 전까지 가만히 있는다. 한 화면에서 모든 것이
+            // 동시에 움직이면 무엇을 보고 있는지 알 수 없다.
+            if (state.kind === 'chase' && !this.#chaseActive) return [this.#input(state.player.playerId, 0, 0)];
+            if (state.kind === 'chase' && state.player.isTagger) return [this.#hunt(world, state)];
             return [this.#follow(world, state)];
         });
+    }
+
+    /**
+     * 추격 구역의 깨어남과 역할 배정.
+     *
+     * 사람이 구역 안에 있으면 깨어나고, 나가면 표적이 제자리로 돌아가 다시 잠든다. 연습을 중간에
+     * 그만두고 나왔을 때 표적이 구역 밖까지 따라 나오면 다른 연습을 할 수가 없다.
+     */
+    #updateChaseZone(world: World): void {
+        const zone = this.#states.find((state) => state.kind === 'chase')?.zone ?? null;
+        if (zone === null) return;
+        const humans = world.players.filter((player) => player.alive && !this.isDummy(player.playerId));
+        const inside = humans.filter((player) => insideZone(zone, world.map.tileSize, player.x, player.y));
+
+        if (inside.length === 0) {
+            if (this.#chaseActive) this.#resetChase(world);
+            return;
+        }
+        if (this.#chaseActive) {
+            // 사람이 스위치로 술래를 넘겼거나 잡혔다. 두 경우 다 연습 한 판이 끝난 것이라 되돌린다.
+            const expectedTagger = this.#chaseMode === ChaseMode.PlayerFlees;
+            const dummyIsTagger = this.#states.some((state) => state.kind === 'chase' && state.player.isTagger);
+            if (expectedTagger !== dummyIsTagger) this.#resetChase(world);
+            return;
+        }
+
+        this.#chaseActive = true;
+        if (this.#chaseMode === ChaseMode.PlayerHunts) {
+            // 내가 술래다. 표적은 코스를 돌고 나는 쫓는다.
+            for (const player of world.players) player.isTagger = false;
+            const self = inside[0]!;
+            self.isTagger = true;
+            grantTaggerFrenzy(world, self);
+        } else {
+            // 표적이 술래다. 가장 가까운 것 하나만 술래로 만든다 — 셋이 동시에 달려들면 연습이 아니다.
+            const chasers = this.#states.filter((state) => state.kind === 'chase' && state.player.alive);
+            const self = inside[0]!;
+            let nearest = chasers[0] ?? null;
+            let best = Infinity;
+            for (const candidate of chasers) {
+                const distance = Math.hypot(candidate.player.x - self.x, candidate.player.y - self.y);
+                if (distance < best) { best = distance; nearest = candidate; }
+            }
+            for (const player of world.players) player.isTagger = false;
+            if (nearest !== null) {
+                nearest.player.isTagger = true;
+                grantTaggerFrenzy(world, nearest.player);
+            }
+        }
+        world.taggerChangedAtTick = world.tick;
+    }
+
+    /** 표적을 집으로 돌려보내고 술래 역할을 지운다. */
+    #resetChase(world: World): void {
+        this.#chaseActive = false;
+        for (const state of this.#states) {
+            if (state.kind !== 'chase') continue;
+            state.player.isTagger = false;
+            this.#sendHome(world, state);
+        }
+        world.taggerChangedAtTick = world.tick;
+    }
+
+    #sendHome(world: World, state: DummyState): void {
+        const [x, y] = tileCenter(world.map, state.home);
+        state.player.x = x;
+        state.player.y = y;
+        state.player.vx = 0;
+        state.player.vy = 0;
+        state.player.alive = true;
+        state.player.stats.eliminatedAtTick = null;
+        state.targetIndex = state.course.length > 1 ? 1 : 0;
+        state.cachedRoute = null;
+        state.respawnAtTick = null;
+        for (const key of Object.keys(state.player.effects)) {
+            delete state.player.effects[key as keyof typeof state.player.effects];
+        }
+    }
+
+    /**
+     * 술래가 된 표적의 추격. **직진이다** — 벽을 돌아가지 않는다.
+     *
+     * 길찾기로 쫓게 만들면 사람에 가까워지지만 그만큼 "봇"이 된다. 지금은 쫓긴다는 감각을 주는 것이
+     * 목적이고, 벽에 걸려 도는 것도 연습 대상이다. 게임이 안정되면 고도화한다(사용자 결정).
+     */
+    #hunt(world: World, state: DummyState): ResolvedInput {
+        const target = world.players.find((player) => player.alive && !this.isDummy(player.playerId));
+        if (target === undefined) return this.#input(state.player.playerId, 0, 0);
+        const dx = target.x - state.player.x;
+        const dy = target.y - state.player.y;
+        const length = Math.hypot(dx, dy);
+        if (length === 0) return this.#input(state.player.playerId, 0, 0);
+        return this.#input(state.player.playerId, dx / length, dy / length);
     }
 
     /**
@@ -279,6 +427,13 @@ export class TrainingGround {
                 world.taggerChangedAtTick = world.tick;
                 break;
             }
+            case TrainingPadKind.ChaseMode:
+                // 구역 밖에서만 밟히는 자리에 둔다. 연습 중에 역할이 뒤집히면 무엇을 하던 중인지 잃는다.
+                this.#chaseMode = this.#chaseMode === ChaseMode.PlayerHunts
+                    ? ChaseMode.PlayerFlees
+                    : ChaseMode.PlayerHunts;
+                this.#resetChase(world);
+                break;
             case TrainingPadKind.Reset:
                 // 쿨타임과 효과를 지운다. 같은 것을 반복해서 시험하려면 기다릴 필요가 없어야 한다.
                 for (const key of Object.keys(player.cooldowns)) delete player.cooldowns[key];
@@ -385,7 +540,7 @@ export class TrainingGround {
             state.player.cooldowns = {};
             state.player.emoji = null;
             state.player.stats.eliminatedAtTick = null;
-            state.targetIndex = state.kind === 'stationary' ? 0 : 1;
+            state.targetIndex = state.kind === 'still' ? 0 : 1;
             state.respawnAtTick = null;
         }
     }

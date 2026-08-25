@@ -4,7 +4,7 @@
  * 방은 world를 모르고 시뮬레이션은 방을 모른다. 둘을 아는 유일한 곳이 이 파일이다.
  */
 
-import { RoomMode, type MatchResultMessage, type TrainingPad, type ViolationSignal } from 'shared';
+import { RoomMode, TilePhysics, type MatchResultMessage, type TrainingPad, type ViolationSignal } from 'shared';
 import { GAMEPLAY } from '../config/gameplay';
 import { instantiateMap, type ServerMapBundle } from '../maps/map-loader';
 import { NullReplayRecorder, type ReplayRecorder } from '../replay/recorder';
@@ -29,6 +29,29 @@ export interface GameLifecycleOptions {
     readonly makeSeed?: (snapshot: RoomStartSnapshot) => number;
     /** 경기마다 새 레코더가 필요하다 — 인스턴스를 공유하면 두 경기가 한 파일에 섞인다. */
     readonly replayRecorderFactory?: () => ReplayRecorder;
+}
+
+/** 중앙에서 나선으로 훑어 처음 나오는 바닥 타일의 중심. 못 찾으면 중앙을 그대로 준다. */
+function nearestFloorToCenter(
+    initialMap: readonly (readonly TilePhysics[])[] | undefined,
+    cols: number,
+    tileSize: number,
+): { x: number; y: number } {
+    const center = Math.floor(cols / 2);
+    const middle = { x: center * tileSize + tileSize / 2, y: center * tileSize + tileSize / 2 };
+    if (initialMap === undefined) return middle;
+    for (let radius = 0; radius < cols; radius += 1) {
+        for (let dy = -radius; dy <= radius; dy += 1) {
+            for (let dx = -radius; dx <= radius; dx += 1) {
+                if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+                const tx = center + dx;
+                const ty = center + dy;
+                if (initialMap[ty]?.[tx] === undefined || initialMap[ty][tx] === TilePhysics.Wall) continue;
+                return { x: tx * tileSize + tileSize / 2, y: ty * tileSize + tileSize / 2 };
+            }
+        }
+    }
+    return middle;
 }
 
 export class GameLifecycle implements RoomLifecyclePort {
@@ -60,12 +83,20 @@ export class GameLifecycle implements RoomLifecyclePort {
 
         const world = createWorld({ map: trainingMap, players, seed });
 
-        // 술래는 world의 PRNG로 고른다. Math.random을 쓰면 리플레이가 같은 경기를 재현하지 못한다.
-        const taggerIndex = world.nextRandomInt(players.length);
-        const tagger = players[taggerIndex] ?? players[0];
-        if (tagger === undefined) throw new Error('cannot start a game with no players');
-        tagger.isTagger = true;
-        grantTaggerFrenzy(world, tagger);
+        // 훈련장은 **아무도 술래가 아닌 상태**로 시작한다. 술래는 패드를 밟아서 되는 것이고,
+        // 들어가자마자 술래가 되어 있으면 러너 연습을 하려던 사람이 영문을 모른다.
+        // 표적이 술래로 뽑히는 것도 막는다.
+        const tagger = snapshot.mode === RoomMode.Training
+            ? null
+            : players[world.nextRandomInt(players.length)] ?? players[0];
+        if (snapshot.mode !== RoomMode.Training && tagger === undefined) {
+            throw new Error('cannot start a game with no players');
+        }
+        if (tagger != null) {
+            // 술래는 world의 PRNG로 고른다. Math.random을 쓰면 리플레이가 같은 경기를 재현하지 못한다.
+            tagger.isTagger = true;
+            grantTaggerFrenzy(world, tagger);
+        }
 
         const roster: RosterEntry[] = snapshot.players.map((player) => ({
             playerId: player.playerId,
@@ -105,7 +136,7 @@ export class GameLifecycle implements RoomLifecyclePort {
         this.#sessions.set(snapshot.roomId, session);
         this.#options.scheduler.add(session);
 
-        return { startTick: 0, taggerId: tagger.playerId };
+        return { startTick: 0, taggerId: tagger?.playerId ?? 0 };
     }
 
     public connectionChanged(roomId: string, playerId: number, connected: boolean): void {
@@ -186,16 +217,21 @@ export class GameLifecycle implements RoomLifecyclePort {
         const players = [...snapshot.players].sort((a, b) => a.playerId - b.playerId);
         const ids = players.map((player) => player.playerId);
         const starts = map?.startPositions[ids.length] ?? [];
-        // 인원수에 맞는 시작 위치가 없으면 맵 중앙 근처에 둔다. 겹치면 첫 tick 밀어내기가 푼다.
-        const fallback = (cols * tileSize) / 2;
+        // 인원수에 맞는 시작 위치가 없을 때의 자리. MapBuilder는 3인 이상만 만들기 때문에
+        // 훈련장(1인)이 여기로 온다.
+        //
+        // 맵 중앙을 그대로 쓰면 안 된다 — 중앙이 벽인 맵이 있고(훈련장은 가운데가 칸막이다)
+        // 벽 속에서 시작하면 첫 tick에 밀려나며 어디로 튈지 모른다. 중앙에서 바깥으로 훑어
+        // 처음 나오는 바닥을 쓴다.
+        const fallback = nearestFloorToCenter(map?.initialMap, cols, tileSize);
 
         return players.map((startPlayer, index) => {
             const playerId = startPlayer.playerId;
             const point = starts[index];
             return {
                 playerId,
-                x: point?.[0] ?? fallback,
-                y: point?.[1] ?? fallback,
+                x: point?.[0] ?? fallback.x,
+                y: point?.[1] ?? fallback.y,
                 vx: 0,
                 vy: 0,
                 facingX: 0,

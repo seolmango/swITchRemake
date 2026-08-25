@@ -289,6 +289,8 @@ export const TrainingPadKind = {
     SkillExhaust: 'skill.exhaust',
     /** 쿨타임과 효과를 모두 지운다. 같은 것을 반복해서 시험하려면 필요하다. */
     Reset: 'reset',
+    /** 추격 구역의 역할을 바꾼다 — 내가 쫓는가, 쫓기는가. */
+    ChaseMode: 'chaseMode',
 } as const;
 export type TrainingPadKind = (typeof TrainingPadKind)[keyof typeof TrainingPadKind];
 

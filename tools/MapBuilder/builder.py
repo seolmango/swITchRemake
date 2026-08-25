@@ -15,6 +15,9 @@ MAP_MARKER_KINDS = frozenset({
     'tagger',
     'reset',
     'training.chaseMode',
+    'training.dummy.still',
+    'training.dummy.patrol',
+    'training.dummy.chase',
 })
 MAP_ZONE_KINDS = frozenset({
     'training.course',
@@ -218,6 +221,14 @@ for i, map_file in enumerate(map_files):
             crt_map[y].append(data[y][x][0][1])
     initial_map = copy.deepcopy(crt_map)
     markers, zones = validate_map_layers(map_info, map_file, initial_map, tile_store)
+    # barrier_speed가 0이면 아래 루프의 barrier_index가 영원히 늘지 않는다. 빌드가 멈춘 것처럼
+    # 보이기만 하고 아무 메시지도 안 나오므로, 원인을 찾는 데 시간이 걸린다. 여기서 끊는다.
+    if barrier_speed <= 0:
+        raise ValueError(
+            f"map {map_info.get('name', map_file.stem)} ({map_file.name}) barrier must be positive; "
+            f"got {barrier_speed}. 자기장을 멈추려면 맵이 아니라 방 모드에서 끈다."
+        )
+
     timeline = {}
     while barrier_index < endpoint:
         crt_tick += 1

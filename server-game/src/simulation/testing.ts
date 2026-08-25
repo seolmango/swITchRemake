@@ -5,7 +5,7 @@
  * 돌리는 것만으로 게임 규칙 전체를 검증할 수 있다. 서버를 띄울 필요가 없다.
  */
 
-import { TilePhysics } from 'shared';
+import { TilePhysics, type MapMarker, type MapZone } from 'shared';
 import { GAMEPLAY } from '../config/gameplay';
 import { SkillId } from './skills';
 import { createWorld, emptyStats, type MapTimeline, type PlayerState, type World, type WorldMap } from './world';
@@ -17,7 +17,10 @@ export const TEST_TILE_SIZE = 256;
  *
  *   `.` 바닥 · `#` 벽 · `b` 수풀 · `g` 연막
  */
-export function mapFromRows(rows: readonly string[], options: { barrierSpeed?: number; timeline?: MapTimeline } = {}): WorldMap {
+export function mapFromRows(
+    rows: readonly string[],
+    options: { barrierSpeed?: number; timeline?: MapTimeline; markers?: MapMarker[]; zones?: MapZone[] } = {},
+): WorldMap {
     const tiles: TilePhysics[][] = rows.map((row) =>
         [...row].map((ch) => {
             switch (ch) {
@@ -36,6 +39,8 @@ export function mapFromRows(rows: readonly string[], options: { barrierSpeed?: n
         tiles,
         barrierSpeed: options.barrierSpeed ?? 0,
         timeline: options.timeline ?? {},
+        markers: options.markers ?? [],
+        zones: options.zones ?? [],
     };
 }
 

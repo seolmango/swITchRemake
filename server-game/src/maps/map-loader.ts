@@ -268,5 +268,7 @@ export function instantiateMap(bundle: ServerMapBundle, mapId: string) {
         tiles: map.initialMap.map((row) => [...row]),
         barrierSpeed: map.barrierSpeed,
         timeline: map.timeline,
+        markers: map.markers,
+        zones: map.zones,
     };
 }

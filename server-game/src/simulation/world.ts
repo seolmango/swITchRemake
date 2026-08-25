@@ -11,7 +11,7 @@
  * 신호다. 필요한 값을 `stepWorld`의 입력으로 받아오는 쪽이 맞다.
  */
 
-import type { EffectType, SkillRejection, TilePhysics, VisibilityActor, VisibilityWorld } from 'shared';
+import type { EffectType, MapMarker, MapZone, SkillRejection, TilePhysics, VisibilityActor, VisibilityWorld } from 'shared';
 import type { SkillId } from './skills';
 import { NETWORK } from '../config/network';
 
@@ -86,6 +86,12 @@ export interface WorldMap {
     /** tick당 자기장 inset 증가량(px). inset = tick * barrierSpeed로 O(1) 계산한다. */
     barrierSpeed: number;
     timeline: MapTimeline;
+    /**
+     * 밟으면 무슨 일이 일어나는 자리와 사각형 구역. **시뮬레이션은 이 값을 읽지 않는다** —
+     * 물리적 실체가 없기 때문이다. 훈련장처럼 바깥에서 규칙을 얹는 쪽이 쓴다.
+     */
+    markers: readonly MapMarker[];
+    zones: readonly MapZone[];
 }
 
 export interface World {

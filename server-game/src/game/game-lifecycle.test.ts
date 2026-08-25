@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { decodeSnapshot, MAX_PLAYERS_PER_ROOM, SkillId, TilePhysics, RoomMode } from 'shared';
+import { decodeSnapshot, MAX_PLAYERS_PER_ROOM, SkillId, TilePhysics, RoomMode , MapMarkerKind, MapZoneKind } from 'shared';
 import { EMOJI_DISPLAY_MS } from '../config/gameplay';
 import type { ServerMapBundle } from '../maps/map-loader';
 import type { Room, RoomStartSnapshot } from '../rooms/room';
@@ -24,8 +24,16 @@ const bundle: ServerMapBundle = {
             startPositions: {
                 3: [[384, 384], [640, 384], [896, 384]],
             },
-        markers: [],
-        zones: [],
+            // 표적 자리는 맵이 정한다. 훈련 테스트가 실제와 같은 경로를 타려면 마커가 있어야 한다.
+            markers: [
+                { kind: MapMarkerKind.TrainingDummyStill, x: 1, y: 1 },
+                { kind: MapMarkerKind.TrainingDummyPatrol, x: 3, y: 1 },
+                { kind: MapMarkerKind.TrainingDummyChase, x: 1, y: 3 },
+            ],
+            zones: [
+                { kind: MapZoneKind.TrainingCourse, x: 2, y: 0, width: 3, height: 3 },
+                { kind: MapZoneKind.TrainingChase, x: 0, y: 3, width: 5, height: 2 },
+            ],
         },
     },
 };
@@ -170,7 +178,7 @@ test('훈련장에만 이름이 붙은 더미가 생기며 로비 참가자로 �
     trainingSession.publish(trainingSession.step()!);
     assert.deepEqual(
         decodeSnapshot(sent[0]!).roster?.map((entry) => entry.nickname),
-        ['연습생', '[더미] 고정', '[더미] 왕복', '[더미] 순환'],
+        ['연습생', '[표적] 정지', '[표적] 순찰', '[표적] 추격'],
     );
     for (const dummy of trainingSession.world.players.slice(1)) dummy.alive = false;
     assert.notEqual(trainingSession.step(), null);

@@ -36,6 +36,8 @@ export interface CreateRoomRequest {
     password?: string;
     capacity?: number;
     mode?: RoomMode;
+    /** 생략하면 서버가 고른다. 훈련장처럼 배치가 맵에 들어 있는 경우에는 반드시 지정한다. */
+    mapId?: string;
 }
 
 export const createRoom = (body: CreateRoomRequest) => apiRequest<RoomAssignment>('/rooms', { method: 'POST', body });
