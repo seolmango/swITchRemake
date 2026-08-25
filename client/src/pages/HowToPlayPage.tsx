@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { RoundButton } from '../components/common/RoundButton.tsx';
 import { PageLayout } from '../components/layout/PageLayout.tsx';
 import { HUD_METRICS } from '../game/hud/hudTheme.ts';
 import { SKILL_TUNING } from 'shared';
@@ -60,6 +62,7 @@ function usePrefersReducedMotion(): boolean {
 
 export const HowToPlayPage: React.FC = () => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const theme = useSettingsStore((state) => state.theme);
     const keyBindings = useSettingsStore((state) => state.keyBindings);
     const motionLevel = useSettingsStore((state) => state.motionLevel);
@@ -116,6 +119,16 @@ export const HowToPlayPage: React.FC = () => {
                 <p className="guide-lead">{t('guide.intro')}</p>
 
                 <div className="guide-info-grid">
+                    <section className="guide-rules" aria-labelledby="guide-rules-heading">
+                        <p className="guide-eyebrow">{t('guide.rules.eyebrow')}</p>
+                        <h2 id="guide-rules-heading">{t('guide.rules.title')}</h2>
+                        <ol>
+                            {(['tag', 'storm', 'switch', 'winners'] as const).map((rule) => (
+                                <li key={rule}><span>{t(`guide.rules.${rule}`)}</span></li>
+                            ))}
+                        </ol>
+                    </section>
+
                     <section className="guide-controls" aria-labelledby="guide-controls-heading">
                         <p className="guide-eyebrow">{t('guide.controls.eyebrow')}</p>
                         <h2 id="guide-controls-heading">{t('guide.controls.title')}</h2>
@@ -159,17 +172,6 @@ export const HowToPlayPage: React.FC = () => {
                             </div>
                         </div>
                     </section>
-
-                    <section className="guide-rules" aria-labelledby="guide-rules-heading">
-                        <p className="guide-eyebrow">{t('guide.rules.eyebrow')}</p>
-                        <h2 id="guide-rules-heading">{t('guide.rules.title')}</h2>
-                        <ol>
-                            {(['tag', 'storm', 'switch', 'winners'] as const).map((rule) => (
-                                <li key={rule}><span>{t(`guide.rules.${rule}`)}</span></li>
-                            ))}
-                        </ol>
-                    </section>
-
                 </div>
 
                 <section className="guide-demo-section" aria-labelledby="guide-tagger-heading">
@@ -247,6 +249,22 @@ export const HowToPlayPage: React.FC = () => {
                     </div>
                 </section>
 
+                {/*
+                  * 훈련장 라우트가 아직 없어서 막아 뒀다. 화면이 붙으면 `disabled`만 지우면 된다 —
+                  * 핸들러는 그때를 위해 미리 연결해 뒀다.
+                  */}
+                <div className="guide-training">
+                    <RoundButton
+                        width={600}
+                        height={120}
+                        type={0}
+                        content={t('guide.training.button')}
+                        ariaLabel={`${t('guide.training.button')}, ${t('guide.training.status')}`}
+                        disabled
+                        onClick={() => navigate('/training')}
+                    />
+                    <p>{t('guide.training.status')}</p>
+                </div>
             </div>
         </PageLayout>
     );

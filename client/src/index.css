@@ -623,7 +623,7 @@ html[data-motion='reduced'] .room-card {
 
 .guide-demo-tabs {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--guide-gap);
   margin-bottom: 18px;
 }
@@ -715,15 +715,18 @@ html[data-motion='reduced'] .room-card {
 
 .guide-info-grid {
   display: grid;
-  grid-template-columns: minmax(430px, 0.8fr) minmax(0, 1.7fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
-  margin-top: 24px;
+  margin-bottom: 24px;
 }
 
 .guide-rules,
 .guide-controls { padding: 28px; }
 
 .guide-rules ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 42px;
   margin: 24px 0 0;
   padding: 0;
   counter-reset: guide-rule;
@@ -759,23 +762,23 @@ html[data-motion='reduced'] .room-card {
 
 .guide-control-row {
   display: grid;
-  grid-template-columns: 130px 1fr;
-  gap: 16px;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 24px;
   align-items: center;
-  padding: 15px 0;
+  padding: 20px 0;
   border-top: 2px solid var(--guide-panel-border);
 }
 
 .guide-control-row h3 {
   margin: 0;
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1.25;
 }
 
 .guide-key-list {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 9px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .guide-key-list-move { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -809,6 +812,22 @@ html[data-motion='reduced'] .room-card {
 
 .guide-demo-tabs button:hover,
 .guide-replay:hover { background: var(--guide-blue-soft); }
+
+.guide-demo-section + .guide-demo-section { margin-top: 24px; }
+
+.guide-training {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 36px 0 12px;
+}
+
+.guide-training p {
+  margin: 0;
+  color: var(--guide-muted);
+  font-size: var(--guide-body-font);
+  font-weight: 700;
+}
 
 .profile-panel {
   position: absolute;

@@ -462,6 +462,10 @@
         "right": "Right"
       }
     },
+    "training": {
+      "button": "Training Ground",
+      "status": "Coming soon"
+    },
     "tagger": {
       "eyebrow": "The tagger",
       "title": "Spotting the tagger",

@@ -462,6 +462,10 @@
         "right": "오른쪽"
       }
     },
+    "training": {
+      "button": "훈련장",
+      "status": "준비 중"
+    },
     "tagger": {
       "eyebrow": "술래",
       "title": "술래 알아보기",
