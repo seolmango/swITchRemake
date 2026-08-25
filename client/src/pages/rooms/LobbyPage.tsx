@@ -118,7 +118,14 @@ export const LobbyPage: React.FC = () => {
                 // 로비의 lobby.setMap은 Room.setMap의 isKnownMap()을 거치므로 `random`을 넣으면
                 // INVALID_PAYLOAD로 거부된다. 방이 이미 있는 시점에 "랜덤"은 방이 가질 수 있는
                 // 상태가 아니다 — 다시 뽑는 것은 별개 기능이다.
-                if (active) setMapIds(Object.keys(bundle.maps));
+                //
+                // 훈련장 맵은 목록에서 뺀다. 고를 수 있게 두면 서버가 INVALID_PAYLOAD로 거부하는
+                // 것을 사용자는 "버튼이 안 먹는다"로 읽는다.
+                if (active) {
+                    setMapIds(Object.entries(bundle.maps)
+                        .filter(([, map]) => map.training_only !== true)
+                        .map(([id]) => id));
+                }
             })
             .catch(() => {
                 if (active) setMapIds(null);

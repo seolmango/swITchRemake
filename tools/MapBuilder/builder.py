@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-MAP_BUNDLE_SCHEMA_VERSION = 2
+MAP_BUNDLE_SCHEMA_VERSION = 3
 
 MAP_MARKER_KINDS = frozenset({
     'skill.dash',
@@ -310,6 +310,10 @@ for i, map_file in enumerate(map_files):
     map_store.append({
         "name": map_info["name"],
         "barrier_speed": barrier_speed,
+        # 훈련장 맵. 경기 방의 맵 목록과 'random' 추첨에서 빠진다.
+        # 맵 안에 표적 마커가 있는지로 추론하지 않는다 — 인게임 맵에도 특수 타일이 들어올
+        # 예정이라, 마커의 존재가 곧 훈련장을 뜻하지 않게 된다.
+        "training_only": bool(map_info.get("training", False)),
         "size": map_info["size"],
         "initial_map": initial_map,
         "timeline": timeline,
@@ -365,6 +369,7 @@ if args.task == "build":
 
         server_maps[m_name] = {
             "size": m_size, "barrier_speed": b_speed,
+            "training_only": temp_map["training_only"],
             "initial_map": srv_init_map, "timeline": srv_timeline,
             "start_pos": temp_map["start_pos"],
             "markers": temp_map["markers"], "zones": temp_map["zones"],

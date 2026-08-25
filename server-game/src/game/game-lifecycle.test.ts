@@ -19,6 +19,7 @@ const bundle: ServerMapBundle = {
             mapId: 'map',
             size: 5,
             barrierSpeed: 1,
+            trainingOnly: false,
             initialMap: Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => TilePhysics.Floor)),
             timeline: {},
             startPositions: {

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import {
     MAP_MARKER_KINDS,
     MAP_ZONE_KINDS,
+    RoomMode,
     TilePhysics,
     type MapMarker,
     type MapMarkerKind,
@@ -11,8 +12,11 @@ import {
     type TilePhysics as TilePhysicsValue,
 } from 'shared';
 
-/** 2에서 마커·구역 레이어가 들어왔다. MapBuilder(`tools/MapBuilder/builder.py`)와 같이 올린다. */
-export const MAP_BUNDLE_SCHEMA_VERSION = 2;
+/**
+ * 2에서 마커·구역 레이어가, 3에서 `training_only`가 들어왔다.
+ * MapBuilder(`tools/MapBuilder/builder.py`)와 같이 올린다.
+ */
+export const MAP_BUNDLE_SCHEMA_VERSION = 3;
 
 export type MapChange = readonly [x: number, y: number, physics: TilePhysicsValue];
 
@@ -27,6 +31,13 @@ export interface ServerMap {
     readonly markers: readonly MapMarker[];
     /** 사각형 구역. 훈련장 표적이 자기 구역 안에서만 움직이는 데 쓴다. */
     readonly zones: readonly MapZone[];
+    /**
+     * 훈련장 전용 맵. 경기 방의 맵 목록에도, `random` 추첨에도 들어가지 않는다.
+     *
+     * 훈련장 맵은 3인 이상 시작 위치가 없고 표적 마커가 깔려 있다. 경기 방이 이 맵으로 시작하면
+     * 전원이 맵 중앙 한 자리에서 겹쳐 태어난다.
+     */
+    readonly trainingOnly: boolean;
 }
 
 export interface ServerMapBundle {
@@ -144,6 +155,7 @@ function parseMap(mapId: string, value: unknown): ServerMap {
         startPositions: Object.freeze(startPositions),
         markers: parseMarkers(mapId, raw['markers'], size, initialMap),
         zones: parseZones(mapId, raw['zones'], size),
+        trainingOnly: raw['training_only'] === true,
     });
 }
 
@@ -272,3 +284,27 @@ export function instantiateMap(bundle: ServerMapBundle, mapId: string) {
         zones: map.zones,
     };
 }
+
+/**
+ * 이 방 모드가 고를 수 있는 맵들.
+ *
+ * 훈련장 맵은 경기 방에서 빠진다. 존재하지 않아서가 아니라 **경기가 성립하지 않아서**다 —
+ * 3인 이상 시작 위치가 없어서 전원이 맵 중앙 한 자리에 겹쳐 태어나고, 깔려 있는 표적 마커는
+ * 경기 방에서 아무 일도 하지 않는다.
+ *
+ * 목록을 만드는 곳과 하나를 검사하는 곳이 같은 규칙을 봐야 한다. 갈라지면 사용자에게는
+ * "고를 수는 있는데 누르면 안 되는" 맵이 생긴다.
+ */
+export function playableMapIds(bundle: ServerMapBundle, mode: RoomMode): readonly string[] {
+    return Object.entries(bundle.maps)
+        .filter(([, map]) => isPlayable(map, mode))
+        .map(([mapId]) => mapId);
+}
+
+export function isPlayableMap(bundle: ServerMapBundle, mapId: string, mode: RoomMode): boolean {
+    const map = bundle.maps[mapId];
+    return map !== undefined && isPlayable(map, mode);
+}
+
+const isPlayable = (map: ServerMap, mode: RoomMode): boolean =>
+    mode === RoomMode.Training || !map.trainingOnly;

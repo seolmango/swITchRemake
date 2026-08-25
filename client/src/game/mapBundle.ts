@@ -18,6 +18,8 @@ export interface RuntimeMapBundle {
          */
         markers?: MapMarker[];
         zones?: MapZone[];
+        /** 훈련장 전용 맵. 경기 방의 맵 목록에서 뺀다 — 서버도 같은 이유로 거부한다. */
+        training_only?: boolean;
     }>;
 }
 
@@ -30,8 +32,9 @@ async function fetchVerifiedMapBundle(expectedHash: string, gameOrigin: string):
     const response = await fetch(`${gameOrigin}/map-bundles/${expectedHash}.json`, { cache: 'force-cache' });
     if (!response.ok) throw new Error(`map bundle request failed (${response.status})`);
     const bundle = await response.json() as RuntimeMapBundle;
-    // 스키마는 서버(`map-loader.ts`)와 MapBuilder가 같이 올린다. 2에서 마커·구역이 들어왔다.
-    if (bundle.mapBundleHash !== expectedHash || bundle.schemaVersion !== 2) throw new Error('map bundle identity mismatch');
+    // 스키마는 서버(`map-loader.ts`)와 MapBuilder가 같이 올린다.
+    // 2에서 마커·구역이, 3에서 training_only가 들어왔다.
+    if (bundle.mapBundleHash !== expectedHash || bundle.schemaVersion !== 3) throw new Error('map bundle identity mismatch');
     const unsigned = JSON.stringify({
         schemaVersion: bundle.schemaVersion,
         simulationHz: bundle.simulationHz,

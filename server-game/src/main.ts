@@ -9,7 +9,7 @@
  *   TicketAuth      Redis 명령                         시뮬레이션 + 시야
  */
 
-import { makeKeys, PROTOCOL_VERSION, type ViolationSignal } from 'shared';
+import { makeKeys, PROTOCOL_VERSION, RoomMode, type ViolationSignal } from 'shared';
 import { readFile } from 'node:fs/promises';
 import { RULES_VERSION } from './config/gameplay';
 import { INFRA } from './config/infrastructure';
@@ -19,7 +19,7 @@ import { GameLifecycle } from './game/game-lifecycle';
 import { ConnectionManager } from './gateway/connection-manager';
 import { TicketAuthenticator } from './gateway/ticket-auth';
 import { InMemoryTicketStore } from './gateway/ticket-store';
-import { loadMapBundle } from './maps/map-loader';
+import { isPlayableMap, loadMapBundle, playableMapIds } from './maps/map-loader';
 import { CommandConsumer } from './redis/command-consumer';
 import { RedisClient } from './redis/redis-client';
 import { GameRegistry } from './redis/registry';
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
 
     rooms = new RoomManager({
         lifecycle,
-        isKnownMap: (mapId) => bundle.maps[mapId] !== undefined,
+        isKnownMap: (mapId, mode) => isPlayableMap(bundle, mapId, mode),
         getServerTick: () => serverTick,
         violationSink,
         skillSink: (roomId, request) => lifecycle.queueSkill(roomId, request),
@@ -208,7 +208,9 @@ async function main(): Promise<void> {
         isDraining: () => draining,
         resolveMapId: (mapId) => {
             if (mapId !== 'random' || bundle.maps[mapId] !== undefined) return mapId;
-            const mapIds = Object.keys(bundle.maps);
+            // 훈련장 맵은 추첨에서 뺀다. 넣어 두면 공개 방을 만든 사람이 이따금 연습장에 떨어진다.
+            // 훈련장 방은 'random'을 쓰지 않고 맵 id를 직접 지정하므로 여기로 오지 않는다.
+            const mapIds = playableMapIds(bundle, RoomMode.Match);
             return mapIds[Math.floor(Math.random() * mapIds.length)] ?? mapId;
         },
     });

@@ -2,6 +2,7 @@
     "name": "TrainingGround",
     "size": 40,
     "barrier": 1,
+    "training": true,
     "data": "training.csv",
     "markers": [
         {

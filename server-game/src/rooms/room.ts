@@ -84,7 +84,11 @@ export interface RoomOptions {
     readonly hudGameplay: Readonly<Record<string, number>>;
     readonly timing: RoomTiming;
     readonly lifecycle: RoomLifecyclePort;
-    readonly isKnownMap: (mapId: string) => boolean;
+    /**
+     * 이 방이 그 맵으로 놀 수 있는가. 방 모드를 같이 받는 이유는 훈련장 맵 때문이다 —
+     * 존재하는 맵이지만 경기 방이 고르면 안 된다.
+     */
+    readonly isKnownMap: (mapId: string, mode: RoomMode) => boolean;
     readonly getServerTick: () => number;
     /** 두 번째 경기부터 쓸 새 matchId. 테스트가 고정값을 넣기 위한 통로다. */
     readonly newMatchId?: () => string;
@@ -151,7 +155,7 @@ export class Room {
         if (options.ownerReservation.roomId !== options.id || options.ownerReservation.resume) {
             throw new Error('owner reservation must be a fresh seat for this room');
         }
-        if (!options.isKnownMap(options.mapId)) throw new Error(`unknown map: ${options.mapId}`);
+        if (!options.isKnownMap(options.mapId, options.mode)) throw new Error(`unknown map: ${options.mapId}`);
         this.id = options.id;
         this.roomCode = options.roomCode;
         this.#matchId = options.matchId;
@@ -390,7 +394,7 @@ export class Room {
     public setMap(requester: ActorId, mapId: string): ErrorCodeValue | null {
         if (this.state !== RoomState.Waiting) return ErrorCode.BadState;
         if (!this.#roster.isHost(requester)) return ErrorCode.NotHost;
-        if (!this.#options.isKnownMap(mapId)) return ErrorCode.InvalidPayload;
+        if (!this.#options.isKnownMap(mapId, this.mode)) return ErrorCode.InvalidPayload;
         if (mapId !== this.#mapId) {
             this.#mapId = mapId;
             this.#startLock.applyMapChange(this.#now());

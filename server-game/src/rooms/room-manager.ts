@@ -44,7 +44,7 @@ export type ManagerResult<T> =
 
 export interface RoomManagerOptions {
     readonly lifecycle: RoomLifecyclePort;
-    readonly isKnownMap: (mapId: string) => boolean;
+    readonly isKnownMap: (mapId: string, mode: RoomMode) => boolean;
     readonly getServerTick: () => number;
     readonly violationSink: (signal: ViolationSignal) => void;
     /** resume 인증 직후 full snapshot을 보낼 외부 publisher 경계. */
@@ -109,7 +109,8 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
         if ((this.#options.maxRooms ?? Number.POSITIVE_INFINITY) <= this.#rooms.size) {
             return { ok: false, code: ControlErrorCode.ServerFull };
         }
-        if (!this.#options.isKnownMap(specification.mapId)) return { ok: false, code: ControlErrorCode.InvalidMap };
+        const mode = specification.mode ?? RoomMode.Match;
+        if (!this.#options.isKnownMap(specification.mapId, mode)) return { ok: false, code: ControlErrorCode.InvalidMap };
         if (specification.ownerReservation.expiresAt <= this.#now()) return { ok: false, code: ControlErrorCode.Expired };
 
         let room: Room;
@@ -123,7 +124,7 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 capacity: specification.capacity,
                 mapId: specification.mapId,
                 ownerReservation: specification.ownerReservation,
-                mode: specification.mode ?? RoomMode.Match,
+                mode,
                 // 훈련장은 혼자 시작한다. 사람을 셋 모아야 연습할 수 있으면 연습장이 아니다.
                 minPlayersToStart: specification.mode === RoomMode.Training ? 1 : GAMEPLAY.MIN_PLAYERS_TO_START,
                 simulationHz: NETWORK.SIMULATION_HZ,
