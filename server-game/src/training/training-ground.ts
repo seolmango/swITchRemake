@@ -1,11 +1,11 @@
 import {
-    MAP_MARKER_RADIUS_TILES,
     MAX_PLAYERS_PER_ROOM,
     MapMarkerKind,
     MapZoneKind,
     SkillId,
     TilePhysics,
     TrainingPadKind,
+    trainingPadsFromMarkers,
     type MapZone,
     type TrainingPad,
 } from 'shared';
@@ -17,16 +17,6 @@ import { grantTaggerFrenzy } from '../simulation/skills';
 import type { RosterEntry } from '../game/snapshot-view';
 
 export const TRAINING_DUMMY_RESPAWN_MS = 3_000;
-
-/** 맵 마커 종류를 패드 종류로 옮긴다. 계약 두 벌이 아니라 한 벌만 늘어나게 하는 대응표다. */
-const PAD_KIND_BY_MARKER: Readonly<Record<string, TrainingPadKind>> = {
-    [MapMarkerKind.SkillDash]: TrainingPadKind.SkillDash,
-    [MapMarkerKind.SkillFlash]: TrainingPadKind.SkillFlash,
-    [MapMarkerKind.SkillExhaust]: TrainingPadKind.SkillExhaust,
-    [MapMarkerKind.Tagger]: TrainingPadKind.Tagger,
-    [MapMarkerKind.Reset]: TrainingPadKind.Reset,
-    [MapMarkerKind.TrainingChaseMode]: TrainingPadKind.ChaseMode,
-};
 
 /** 구역 안에서 표적이 돌 네 귀퉁이. 구역을 벗어나지 않는 것이 이 함수의 유일한 책임이다. */
 function patrolCourse(map: WorldMap, home: TilePoint, zone: MapZone | null): TilePoint[] {
@@ -264,13 +254,7 @@ export class TrainingGround {
         }));
         this.#dummyIds = new Set(this.players.map((player) => player.playerId));
 
-        const radius = MAP_MARKER_RADIUS_TILES * map.tileSize;
-        this.pads = map.markers
-            .filter((marker) => marker.kind in PAD_KIND_BY_MARKER)
-            .map((marker) => {
-                const [x, y] = tileCenter(map, [marker.x, marker.y]);
-                return { kind: PAD_KIND_BY_MARKER[marker.kind]!, x, y, radius };
-            });
+        this.pads = trainingPadsFromMarkers(map.markers, map.tileSize);
     }
 
     public get chaseMode(): ChaseMode {

@@ -18,7 +18,6 @@ import {
     type RoomState as RoomStateValue,
     type SkillId,
     type SkillRejection,
-    type TrainingPad,
 } from 'shared';
 import type { SeatReservation } from '../gateway/ticket-store';
 import type { ResolvedInput } from '../simulation/world';
@@ -54,8 +53,6 @@ export interface RoomLifecyclePort {
     startGame(snapshot: RoomStartSnapshot): GameStartInfo;
     /** 방이 사라졌다. 결과를 내보내지 않고 돌던 세션만 내린다. */
     stopRoom(roomId: string): void;
-    /** 훈련장 패드. 경기 방이면 빈 배열이다. */
-    trainingPads(roomId: string): readonly TrainingPad[];
     connectionChanged(roomId: string, playerId: number, connected: boolean): void;
     participantTimedOut(roomId: string, playerId: number): void;
     participantRemoved(roomId: string, playerId: number, reason: string): void;
@@ -715,9 +712,6 @@ export class Room {
             this.#countdownEndsAt = null;
             this.#stateMachine.transition(RoomState.Playing, now);
             this.#broadcast({ type: 'game.started', payload: { startTick: started.startTick, taggerId: started.taggerId } });
-            // 훈련장 패드는 경기 중에 안 바뀌는 정적 데이터라 시작할 때 한 번만 보낸다.
-            const pads = this.#options.lifecycle.trainingPads(this.id);
-            if (pads.length > 0) this.#broadcast({ type: 'training.state', payload: { pads: [...pads] } });
             this.broadcastLobbyState();
         }
 

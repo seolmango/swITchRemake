@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { RoomState, SkillId, SkillSlot, isLoadoutSkill } from 'shared';
+import { RoomState, SkillId, SkillSlot, isLoadoutSkill, trainingPadsFromMarkers } from 'shared';
 import { RoundBox } from '../components/common/RoundBox.tsx';
 import { RoundButton } from '../components/common/RoundButton.tsx';
 import { PageLayout } from '../components/layout/PageLayout.tsx';
 import { EngineMode, SwitchGame, type HudState, type SwitchEngine } from '../game';
 import { verifiedMapView } from '../game/mapBundle.ts';
+import { TILE_SIZE } from '../game/constants.ts';
 import { gameSession } from '../game/GameSession.ts';
 import { useGameSession } from '../game/useGameSession.ts';
 import { type KeyAction, useSettingsStore } from '../stores/useSettingsStore.ts';
@@ -102,9 +103,13 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
         mapReady.current = false;
         setMapError(null);
         try {
-            const view = await verifiedMapView(id, hash, gameOrigin);
+            const { view, markers } = await verifiedMapView(id, hash, gameOrigin);
             if (engineRef.current !== engine) return;
             engine.map.load(view);
+            // 패드는 맵과 같은 번들에서 온다. 별도 메시지로 받으면 두 경로가 갈라질 자리가 생긴다.
+            const pads = trainingPadsFromMarkers(markers, TILE_SIZE);
+            engine.setTrainingPads(pads);
+            gameSession.setTrainingPads(pads);
             await engine.whenReady();
             if (engineRef.current !== engine) return;
             loadedMapId.current = key;
@@ -127,18 +132,13 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
         setMapLoaded(false);
         setFirstSnapshotApplied(false);
         if (!engine) return;
-        if (training) engine.setTrainingPads(session.trainingPads);
         void engine.whenReady().then(() => {
             if (engineRef.current === engine) setEngineReady(true);
         });
         if (mapId && mapBundleHash && session.gameHttpOrigin) {
             void loadMap(engine, mapId, mapBundleHash, session.gameHttpOrigin);
         }
-    }, [loadMap, mapBundleHash, mapId, session.gameHttpOrigin, session.trainingPads, training]);
-
-    useEffect(() => {
-        if (training) engineRef.current?.setTrainingPads(session.trainingPads);
-    }, [session.trainingPads, training]);
+    }, [loadMap, mapBundleHash, mapId, session.gameHttpOrigin]);
 
     useEffect(() => {
         if (!training || session.role !== 'spectator') return;

@@ -58,8 +58,11 @@ export {
     MAP_MARKER_KINDS,
     MAP_ZONE_KINDS,
     MAP_MARKER_RADIUS_TILES,
+    TrainingPadKind,
+    trainingPadsFromMarkers,
     type MapMarker,
     type MapZone,
+    type TrainingPad,
 } from './protocol/mapMarkers';
 
 export {
@@ -73,8 +76,6 @@ export {
     JSON_MESSAGE_VERSION,
     RoomState,
     RoomMode,
-    TrainingPadKind,
-    type TrainingPad,
     PlayerRole,
     ErrorCode,
     NON_RETRYABLE_ERRORS,

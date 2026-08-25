@@ -58,7 +58,6 @@ export interface GameSessionState {
     latencyMs: number | null;
     /** Client-side estimate from authoritative snapshot tick progress over arrival time. */
     estimatedTps: number | null;
-    trainingPads: readonly TrainingPad[];
     trainingPlayers: ReadonlyArray<{ id: number; nickname: string; colorIndex: number; alive: boolean }>;
     trainingSkill: Exclude<SkillId, 'switch'> | null;
 }
@@ -85,7 +84,6 @@ const INITIAL_STATE: GameSessionState = {
     skillRejections: [],
     latencyMs: null,
     estimatedTps: null,
-    trainingPads: [],
     trainingPlayers: [],
     trainingSkill: null,
 };
@@ -126,6 +124,7 @@ class GameSession {
     private readonly listeners = new Set<() => void>();
     private readonly snapshotListeners = new Set<(frame: ArrayBuffer) => void>();
     private readonly blinkListeners = new Set<(payload: PlayerBlinkedMessage['payload']) => void>();
+    #trainingPads: readonly TrainingPad[] = [];
     private readonly skillAreaListeners = new Set<(payload: PlayerSkillAreaMessage['payload']) => void>();
     private pageUnloading = false;
     private pingTimer: number | null = null;
@@ -155,6 +154,17 @@ class GameSession {
     };
 
     getLatestSnapshot = (): ArrayBuffer | null => this.latestSnapshot;
+
+    /**
+     * 훈련장 패드. **맵 번들에서 온다** — 별도 메시지로 받지 않는다(같은 번들을 해시 검증해서
+     * 받으므로 서버와 다를 수가 없다).
+     *
+     * 여기서 쓰는 곳은 HUD의 "지금 밟고 있는 패드" 표시뿐이다. 로드아웃을 실제로 바꾸는 것은
+     * 서버이고, 이건 그 판정을 화면에 미리 비추는 것에 지나지 않는다.
+     */
+    setTrainingPads = (pads: readonly TrainingPad[]): void => {
+        this.#trainingPads = pads;
+    };
 
     subscribeBlinks = (listener: (payload: PlayerBlinkedMessage['payload']) => void): (() => void) => {
         this.blinkListeners.add(listener);
@@ -209,7 +219,7 @@ class GameSession {
 
             const self = this.state.selfId === null ? undefined : visible.get(this.state.selfId);
             if (self) {
-                const pad = this.state.trainingPads.find((candidate) => {
+                const pad = this.#trainingPads.find((candidate) => {
                     const dx = candidate.x - self.x;
                     const dy = candidate.y - self.y;
                     return dx * dx + dy * dy <= candidate.radius * candidate.radius;
@@ -394,9 +404,6 @@ class GameSession {
                     trainingPlayers: this.state.trainingPlayers.map((player) =>
                         player.id === message.payload.playerId ? { ...player, alive: false } : player),
                 });
-                break;
-            case 'training.state':
-                this.setState({ trainingPads: message.payload.pads.map((pad) => ({ ...pad })) });
                 break;
             case 'player.left':
                 if (message.payload.playerId === this.state.selfId) sessionStorage.removeItem(ACTIVE_ROOM_KEY);

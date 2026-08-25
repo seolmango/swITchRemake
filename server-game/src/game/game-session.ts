@@ -24,7 +24,6 @@ import type { SchedulerTarget } from '../simulation/scheduler';
 import { isFinished, stepWorld, type EmojiRequest } from '../simulation/step';
 import type { SkillRequest } from '../simulation/skills';
 import type { AuthoritativeFrame, World, WorldEvent } from '../simulation/world';
-import type { TrainingPad } from 'shared';
 import type { TrainingGround } from '../training/training-ground';
 import { SessionReplayRecorder } from './session-recorder';
 import { encodeForViewer, type RosterEntry, type SnapshotTileChange } from './snapshot-view';
@@ -164,11 +163,6 @@ export class GameSession implements SchedulerTarget {
             return;
         }
         this.#pendingEmojis.set(request.playerId, request);
-    }
-
-    /** 훈련장 패드. 경기 방이면 빈 배열이다. */
-    public trainingPads(): readonly TrainingPad[] {
-        return this.#options.trainingGround?.pads ?? [];
     }
 
     /** 훈련장에서 죽은 사람을 되살린다. 경기 방이면 아무것도 하지 않는다. */

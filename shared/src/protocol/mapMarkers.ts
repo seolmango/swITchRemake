@@ -84,3 +84,67 @@ export interface MapZone {
  * 클라이언트가 그리는 크기도 이 값이다 — 다르면 "밟았는데 안 밟혔다"가 생긴다.
  */
 export const MAP_MARKER_RADIUS_TILES = 0.75;
+
+/**
+ * 훈련장 바닥의 패드. 마커에서 **파생되는** 값이지, 따로 오는 데이터가 아니다.
+ *
+ * 타일 종류(`TilePhysics`)로 만들지 않는다. 그건 와이어 계약이자 리플레이 파일에 박히는 값이라
+ * 훈련장 전용 개념을 넣으면 경기 리플레이까지 따라 넓어진다. 패드는 물리적 실체가 없고 밟으면
+ * 효과만 난다.
+ *
+ * 마커 종류와 1:1로 두지 않는 이유는 마커가 더 넓기 때문이다 — 표적 생성 자리(`training.dummy.*`)는
+ * 마커이지만 밟는 것이 아니라 패드가 아니다.
+ */
+export const TrainingPadKind = {
+    /** 밟으면 술래가 된다. 이미 술래면 벗는다. 양쪽을 다 겪어 봐야 한다. */
+    Tagger: 'tagger',
+    SkillDash: 'skill.dash',
+    SkillFlash: 'skill.flash',
+    SkillExhaust: 'skill.exhaust',
+    /** 쿨타임과 효과를 모두 지운다. 같은 것을 반복해서 시험하려면 필요하다. */
+    Reset: 'reset',
+    /** 추격 구역의 역할을 바꾼다 — 내가 쫓는가, 쫓기는가. */
+    ChaseMode: 'chaseMode',
+} as const;
+export type TrainingPadKind = (typeof TrainingPadKind)[keyof typeof TrainingPadKind];
+
+export interface TrainingPad {
+    kind: TrainingPadKind;
+    /** 세계 좌표(픽셀). 타일 중심이다. */
+    x: number;
+    y: number;
+    /** 서버가 판정에 쓰는 반경 그대로다. 클라이언트가 다른 크기로 그리면 밟았는데 안 밟힌다. */
+    radius: number;
+}
+
+const PAD_KIND_BY_MARKER: Partial<Record<MapMarkerKind, TrainingPadKind>> = {
+    [MapMarkerKind.SkillDash]: TrainingPadKind.SkillDash,
+    [MapMarkerKind.SkillFlash]: TrainingPadKind.SkillFlash,
+    [MapMarkerKind.SkillExhaust]: TrainingPadKind.SkillExhaust,
+    [MapMarkerKind.Tagger]: TrainingPadKind.Tagger,
+    [MapMarkerKind.Reset]: TrainingPadKind.Reset,
+    [MapMarkerKind.TrainingChaseMode]: TrainingPadKind.ChaseMode,
+};
+
+/**
+ * 마커 목록에서 패드를 뽑는다. 서버와 클라이언트가 **이 함수 하나**를 같이 쓴다.
+ *
+ * 양쪽이 각자 대응표를 갖고 있으면 한쪽만 고쳤을 때 "보이는데 안 밟히는" 패드가 생긴다.
+ * 입력이 되는 마커는 해시로 검증된 같은 맵 번들에서 오므로, 함수가 하나면 결과도 하나다.
+ */
+export function trainingPadsFromMarkers(
+    markers: readonly MapMarker[],
+    tileSize: number,
+): TrainingPad[] {
+    const radius = MAP_MARKER_RADIUS_TILES * tileSize;
+    return markers.flatMap((marker) => {
+        const kind = PAD_KIND_BY_MARKER[marker.kind];
+        if (kind === undefined) return [];
+        return [{
+            kind,
+            x: marker.x * tileSize + tileSize / 2,
+            y: marker.y * tileSize + tileSize / 2,
+            radius,
+        }];
+    });
+}

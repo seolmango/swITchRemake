@@ -46,7 +46,6 @@ class FakeLifecycle implements RoomLifecyclePort {
         this.removals.push({ playerId, reason });
     }
     public stopRoom(_roomId: string): void {}
-    public trainingPads(_roomId: string): [] { return []; }
 }
 
 function seat(userId: number, now: number, resume = false): SeatReservation {

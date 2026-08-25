@@ -274,44 +274,6 @@ export type PlayerSkillAreaMessage = ServerEnvelope<'player.skillArea', {
     targetPlayerId: number | null;
 }>;
 
-/**
- * 훈련장 바닥의 패드.
- *
- * 타일 종류(`TilePhysics`)로 만들지 않는다. 그건 와이어 계약이자 리플레이 파일에 박히는 값이라
- * 훈련장 전용 개념을 넣으면 경기 리플레이까지 따라 넓어진다. 패드는 **물리적 실체가 없고**
- * 밟으면 효과만 나므로 정적 데이터로 따로 내려보내고 클라이언트는 바닥에 표시만 한다.
- */
-export const TrainingPadKind = {
-    /** 밟으면 술래가 된다. 이미 술래면 벗는다. 양쪽을 다 겪어 봐야 한다. */
-    Tagger: 'tagger',
-    SkillDash: 'skill.dash',
-    SkillFlash: 'skill.flash',
-    SkillExhaust: 'skill.exhaust',
-    /** 쿨타임과 효과를 모두 지운다. 같은 것을 반복해서 시험하려면 필요하다. */
-    Reset: 'reset',
-    /** 추격 구역의 역할을 바꾼다 — 내가 쫓는가, 쫓기는가. */
-    ChaseMode: 'chaseMode',
-} as const;
-export type TrainingPadKind = (typeof TrainingPadKind)[keyof typeof TrainingPadKind];
-
-export interface TrainingPad {
-    kind: TrainingPadKind;
-    x: number;
-    y: number;
-    /** 서버가 판정에 쓰는 반경 그대로다. 클라이언트가 다른 크기로 그리면 밟았는데 안 밟힌다. */
-    radius: number;
-}
-
-/**
- * 훈련장 정적 정보. 방에 들어오거나 full 스냅샷을 받을 때 한 번 온다.
- *
- * 스냅샷의 바이너리 섹션이 아니라 JSON인 이유는 저빈도이고 경기 중에 바뀌지 않기 때문이다.
- * 놓쳐도 다음 full 스냅샷 때 다시 온다.
- */
-export type TrainingStateMessage = ServerEnvelope<'training.state', {
-    pads: TrainingPad[];
-}>;
-
 export type GameEndedMessage = ServerEnvelope<'game.ended', {
     /**
      * 방금 끝난 경기의 식별자. 결과 화면(`/matches/{matchId}/result`)으로 가려면 이 값이 필요하다.
@@ -351,7 +313,6 @@ export type ServerMessage =
     | SpectateChangedMessage
     | PlayerBlinkedMessage
     | PlayerSkillAreaMessage
-    | TrainingStateMessage
     | GameEndedMessage
     | ErrorMessage
     | PongMessage;

@@ -4,7 +4,7 @@
  * 방은 world를 모르고 시뮬레이션은 방을 모른다. 둘을 아는 유일한 곳이 이 파일이다.
  */
 
-import { RoomMode, TilePhysics, type MatchResultMessage, type TrainingPad, type ViolationSignal } from 'shared';
+import { RoomMode, TilePhysics, type MatchResultMessage, type ViolationSignal } from 'shared';
 import { GAMEPLAY } from '../config/gameplay';
 import { instantiateMap, type ServerMapBundle } from '../maps/map-loader';
 import { NullReplayRecorder, type ReplayRecorder } from '../replay/recorder';
@@ -169,10 +169,6 @@ export class GameLifecycle implements RoomLifecyclePort {
         if (session === undefined) return false;
         session.queueEmoji(request);
         return true;
-    }
-
-    public trainingPads(roomId: string): readonly TrainingPad[] {
-        return this.#sessions.get(roomId)?.trainingPads() ?? [];
     }
 
     public respawn(roomId: string, playerId: number): boolean {

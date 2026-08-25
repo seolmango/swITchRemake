@@ -64,7 +64,17 @@ export function verifiedMapBundle(expectedHash: string, gameOrigin: string): Pro
     return request;
 }
 
-export async function verifiedMapView(mapId: string, expectedHash: string, gameOrigin: string): Promise<MapView> {
+export interface VerifiedMap {
+    view: MapView;
+    /**
+     * 밟으면 무슨 일이 일어나는 자리. 서버가 판정에 쓰는 것과 **같은 데이터**다 —
+     * 이 번들은 해시로 검증되므로 서버가 보는 것과 다를 수가 없다.
+     */
+    markers: readonly MapMarker[];
+    zones: readonly MapZone[];
+}
+
+export async function verifiedMapView(mapId: string, expectedHash: string, gameOrigin: string): Promise<VerifiedMap> {
     const bundle = await verifiedMapBundle(expectedHash, gameOrigin);
     const map = bundle.maps[mapId];
     if (!map || !Number.isInteger(map.size) || map.initial_map.length !== map.size) throw new Error(`unknown map: ${mapId}`);
@@ -72,5 +82,9 @@ export async function verifiedMapView(mapId: string, expectedHash: string, gameO
     if (map.initial_map.some((row) => row.length !== map.size || row.some((tile) => !validTiles.has(tile)))) {
         throw new Error('map tile data is malformed');
     }
-    return { cols: map.size, rows: map.size, tiles: map.initial_map as MapView['tiles'] };
+    return {
+        view: { cols: map.size, rows: map.size, tiles: map.initial_map as MapView['tiles'] },
+        markers: map.markers ?? [],
+        zones: map.zones ?? [],
+    };
 }
