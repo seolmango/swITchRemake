@@ -10,6 +10,12 @@ import { useAuthStore } from '../stores/useAuthStore.ts';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../theme/color.ts';
 import { loginErrorMessage } from './auth/authErrorMessage.ts';
+import { getMyMatches, getMyStats, type UserMatchHistoryItem, type UserStats } from '../api/profile.ts';
+
+type RecordsState =
+    | { kind: 'loading' }
+    | { kind: 'failed' }
+    | { kind: 'ready'; stats: UserStats; matches: UserMatchHistoryItem[] };
 
 export const ProfilePage: React.FC = () => {
     const { t, i18n } = useTranslation();
@@ -25,6 +31,18 @@ export const ProfilePage: React.FC = () => {
     const sessionListRef = useRef<HTMLDivElement>(null);
     const drag = useRef<{ pointerId: number; lastY: number; scale: number } | null>(null);
     const [hasSessionOverflow, setHasSessionOverflow] = useState(false);
+    const [records, setRecords] = useState<RecordsState>({ kind: 'loading' });
+
+    const loadRecords = useCallback(async () => {
+        if (!authenticated) return;
+        setRecords({ kind: 'loading' });
+        try {
+            const [stats, history] = await Promise.all([getMyStats(), getMyMatches({ limit: 5 })]);
+            setRecords({ kind: 'ready', stats, matches: history.matches });
+        } catch {
+            setRecords({ kind: 'failed' });
+        }
+    }, [authenticated]);
 
     const loadSessions = useCallback(async () => {
         if (!authenticated) return;
@@ -54,6 +72,9 @@ export const ProfilePage: React.FC = () => {
         });
         return () => { active = false; };
     }, [authenticated, t]);
+
+    // 최초 로드와 재시도·새로고침 버튼이 같은 함수를 쓴다. 같은 fetch를 두 벌 두면 한쪽만 고쳐진다.
+    useEffect(() => { void loadRecords(); }, [loadRecords]);
 
     const revokeSession = async (session: LoginSession) => {
         setSessionAction(session.id);
@@ -89,6 +110,8 @@ export const ProfilePage: React.FC = () => {
     const formatDate = (value: string) => new Intl.DateTimeFormat(i18n.language, {
         dateStyle: 'medium', timeStyle: 'short',
     }).format(new Date(value));
+    const formatNumber = (value: number) => new Intl.NumberFormat(i18n.language).format(value);
+    const formatDuration = (value: number) => t('profile.seconds', { count: Math.floor(value / 1_000) });
 
     useEffect(() => {
         const list = sessionListRef.current;
@@ -130,7 +153,7 @@ export const ProfilePage: React.FC = () => {
                     <h2>{t('profile.guestTitle')}</h2>
                     <p style={{ color: colors.muted }}>{t('profile.guestBody')}</p>
                     <RoundBox width={900} height={175} type={1} style={{ display: 'grid', placeItems: 'center', padding: 28, textAlign: 'center', color: colors.text, fontSize: 27, lineHeight: 1.45 }}>
-                        {t('profile.statsPending')}
+                        {t('profile.guestStats')}
                     </RoundBox>
                     <div className="profile-actions">
                         <RoundButton width={360} height={96} type={1} content={t('auth.login')} onClick={() => navigate('/login')}/>
@@ -149,9 +172,30 @@ export const ProfilePage: React.FC = () => {
                     <div className="profile-avatar" style={{ borderColor: Color.blue[2], color: Color.blue[2], background: theme === 0 ? Color.blue[0] : 'transparent' }}><Icon name="person" size={115}/></div>
                     <h2>{nickname ?? 'swITch'}</h2>
                     <p style={{ color: colors.muted }}>{t('profile.loggedBody')}</p>
-                    <RoundBox width={410} height={150} type={1} style={{ display: 'grid', placeItems: 'center', padding: 22, textAlign: 'center', color: colors.text, fontSize: 22, lineHeight: 1.4 }}>
-                        {t('profile.statsPending')}
-                    </RoundBox>
+                    <section
+                        className="profile-stats-card"
+                        style={{ '--profile-border': colors.panelBorder, '--profile-field': colors.field, '--profile-muted': colors.muted } as React.CSSProperties}
+                        aria-label={t('profile.statsTitle')}
+                    >
+                        <span>{t('profile.statsKicker')}</span>
+                        {records.kind === 'loading' && <div className="profile-record-state" aria-busy="true">{t('profile.statsLoading')}</div>}
+                        {records.kind === 'failed' && (
+                            <div className="profile-record-state is-failed" role="alert">
+                                <span>{t('profile.statsLoadFailed')}</span>
+                                <button type="button" onClick={() => void loadRecords()}>{t('profile.retryStats')}</button>
+                            </div>
+                        )}
+                        {records.kind === 'ready' && (
+                            <div className="profile-stat-grid">
+                                <span><strong>{formatNumber(records.stats.games)}</strong><small>{t('profile.games')}</small></span>
+                                <span><strong>{formatNumber(records.stats.wins)}</strong><small>{t('profile.wins')}</small></span>
+                                <span><strong>{records.stats.winRate}%</strong><small>{t('profile.winRate')}</small></span>
+                                <span><strong>{records.stats.switchSuccessRate}%</strong><small>{t('profile.switchRate')}</small></span>
+                                <span><strong>{formatNumber(records.stats.tagCount)}</strong><small>{t('profile.tags')}</small></span>
+                                <span><strong>{formatNumber(records.stats.level)}</strong><small>{t('profile.level')}</small></span>
+                            </div>
+                        )}
+                    </section>
                     <div className="profile-actions is-compact">
                         <RoundButton width={220} height={76} type={1} content={t('profile.changePassword')} onClick={() => navigate('/change-password')}/>
                         <RoundButton width={170} height={76} type={0} content={t('auth.logout')} onClick={() => {
@@ -162,7 +206,40 @@ export const ProfilePage: React.FC = () => {
                     </div>
                 </div>
 
-                <section className="session-panel" style={{ '--session-border': colors.panelBorder, '--session-field': colors.field, '--session-muted': colors.muted } as React.CSSProperties}>
+                <div className="profile-detail-stack">
+                    <section className="match-history-panel" style={{ '--profile-border': colors.panelBorder, '--profile-field': colors.field, '--profile-muted': colors.muted } as React.CSSProperties}>
+                        <header>
+                            <div>
+                                <span>{t('profile.historyKicker')}</span>
+                                <h2>{t('profile.recentMatches')}</h2>
+                            </div>
+                            <button type="button" onClick={() => void loadRecords()} disabled={records.kind === 'loading'} aria-label={t('rooms.refresh')}><Icon name="refresh" size={28}/></button>
+                        </header>
+                        {records.kind === 'loading' && <div className="match-history-state" aria-busy="true">{t('profile.matchesLoading')}</div>}
+                        {records.kind === 'failed' && <div className="match-history-state is-failed" role="alert">{t('profile.matchesLoadFailed')}</div>}
+                        {records.kind === 'ready' && records.matches.length === 0 && <div className="match-history-state">{t('profile.noMatches')}</div>}
+                        {records.kind === 'ready' && records.matches.length > 0 && (
+                            <div className="match-history-list" aria-label={t('profile.recentMatches')}>
+                                {records.matches.map((match) => (
+                                    <article key={match.matchId}>
+                                        <div className={match.won ? 'is-win' : 'is-loss'}>
+                                            <strong>{t(match.won ? 'profile.victory' : 'profile.defeat')}</strong>
+                                            <span>{t(`lobby.maps.${match.map}`, { defaultValue: match.map })}</span>
+                                        </div>
+                                        <div className="match-history-stats">
+                                            <span>{t('profile.matchTags', { count: match.tagCount })}</span>
+                                            <span>{t('profile.matchTagged', { count: match.taggedCount })}</span>
+                                            <span>{t('profile.matchSwitch', { success: match.switchSuccess, tries: match.switchTry })}</span>
+                                            <span>{t('profile.matchSurvived', { duration: formatDuration(match.survivedMs) })}</span>
+                                        </div>
+                                        <time dateTime={match.endedAt}>{formatDate(match.endedAt)}</time>
+                                    </article>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+
+                    <section className="session-panel" style={{ '--session-border': colors.panelBorder, '--session-field': colors.field, '--session-muted': colors.muted } as React.CSSProperties}>
                     <header>
                         <div>
                             <span>{t('profile.securityKicker')}</span>
@@ -204,7 +281,8 @@ export const ProfilePage: React.FC = () => {
                             {t('profile.revokeOthers')}
                         </button>
                     </footer>
-                </section>
+                    </section>
+                </div>
             </section>
         </PageLayout>
     );

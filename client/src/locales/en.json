@@ -55,7 +55,11 @@
   },
   "profile": {
     "title": "Profile", "guestTitle": "You are not logged in yet", "guestBody": "Log in to keep your match history and game settings together.",
-    "loggedBody": "This session is connected to the authentication server.", "changePassword": "Change Password", "statsPending": "Games, wins, and switch success rate will appear here when the profile API is added.",
+    "loggedBody": "This session is connected to the authentication server.", "changePassword": "Change Password", "guestStats": "Guest matches are not recorded.",
+    "statsKicker": "CAREER STATS", "statsTitle": "Career stats", "statsLoading": "Loading your stats…", "statsLoadFailed": "Could not load your stats.", "retryStats": "Try again",
+    "games": "Games", "wins": "Wins", "winRate": "Win rate", "switchRate": "Switch success", "tags": "Tags", "level": "Level",
+    "historyKicker": "MATCH HISTORY", "recentMatches": "Recent matches", "matchesLoading": "Loading recent matches…", "matchesLoadFailed": "Could not load recent matches.", "noMatches": "No matches have been recorded yet.",
+    "victory": "Victory", "defeat": "Defeat", "matchTags": "{{count}} tags", "matchTagged": "Tagged {{count}} times", "matchSwitch": "swITch {{success}}/{{tries}}", "matchSurvived": "Survived {{duration}}", "seconds": "{{count}}s",
     "securityKicker": "ACCOUNT SECURITY", "loginDevices": "Signed-in devices", "loginDevicesHelp": "Review the devices signed in to this account and end sessions you no longer need.",
     "lastActive": "Last active {{date}}", "currentDevice": "This device", "revokeSession": "Sign out", "revokeOthers": "Sign out all other devices", "noSessions": "There are no active login sessions.",
     "sessionsLoadFailed": "Could not load signed-in devices.", "sessionRevoked": "That device has been signed out.", "sessionActionFailed": "Could not update the session.", "otherSessionsRevoked": "Signed out {{count}} other devices.", "sessionScrollHint": "Drag or scroll to see more devices."

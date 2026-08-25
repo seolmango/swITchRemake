@@ -5,10 +5,92 @@ import * as schema from '../database/schema';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from "./dto/create-user.dto";
 import { RedisService } from "../redis/redis.service";
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, lt, or } from 'drizzle-orm';
 import { SanctionService } from '../sanction/sanction.service';
 import { SessionService } from '../session/session.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+
+interface StoredStats {
+    level: number;
+    xp: number;
+    games: number;
+    wins: number;
+    sw_try: number;
+    sw_su: number;
+    kill: number;
+    death_order: number;
+}
+
+export interface UserStatsResponse {
+    level: number;
+    xp: number;
+    games: number;
+    wins: number;
+    switchTry: number;
+    switchSuccess: number;
+    tagCount: number;
+    deathOrder: number;
+    winRate: number;
+    switchSuccessRate: number;
+}
+
+export interface UserMatchHistoryItem {
+    matchId: string;
+    endedAt: string;
+    map: string;
+    won: boolean;
+    tagCount: number;
+    taggedCount: number;
+    switchTry: number;
+    switchSuccess: number;
+    survivedMs: number;
+}
+
+export interface UserMatchHistoryResponse {
+    matches: UserMatchHistoryItem[];
+    nextCursor: string | null;
+}
+
+interface MatchCursor {
+    endedAt: string;
+    matchId: string;
+}
+
+const DEFAULT_STATS: StoredStats = {
+    level: 0,
+    xp: 0,
+    games: 0,
+    wins: 0,
+    sw_try: 0,
+    sw_su: 0,
+    kill: 0,
+    death_order: 0,
+};
+const MAX_MATCH_HISTORY_LIMIT = 50;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const nonNegativeInteger = (value: unknown): number =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+
+const percentage = (numerator: number, denominator: number): number =>
+    denominator === 0 ? 0 : Math.round(numerator / denominator * 1_000) / 10;
+
+const decodeCursor = (cursor: string): MatchCursor => {
+    try {
+        if (!/^[A-Za-z0-9_-]+$/.test(cursor)) throw new Error('invalid base64url');
+        const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as Record<string, unknown>;
+        if (typeof parsed.endedAt !== 'string' || typeof parsed.matchId !== 'string') throw new Error('invalid fields');
+        const endedAt = new Date(parsed.endedAt);
+        if (Number.isNaN(endedAt.getTime()) || endedAt.toISOString() !== parsed.endedAt || !UUID.test(parsed.matchId)) {
+            throw new Error('invalid values');
+        }
+        return { endedAt: parsed.endedAt, matchId: parsed.matchId };
+    } catch {
+        throw new BadRequestException({ code: 'INVALID_MATCH_CURSOR', message: 'Invalid match history cursor' });
+    }
+};
+
+const encodeCursor = (cursor: MatchCursor): string => Buffer.from(JSON.stringify(cursor)).toString('base64url');
 
 @Injectable()
 export class UserService {
@@ -106,5 +188,81 @@ export class UserService {
         await this.db.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, userId));
         const revokedCount = await this.sessionService.revokeOthers(userId, currentSessionId);
         return { revokedCount };
+    }
+
+    async getStats(userId: number): Promise<UserStatsResponse> {
+        const [row] = await this.db.select({ stats: schema.users.stats })
+            .from(schema.users)
+            .where(eq(schema.users.id, userId));
+        if (!row) throw new NotFoundException('User not found');
+
+        const stored = typeof row.stats === 'object' && row.stats !== null
+            ? row.stats as Partial<StoredStats>
+            : DEFAULT_STATS;
+        const games = nonNegativeInteger(stored.games);
+        const wins = nonNegativeInteger(stored.wins);
+        const switchTry = nonNegativeInteger(stored.sw_try);
+        const switchSuccess = nonNegativeInteger(stored.sw_su);
+        return {
+            level: nonNegativeInteger(stored.level),
+            xp: nonNegativeInteger(stored.xp),
+            games,
+            wins,
+            switchTry,
+            switchSuccess,
+            tagCount: nonNegativeInteger(stored.kill),
+            deathOrder: nonNegativeInteger(stored.death_order),
+            winRate: percentage(wins, games),
+            switchSuccessRate: percentage(switchSuccess, switchTry),
+        };
+    }
+
+    async getMatches(userId: number, requestedLimit = 20, encodedCursor?: string): Promise<UserMatchHistoryResponse> {
+        const limit = Math.min(MAX_MATCH_HISTORY_LIMIT, Math.max(1, requestedLimit));
+        const cursor = encodedCursor ? decodeCursor(encodedCursor) : null;
+        const cursorCondition = cursor
+            ? or(
+                lt(schema.matches.endedAt, new Date(cursor.endedAt)),
+                and(eq(schema.matches.endedAt, new Date(cursor.endedAt)), lt(schema.matches.matchId, cursor.matchId)),
+            )
+            : undefined;
+        const rows = await this.db.select({
+            matchId: schema.matchParticipants.matchId,
+            endedAt: schema.matches.endedAt,
+            map: schema.matches.mapId,
+            won: schema.matchParticipants.isWinner,
+            tagCount: schema.matchParticipants.tagCount,
+            taggedCount: schema.matchParticipants.taggedCount,
+            switchTry: schema.matchParticipants.switchTry,
+            switchSuccess: schema.matchParticipants.switchSuccess,
+            survivedMs: schema.matchParticipants.survivedMs,
+        }).from(schema.matchParticipants)
+            .innerJoin(schema.matches, eq(schema.matches.matchId, schema.matchParticipants.matchId))
+            .where(and(
+                eq(schema.matchParticipants.userId, userId),
+                isNotNull(schema.matches.endedAt),
+                cursorCondition,
+            ))
+            .orderBy(desc(schema.matches.endedAt), desc(schema.matches.matchId))
+            .limit(limit + 1);
+
+        const hasMore = rows.length > limit;
+        const page = rows.slice(0, limit);
+        const matches = page.flatMap((row): UserMatchHistoryItem[] => row.endedAt ? [{
+            matchId: row.matchId,
+            endedAt: row.endedAt.toISOString(),
+            map: row.map,
+            won: row.won,
+            tagCount: row.tagCount,
+            taggedCount: row.taggedCount,
+            switchTry: row.switchTry,
+            switchSuccess: row.switchSuccess,
+            survivedMs: row.survivedMs,
+        }] : []);
+        const last = hasMore ? matches.at(-1) : undefined;
+        return {
+            matches,
+            nextCursor: last ? encodeCursor({ endedAt: last.endedAt, matchId: last.matchId }) : null,
+        };
     }
 }

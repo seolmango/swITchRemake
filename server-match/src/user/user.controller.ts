@@ -1,4 +1,4 @@
-import { Controller, Delete, Post, Body, Req, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Post, Query, Req, Res } from '@nestjs/common';
 import { UserService } from "./user.service";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { RateLimiter } from "../ratelimiter.decorator";
@@ -6,6 +6,9 @@ import { NeedAccount } from '../auth/need-account.decorator';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { MatchHistoryQueryDto } from './dto/match-history-query.dto';
+
+type AccountRequest = FastifyRequest & { user: { id: number; sessionId: string; guest: false } };
 
 @Controller('users')
 export class UserController {
@@ -24,9 +27,26 @@ export class UserController {
     @RateLimiter({ anon: 0, guest: 5, account: 5, ttl: 60000 })
     async changePassword(
         @Body() dto: ChangePasswordDto,
-        @Req() req: FastifyRequest & { user: { id: number; sessionId: string } },
+        @Req() req: AccountRequest,
     ) {
         return this.userService.changePassword(req.user.id, req.user.sessionId, dto);
+    }
+
+    @Get('me/stats')
+    @NeedAccount()
+    @RateLimiter({ anon: 0, guest: 60, account: 120, ttl: 60_000 })
+    async getMyStats(@Req() req: AccountRequest) {
+        return this.userService.getStats(req.user.id);
+    }
+
+    @Get('me/matches')
+    @NeedAccount()
+    @RateLimiter({ anon: 0, guest: 60, account: 120, ttl: 60_000 })
+    async getMyMatches(
+        @Req() req: AccountRequest,
+        @Query() query: MatchHistoryQueryDto,
+    ) {
+        return this.userService.getMatches(req.user.id, query.limit, query.cursor);
     }
 
     @Delete('me')

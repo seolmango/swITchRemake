@@ -9,6 +9,7 @@ export type PlayerSkill = Exclude<SkillId, 'switch'>;
 export interface LobbyViewPlayerStats {
     games: number;
     wins: number;
+    winRate: number;
     switchSuccessRate: number;
 }
 

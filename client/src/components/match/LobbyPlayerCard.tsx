@@ -128,7 +128,7 @@ export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, 
                 {player.stats ? (
                     <>
                         <span><strong>{player.stats.games}</strong><small>{t('lobby.games')}</small></span>
-                        <span><strong>{Math.round(player.stats.wins / Math.max(1, player.stats.games) * 100)}%</strong><small>{t('lobby.winRate')}</small></span>
+                        <span><strong>{player.stats.winRate}%</strong><small>{t('lobby.winRate')}</small></span>
                         <span><strong>{player.stats.switchSuccessRate}%</strong><small>{t('lobby.switchRate')}</small></span>
                     </>
                 ) : <span className="lobby-no-stats">{player.guest ? t('lobby.guestStats') : '—'}</span>}

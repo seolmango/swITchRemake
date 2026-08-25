@@ -55,7 +55,11 @@
   },
   "profile": {
     "title": "프로필", "guestTitle": "아직 로그인하지 않았어요", "guestBody": "로그인하면 전적과 게임 설정을 한곳에서 관리할 수 있습니다.",
-    "loggedBody": "인증 서버와 연결된 세션입니다.", "changePassword": "비밀번호 변경", "statsPending": "전적 API가 추가되면 이 영역에 게임 수, 승리, 스위치 성공률을 표시합니다.",
+    "loggedBody": "인증 서버와 연결된 세션입니다.", "changePassword": "비밀번호 변경", "guestStats": "게스트는 전적이 저장되지 않아요.",
+    "statsKicker": "CAREER STATS", "statsTitle": "누적 전적", "statsLoading": "전적을 불러오는 중…", "statsLoadFailed": "전적을 불러오지 못했습니다.", "retryStats": "다시 시도",
+    "games": "게임", "wins": "승리", "winRate": "승률", "switchRate": "스위치 성공률", "tags": "태그", "level": "레벨",
+    "historyKicker": "MATCH HISTORY", "recentMatches": "최근 경기", "matchesLoading": "최근 경기를 불러오는 중…", "matchesLoadFailed": "최근 경기 목록을 불러오지 못했습니다.", "noMatches": "아직 기록된 경기가 없습니다.",
+    "victory": "승리", "defeat": "패배", "matchTags": "태그 {{count}}회", "matchTagged": "태그당함 {{count}}회", "matchSwitch": "swITch {{success}}/{{tries}}", "matchSurvived": "생존 {{duration}}", "seconds": "{{count}}초",
     "securityKicker": "ACCOUNT SECURITY", "loginDevices": "로그인한 기기", "loginDevicesHelp": "현재 계정으로 로그인된 기기를 확인하고 필요 없는 세션을 종료할 수 있습니다.",
     "lastActive": "최근 사용 {{date}}", "currentDevice": "현재 기기", "revokeSession": "로그아웃", "revokeOthers": "다른 기기 모두 로그아웃", "noSessions": "활성 로그인 세션이 없습니다.",
     "sessionsLoadFailed": "로그인 기기 목록을 불러오지 못했습니다.", "sessionRevoked": "선택한 기기에서 로그아웃했습니다.", "sessionActionFailed": "세션을 변경하지 못했습니다.", "otherSessionsRevoked": "다른 기기 {{count}}개에서 로그아웃했습니다.", "sessionScrollHint": "드래그하거나 스크롤해서 더 많은 기기를 확인하세요."
