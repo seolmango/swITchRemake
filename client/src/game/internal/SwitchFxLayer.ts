@@ -1,8 +1,9 @@
-import Phaser from 'phaser';
+// 타입으로만 쓴다. 값으로 import하면 Phaser의 device 탐지가 돌면서 테스트 환경(node)에서 죽는다.
+import type Phaser from 'phaser';
 import { Palette } from '../palette.ts';
 import { SWITCH_FX, type RenderOptions } from '../constants.ts';
 import type { Theme } from '../types.ts';
-import { DEPTH } from './PlayerSprite.ts';
+import { DEPTH } from './depth.ts';
 
 interface SwitchEntry {
     x: number;

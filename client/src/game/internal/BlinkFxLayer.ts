@@ -3,7 +3,7 @@ import { Palette } from '../palette.ts';
 import { BLINK_FX, type RenderOptions } from '../constants.ts';
 import type { Theme } from '../types.ts';
 import { strokeDashedLine } from './dashed.ts';
-import { DEPTH } from './PlayerSprite.ts';
+import { DEPTH } from './depth.ts';
 
 interface BlinkEntry {
     x0: number;

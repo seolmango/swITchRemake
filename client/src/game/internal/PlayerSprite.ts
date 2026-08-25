@@ -6,22 +6,9 @@ import { BAR, CONCEAL, DASH_FX, EFFECT_BAR_ORDER, EMOJI, EXHAUST_FX, FRENZY_FX, 
 import { fillRoundedRect, strokeRoundedRect } from './shapes.ts';
 import { strokeDashedCircle } from './dashed.ts';
 import { emojiTextureKey } from '../emoji.ts';
+import { DEPTH } from './depth.ts';
 
 /** Render depths (higher draws on top). Kept together so the whole stack order is visible at a glance. */
-export const DEPTH = {
-    mapStatic: 0,
-    grass: 1,
-    smoke: 2,
-    stormFill: 3,
-    stormBorder: 4,
-    /** 점멸 궤적보다 아래. 사거리 원이 궤적을 덮으면 어느 쪽이 무슨 스킬인지 안 읽힌다. */
-    switchFx: 4.5,
-    blinkFx: 5,
-    playerBody: 6,
-    playerLabel: 6.1,
-    playerBars: 8,
-    playerEmoji: 9,
-} as const;
 
 export interface PlayerVisualState {
     x: number;

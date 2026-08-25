@@ -5,7 +5,7 @@ import { Palette } from '../palette.ts';
 import { traceQuadraticCurve } from './shapes.ts';
 import { buildRegions, collectTiles } from './regions.ts';
 import { traceOrthogonalRoundedLoop, traceRegionOutlines } from './regionOutline.ts';
-import { DEPTH } from './PlayerSprite.ts';
+import { DEPTH } from './depth.ts';
 
 interface SmokeRegionRuntime extends RegionInfo {
     /** 1 = fully present, 0 = fully dissipated. Set by the caller (setRegionRemaining) — no owned timer here. */
