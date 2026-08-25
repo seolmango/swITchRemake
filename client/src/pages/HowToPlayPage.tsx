@@ -262,7 +262,7 @@ export const HowToPlayPage: React.FC = () => {
                         ariaLabel={t('guide.training.button')}
                         onClick={() => navigate('/training')}
                     />
-                    <p>{t('guide.training.status')}</p>
+                    <p>{t('guide.training.hint')}</p>
                 </div>
             </div>
         </PageLayout>

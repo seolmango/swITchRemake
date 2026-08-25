@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { TitlePage } from "./pages/TitlePage.tsx";
-import { EngineSandboxPage } from "./pages/dev/EngineSandboxPage.tsx";
 import './i18n.ts';
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "./stores/useSettingsStore.ts";
@@ -75,7 +74,6 @@ function App() {
                         <Route path="/training" element={<TrainingPage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
-                    <Route path="/sandbox" element={<EngineSandboxPage />} />
                 </Routes>
             </BrowserRouter>
         </div>

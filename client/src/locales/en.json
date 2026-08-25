@@ -475,7 +475,7 @@
     },
     "training": {
       "button": "Training Ground",
-      "status": "Safely practice skills, physics, and spectating."
+      "hint": "Try every skill and bump into things. Nothing here counts for or against you."
     },
     "tagger": {
       "eyebrow": "The tagger",

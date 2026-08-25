@@ -494,7 +494,7 @@ export class WorldScene extends Phaser.Scene {
 
     /**
      * Applies one decoded server frame. This is the only path a real match uses — the individual setters
-     * stay for the tutorial and the dev sandbox.
+     * stay for the help-screen demos.
      *
      * The `players` list is authoritative when present: anyone absent from it is removed, because "the
      * server didn't send them" is exactly how invisibility is expressed. Sections that are absent
