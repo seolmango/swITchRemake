@@ -1,0 +1,21 @@
+{
+  "name": "server-supervisor",
+  "version": "1.0.0",
+  "description": "swITch 감독자. 부하를 보고 인게임 서버 프로세스를 늘리고 재운다.",
+  "type": "commonjs",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.test.json && node ../scripts/run-tests.cjs dist-test"
+  },
+  "dependencies": {
+    "ioredis": "^5.10.1",
+    "shared": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
