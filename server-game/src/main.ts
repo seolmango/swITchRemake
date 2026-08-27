@@ -53,6 +53,7 @@ async function main(): Promise<void> {
     log(`  listen         ${INFRA.HOST}:${INFRA.PORT}${INFRA.PUBLIC_WS_PATH}`);
     log(`  rulesVersion   ${RULES_VERSION}  buildId ${INFRA.BUILD_ID}`);
     log(`  simulation     ${NETWORK.SIMULATION_HZ}Hz, 스냅샷 ${NETWORK.SNAPSHOT_HZ}Hz (${SNAPSHOT_INTERVAL_TICKS} tick마다)`);
+    log(`  maxRooms       ${INFRA.MAX_ROOMS}개`);
 
     // ── 리플레이 ──
     // `s3`는 아직 구현이 없다. 그 상태로 켜져 있으면 조용히 기록을 잃는 것보다 꺼서 알리는 편이 낫다.
@@ -112,6 +113,7 @@ async function main(): Promise<void> {
 
     rooms = new RoomManager({
         lifecycle,
+        maxRooms: INFRA.MAX_ROOMS,
         isKnownMap: (mapId, mode) => isPlayableMap(bundle, mapId, mode),
         canStartGame: () => outbox.canStartNewGame(),
         getServerTick: () => serverTick,
@@ -193,6 +195,7 @@ async function main(): Promise<void> {
             rulesVersion: RULES_VERSION,
             mapBundleHash: bundle.mapBundleHash,
             internalAddress: () => internalAddress(),
+            maxRooms: INFRA.MAX_ROOMS,
             connectionCount: () => transport.connectionCount(),
             loopLagMs: () => scheduler.getStats().loopLagMs,
             isDraining: () => draining,

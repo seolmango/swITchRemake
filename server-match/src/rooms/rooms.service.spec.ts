@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
-import { CONTROL_VERSION, CommandType, ControlErrorCode, type ControlCommand, type ControlReply } from 'shared';
+import { CONTROL_VERSION, CommandType, ControlErrorCode, PROTOCOL_VERSION, type ControlCommand, type ControlReply } from 'shared';
 import { RoomsService } from './rooms.service';
 
 class FakeRedis {
@@ -301,4 +301,54 @@ test('게스트는 전적 없이 예약한다', async () => {
     }, 'room-1', undefined, '203.0.113.9');
 
     assert.equal((command!.payload as { stats: unknown }).stats, null);
+});
+
+/** heartbeat 하나를 Redis에 심는다. 배정이 이 값을 보고 서버를 고른다. */
+function addServer(redis: FakeRedis, serverId: string, overrides: Record<string, unknown> = {}): void {
+    redis.values.set(`dev:game-server:${serverId}`, JSON.stringify({
+        serverId,
+        protocolVersion: PROTOCOL_VERSION,
+        waitingRooms: 0,
+        playingRooms: 0,
+        connections: 0,
+        loopLagMs: 0,
+        draining: false,
+        internalAddress: `http://127.0.0.1:4000`,
+        maxRooms: 100,
+        updatedAt: Date.now(),
+        ...overrides,
+    }));
+    const alive = redis.sorted.get('dev:game-servers:alive') ?? [];
+    alive.push(serverId);
+    redis.sorted.set('dev:game-servers:alive', alive);
+}
+
+test('가득 찬 서버에는 방을 배정하지 않는다', async () => {
+    // 후보에 두면 가장 한가한 축에 들 때 골라 놓고 SERVER_FULL을 돌려받는다. 사용자에게는
+    // 그냥 실패다 — 상한이 뜻을 가지려면 배정하는 쪽이 그 값을 봐야 한다.
+    const redis = new FakeRedis();
+    addServer(redis, 'game-full', { waitingRooms: 100, maxRooms: 100 });
+    addServer(redis, 'game-free', { waitingRooms: 40, maxRooms: 100 });
+    const service = makeService(redis);
+
+    const chosen = await (service as any).selectServer();
+    assert.equal(chosen.serverId, 'game-free', '가득 찬 서버를 골랐다');
+});
+
+test('maxRooms를 안 싣는 서버는 상한이 없는 것으로 본다', async () => {
+    // 예전 판 heartbeat가 섞여 있을 수 있다. 모르는 값 때문에 멀쩡한 서버를 빼면 배정이 막힌다.
+    const redis = new FakeRedis();
+    addServer(redis, 'game-old', { waitingRooms: 500, maxRooms: undefined });
+    const service = makeService(redis);
+
+    const chosen = await (service as any).selectServer();
+    assert.equal(chosen.serverId, 'game-old');
+});
+
+test('전부 가득 차면 배정할 서버가 없다', async () => {
+    const redis = new FakeRedis();
+    addServer(redis, 'game-full', { playingRooms: 100, maxRooms: 100 });
+    const service = makeService(redis);
+
+    await assert.rejects(() => (service as any).selectServer());
 });

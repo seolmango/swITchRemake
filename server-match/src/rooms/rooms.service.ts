@@ -103,6 +103,15 @@ interface PendingReply {
 
 type ClientSeatGrant = SeatGrant & { roomId: string; roomCode: string };
 
+/**
+ * 이 서버가 방을 더 받을 수 있는가.
+ *
+ * `maxRooms`를 안 싣던 시절의 heartbeat도 있을 수 있다. 그때는 상한이 없는 것으로 본다 —
+ * 모르는 값 때문에 멀쩡한 서버를 후보에서 빼면 배정이 통째로 막힌다.
+ */
+const hasRoomCapacity = (server: GameServerHeartbeat): boolean =>
+    typeof server.maxRooms !== 'number' || server.waitingRooms + server.playingRooms < server.maxRooms;
+
 @Injectable()
 export class RoomsService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(RoomsService.name);
@@ -545,7 +554,10 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         const ids = await this.redis.sortedSetMembers(this.keys.gameServersAlive(), 0, -1);
         const candidates = (await Promise.all(ids.map((id) => this.readServer(id))))
             .filter((server): server is GameServerHeartbeat => server !== null)
-            .filter((server) => !server.draining && server.protocolVersion === PROTOCOL_VERSION);
+            .filter((server) => !server.draining && server.protocolVersion === PROTOCOL_VERSION)
+            // 가득 찬 서버는 아예 후보에서 뺀다. 넣어 두면 가장 한가한 축에 들 때 골라 놓고
+            // SERVER_FULL을 돌려받는다 — 사용자에게는 그냥 실패다.
+            .filter((server) => hasRoomCapacity(server));
         if (!candidates.length) {
             throw new ServiceUnavailableException({ code: 'NO_GAME_SERVER', retryable: true });
         }

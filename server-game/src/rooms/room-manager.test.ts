@@ -389,3 +389,32 @@ test('모르는 맵으로는 넘겨받지 않는다', () => {
     const fixture = managerFixture();
     assert.equal(fixture.manager.adoptRoom(migrationPayload({ mapId: 'ghost' })).ok, false);
 });
+
+test('상한을 넘으면 방을 더 만들지 않는다', () => {
+    // 상한이 없으면 부하 분산기가 밀어붙일 천장이 없다 — 서버가 다 터져 가도 "그나마 덜 나쁜
+    // 놈"을 골라 계속 방을 꽂아넣는다. 거절할 줄 아는 것이 분산의 전제다.
+    let now = 0;
+    const manager = new RoomManager({
+        lifecycle,
+        maxRooms: 2,
+        isKnownMap: (mapId) => mapId === 'map',
+        getServerTick: () => 0,
+        violationSink: () => undefined,
+        now: () => now,
+        timing: {
+            reconnectGraceMs: 10_000,
+            startLockOnJoinMs: 0,
+            startLockOnMapChangeMs: 0,
+        },
+    });
+    const make = (id: string, userId: number) => manager.createRoom({
+        id, roomCode: 'ABC234', matchId: `m-${id}`, name: id, password: null,
+        capacity: 8, mapId: 'map', ownerReservation: { ...seat(userId), roomId: id },
+    });
+
+    assert.equal(make('r1', 1).ok, true);
+    assert.equal(make('r2', 2).ok, true);
+    const third = make('r3', 3);
+    assert.equal(third.ok, false);
+    assert.equal(third.ok ? null : third.code, 'SERVER_FULL');
+});

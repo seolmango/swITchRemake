@@ -42,6 +42,17 @@ export const INFRA = Object.freeze({
     SERVER_ID: required('GAME_SERVER_ID'),
     /** 리버스 프록시가 이 프로세스로 보낼 때 쓰는 공개 경로. 클라이언트에 그대로 내려간다. */
     PUBLIC_WS_PATH: optional('GAME_PUBLIC_WS_PATH', `/game-ws/${optional('GAME_SERVER_ID', 'local')}`),
+    /**
+     * 이 프로세스가 동시에 들고 있을 방의 상한.
+     *
+     * 예전에는 코드에 자리만 있고 아무도 값을 넣지 않아 무한대였다. 그러면 부하 분산기가
+     * **밀어붙일 천장이 없다** — 서버가 다 터져 가도 "그나마 덜 나쁜 놈"을 골라 계속 방을
+     * 꽂아넣는다. 거절할 줄 아는 것이 분산의 전제다.
+     *
+     * 100은 측정으로 나온 값이 아니라 보수적인 출발점이다. 8인 풀방 tick 측정이 끝나면
+     * 실제 수치로 바꾼다.
+     */
+    MAX_ROOMS: num('GAME_MAX_ROOMS', 100),
     PORT: num('GAME_PORT', 4000),
     HOST: optional('GAME_HOST', '0.0.0.0'),
     /**

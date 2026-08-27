@@ -17,6 +17,7 @@ function server(serverId: string, overrides: Partial<GameServerHeartbeat> = {}):
         loopLagMs: 0,
         draining: false,
         internalAddress: 'http://127.0.0.1:4000',
+        maxRooms: 100,
         updatedAt: 0,
         ...overrides,
     };

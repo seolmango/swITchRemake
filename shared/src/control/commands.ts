@@ -247,6 +247,13 @@ export interface GameServerHeartbeat {
      * 고치지 않아도 되게 하기 위해서다. 뜨면 알아서 경로가 생기고 죽으면 TTL로 사라진다.
      */
     internalAddress: string;
+    /**
+     * 이 서버가 동시에 들고 있을 방의 상한.
+     *
+     * 배정하는 쪽이 이 값을 봐야 상한이 뜻을 갖는다. 안 보면 가득 찬 서버에 방을 꽂아 넣고
+     * `SERVER_FULL`을 돌려받는데, 그건 상한이 아니라 그냥 에러다.
+     */
+    maxRooms: number;
 }
 
 /** heartbeat 주기와 키 TTL. TTL은 주기의 3배라 한 번 걸러도 살아 있는 것으로 본다. */

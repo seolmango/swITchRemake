@@ -23,6 +23,7 @@ export interface HeartbeatSource {
     readonly mapBundleHash: string;
     /** 게이트웨이가 이 서버에 닿는 주소. 포트가 0으로 뜨는 경우가 있어 listen 뒤에 읽는다. */
     internalAddress(): string;
+    readonly maxRooms: number;
     connectionCount(): number;
     loopLagMs(): number;
     isDraining(): boolean;
@@ -288,6 +289,7 @@ export class GameRegistry {
             loopLagMs: this.#options.heartbeat.loopLagMs(),
             draining: this.#options.heartbeat.isDraining(),
             internalAddress: this.#options.heartbeat.internalAddress(),
+            maxRooms: this.#options.heartbeat.maxRooms,
             updatedAt: now,
         };
     }
