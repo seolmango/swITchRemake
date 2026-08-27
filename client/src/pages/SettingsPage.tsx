@@ -8,6 +8,7 @@ import {
 } from '../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../theme/color.ts';
 import { formatKeyBinding } from '../utils/keyBinding.ts';
+import { TouchLayoutEditor } from '../game/hud/touch/TouchLayoutEditor.tsx';
 
 interface Choice<T extends string> {
     value: T;
@@ -252,6 +253,35 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                     { value: 'off', label: t('settings.game.off') }, { value: 'protanopia', label: t('settings.game.protanopia') },
                     { value: 'deuteranopia', label: t('settings.game.deuteranopia') }, { value: 'tritanopia', label: t('settings.game.tritanopia') },
                 ]} onChange={(value) => settings.setGameSetting('colorVisionMode', value)} />
+            </SettingRow>
+            <SettingRow title={t('settings.game.touchControls')} description={t('settings.game.touchControlsDescription')}>
+                <SegmentedControl value={settings.touchControls} options={[
+                    { value: 'auto', label: t('settings.game.touchAuto') },
+                    { value: 'on', label: t('settings.game.touchOn') },
+                    { value: 'off', label: t('settings.game.touchOff') },
+                ]} onChange={(value) => settings.setGameSetting('touchControls', value)} />
+            </SettingRow>
+            <SettingRow title={t('settings.game.touchScale')} description={t('settings.game.touchScaleDescription')}>
+                <div className="settings-volume-control">
+                    <input
+                        type="range"
+                        min="70"
+                        max="140"
+                        step="5"
+                        value={Math.round(settings.touchScale * 100)}
+                        aria-label={t('settings.game.touchScale')}
+                        style={{ '--range-progress': `${((settings.touchScale * 100 - 70) / 70) * 100}%` } as React.CSSProperties}
+                        onChange={(event) => settings.setGameSetting('touchScale', Number(event.target.value) / 100)}
+                    />
+                    <output>{Math.round(settings.touchScale * 100)}%</output>
+                </div>
+            </SettingRow>
+            <SettingRow title={t('settings.game.touchLayout')} description={t('settings.game.touchLayoutDescription')}>
+                <TouchLayoutEditor label={{
+                    move: t('settings.game.touchMove'),
+                    action: t('settings.game.touchAction'),
+                    hint: t('settings.game.touchLayoutHint'),
+                }} />
             </SettingRow>
             {([
                 ['screenShake', 'screenShakeDescription'],

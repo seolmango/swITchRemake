@@ -6,6 +6,8 @@ import { EngineMode } from './types.ts';
 import type { SwitchEngine } from './SwitchEngine.ts';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
 import { PerformanceStats } from './hud/PerformanceStats.tsx';
+import { TouchControls } from './hud/touch/TouchControls.tsx';
+import { useTouchControlsVisible } from './hud/touch/useTouchControls.ts';
 
 export interface SwitchGameProps {
     mode?: EngineMode;
@@ -51,6 +53,7 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
     const colorVision = useSettingsStore((s) => s.colorVisionMode);
     const showControlHints = useSettingsStore((s) => s.showControlHints);
     const [engine, setEngine] = useState<SwitchEngine | null>(null);
+    const touchVisible = useTouchControlsVisible();
 
     const handleEngine = useCallback((next: SwitchEngine | null) => {
         setEngine(next);
@@ -83,6 +86,16 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
                 onSpectate={handleSpectate}
                 onEmoji={(id) => onEmoji?.(id)}
             />
+            {touchVisible && mode !== EngineMode.Spectate && (
+                <TouchControls
+                    theme={theme}
+                    colorVision={colorVision}
+                    hud={hud}
+                    onUseMovementSkill={() => onUseMovementSkill?.()}
+                    onSwitchTarget={(id) => onSwitchTarget?.(id)}
+                    onEmoji={(id) => onEmoji?.(id)}
+                />
+            )}
             <PerformanceStats theme={theme} engine={engine} latencyMs={latencyMs} estimatedTps={estimatedTps} />
         </div>
     );

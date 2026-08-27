@@ -7,6 +7,7 @@ import { RoundButton } from '../components/common/RoundButton.tsx';
 import { PageLayout } from '../components/layout/PageLayout.tsx';
 import { EngineMode, SwitchGame, type HudState, type SwitchEngine } from '../game';
 import { verifiedMapView } from '../game/mapBundle.ts';
+import { readTouchDirection } from '../game/touchInput.ts';
 import { TILE_SIZE } from '../game/constants.ts';
 import { gameSession } from '../game/GameSession.ts';
 import { useGameSession } from '../game/useGameSession.ts';
@@ -249,10 +250,16 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
         const active = (action: 'moveUp' | 'moveDown' | 'moveLeft' | 'moveRight') =>
             useSettingsStore.getState().keyBindings[action].some((code) => code !== null && pressed.has(code));
         const timer = window.setInterval(() => {
+            // 키보드와 조이스틱을 합친다. 한쪽이 다른 쪽을 끄면 태블릿에 키보드를 붙인 사람처럼
+            // 둘 다 쓰는 조합에서 조작이 죽는다. 조이스틱을 안 잡고 있으면 전부 false다.
+            const touch = readTouchDirection();
             gameSession.sendInput({
                 sequence: inputSequence.current++ & 0xffff,
-                left: active('moveLeft'), right: active('moveRight'),
-                up: active('moveUp'), down: active('moveDown'), heldActions: 0,
+                left: active('moveLeft') || touch.left,
+                right: active('moveRight') || touch.right,
+                up: active('moveUp') || touch.up,
+                down: active('moveDown') || touch.down,
+                heldActions: 0,
             });
         }, 1000 / 30);
         window.addEventListener('keydown', onKeyDown);

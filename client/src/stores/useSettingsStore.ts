@@ -8,6 +8,19 @@ export type FrameRate = '30' | '60' | '120' | 'unlimited';
 export type MotionLevel = 'reduced' | 'standard' | 'full';
 export type GraphicsQuality = 'low' | 'medium' | 'high';
 export type ResolutionScale = '75' | '100' | '125';
+/**
+ * 터치 조이스틱을 언제 띄울지.
+ *
+ * 'auto'는 `pointer: coarse`로 판단한다. 기기 종류만으로 정할 수 없는 조합이 실재해서 —
+ * 터치 노트북, 폰에 붙인 블루투스 키보드 — 사용자가 덮어쓸 자리를 남긴다.
+ */
+export type TouchControlsMode = 'auto' | 'on' | 'off';
+
+/** 조이스틱 중심 위치. 화면 크기로 나눈 0~1 값이라 기기와 방향이 바뀌어도 같은 자리에 온다. */
+export interface TouchAnchor {
+    x: number;
+    y: number;
+}
 // 색각 보조 모드의 정의는 팔레트가 있는 곳(theme/cvd.ts)에 둔다 — 값이 늘어나면 팔레트도 같이 늘어야 하므로.
 export type { ColorVisionMode };
 
@@ -36,6 +49,11 @@ interface GameSettings {
     showLatency: boolean;
     showFps: boolean;
     showTps: boolean;
+    touchControls: TouchControlsMode;
+    /** 조이스틱 지름 배율. 손 크기와 화면 크기가 사람마다 다르다. */
+    touchScale: number;
+    touchMoveAnchor: TouchAnchor;
+    touchActionAnchor: TouchAnchor;
 }
 
 interface SettingsState extends GameSettings {
@@ -84,6 +102,11 @@ const GAME_DEFAULTS: GameSettings = {
     showLatency: true,
     showFps: false,
     showTps: false,
+    touchControls: 'auto',
+    touchScale: 1,
+    // 화면 아래쪽 양 끝. 엄지가 자연스럽게 닿는 자리이면서 시야를 가장 덜 가린다.
+    touchMoveAnchor: { x: 0.15, y: 0.74 },
+    touchActionAnchor: { x: 0.85, y: 0.74 },
 };
 
 const createDefaults = () => ({
