@@ -64,6 +64,13 @@ export const ErrorCode = {
     Kicked: 'KICKED',
     SpectateDenied: 'SPECTATE_DENIED',
     StartLocked: 'START_LOCKED',
+    /**
+     * 결과를 내보낼 자리가 없어 새 경기를 받지 않는다. Redis가 막혀 outbox가 찼을 때다.
+     *
+     * `Internal`로 뭉뚱그리지 않는 이유는 사용자가 할 일이 다르기 때문이다. 이건 잠시 뒤 다시
+     * 누르면 되는 상태다 — outbox는 Redis가 살아나면 스스로 비워진다.
+     */
+    ResultBacklog: 'RESULT_BACKLOG',
     ServerShutdown: 'SERVER_SHUTDOWN',
     Internal: 'INTERNAL',
 } as const;

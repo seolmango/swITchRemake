@@ -132,6 +132,9 @@
     "startCountdown": "Start in {{seconds}}s",
     "liveData": "Game server connected",
     "commandFailed": "The request could not be completed. ({{code}})",
+    "errorCodes": {
+      "RESULT_BACKLOG": "The server is still saving the last match's results. Try starting again in a moment."
+    },
     "reconnecting": "Reconnecting to the game server…",
     "resumeFailed": "This room connection could not be restored."
   },

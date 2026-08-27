@@ -464,7 +464,7 @@ export class Room {
         if (this.#startLock.remainingMs(now) > 0) return ErrorCode.StartLocked;
         const participants = this.#roster.members().filter((member) => member.connection !== null);
         if (participants.length < this.#options.minPlayersToStart) return ErrorCode.BadState;
-        if (this.#options.canStartGame?.() === false) return ErrorCode.Internal;
+        if (this.#options.canStartGame?.() === false) return ErrorCode.ResultBacklog;
 
         // 첫 경기는 매칭 서버가 발급해 둔 id를 그대로 쓴다. 재경기부터 새로 만든다.
         if (this.#playedGames > 0) this.#matchId = (this.#options.newMatchId ?? randomUUID)();

@@ -329,7 +329,7 @@ test('결과를 내보낼 자리가 없으면 새 경기를 시작하지 않는�
     context.connect(r3);
     context.setNow(5_001);
 
-    assert.equal(context.room.requestStart(1), ErrorCode.Internal);
+    assert.equal(context.room.requestStart(1), ErrorCode.ResultBacklog);
     assert.equal(context.room.state, RoomState.Waiting);
 
     outboxHasRoom = true;

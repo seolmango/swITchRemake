@@ -178,7 +178,12 @@ export const LobbyPage: React.FC = () => {
     const startLockSeconds = Math.ceil((room?.startLockMs ?? 0) / 1000);
     const hasEnoughPlayers = (room?.players.filter((player) => player.role === 'player').length ?? 0) >= MIN_PLAYERS_TO_START;
     const canStart = isOwner && hasEnoughPlayers && (room?.startLockMs ?? 0) <= 0;
-    const statusText = (live && session.errorCode ? t('lobby.commandFailed', { code: session.errorCode }) : message)
+    // 코드별 문구가 있으면 그걸 쓰고, 없으면 코드를 그대로 보여준다. 사용자가 할 일이 다른
+    // 실패(예: 잠시 뒤 다시 누르면 되는 것)를 전부 같은 문장으로 뭉개면 아무 도움이 안 된다.
+    const errorText = live && session.errorCode
+        ? t(`lobby.errorCodes.${session.errorCode}`, { defaultValue: t('lobby.commandFailed', { code: session.errorCode }) })
+        : null;
+    const statusText = (errorText ?? message)
         || ((room?.startLockMs ?? 0) > 0
             ? t('lobby.startLocked', { seconds: startLockSeconds })
             : !hasEnoughPlayers
