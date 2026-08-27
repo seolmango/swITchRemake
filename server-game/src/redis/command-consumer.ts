@@ -8,6 +8,8 @@ import {
     type ControlReply,
     type CreateRoomPayload,
     type CreateRoomResult,
+    type DrainServerPayload,
+    type DrainServerResult,
     type KickUserPayload,
     type LobbyStats,
     type RedisKeys,
@@ -35,6 +37,14 @@ export interface CommandConsumerOptions {
     readonly isDraining: () => boolean;
     /** 'random' sentinel을 실제 맵 id로 바꾼다. 없으면 그대로 통과시킨다(테스트 기본값). */
     readonly resolveMapId?: (mapId: string) => string;
+    /**
+     * DRAIN_SERVER 명령을 받았을 때 부를 것. 생략하면 명령을 거절한다.
+     *
+     * 여기서 종료까지 기다리지 않는다 — 방이 다 빌 때까지 몇 분이 걸릴 수 있고, 그동안 명령
+     * 소비자가 멈춰 있으면 재접속 예약(RESERVE_RESUME)을 처리할 수 없다. 남은 사람을 위해
+     * 계속 돌아야 하는 바로 그 경로다.
+     */
+    readonly beginDrain?: () => void;
     readonly now?: () => number;
     readonly roomIdFactory?: () => string;
     readonly logger?: (message: string, error?: unknown) => void;
@@ -275,9 +285,27 @@ export class CommandConsumer {
                 return this.#releaseSeat(command, command.payload as ReleaseSeatPayload);
             case CommandType.KickUser:
                 return this.#kickUser(command, command.payload as KickUserPayload);
+            case CommandType.DrainServer:
+                return this.#drainServer(command, command.payload as DrainServerPayload);
             default:
                 return failure(this.#options.serverId, command, ControlErrorCode.Internal);
         }
+    }
+
+    /**
+     * 이 서버를 재운다. 신규 방·참가는 이 시점부터 거절되고, 남은 방이 다 비면 스스로 종료한다.
+     *
+     * 같은 명령이 두 번 와도 안전하다 — 이미 draining이면 남은 방 수만 다시 알려 준다.
+     */
+    #drainServer(command: ControlCommand, payload: DrainServerPayload): ControlReply<DrainServerResult> {
+        if (payload.serverId !== this.#options.serverId) {
+            return failure(this.#options.serverId, command, ControlErrorCode.RoomNotFound);
+        }
+        if (this.#options.beginDrain === undefined) {
+            return failure(this.#options.serverId, command, ControlErrorCode.Internal);
+        }
+        this.#options.beginDrain();
+        return success(this.#options.serverId, command, { remainingRooms: this.#options.rooms.size });
     }
 
     #reservation(

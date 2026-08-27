@@ -122,6 +122,8 @@ export {
     type ReserveJoinPayload,
     type ReserveResumePayload,
     type ReleaseSeatPayload,
+    type DrainServerPayload,
+    type DrainServerResult,
     type KickUserPayload,
     type SeatGrant,
     type GameServerHeartbeat,

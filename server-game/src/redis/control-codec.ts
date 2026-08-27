@@ -93,6 +93,7 @@ function validPayload(type: string, payload: unknown): boolean {
         case CommandType.ReserveResume: return reserveResumePayload(payload);
         case CommandType.ReleaseSeat: return releaseSeatPayload(payload);
         case CommandType.KickUser: return kickUserPayload(payload);
+        case CommandType.DrainServer: return object(payload) && text(payload['serverId']);
         default: return false;
     }
 }

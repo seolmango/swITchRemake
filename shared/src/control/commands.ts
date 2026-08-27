@@ -15,6 +15,16 @@ export const CommandType = {
     ReserveResume: 'RESERVE_RESUME',
     ReleaseSeat: 'RELEASE_SEAT',
     KickUser: 'KICK_USER',
+    /**
+     * 이 서버를 draining으로 돌린다. 신규 방·참가는 거절하고, 남은 방이 다 빌 때까지 돌다가
+     * 스스로 종료한다.
+     *
+     * 신호(SIGTERM) 대신 제어 평면으로 보내는 이유는 두 가지다. 하나는 Windows에 SIGTERM이
+     * 없어서 Node가 핸들러를 부르지 않고 프로세스를 즉시 죽인다는 것 — 경기 중인 사람이 전부
+     * 그 자리에서 튕긴다. 다른 하나는 감독자가 인게임 서버와 같은 기계에 있다는 보장이 없다는
+     * 것이다. 신호는 프로세스 옆에 있어야 보낼 수 있지만 Redis는 어디서든 닿는다.
+     */
+    DrainServer: 'DRAIN_SERVER',
 } as const;
 export type CommandType = (typeof CommandType)[keyof typeof CommandType];
 
@@ -125,6 +135,16 @@ export interface ReleaseSeatPayload {
     userId: ActorId;
 }
 
+export interface DrainServerPayload {
+    /** 엉뚱한 서버를 재우지 않도록 보낸 쪽이 대상을 적는다. 다르면 거절한다. */
+    serverId: string;
+}
+
+export interface DrainServerResult {
+    /** 명령을 받은 시점에 남아 있던 방 수. 감독자가 얼마나 기다릴지 가늠하는 데 쓴다. */
+    remainingRooms: number;
+}
+
 export interface KickUserPayload {
     roomId: string;
     userId: ActorId;
@@ -152,6 +172,7 @@ export interface ControlCommandMap {
     [CommandType.ReserveResume]: { payload: ReserveResumePayload; result: SeatGrant };
     [CommandType.ReleaseSeat]: { payload: ReleaseSeatPayload; result: Record<string, never> };
     [CommandType.KickUser]: { payload: KickUserPayload; result: Record<string, never> };
+    [CommandType.DrainServer]: { payload: DrainServerPayload; result: DrainServerResult };
 }
 
 /* ────────────────────────────── heartbeat ────────────────────────────── */

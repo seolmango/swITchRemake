@@ -208,6 +208,9 @@ async function main(): Promise<void> {
         tickets,
         registry,
         isDraining: () => draining,
+        // 명령 처리를 막지 않도록 기다리지 않고 시작만 시킨다. 남은 사람의 재접속 예약이
+        // 이 소비자를 지나가므로 여기서 멈추면 안 된다.
+        beginDrain: () => { void shutdown('DRAIN_SERVER'); },
         resolveMapId: (mapId) => {
             if (mapId !== 'random' || bundle.maps[mapId] !== undefined) return mapId;
             // 훈련장 맵은 추첨에서 뺀다. 넣어 두면 공개 방을 만든 사람이 이따금 연습장에 떨어진다.
@@ -218,6 +221,8 @@ async function main(): Promise<void> {
     });
 
     let draining = false;
+    /** draining 중 남은 방을 확인하는 주기. 경기가 분 단위라 촘촘할 이유가 없다. */
+    const DRAIN_POLL_MS = 1_000;
 
     // A newly started server is not useful until Redis authentication, the
     // command group, and the first registry heartbeat have all succeeded.
@@ -287,20 +292,55 @@ async function main(): Promise<void> {
     log('조립 완료. 방 배정 대기 중.');
 
     // ── 종료 ──
-    // draining으로 먼저 전환해 신규 방을 받지 않고, 진행 중인 방이 끝날 시간을 준다.
+    //
+    // draining으로 전환하고 **방이 다 빌 때까지 기다린다.** 예전에는 주석만 그렇게 적혀 있고
+    // 실제로는 즉시 scheduler를 멈추고 소켓을 닫았다 — 경기 중인 사람이 전부 그 자리에서 튕겼다.
+    //
+    // 기다리는 동안에도 소켓은 계속 받는다. 신규 방과 신규 참가는 명령 소비자가 막지만
+    // (`ServerDraining`), **재접속은 막으면 안 된다.** 마지막 경기에서 잠깐 끊긴 사람이 영영
+    // 못 돌아오게 된다.
     const shutdown = async (signal: string): Promise<void> => {
-        log(`${signal} 수신. draining으로 전환합니다.`);
+        if (draining) {
+            // 제어 평면 명령은 재전달될 수 있다(멱등). 그걸 "두 번 눌렀다"로 읽어 사람을
+            // 끊어 버리면 안 된다. 손으로 보내는 신호만 강제 종료로 친다.
+            if (signal === 'DRAIN_SERVER') return;
+            log(`${signal} 재수신. 남은 방을 버리고 즉시 종료합니다.`);
+            process.exit(0);
+        }
         draining = true;
-        transport.setAccepting(false);
+        log(`${signal} 수신. draining으로 전환합니다. 남은 방 ${rooms?.size ?? 0}개`);
+        // heartbeat 주기를 기다리지 않고 지금 알린다. 그래야 매칭 서버가 곧바로 배정을 멈춘다.
+        await registry.publish().catch(() => undefined);
+
+        await waitForEmptyRooms();
+
         clearInterval(roomTimer);
         clearInterval(redisRetry);
         scheduler.stop();
         outbox.stop();
+        // 마지막 결과까지 내보내고 나간다. 여기서 버리면 방금 끝난 경기의 전적이 사라진다.
+        await outbox.flush().catch(() => undefined);
         registry.stop();
+        transport.setAccepting(false);
         await consumer.stop().catch(() => undefined);
         await transport.close().catch(() => undefined);
         await redis.close().catch(() => undefined);
+        log('종료합니다.');
         process.exit(0);
+    };
+
+    /** 방이 0이 될 때까지 기다린다. 상한을 두지 않는다 — 경기 중인 사람을 끊지 않는 것이 우선이다. */
+    const waitForEmptyRooms = async (): Promise<void> => {
+        let lastReported = -1;
+        for (;;) {
+            const remaining = rooms?.size ?? 0;
+            if (remaining === 0) return;
+            if (remaining !== lastReported) {
+                log(`draining: 남은 방 ${remaining}개`);
+                lastReported = remaining;
+            }
+            await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
+        }
     };
 
     process.on('SIGINT', () => void shutdown('SIGINT'));

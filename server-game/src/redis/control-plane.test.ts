@@ -184,6 +184,7 @@ function harness() {
         now: () => now,
     });
     let nextRoomId = 1;
+    const drainCalls: number[] = [];
     const makeConsumer = (consumerId: string) => new CommandConsumer({
         redis,
         keys,
@@ -194,12 +195,16 @@ function harness() {
         tickets,
         registry,
         isDraining: () => false,
+        beginDrain: () => { drainCalls.push(now); },
         now: () => now,
         roomIdFactory: () => `room-${nextRoomId++}`,
         readBlockMs: 0,
     });
     const consumer = makeConsumer('consumer-1');
-    return { redis, keys, rooms, tickets, registry, consumer, makeConsumer, getNow: () => now, setNow: (value: number) => { now = value; } };
+    return {
+        redis, keys, rooms, tickets, registry, consumer, makeConsumer, drainCalls,
+        getNow: () => now, setNow: (value: number) => { now = value; },
+    };
 }
 
 const requestIds = new Map<string, string>();
@@ -527,6 +532,32 @@ test('주소를 읽을 수 없는 깨진 명령의 답만 공용 사서함으로
     h.redis.fresh.push({ id: 'bad-b', fields: { command: '{"requestId":"broken"}' } });
     await h.consumer.pollOnce();
     assert.equal(h.redis.added.at(-1)?.stream, h.keys.replies());
+});
+
+test('DRAIN_SERVER 명령이 이 서버를 재우고 남은 방 수를 알려 준다', async () => {
+    // 신호가 아니라 제어 평면으로 받는다. Windows에는 SIGTERM이 없어 Node가 핸들러를 부르지
+    // 않고 프로세스를 즉시 죽이고, 감독자가 같은 기계에 있다는 보장도 없다.
+    const h = harness();
+    h.redis.fresh.push(streamEntry('create-for-drain', createCommand()));
+    await h.consumer.pollOnce();
+
+    h.redis.fresh.push(streamEntry('drain-1', command('drain-1', CommandType.DrainServer, { serverId: 'game-1' })));
+    await h.consumer.pollOnce();
+
+    const reply = latestReply(h.redis);
+    assert.equal(reply.ok, true);
+    assert.deepEqual(reply.payload, { remainingRooms: 1 });
+    assert.deepEqual(h.drainCalls.length, 1);
+});
+
+test('남의 serverId로 온 DRAIN_SERVER는 거절한다', async () => {
+    // 스트림을 잘못 짚으면 엉뚱한 서버가 잠든다. 대상을 적게 하고 다르면 안 받는다.
+    const h = harness();
+    h.redis.fresh.push(streamEntry('drain-other', command('drain-other', CommandType.DrainServer, { serverId: 'game-9' })));
+    await h.consumer.pollOnce();
+
+    assert.equal(latestReply(h.redis).ok, false);
+    assert.deepEqual(h.drainCalls, []);
 });
 
 test('퇴장 cooldown과 강퇴 marker는 A1이 조회하는 makeKeys 형태로 기록된다', async () => {
