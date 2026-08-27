@@ -2,6 +2,7 @@ import {
     ControlErrorCode,
     decodeInput,
     ErrorCode,
+    isEmojiId,
     isLoadoutSkill,
     PlayerRole,
     RoomState,
@@ -332,8 +333,9 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                     error = ErrorCode.BadState;
                     break;
                 }
-                // SnapshotPlayer.emojiId is encoded as u8.
-                if (message.payload.emojiId < 0 || message.payload.emojiId > 0xff) {
+                // 계약이 정한 범위(1..8)로 막는다. u8이라는 이유로 0..255를 통과시키면, 서버는
+                // 받아서 뿌리는데 남의 클라이언트에는 그릴 그림이 없는 번호가 나간다.
+                if (!isEmojiId(message.payload.emojiId)) {
                     error = ErrorCode.InvalidPayload;
                     break;
                 }

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+    EMOJI_ID_MAX,
+    EMOJI_ID_MIN,
     encodeInput,
     ErrorCode,
     JSON_MESSAGE_VERSION,
@@ -233,17 +235,35 @@ test('game.emoji forwards an in-game player request to the emoji state sink', ()
     assert.deepEqual(fixture.emojis, [{ playerId: fixture.owner.playerId, emojiId: 7 }]);
 });
 
-test('game.emoji rejects values that cannot fit SnapshotPlayer emojiId', () => {
-    const fixture = managerFixture();
-    startFixtureGame(fixture);
-    fixture.manager.onJson(fixture.owner, {
-        v: JSON_MESSAGE_VERSION,
-        type: 'game.emoji',
-        requestId: 6,
-        payload: { emojiId: 256 },
-    });
-    assert.equal(errorCode(fixture.owner), ErrorCode.InvalidPayload);
-    assert.deepEqual(fixture.emojis, []);
+test('game.emoji는 계약 범위 밖의 번호를 거부한다', () => {
+    // u8에 들어간다는 이유로 0..255를 통과시키면, 서버는 받아서 뿌리는데 남의 클라이언트에는
+    // 그릴 그림이 없는 번호가 나간다. 보내는 사람만 멀쩡해 보이는 종류의 버그다.
+    for (const [index, emojiId] of [256, 0, -1, EMOJI_ID_MAX + 1, 1.5].entries()) {
+        const fixture = managerFixture();
+        startFixtureGame(fixture);
+        fixture.manager.onJson(fixture.owner, {
+            v: JSON_MESSAGE_VERSION,
+            type: 'game.emoji',
+            requestId: 6 + index,
+            payload: { emojiId },
+        });
+        assert.equal(errorCode(fixture.owner), ErrorCode.InvalidPayload, `emojiId=${emojiId}`);
+        assert.deepEqual(fixture.emojis, [], `emojiId=${emojiId}`);
+    }
+});
+
+test('game.emoji는 계약 범위의 양 끝을 통과시킨다', () => {
+    for (const emojiId of [EMOJI_ID_MIN, EMOJI_ID_MAX]) {
+        const fixture = managerFixture();
+        startFixtureGame(fixture);
+        fixture.manager.onJson(fixture.owner, {
+            v: JSON_MESSAGE_VERSION,
+            type: 'game.emoji',
+            requestId: 20,
+            payload: { emojiId },
+        });
+        assert.deepEqual(fixture.emojis, [{ playerId: fixture.owner.playerId, emojiId }]);
+    }
 });
 
 test('RoomManager가 티켓 admission과 GameTransport handler 경계를 연결한다', async () => {

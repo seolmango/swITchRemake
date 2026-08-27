@@ -127,6 +127,22 @@ export type LobbySpectateMessage = ClientEnvelope<'lobby.spectate', { spectate: 
  * `targetPlayerId`는 스위치에만 쓴다 — 지목 대상은 맵 어디에 있어도 되므로 서버가 좌표로 추론할 수 없다.
  */
 export type GameUseSkillMessage = ClientEnvelope<'game.useSkill', { slot: number; targetPlayerId?: number }>;
+/**
+ * 쓸 수 있는 이모지 번호는 1..8이다.
+ *
+ * 계약에 적어 두는 이유: 이 범위를 지금까지 클라이언트만 알고 있었고, 서버는 스냅샷 인코딩이
+ * u8이라는 이유로 0..255를 통과시켰다. 그러면 서버는 받아서 뿌리는데 클라이언트에는 그릴 그림이
+ * 없는 번호가 생긴다 — 남의 화면에서만 아무 일도 안 일어나는 상태다.
+ *
+ * 그림 파일이 늘어나면 `EMOJI_ID_MAX`를 올린다. 클라이언트가 자기 그림 수와 이 값이 어긋나면
+ * 부팅할 때 죽는다(`client/src/game/emoji.ts`) — 한쪽만 올리는 실수를 그 자리에서 잡는다.
+ */
+export const EMOJI_ID_MIN = 1;
+export const EMOJI_ID_MAX = 8;
+
+export const isEmojiId = (value: unknown): boolean =>
+    typeof value === 'number' && Number.isInteger(value) && value >= EMOJI_ID_MIN && value <= EMOJI_ID_MAX;
+
 export type GameEmojiMessage = ClientEnvelope<'game.emoji', { emojiId: number }>;
 export type PingMessage = ClientEnvelope<'ping', { clientTime: number }>;
 
