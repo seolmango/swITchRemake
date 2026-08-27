@@ -189,7 +189,7 @@ Playwright로 첫 방문→가입→방 생성→코드 참가→로비→경기
   자기 `pending`에 없는 reply를 ACK하면 원 요청자는 2초 복구 타이머까지 기다린다.
   **수평 확장하는 순간 모든 방 생성이 2초가 된다**
 - `game.emoji`의 `emojiId` 범위가 shared 계약에 없다(서버가 0..255로 막는 중)
-- 결정론 테스트와 가짜 클라이언트 부하 테스트
+- 가짜 클라이언트 부하 테스트 (결정론 테스트는 `simulation/determinism.test.ts`로 들어갔다)
 - 8인 풀방 tick 측정 후 프로세스당 방 수 상한 확정, `draining` 임계값
 - `replays`/`replay_holds` 보존·삭제 주기가 아무것도 안 돈다
 
