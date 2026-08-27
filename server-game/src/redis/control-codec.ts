@@ -108,6 +108,7 @@ export function decodeCommand(value: string): ControlCommand {
         || typeof parsed['deadlineAt'] !== 'number'
         || !Number.isFinite(parsed['deadlineAt'])
         || parsed['deadlineAt'] < parsed['issuedAt']
+        || !text(parsed['replyTo'])
         || !validPayload(parsed['type'], parsed['payload'])) {
         throw new Error('Malformed control command');
     }

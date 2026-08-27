@@ -10,6 +10,7 @@ test('control stream codec uses one stable JSON field per direction', () => {
         type: 'RESERVE_JOIN',
         issuedAt: 1,
         deadlineAt: 2,
+        replyTo: 'dev:matching-server:replies:test',
         payload: { roomId: 'ROOM1', userId: 7, nickname: 'Alice', password: null },
     };
     const reply: ControlReply = {

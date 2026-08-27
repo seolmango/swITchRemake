@@ -167,21 +167,27 @@ export class CommandConsumer {
         } catch (error: unknown) {
             this.#logger(`Ignoring malformed command stream entry ${entry.id}`, error);
             let requestId = `invalid:${this.#options.serverId}:${entry.id}`;
+            let replyTo: string | null = null;
             try {
                 const candidate = JSON.parse(raw) as unknown;
-                if (candidate !== null && typeof candidate === 'object'
-                    && isControlRequestId((candidate as Record<string, unknown>)['requestId'])) {
-                    requestId = (candidate as Record<string, string>)['requestId']!;
+                if (candidate !== null && typeof candidate === 'object') {
+                    const fields = candidate as Record<string, unknown>;
+                    if (isControlRequestId(fields['requestId'])) requestId = fields['requestId'] as string;
+                    // 명령이 깨졌어도 주소는 읽힐 수 있다. 읽히면 원 요청자가 즉시 실패를 받는다.
+                    if (typeof fields['replyTo'] === 'string' && fields['replyTo'].length > 0) {
+                        replyTo = fields['replyTo'];
+                    }
                 }
             } catch { /* synthetic requestId keeps the poison entry correlatable */ }
-            await this.#replyAndAckPoison(entry, requestId);
+            await this.#replyAndAckPoison(entry, requestId, replyTo);
             return;
         }
 
         const reply = await this.#replyFor(command);
         // 결과가 stream에 기록된 뒤에만 ack한다. 이 순서는 테스트로 고정한다.
+        // 보낸 인스턴스가 적어 준 주소로 답한다. 공용 stream에 넣으면 다른 인스턴스가 가져가 버린다.
         await this.#options.redis.xAdd(
-            this.#options.keys.replies(),
+            command.replyTo,
             CONTROL_STREAM_FIELDS.reply,
             encodeReply(reply),
             NETWORK.STREAM_MAXLEN,
@@ -195,7 +201,11 @@ export class CommandConsumer {
         if (cached !== undefined) cached.expiresAt = this.#now() + NETWORK.OPERATION_RESULT_TTL_MS;
     }
 
-    async #replyAndAckPoison(entry: StreamEntry, requestId: string): Promise<void> {
+    /**
+     * 주소를 모르는 답은 사서함(`keys.replies()`)으로 간다. 아무도 읽지 않는다 — 명령이 깨져서
+     * 여기까지 온 것이라 원 요청자는 어차피 상관관계를 만들 수 없고 타임아웃으로 복구한다.
+     */
+    async #replyAndAckPoison(entry: StreamEntry, requestId: string, replyTo: string | null = null): Promise<void> {
         const reply: ControlReply = {
             v: CONTROL_VERSION,
             requestId,
@@ -205,7 +215,7 @@ export class CommandConsumer {
             payload: null,
         };
         await this.#options.redis.xAdd(
-            this.#options.keys.replies(),
+            replyTo ?? this.#options.keys.replies(),
             CONTROL_STREAM_FIELDS.reply,
             encodeReply(reply),
             NETWORK.STREAM_MAXLEN,

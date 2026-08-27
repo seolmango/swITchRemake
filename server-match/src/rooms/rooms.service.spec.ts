@@ -186,6 +186,7 @@ test('a reply resolves only the pending request from its expected server', async
         type: CommandType.ReserveJoin,
         issuedAt: 1,
         deadlineAt: 2,
+        replyTo: 'dev:matching-server:replies:test',
         payload: { roomId: 'room', userId: 1, nickname: 'Alice', password: null },
     };
     const replyPromise = (service as any).sendCommand('expected-server', command) as Promise<ControlReply>;

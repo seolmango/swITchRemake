@@ -57,6 +57,17 @@ export interface ControlCommand<T = unknown> {
      * 매칭 서버가 이미 포기한 요청이 몇 초 뒤 처리되어 유령 방이 남는 것을 막는다.
      */
     deadlineAt: number;
+    /**
+     * 이 명령의 답을 넣을 stream. **보낸 인스턴스만 읽는 자기 전용 stream**이다.
+     *
+     * 예전에는 모든 매칭 서버가 하나의 응답 stream을 같은 소비자 그룹으로 읽었다. Redis 소비자
+     * 그룹은 항목을 소비자들에게 **나눠** 주므로, 다른 인스턴스가 자기 `pending`에 없는 응답을
+     * 받아 ack해 버리면 원 요청자는 아무것도 못 받고 2초 복구 타이머까지 기다렸다.
+     * 인스턴스가 N대면 응답의 (N-1)/N이 그렇게 사라진다 — 수평 확장하는 순간 모든 방 생성이 2초가 된다.
+     *
+     * 답을 받을 사람이 주소를 같이 적어 보내면 그 문제가 생기지 않는다.
+     */
+    replyTo: string;
     payload: T;
 }
 
@@ -181,6 +192,17 @@ export function makeKeys(env: string) {
         guestSession: (sessionId: string) => p(`guest-session:${sessionId}`),
         roomRejoin: (roomId: string, userId: ActorId) => p(`room-rejoin:${roomId}:${userId}`),
         commands: (serverId: string) => p(`game-server:${serverId}:commands`),
+        /**
+         * 매칭 서버 인스턴스 하나가 자기 응답만 읽는 stream.
+         *
+         * 읽는 쪽이 TTL을 계속 갱신한다. 인스턴스가 죽으면 아무도 갱신하지 않으므로 키가 스스로
+         * 사라진다 — 죽은 인스턴스의 stream이 Redis에 쌓이지 않는다.
+         */
+        repliesFor: (consumerId: string) => p(`matching-server:replies:${consumerId}`),
+        /**
+         * 주소를 알 수 없는 응답이 가는 곳. 명령 자체가 깨져서 `replyTo`를 읽지 못했을 때다.
+         * 아무도 읽지 않는다 — 원 요청자는 어차피 상관관계를 만들 수 없어 타임아웃으로 복구한다.
+         */
         replies: () => p('matching-server:replies'),
         gameResults: () => p('game-results'),
         operation: (requestId: string) => p(`operation:${requestId}`),

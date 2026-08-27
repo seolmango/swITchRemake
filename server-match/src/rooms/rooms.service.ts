@@ -48,6 +48,11 @@ const JOIN_RATE_LIMIT = 30;
 const JOIN_RATE_WINDOW_SECONDS = 60;
 const REJOIN_COOLDOWN_SECONDS = 60;
 const ROOM_LIST_PAGE_SIZE = 20;
+/**
+ * 자기 전용 응답 stream을 살려 두는 시간. 읽기 루프가 한 바퀴(최대 1초)마다 갱신한다.
+ * 프로세스가 죽으면 갱신이 멈추고 키가 사라진다 — 죽은 인스턴스의 stream이 Redis에 남지 않는다.
+ */
+const REPLY_STREAM_TTL_SECONDS = 300;
 
 interface Actor {
     id: ActorId;
@@ -103,6 +108,13 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(RoomsService.name);
     private readonly keys: ReturnType<typeof makeKeys>;
     private readonly consumer = `matching-${randomUUID()}`;
+    /**
+     * 이 인스턴스만 읽는 응답 stream.
+     *
+     * 예전에는 모든 인스턴스가 공용 stream 하나를 같은 소비자 그룹으로 읽었다. 소비자 그룹은 항목을
+     * 나눠 주므로 남의 응답을 받아 ack해 버렸고, 원 요청자는 2초 복구 타이머까지 기다렸다.
+     */
+    private readonly replyStream: string;
     private readonly pending = new Map<string, PendingReply>();
     private stopping = false;
     private replyFailureBackoffMs = 50;
@@ -116,10 +128,12 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     ) {
         const environment = process.env.APP_ENV ?? 'dev';
         this.keys = makeKeys(environment);
+        this.replyStream = this.keys.repliesFor(this.consumer);
     }
 
     async onModuleInit(): Promise<void> {
-        await this.redis.ensureConsumerGroup(this.keys.replies(), ConsumerGroup.Replies);
+        await this.redis.ensureConsumerGroup(this.replyStream, ConsumerGroup.Replies);
+        await this.redis.expire(this.replyStream, REPLY_STREAM_TTL_SECONDS);
         void this.consumeReplies();
     }
 
@@ -175,6 +189,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                 type: CommandType.CreateRoom,
                 issuedAt: Date.now(),
                 deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
+                replyTo: this.replyStream,
                 payload: {
                     matchId: issuedMatchId,
                     roomCode: roomCodeReservation.code,
@@ -235,6 +250,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                 type: CommandType.ReserveJoin,
                 issuedAt: Date.now(),
                 deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
+                replyTo: this.replyStream,
                 payload: {
                     roomId,
                     userId: actor.id,
@@ -298,6 +314,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                     type: CommandType.ReserveJoin,
                     issuedAt: Date.now(),
                     deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
+                    replyTo: this.replyStream,
                     payload: {
                         roomId: candidate.roomId,
                         userId: actor.id,
@@ -353,6 +370,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
             type: CommandType.ReserveResume,
             issuedAt: Date.now(),
             deadlineAt: Date.now() + COMMAND_DEADLINE_MS,
+            replyTo: this.replyStream,
             payload: { roomId, userId: actor.id },
         });
         if (!reply.ok || !reply.payload) {
@@ -665,8 +683,10 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         while (!this.stopping) {
             try {
                 const entries = await this.redis.readGroup(
-                    this.keys.replies(), ConsumerGroup.Replies, this.consumer, 1_000,
+                    this.replyStream, ConsumerGroup.Replies, this.consumer, 1_000,
                 );
+                // 살아 있다는 신호. 갱신이 멈추면 키가 사라져 죽은 인스턴스의 stream이 남지 않는다.
+                await this.redis.expire(this.replyStream, REPLY_STREAM_TTL_SECONDS);
                 this.replyFailureBackoffMs = 50;
                 for (const entry of entries) {
                     try {
@@ -678,12 +698,14 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                     } catch (error) {
                         this.logger.warn(`Ignoring malformed control reply: ${error instanceof Error ? error.message : String(error)}`);
                     } finally {
-                        await this.redis.acknowledge(this.keys.replies(), ConsumerGroup.Replies, entry.id);
+                        await this.redis.acknowledge(this.replyStream, ConsumerGroup.Replies, entry.id);
                     }
                 }
             } catch (error) {
                 if (!this.stopping) {
                     this.logger.error('Failed to consume control replies', error);
+                    // TTL이 지나 키가 사라졌으면 그룹도 함께 사라진다(NOGROUP). 다시 만들어야 루프가 산다.
+                    await this.redis.ensureConsumerGroup(this.replyStream, ConsumerGroup.Replies).catch(() => undefined);
                     await this.waitForReplyRetry();
                 }
             }

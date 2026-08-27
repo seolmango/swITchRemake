@@ -202,4 +202,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     async acknowledge(stream: string, group: string, entryId: string): Promise<void> {
         await this.client.xack(stream, group, entryId);
     }
+
+    /** 살아 있는 동안만 유지되어야 하는 키에 쓴다. 갱신이 멈추면 키가 스스로 사라진다. */
+    async expire(key: string, ttlSeconds: number): Promise<void> {
+        await this.client.expire(key, ttlSeconds);
+    }
 }

@@ -212,8 +212,19 @@ function uuidFor(label: string): string {
     return value;
 }
 
+/** 보낸 인스턴스 전용 응답 stream. 답이 여기로 가는지가 확장 시 지연을 가른다. */
+const REPLY_STREAM = 'dev:matching-server:replies:matching-test';
+
 function command(requestId: string, type: string, payload: unknown, deadlineAt = 5_000): ControlCommand {
-    return { v: CONTROL_VERSION, requestId: uuidFor(requestId), type: type as ControlCommand['type'], issuedAt: 1_000, deadlineAt, payload };
+    return {
+        v: CONTROL_VERSION,
+        requestId: uuidFor(requestId),
+        type: type as ControlCommand['type'],
+        issuedAt: 1_000,
+        deadlineAt,
+        replyTo: REPLY_STREAM,
+        payload,
+    };
 }
 
 function streamEntry(id: string, value: ControlCommand): StreamEntry {
@@ -490,6 +501,32 @@ test('malformed command도 INTERNAL reply를 기록한 다음 ack해 poison recl
     await h.consumer.pollOnce();
     assert.equal(latestReply(h.redis).requestId, 'invalid:game-1:bad-2',
         'malformed payload의 임의 문자열을 reply stream에 증폭하면 안 된다');
+});
+
+test('답은 보낸 인스턴스가 적어 준 stream으로만 간다', async () => {
+    // 공용 stream에 넣으면 다른 매칭 서버 인스턴스가 소비자 그룹에서 가져가 ack해 버린다.
+    // 원 요청자는 아무것도 못 받고 2초 복구 타이머까지 기다린다 — 확장하는 순간 모든 방 생성이 2초가 된다.
+    const h = harness();
+    h.redis.fresh.push(streamEntry('create-ok', createCommand()));
+    await h.consumer.pollOnce();
+
+    const replies = h.redis.added.filter((entry) => entry.field === CONTROL_STREAM_FIELDS.reply);
+    assert.equal(replies.length, 1);
+    assert.equal(replies[0]?.stream, REPLY_STREAM);
+    assert.equal(replies.some((entry) => entry.stream === h.keys.replies()), false);
+});
+
+test('주소를 읽을 수 없는 깨진 명령의 답만 공용 사서함으로 간다', async () => {
+    const h = harness();
+    // replyTo가 살아 있으면 명령이 깨졌어도 원 요청자가 즉시 실패를 받는다.
+    h.redis.fresh.push({ id: 'bad-a', fields: { command: JSON.stringify({ requestId: 'broken', replyTo: REPLY_STREAM }) } });
+    await h.consumer.pollOnce();
+    assert.equal(h.redis.added.at(-1)?.stream, REPLY_STREAM);
+
+    // 주소까지 못 읽으면 갈 곳이 없다. 원 요청자는 어차피 상관관계를 만들 수 없어 타임아웃으로 복구한다.
+    h.redis.fresh.push({ id: 'bad-b', fields: { command: '{"requestId":"broken"}' } });
+    await h.consumer.pollOnce();
+    assert.equal(h.redis.added.at(-1)?.stream, h.keys.replies());
 });
 
 test('퇴장 cooldown과 강퇴 marker는 A1이 조회하는 makeKeys 형태로 기록된다', async () => {
