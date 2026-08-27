@@ -2,6 +2,7 @@ node_modules/
 .venv/
 build/
 dist/
+dist-test/
 .env
 .env.*
 !.env.example
