@@ -47,7 +47,8 @@ const neutral = (playerId: number): ResolvedInput =>
     ({ playerId, moveX: 0, moveY: 0, heldActions: 0, lastProcessedSequence: 0 });
 
 function stepTraining(world: World, ground: TrainingGround, humanInputs: readonly ResolvedInput[] = []): void {
-    const frame = stepWorld(world, [...humanInputs, ...ground.resolveInputs(world)]);
+    // 스킬도 같이 태운다. 표적이 점멸을 쓰는 경로가 여기를 지나므로 빼면 실제와 다른 것을 잰다.
+    const frame = stepWorld(world, [...humanInputs, ...ground.resolveInputs(world)], ground.resolveSkills(world));
     ground.afterStep(frame.world);
 }
 
@@ -267,4 +268,148 @@ test('술래가 된 표적은 사람 쪽으로 다가온다', () => {
     for (let i = 0; i < 60; i++) stepTraining(world, ground, [neutral(human.playerId)]);
     const after = Math.hypot(dummy.x - human.x, dummy.y - human.y);
     assert.ok(after < before, `가까워지지 않았다: ${before} -> ${after}`);
+});
+
+/**
+ * 추격 구역 한가운데를 세로 벽이 가른다. 표적은 왼쪽(5,14), 사람은 오른쪽에 선다.
+ *
+ * 벽에 문이 하나 있다(y=17). 길찾기가 돌아갈 길을 찾을 수 있어야 "벽에 걸린다"와 "길이 없다"가
+ * 구분된다.
+ */
+const WALLED_MAP = Array.from({ length: 20 }, (_, y) => {
+    if (y === 0 || y === 19) return '#'.repeat(20);
+    const row = [...`#${'.'.repeat(18)}#`];
+    if (y >= 11 && y <= 16) row[9] = '#';
+    return row.join('');
+});
+
+function walledChase(mode: 'hunt' | 'flee' = 'flee') {
+    const map = mapFromRows(WALLED_MAP, { markers: TRAINING_MARKERS, zones: TRAINING_ZONES });
+    const human = makePlayer(1, 13, 14);
+    const ground = new TrainingGround(map, [human.playerId]);
+    const world = makeWorld(map, [human, ...ground.players]);
+    if (mode === 'flee') {
+        // 모드 패드를 밟아 표적을 술래로 만든다. 사람을 쫓는 쪽이 표적이어야 추격을 볼 수 있다.
+        const pad = ground.pads.find((p) => p.kind === TrainingPadKind.ChaseMode)!;
+        human.x = pad.x;
+        human.y = pad.y;
+        ground.afterStep(world);
+        human.x = 13 * map.tileSize + map.tileSize / 2;
+        human.y = 14 * map.tileSize + map.tileSize / 2;
+    }
+    return { world, ground, human, dummy: chaseDummy(ground) };
+}
+
+test('추격 표적이 벽을 돌아서 온다', () => {
+    // 예전에는 직진뿐이라 벽에 붙어 비볐다. 그러면 추격 구역이 통째로 논다.
+    const { world, ground, human, dummy } = walledChase();
+    // 점멸로 넘는 것과 구분해서 길찾기만 본다.
+    dummy.loadout = SkillId.Dash;
+    const wallX = 9 * world.map.tileSize;
+
+    let crossed = false;
+    for (let i = 0; i < 900 && !crossed; i++) {
+        dummy.cooldowns[SkillId.Dash] = 100_000;
+        stepTraining(world, ground, [neutral(human.playerId)]);
+        // 잡으면 추격이 끝나고 표적이 집으로 돌아간다. 그 전에 벽을 넘었는지만 본다.
+        if (dummy.x > wallX + world.map.tileSize) crossed = true;
+    }
+
+    assert.ok(crossed, `벽에 걸렸다. 표적이 x=${Math.round(dummy.x)}에서 못 넘어왔다`);
+});
+
+test('길이 뚫려 있으면 표적이 타일 격자가 아니라 사람을 향해 곧장 간다', () => {
+    const { world, ground, human, dummy } = walledChase();
+    // 둘 다 벽 오른쪽에 두어 사이를 막는 것이 없게 한다.
+    dummy.x = 12 * world.map.tileSize + world.map.tileSize / 2;
+    dummy.y = 17 * world.map.tileSize + world.map.tileSize / 2;
+    human.x = 16 * world.map.tileSize + world.map.tileSize / 2;
+    human.y = 12 * world.map.tileSize + world.map.tileSize / 2;
+
+    const input = ground.resolveInputs(world).find((entry) => entry.playerId === dummy.playerId)!;
+    const dx = human.x - dummy.x;
+    const dy = human.y - dummy.y;
+    const length = Math.hypot(dx, dy);
+    assert.ok(Math.abs(input.moveX - dx / length) < 1e-9, '가로 성분이 사람 쪽이 아니다');
+    assert.ok(Math.abs(input.moveY - dy / length) < 1e-9, '세로 성분이 사람 쪽이 아니다');
+});
+
+test('벽 너머의 표적은 한 tick 조준한 뒤 점멸로 넘어온다', () => {
+    const { world, ground, human, dummy } = walledChase();
+    dummy.loadout = SkillId.Flash;
+    // 벽 바로 앞에 세운다. 여기서 사람 쪽으로 점멸하면 벽을 넘는다.
+    const place = () => {
+        dummy.x = 8 * world.map.tileSize + world.map.tileSize / 2;
+        dummy.y = 13 * world.map.tileSize + world.map.tileSize / 2;
+        human.x = 11 * world.map.tileSize + world.map.tileSize / 2;
+        human.y = 13 * world.map.tileSize + world.map.tileSize / 2;
+    };
+    place();
+
+    // 실제 호출 순서를 따른다: 입력이 먼저(조준이 여기서 일어난다), 스킬이 나중.
+    ground.resolveInputs(world);
+    assert.deepEqual(ground.resolveSkills(world), [], '조준한 tick에 바로 쐈다 — facing이 아직 경로 방향이다');
+
+    // 다음 tick. 이제 facing이 사람 쪽이다.
+    world.tick += 1;
+    place();
+    ground.resolveInputs(world);
+    const queued = ground.resolveSkills(world);
+    assert.equal(queued.length, 1, '조준했는데 안 쏜다');
+    assert.equal(queued[0]?.playerId, dummy.playerId);
+});
+
+test('점멸을 쏘면 표적이 벽 반대쪽에 선다', () => {
+    const { world, ground, human, dummy } = walledChase();
+    dummy.loadout = SkillId.Flash;
+    const wallX = 9 * world.map.tileSize;
+
+    // 한 번만 세워 두고 흘러가게 둔다. 매 tick 자리를 되돌리면 조준-발사 두 tick이 성립하지 않는다.
+    dummy.x = 8 * world.map.tileSize + world.map.tileSize / 2;
+    dummy.y = 13 * world.map.tileSize + world.map.tileSize / 2;
+    human.x = 11 * world.map.tileSize + world.map.tileSize / 2;
+    human.y = 13 * world.map.tileSize + world.map.tileSize / 2;
+
+    let crossed = false;
+    for (let i = 0; i < 20 && !crossed; i++) {
+        stepTraining(world, ground, [neutral(human.playerId)]);
+        if (dummy.x > wallX + world.map.tileSize / 2) crossed = true;
+    }
+
+    // 걸어서는 20 tick에 3칸을 갈 수 없다. 넘었다면 점멸이다.
+    assert.ok(crossed, '점멸을 쐈는데 벽을 못 넘었다');
+});
+
+test('길이 뚫려 있으면 점멸을 쓰지 않는다', () => {
+    // 뚫린 길에서 점멸하면 3칸 앞으로 가는 것뿐이고, 사람은 "왜 저기서 썼지"라고 느낀다.
+    const { world, ground, human, dummy } = walledChase();
+    dummy.loadout = SkillId.Flash;
+    dummy.x = 12 * world.map.tileSize + world.map.tileSize / 2;
+    dummy.y = 14 * world.map.tileSize + world.map.tileSize / 2;
+    human.x = 16 * world.map.tileSize + world.map.tileSize / 2;
+    human.y = 14 * world.map.tileSize + world.map.tileSize / 2;
+
+    ground.resolveInputs(world);
+    assert.deepEqual(ground.resolveSkills(world), []);
+});
+
+test('쿨타임 중에는 스킬을 요청하지 않는다', () => {
+    const { world, ground, human, dummy } = walledChase();
+    dummy.loadout = SkillId.Flash;
+    dummy.cooldowns[SkillId.Flash] = 500;
+    dummy.x = 8 * world.map.tileSize + world.map.tileSize / 2;
+    dummy.y = 13 * world.map.tileSize + world.map.tileSize / 2;
+    human.x = 11 * world.map.tileSize + world.map.tileSize / 2;
+    human.y = 13 * world.map.tileSize + world.map.tileSize / 2;
+
+    ground.resolveInputs(world);
+    assert.deepEqual(ground.resolveSkills(world), []);
+});
+
+test('사람이 구역 밖이면 표적은 스킬도 쓰지 않는다', () => {
+    const { world, ground, human, dummy } = walledChase();
+    dummy.loadout = SkillId.Flash;
+    human.y = 9 * world.map.tileSize;   // 추격 구역 밖
+    ground.resolveInputs(world);
+    assert.deepEqual(ground.resolveSkills(world), []);
 });

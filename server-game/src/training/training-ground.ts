@@ -3,20 +3,26 @@ import {
     MapMarkerKind,
     MapZoneKind,
     SkillId,
+    SkillSlot,
     TilePhysics,
     TrainingPadKind,
     trainingPadsFromMarkers,
     type MapZone,
     type TrainingPad,
 } from 'shared';
-import { GAMEPLAY } from '../config/gameplay';
-import { msToTicks } from '../simulation/effects';
+import { GAMEPLAY, SKILLS } from '../config/gameplay';
+import { isReady, msToTicks } from '../simulation/effects';
 import type { PlayerState, ResolvedInput, World, WorldMap } from '../simulation/world';
 import { emptyStats } from '../simulation/world';
-import { grantTaggerFrenzy } from '../simulation/skills';
+import { grantTaggerFrenzy, type SkillRequest } from '../simulation/skills';
+import { isPositionFree } from '../simulation/static-collision';
+import { stormRect } from '../simulation/storm';
 import type { RosterEntry } from '../game/snapshot-view';
 
 export const TRAINING_DUMMY_RESPAWN_MS = 3_000;
+
+/** 표적이 유체화를 쓸 최소 거리(타일). 코앞에서 쓰면 쿨타임만 버린다. */
+const BOT_DASH_MIN_TILES = 4;
 
 /** 구역 안에서 표적이 돌 네 귀퉁이. 구역을 벗어나지 않는 것이 이 함수의 유일한 책임이다. */
 function patrolCourse(map: WorldMap, home: TilePoint, zone: MapZone | null): TilePoint[] {
@@ -58,6 +64,19 @@ interface DummyState {
     readonly home: TilePoint;
     targetIndex: number;
     respawnAtTick: number | null;
+    /** 추격 경로 캐시의 목표 타일. 순찰(`cachedTargetIndex`)과 조건이 달라 따로 둔다. */
+    cachedChaseTargetKey: string | null;
+    /**
+     * 점멸을 쓰기로 정하고 목표 쪽으로 몸을 돌린 tick. 아직 안 정했으면 null이다.
+     *
+     * 스킬은 이동보다 먼저 판정되므로(`step.ts`), 점멸이 보는 `facing`은 **지난 tick** 입력이
+     * 만든 값이다. 길찾기로 벽을 돌아가던 중에 그대로 쏘면 경로 방향으로 튄다 — 실제로 벽을
+     * 북쪽으로 돌아가던 표적이 북쪽으로 점멸해 구역 밖으로 나가 버렸다.
+     *
+     * 그래서 정한 tick에는 사람 쪽으로 몸만 돌리고(`#hunt`), **다음** tick에 쏜다. 덤으로
+     * 사람에게 예고가 된다 — 벽 너머에서 표적이 이쪽을 홱 돌아보고 나서 넘어온다.
+     */
+    flashAimedAtTick: number | null;
     /**
      * 마지막으로 계산한 경로와 그때의 조건.
      *
@@ -94,6 +113,38 @@ function desiredTile(map: WorldMap, [x, y]: Point): TilePoint {
         Math.max(0, Math.min(map.cols - 1, Math.floor(x * map.cols))),
         Math.max(0, Math.min(map.rows - 1, Math.floor(y * map.rows))),
     ];
+}
+
+/**
+ * `from`에서 `to`까지 몸이 그대로 지나갈 수 있는가.
+ *
+ * 중심선만 보면 몸통보다 좁은 틈을 통과할 수 있다고 판단한다(플레이어 반지름 102px, 타일 256px).
+ * 그래서 중심선과 함께 진행 방향의 **양옆 반지름만큼 밀린 두 선**도 같이 훑는다 — 원을 끌고 간
+ * 자리를 세 줄로 근사하는 것이다.
+ *
+ * 표본 간격은 반지름의 절반이다. 이보다 성기면 타일 모서리를 건너뛴다.
+ */
+function hasClearPath(map: WorldMap, from: Point, to: Point, radius: number): boolean {
+    const dx = to[0] - from[0];
+    const dy = to[1] - from[1];
+    const distance = Math.hypot(dx, dy);
+    if (distance === 0) return true;
+
+    const stepCount = Math.max(1, Math.ceil(distance / (radius / 2)));
+    // 진행 방향에 수직인 단위 벡터.
+    const sideX = -dy / distance;
+    const sideY = dx / distance;
+
+    for (const offset of [0, radius, -radius]) {
+        for (let step = 0; step <= stepCount; step += 1) {
+            const t = step / stepCount;
+            const x = from[0] + dx * t + sideX * offset;
+            const y = from[1] + dy * t + sideY * offset;
+            const tile: TilePoint = [Math.floor(x / map.tileSize), Math.floor(y / map.tileSize)];
+            if (!isWalkable(map, tile)) return false;
+        }
+    }
+    return true;
 }
 
 function nearestWalkable(map: WorldMap, desired: TilePoint): TilePoint {
@@ -156,7 +207,17 @@ function routeToward(map: WorldMap, from: TilePoint, target: TilePoint): RouteRe
     return { tiles: reversed.reverse(), reachedTarget: bestDistance === 0 };
 }
 
-function makeDummy(playerId: number, colorIndex: number, map: WorldMap, start: TilePoint): PlayerState {
+/**
+ * 추격 표적이 드는 이동기.
+ *
+ * 번갈아 준다. 셋 다 점멸이면 벽이 의미가 없어지고 셋 다 유체화면 벽이 안전지대가 된다.
+ * 사람이 두 가지 압박을 다 겪어 봐야 연습이 된다.
+ */
+function chaseLoadout(index: number): SkillId {
+    return index % 2 === 0 ? SkillId.Flash : SkillId.Dash;
+}
+
+function makeDummy(playerId: number, colorIndex: number, map: WorldMap, start: TilePoint, loadout: SkillId = SkillId.Dash): PlayerState {
     const [x, y] = tileCenter(map, start);
     return {
         playerId,
@@ -174,7 +235,7 @@ function makeDummy(playerId: number, colorIndex: number, map: WorldMap, start: T
         connected: true,
         effects: {},
         cooldowns: {},
-        loadout: SkillId.Dash,
+        loadout,
         emoji: null,
         stats: emptyStats(),
     };
@@ -232,13 +293,15 @@ export class TrainingGround {
             const zone = zoneContaining(map, marker.x, marker.y, role);
             const playerId = availableIds[index]!;
             return {
-                player: makeDummy(playerId, playerId - 1, map, home),
+                player: makeDummy(playerId, playerId - 1, map, home, role === 'chase' ? chaseLoadout(index) : SkillId.Dash),
                 course: role === 'still' ? [home] : patrolCourse(map, home, zone),
                 kind: role,
                 zone,
                 home,
                 // 구역이 좁으면 코스가 집 한 곳뿐이다. 그때 1을 넣으면 없는 목표를 가리킨다.
                 targetIndex: role === 'still' ? 0 : (patrolCourse(map, home, zone).length > 1 ? 1 : 0),
+                cachedChaseTargetKey: null,
+                flashAimedAtTick: null,
                 respawnAtTick: null,
                 cachedRoute: null,
                 cachedFromKey: '',
@@ -277,6 +340,90 @@ export class TrainingGround {
             if (state.kind === 'chase' && state.player.isTagger) return [this.#hunt(world, state)];
             return [this.#follow(world, state)];
         });
+    }
+
+    /**
+     * 표적이 이번 tick에 쓸 스킬.
+     *
+     * 입력과 나눠 두는 이유는 시뮬레이션이 둘을 다른 단계에서 처리하기 때문이다 — 스킬이 먼저,
+     * 이동이 나중이다(`step.ts`). 한 함수가 둘 다 만들면 그 순서를 여기서 흉내 내야 한다.
+     *
+     * 무작위는 쓰지 않는다. 표적의 판단이 world 상태만 보고 정해져야 리플레이가 같은 경기를
+     * 재현한다.
+     */
+    public resolveSkills(world: World): SkillRequest[] {
+        if (!this.#chaseActive) return [];
+        const target = this.#prey(world);
+        if (target === null) return [];
+
+        return this.#states.flatMap((state) => {
+            if (state.kind !== 'chase' || !state.player.alive || !state.player.isTagger) return [];
+            if (!this.#chooseSkill(world, state, target)) return [];
+            return [{ playerId: state.player.playerId, slot: SkillSlot.Movement }];
+        });
+    }
+
+    /**
+     * 표적이 지금 이동기를 쓸 만한가.
+     *
+     * 점멸은 **벽을 넘을 때만** 쓴다. 뚫린 길에서 점멸하면 3칸 앞으로 가는 것뿐이라 유체화보다
+     * 못하고, 무엇보다 사람이 "왜 저기서 썼지"라고 느낀다. 벽 너머로 넘어올 때만 써야 무섭다.
+     *
+     * 유체화는 반대로 **뚫린 길에서 멀 때** 쓴다. 코앞에서 쓰면 이미 잡힐 사람이 잡히는 것뿐이고
+     * 쿨타임만 버린다.
+     */
+    #chooseSkill(world: World, state: DummyState, target: PlayerState): boolean {
+        const self = state.player;
+        if (!isReady(self, self.loadout)) return false;
+
+        if (self.loadout === SkillId.Flash) {
+            // 조준한 **다음** tick에 쏜다. 그래야 facing이 사람 쪽을 가리킨다.
+            if (state.flashAimedAtTick === null || world.tick <= state.flashAimedAtTick) return false;
+            state.flashAimedAtTick = null;
+            return true;
+        }
+
+        if (self.loadout === SkillId.Dash) {
+            const distance = Math.hypot(target.x - self.x, target.y - self.y);
+            return hasClearPath(world.map, [self.x, self.y], [target.x, target.y], self.radius)
+                && distance > world.map.tileSize * BOT_DASH_MIN_TILES;
+        }
+        return false;
+    }
+
+    /**
+     * 지금 점멸을 쓸 만한가. **벽을 넘을 때만** 쓴다.
+     *
+     * 뚫린 길에서 점멸하면 3칸 앞으로 가는 것뿐이라 유체화보다 못하고, 무엇보다 사람이
+     * "왜 저기서 썼지"라고 느낀다. 벽 너머로 넘어올 때만 써야 무섭다.
+     */
+    #wantsFlash(world: World, state: DummyState, target: PlayerState): boolean {
+        const self = state.player;
+        return self.loadout === SkillId.Flash
+            && isReady(self, SkillId.Flash)
+            && this.#flashGainsGround(world, self, target);
+    }
+
+    /**
+     * 사람 쪽으로 점멸했을 때 실제로 가까워지는가.
+     *
+     * 착지점이 벽 안이면 `useFlash`가 진행 방향으로 더 밀어 보지만, 여기서는 그 보정을 따라
+     * 하지 않는다. 확실히 이득일 때만 쓰는 편이 낫다 — 애매할 때 써서 벽에 붙어 버리면 쿨타임만
+     * 날리고 추격이 끊긴다.
+     */
+    #flashGainsGround(world: World, self: PlayerState, target: PlayerState): boolean {
+        const dx = target.x - self.x;
+        const dy = target.y - self.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance === 0) return false;
+
+        const landingX = self.x + (dx / distance) * SKILLS.FLASH.DISTANCE_PX;
+        const landingY = self.y + (dy / distance) * SKILLS.FLASH.DISTANCE_PX;
+        if (!isPositionFree(world.map, landingX, landingY, self.radius, stormRect(world))) return false;
+
+        // 착지하고도 여전히 벽 너머라면 넘은 것이 아니다.
+        if (!hasClearPath(world.map, [landingX, landingY], [target.x, target.y], self.radius)) return false;
+        return Math.hypot(target.x - landingX, target.y - landingY) < distance;
     }
 
     /**
@@ -357,19 +504,83 @@ export class TrainingGround {
     }
 
     /**
-     * 술래가 된 표적의 추격. **직진이다** — 벽을 돌아가지 않는다.
+/**
+     * 술래가 된 표적의 추격.
      *
-     * 길찾기로 쫓게 만들면 사람에 가까워지지만 그만큼 "봇"이 된다. 지금은 쫓긴다는 감각을 주는 것이
-     * 목적이고, 벽에 걸려 도는 것도 연습 대상이다. 게임이 안정되면 고도화한다(사용자 결정).
+     * 몸이 지나갈 길이 뚫려 있으면 직진한다. 그게 사람이 하는 짓이고, 타일 격자를 따라가지
+     * 않으므로 움직임이 각지지 않는다. 막혀 있을 때만 길찾기로 돌아간다.
+     *
+     * 예전에는 항상 직진이었다. 벽 하나에 걸려 제자리에서 비비는 봇은 무섭지도 않고 연습도
+     * 안 된다 — 추격 구역이 사실상 놀고 있었다.
      */
     #hunt(world: World, state: DummyState): ResolvedInput {
-        const target = world.players.find((player) => player.alive && !this.isDummy(player.playerId));
-        if (target === undefined) return this.#input(state.player.playerId, 0, 0);
-        const dx = target.x - state.player.x;
-        const dy = target.y - state.player.y;
+        const target = this.#prey(world);
+        if (target === null) {
+            state.flashAimedAtTick = null;
+            return this.#input(state.player.playerId, 0, 0);
+        }
+
+        const self = state.player;
+        if (hasClearPath(world.map, [self.x, self.y], [target.x, target.y], self.radius)) {
+            state.cachedRoute = null;
+            state.flashAimedAtTick = null;
+            return this.#steerTo(state, target.x, target.y);
+        }
+
+        // 점멸 판단을 여기서 한다. 몸을 돌리는 것이 곧 조준이고, 방향은 입력으로만 바뀐다.
+        if (this.#wantsFlash(world, state, target)) {
+            state.flashAimedAtTick ??= world.tick;
+            return this.#steerTo(state, target.x, target.y);
+        }
+        state.flashAimedAtTick = null;
+
+        const route = this.#routeTo(world, state, this.#tileOf(world.map, target));
+        const nextTile = route.tiles[1];
+        const [x, y] = nextTile !== undefined
+            ? tileCenter(world.map, nextTile)
+            : [target.x, target.y];
+        return this.#steerTo(state, x, y);
+    }
+
+    /** 표적이 쫓는 대상. 표적끼리는 쫓지 않는다. */
+    #prey(world: World): PlayerState | null {
+        return world.players.find((player) => player.alive && !this.isDummy(player.playerId)) ?? null;
+    }
+
+    #steerTo(state: DummyState, x: number, y: number): ResolvedInput {
+        const dx = x - state.player.x;
+        const dy = y - state.player.y;
         const length = Math.hypot(dx, dy);
         if (length === 0) return this.#input(state.player.playerId, 0, 0);
         return this.#input(state.player.playerId, dx / length, dy / length);
+    }
+
+    /**
+     * 움직이는 목표를 향한 경로. 순찰용 `#routeFor`와 캐시 조건이 다르다.
+     *
+     * 순찰은 목표가 코스 인덱스로 고정돼 있어 그것만 비교하면 되지만, 추격은 목표가 매 tick
+     * 움직인다. 그래서 **목표 타일**을 캐시 키에 넣는다 — 사람이 같은 타일 안에서 움직이는
+     * 동안은 다시 풀지 않는다.
+     */
+    #routeTo(world: World, state: DummyState, targetTile: TilePoint): RouteResult {
+        const from = this.#tileOf(world.map, state.player);
+        const fromKey = tileKey(from);
+        const targetKey = tileKey(targetTile);
+        const cached = state.cachedRoute;
+        const stepBlocked = cached !== null
+            && cached.tiles[1] !== undefined
+            && !isWalkable(world.map, cached.tiles[1]);
+        if (cached !== null && !stepBlocked
+            && state.cachedFromKey === fromKey && state.cachedChaseTargetKey === targetKey) {
+            return cached;
+        }
+        const route = routeToward(world.map, from, targetTile);
+        state.cachedRoute = route;
+        state.cachedFromKey = fromKey;
+        state.cachedChaseTargetKey = targetKey;
+        // 순찰 캐시와 섞이지 않게 코스 인덱스 조건은 무효로 둔다.
+        state.cachedTargetIndex = -1;
+        return route;
     }
 
     /**

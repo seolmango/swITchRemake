@@ -196,7 +196,11 @@ export class GameSession implements SchedulerTarget {
             ...this.#room.resolvedInputs(),
             ...(this.#options.trainingGround?.resolveInputs(this.world) ?? []),
         ];
-        const skills = this.#pendingSkills.splice(0, this.#pendingSkills.length);
+        const skills = [
+            ...this.#pendingSkills.splice(0, this.#pendingSkills.length),
+            // 표적의 스킬. 사람 요청과 같은 목록에 들어가야 처리 순서(playerId 오름차순)가 하나다.
+            ...(this.#options.trainingGround?.resolveSkills(this.world) ?? []),
+        ];
         const emojis = [...this.#pendingEmojis.values()];
         this.#pendingEmojis.clear();
         const frame = stepWorld(this.world, inputs, skills, emojis);
