@@ -26,6 +26,7 @@ import { GameRegistry } from './redis/registry';
 import { ResultOutbox } from './redis/result-outbox';
 import { MemoryReplayRecorder, NullReplayRecorder, type ReplayRecorder } from './replay/recorder';
 import { LocalReplayStore } from './replay/replay-store';
+import { handOffWaitingRooms } from './rooms/hand-off';
 import { RoomManager } from './rooms/room-manager';
 import { Scheduler } from './simulation/scheduler';
 import { WsTransport } from './transport/ws-transport';
@@ -349,7 +350,13 @@ async function main(): Promise<void> {
         process.exit(0);
     };
 
-    /** 방이 0이 될 때까지 기다린다. 상한을 두지 않는다 — 경기 중인 사람을 끊지 않는 것이 우선이다. */
+    /**
+     * 방이 0이 될 때까지 기다린다. 상한을 두지 않는다 — 경기 중인 사람을 끊지 않는 것이 우선이다.
+     *
+     * 기다리는 동안 **대기실 상태의 방은 다른 서버로 넘긴다.** 경기가 끝나 대기실로 돌아온
+     * 순간이 기회이고, 그걸 잡으면 축소가 "마지막 사람이 나갈 때까지"에서 "마지막 경기가 끝날
+     * 때까지"로 짧아진다.
+     */
     const waitForEmptyRooms = async (): Promise<void> => {
         let lastReported = -1;
         for (;;) {
@@ -358,6 +365,13 @@ async function main(): Promise<void> {
             if (remaining !== lastReported) {
                 log(`draining: 남은 방 ${remaining}개`);
                 lastReported = remaining;
+            }
+            if (rooms !== null) {
+                await handOffWaitingRooms({
+                    redis, keys, rooms, serverId: INFRA.SERVER_ID, log,
+                    forgetRoom: (roomId) => registry.forgetRoom(roomId),
+                })
+                    .catch((error: unknown) => { log(`방 넘기기 실패: ${String(error)}`); return 0; });
             }
             await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
         }

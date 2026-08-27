@@ -10,6 +10,7 @@ import {
     ViolationKind,
     type ActorId,
     type ClientMessage,
+    type AdoptRoomPayload,
     type ControlErrorCode as ControlErrorCodeValue,
     type ViolationSignal,
 } from 'shared';
@@ -152,6 +153,64 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
             return { ok: false, code: ControlErrorCode.Internal };
         }
         this.#rooms.set(room.id, room);
+        this.#options.onDirectoryChanged?.();
+        return { ok: true, value: room };
+    }
+
+    /**
+     * 다른 서버가 들고 있던 방을 그대로 세운다.
+     *
+     * `createRoom`과 달리 좌석 예약이 없다. 그 사람들은 이미 방에 있었고, 바뀌는 것은 방이 어느
+     * 프로세스에 있느냐뿐이다.
+     *
+     * 같은 roomId가 이미 있으면 거절한다. 명령은 재전달될 수 있는데, 그때 명단을 덮어쓰면
+     * 그 사이에 들어온 사람이 사라진다.
+     */
+    public adoptRoom(payload: AdoptRoomPayload): ManagerResult<Room> {
+        this.sweep();
+        if (this.#rooms.has(payload.roomId)) return { ok: false, code: ControlErrorCode.AlreadyInRoom };
+        if ((this.#options.maxRooms ?? Number.POSITIVE_INFINITY) <= this.#rooms.size) {
+            return { ok: false, code: ControlErrorCode.ServerFull };
+        }
+        if (!this.#options.isKnownMap(payload.mapId, payload.mode)) {
+            return { ok: false, code: ControlErrorCode.InvalidMap };
+        }
+        if (payload.members.length === 0) return { ok: false, code: ControlErrorCode.Internal };
+
+        let room: Room;
+        try {
+            room = new Room({
+                id: payload.roomId,
+                roomCode: payload.roomCode,
+                matchId: payload.matchId,
+                name: payload.name,
+                password: payload.password,
+                capacity: payload.capacity,
+                mapId: payload.mapId,
+                mode: payload.mode,
+                // 넘겨받는 방에는 방장이 이미 정해져 있다. 좌석 예약은 명단을 앉힌 뒤 필요 없다.
+                adopted: payload.members,
+                minPlayersToStart: payload.mode === RoomMode.Training ? 1 : GAMEPLAY.MIN_PLAYERS_TO_START,
+                simulationHz: NETWORK.SIMULATION_HZ,
+                rules: gameplayRules(),
+                hudGameplay: hudGameplayPayload(),
+                timing: payload.mode === RoomMode.Training
+                    ? { ...this.#timing, startLockOnJoinMs: 0, startLockOnMapChangeMs: 0, countdownMs: 0 }
+                    : this.#timing,
+                lifecycle: this.#options.lifecycle,
+                isKnownMap: this.#options.isKnownMap,
+                getServerTick: this.#options.getServerTick,
+                ...(this.#options.canStartGame === undefined ? {} : { canStartGame: this.#options.canStartGame }),
+                ...(this.#options.onDirectoryChanged === undefined
+                    ? {}
+                    : { onDirectoryChanged: this.#options.onDirectoryChanged }),
+                now: this.#now,
+            });
+        } catch {
+            return { ok: false, code: ControlErrorCode.Internal };
+        }
+        this.#rooms.set(room.id, room);
+        room.adoptMembers(payload.members);
         this.#options.onDirectoryChanged?.();
         return { ok: true, value: room };
     }

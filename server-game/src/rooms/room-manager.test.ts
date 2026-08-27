@@ -8,8 +8,10 @@ import {
     ErrorCode,
     JSON_MESSAGE_VERSION,
     MovementBits,
+    RoomMode,
     RoomState,
     SkillId,
+    type AdoptRoomPayload,
     type ClientMessage,
     type ViolationSignal,
 } from 'shared';
@@ -318,4 +320,72 @@ test('RoomManager가 티켓 admission과 GameTransport handler 경계를 연결�
 
     now = 20_000;
     assert.deepEqual(manager.sweep(), [], '재접속한 참가자의 이전 grace timer는 제거된다');
+});
+
+/** 다른 서버에서 넘어온 것처럼 생긴 방 사본. */
+const migrationPayload = (overrides: Partial<AdoptRoomPayload> = {}): AdoptRoomPayload => ({
+    serverId: 'game-1',
+    roomId: 'moved-room',
+    roomCode: 'XYZ789',
+    matchId: 'match-moved',
+    name: '넘어온 방',
+    password: null,
+    capacity: 8,
+    mapId: 'map',
+    mode: RoomMode.Match,
+    members: [
+        {
+            userId: 11, playerId: 1, slot: 1, nickname: 'p11', guest: false, stats: null,
+            loadout: SkillId.Dash, joinedOrder: 0, colorIndex: 0, isHost: true,
+        },
+        {
+            userId: 12, playerId: 2, slot: 2, nickname: 'p12', guest: false, stats: null,
+            loadout: SkillId.Flash, joinedOrder: 1, colorIndex: 1, isHost: false,
+        },
+    ],
+    ...overrides,
+});
+
+test('넘겨받은 방의 사람들은 재접속으로 돌아올 수 있다', () => {
+    // 소켓은 프로세스에 붙은 TCP 연결이라 옮길 수 없다. 그래서 받는 쪽은 이 사람들을
+    // "끊겼지만 유예 안에 있는" 상태로 세우고, 클라이언트의 기존 재접속 경로가 그대로 통한다.
+    const fixture = managerFixture();
+    const adopted = fixture.manager.adoptRoom(migrationPayload());
+    assert.equal(adopted.ok, true);
+
+    const room = fixture.manager.get('moved-room');
+    assert.notEqual(room, null);
+    assert.equal(room?.canReserveResume(11), null, '넘어온 방장이 재접속할 수 없다');
+    assert.equal(room?.canReserveResume(12), null);
+    assert.equal(room?.state, RoomState.Waiting);
+});
+
+test('넘겨받은 방은 방장과 로드아웃을 그대로 유지한다', () => {
+    const fixture = managerFixture();
+    fixture.manager.adoptRoom(migrationPayload());
+    const room = fixture.manager.get('moved-room')!;
+
+    const members = room.participants();
+    assert.deepEqual(members.map((member) => member.playerId).sort(), [1, 2]);
+    // 방장이 안 옮겨지면 아무도 경기를 시작할 수 없다.
+    assert.equal(room.setMap(11, 'map'), null, '넘어온 방장이 방장 권한을 잃었다');
+    assert.notEqual(room.setMap(12, 'map'), null, '방장이 아닌 사람이 맵을 바꿀 수 있다');
+});
+
+test('같은 방을 두 번 넘겨받지 않는다', () => {
+    // 제어 명령은 재전달될 수 있다. 명단을 덮어쓰면 그 사이에 들어온 사람이 사라진다.
+    const fixture = managerFixture();
+    assert.equal(fixture.manager.adoptRoom(migrationPayload()).ok, true);
+    assert.equal(fixture.manager.adoptRoom(migrationPayload()).ok, false);
+});
+
+test('명단이 빈 방은 넘겨받지 않는다', () => {
+    // 아무도 없는 방이 서면 첫 sweep에 닫힌다. 조용히 사라지느니 거절한다.
+    const fixture = managerFixture();
+    assert.equal(fixture.manager.adoptRoom(migrationPayload({ members: [] })).ok, false);
+});
+
+test('모르는 맵으로는 넘겨받지 않는다', () => {
+    const fixture = managerFixture();
+    assert.equal(fixture.manager.adoptRoom(migrationPayload({ mapId: 'ghost' })).ok, false);
 });

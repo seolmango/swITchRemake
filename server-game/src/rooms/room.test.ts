@@ -424,3 +424,50 @@ test('카운트다운 중에 재접속하면 game.starting만 받는다', async 
     assert.ok((starting?.payload.countdownMs ?? 0) > 0);
     assert.equal(back.messages.some((message) => message.type === 'game.started'), false);
 });
+
+test('넘길 방의 사본에 명단과 방장이 그대로 담긴다', async () => {
+    // 소켓은 프로세스에 붙은 TCP 연결이라 옮길 수 없다. 그래서 받는 쪽은 이 사람들을
+    // "끊겼지만 유예 안에 있는" 상태로 세우고, 클라이언트의 기존 재접속 경로가 그대로 통한다.
+    const source = setup();
+    source.connect(source.owner);
+    const r2 = seat(2, 0);
+    assert.equal(source.room.reserveJoin(r2, 'secret'), null);
+    source.connect(r2);
+    await Promise.resolve();
+
+    assert.equal(source.room.canHandOff(), true);
+    const exported = source.room.exportForHandOff('game-2');
+    assert.equal(exported.serverId, 'game-2');
+    assert.equal(exported.roomId, source.room.id);
+    assert.deepEqual(exported.members.map((member) => member.playerId).sort(), [1, 2]);
+    assert.equal(exported.members.filter((member) => member.isHost).length, 1, '방장이 정확히 하나여야 한다');
+    assert.equal(exported.members.find((member) => member.playerId === 2)?.nickname, 'p2');
+});
+
+test('경기 중인 방은 넘기지 않는다', () => {
+    // 옮기려면 세계 전체를 직렬화해야 한다. 그 위험을 감수할 이유가 없다.
+    const context = setup();
+    context.connect(context.owner);
+    const r2 = seat(2, 0);
+    const r3 = seat(3, 0);
+    assert.equal(context.room.reserveJoin(r2, 'secret'), null);
+    assert.equal(context.room.reserveJoin(r3, 'secret'), null);
+    context.connect(r2);
+    context.connect(r3);
+    context.setNow(5_001);
+    assert.equal(context.room.requestStart(1), null);
+    assert.equal(context.room.canHandOff(), false, '카운트다운 중에 넘기려 한다');
+
+    context.setNow(8_001);
+    context.room.advance();
+    assert.equal(context.room.state, RoomState.Playing);
+    assert.equal(context.room.canHandOff(), false, '경기 중에 넘기려 한다');
+});
+
+test('아무도 안 붙어 있는 방은 넘기지 않는다', () => {
+    // 곧 스스로 닫힐 방이라 옮길 값이 없다.
+    const context = setup();
+    assert.equal(context.room.canHandOff(), false);
+});
+
+

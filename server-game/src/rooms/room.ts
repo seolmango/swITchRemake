@@ -10,6 +10,8 @@ import {
     RoomState,
     RoomMode,
     type ActorId,
+    type AdoptRoomPayload,
+    type AdoptedRoomMember,
     type ControlErrorCode as ControlErrorCodeValue,
     type ErrorCode as ErrorCodeValue,
     type InputState,
@@ -78,7 +80,13 @@ export interface RoomOptions {
     readonly mode: RoomMode;
     readonly capacity: number;
     readonly mapId: string;
-    readonly ownerReservation: Readonly<SeatReservation>;
+    /**
+     * 새로 만드는 방의 방장 좌석. 다른 서버에서 넘겨받는 방은 대신 `adopted`가 온다 —
+     * 그 사람들은 이미 방에 있었으므로 예약할 자리가 없다.
+     */
+    readonly ownerReservation?: Readonly<SeatReservation>;
+    /** 넘겨받는 방의 명단. `ownerReservation`과 둘 중 하나만 온다. */
+    readonly adopted?: readonly AdoptedRoomMember[];
     readonly minPlayersToStart: number;
     /**
      * 지금 새 경기를 시작해도 되는가. 결과 outbox가 가득 차면 false다.
@@ -174,7 +182,13 @@ export class Room {
     #resumeStarted: Extract<ServerMessage, { type: 'game.started' }>['payload'] | null = null;
 
     public constructor(options: RoomOptions) {
-        if (options.ownerReservation.roomId !== options.id || options.ownerReservation.resume) {
+        // 새 방은 방장 좌석으로, 넘겨받는 방은 명단으로 시작한다. 둘 다 없으면 아무도 없는
+        // 방이 서고, 그건 첫 sweep에 닫힌다 — 조용히 사라지느니 여기서 막는다.
+        if (options.ownerReservation === undefined && options.adopted === undefined) {
+            throw new Error('room needs either an owner reservation or an adopted roster');
+        }
+        if (options.ownerReservation !== undefined
+            && (options.ownerReservation.roomId !== options.id || options.ownerReservation.resume)) {
             throw new Error('owner reservation must be a fresh seat for this room');
         }
         if (!options.isKnownMap(options.mapId, options.mode)) throw new Error(`unknown map: ${options.mapId}`);
@@ -195,8 +209,10 @@ export class Room {
             mapLockMs: options.timing.startLockOnMapChangeMs,
         });
         this.#mapId = options.mapId;
-        const held = this.#roster.hold(options.ownerReservation);
-        if (!held.ok) throw new Error(`could not reserve owner seat: ${held.reason}`);
+        if (options.ownerReservation !== undefined) {
+            const held = this.#roster.hold(options.ownerReservation);
+            if (!held.ok) throw new Error(`could not reserve owner seat: ${held.reason}`);
+        }
     }
 
     public get state(): RoomStateValue {
@@ -323,6 +339,86 @@ export class Room {
     }
 
     /** 인증 뒤 실제 Connection이 만들어졌을 때 admission을 연결에 결박한다. */
+    /**
+     * 다른 서버에서 넘어온 방을 이어받는다.
+     *
+     * 대기실 상태의 방만 넘어온다 — 시뮬레이션이 안 돌고 있어서 옮길 것이 명단과 방 정보뿐이다.
+     * 그래서 여기서 하는 일은 명단을 그대로 앉히고 시작 잠금을 다시 거는 것뿐이다.
+     *
+     * 시작 잠금을 새로 거는 이유: 사람들이 재접속으로 하나씩 돌아오는 중에 방장이 시작을 눌러
+     * 버리면 아직 안 돌아온 사람이 경기에서 빠진다. "누가 들어오는 중에는 시작하지 마라"가
+     * 원래 이 잠금의 뜻이고, 지금이 정확히 그 상황이다.
+     */
+    /**
+     * 이 방을 다른 서버로 넘길 수 있는가.
+     *
+     * 대기실일 때만이다. 경기 중이나 카운트다운 중에는 세계가 돌고 있어서, 옮기려면 그것까지
+     * 직렬화해야 한다. 그 위험을 감수할 이유가 없다 — 경기가 끝나 대기실로 돌아온 순간이 기회고,
+     * 재우는 서버는 어차피 그때까지 기다린다.
+     *
+     * 사람이 아무도 안 붙어 있는 방은 넘기지 않는다. 곧 스스로 닫힐 방이라 옮길 값이 없다.
+     */
+    public canHandOff(): boolean {
+        return this.state === RoomState.Waiting
+            && this.#roster.members().some((member) => member.connection !== null);
+    }
+
+    /** 넘길 방의 사본. 소켓은 옮길 수 없으므로 명단만 나간다. */
+    public exportForHandOff(targetServerId: string): AdoptRoomPayload {
+        const hostId = this.#roster.hostId;
+        return {
+            serverId: targetServerId,
+            roomId: this.id,
+            roomCode: this.roomCode,
+            matchId: this.matchId,
+            name: this.name,
+            password: this.#password,
+            capacity: this.#roster.capacity,
+            mapId: this.#mapId,
+            mode: this.mode,
+            members: this.#roster.members().map((member) => ({
+                userId: member.userId,
+                playerId: member.playerId,
+                slot: member.slot,
+                nickname: member.nickname,
+                guest: member.guest,
+                stats: member.stats,
+                loadout: member.loadout,
+                joinedOrder: member.joinedOrder,
+                colorIndex: member.colorIndex,
+                isHost: member.playerId === hostId,
+            })),
+        };
+    }
+
+    /**
+     * 넘기기가 끝났다. 여기 있던 방을 접는다.
+     *
+     * 소켓을 닫을 때 재시도 가능한 이유를 준다. 클라이언트는 그 코드를 보고 자동 재접속을 도는데,
+     * 그 경로가 매칭 서버에 방의 **현재** 서버를 다시 물어보므로 새 서버로 알아서 간다.
+     * 그래서 클라이언트에 "방이 옮겨졌다"는 메시지를 따로 보낼 필요가 없다.
+     */
+    public releaseAfterHandOff(): void {
+        for (const member of this.#roster.members()) {
+            member.connection?.close(CloseCode.TryAgainLater, 'room migrated');
+            member.connection = null;
+        }
+        this.#stateMachine.transition(RoomState.Closed, this.#now());
+    }
+
+    public adoptMembers(members: readonly AdoptedRoomMember[]): void {
+        const now = this.#now();
+        for (const member of members) {
+            this.#roster.adopt(member, now + this.#options.timing.reconnectGraceMs);
+        }
+        // ALLOCATING은 "첫 사람이 아직 안 앉았다"는 뜻이다. 넘어온 방은 이미 대기실이었고
+        // 명단도 그대로다 — 좌석 청구를 거치지 않았다는 이유로 그 상태에 머물면, 방 목록에도
+        // 안 뜨고 넘길 수도 없는(canHandOff가 WAITING을 본다) 방이 된다.
+        if (this.state === RoomState.Allocating) this.#stateMachine.transition(RoomState.Waiting, now);
+        this.#startLock.applyJoin(now);
+        this.#directoryChanged();
+    }
+
     public bindConnection(connection: Connection): boolean {
         const now = this.#now();
         const member = this.#roster.getByUser(connection.userId);

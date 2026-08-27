@@ -179,8 +179,11 @@ function spawnServer(): void {
 
     child.on('exit', (code) => {
         children.delete(serverId);
-        // 재우고 나간 것은 정상이다. 그게 아니면 사고이므로 눈에 띄게 남긴다.
-        if (entry.draining) log(`${serverId} 종료 (재우기 완료)`);
+        // 0으로 나간 것은 스스로 정리하고 나간 것이다 — 감독자가 재운 경우도 있고, 밖에서
+        // DRAIN_SERVER를 받은 경우도 있다. 후자는 감독자가 draining heartbeat를 보기 전에
+        // 끝날 수 있어서, `entry.draining`만 보고 판단하면 멀쩡한 종료를 사고로 알린다.
+        // 사고는 0이 아닌 코드다.
+        if (code === 0) log(`${serverId} 종료 (재우기 완료)`);
         else log(`! ${serverId}가 예기치 않게 종료했습니다 (code=${String(code)})`);
     });
 

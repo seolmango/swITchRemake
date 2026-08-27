@@ -86,6 +86,13 @@ class FakeRedis implements RedisPort {
         values.set(member, score);
         this.log.push(`zadd:${key}:${member}`);
     }
+    async zRange(key: string, start: number, stop: number): Promise<string[]> {
+        if (!this.ready) throw new Error('redis unavailable');
+        const values = [...(this.sorted.get(key) ?? new Map()).entries()]
+            .sort((a, b) => a[1] - b[1])
+            .map(([member]) => member);
+        return values.slice(start, stop === -1 ? undefined : stop + 1);
+    }
     async zRemove(key: string, member: string): Promise<void> {
         if (!this.ready) throw new Error('redis unavailable');
         this.sorted.get(key)?.delete(member);

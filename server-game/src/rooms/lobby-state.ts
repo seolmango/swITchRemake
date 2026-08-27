@@ -3,6 +3,7 @@ import {
     SkillId,
     PlayerRole,
     type ActorId,
+    type AdoptedRoomMember,
     type InputState,
     type LobbyStats,
     type PlayerRole as PlayerRoleValue,
@@ -150,6 +151,41 @@ export class LobbyRoster {
         this.#members.set(userId, member);
         if (this.#hostUserId === null) this.#hostUserId = userId;
         return member;
+    }
+
+    /**
+     * 다른 서버에서 넘어온 사람을 명단에 그대로 앉힌다.
+     *
+     * `claim`과 달리 좌석 예약을 거치지 않는다 — 그 사람은 이미 방에 있었고, 바뀐 것은 방이
+     * 어느 프로세스에 있느냐뿐이다. 대신 **끊겼지만 유예 안에 있는 상태**로 넣는다. 소켓은
+     * 옮길 수 없으니 그것이 사실이고, 그러면 기존 재접속 경로가 그대로 통한다.
+     */
+    public adopt(member: AdoptedRoomMember, reconnectUntil: number): LobbyMember {
+        const seated: LobbyMember = {
+            userId: member.userId,
+            playerId: member.playerId,
+            slot: member.slot,
+            nickname: member.nickname,
+            guest: member.guest,
+            stats: member.stats,
+            loadout: member.loadout,
+            joinedOrder: member.joinedOrder,
+            colorIndex: member.colorIndex,
+            // 옮기는 것은 대기실 상태의 방뿐이다. 경기가 안 돌고 있으므로 전원이 평범한 참가자다.
+            role: PlayerRole.Player,
+            spectatorEligible: false,
+            inCurrentGame: false,
+            connection: null,
+            admissionPendingUntil: null,
+            reconnectUntil,
+            latestInput: null,
+            lastInputSequence: null,
+        };
+        this.#members.set(member.userId, seated);
+        // 넘어온 순서 번호를 그대로 쓰므로, 다음에 들어오는 사람이 겹치지 않게 뒤로 민다.
+        this.#joinOrder = Math.max(this.#joinOrder, member.joinedOrder + 1);
+        if (member.isHost) this.#hostUserId = member.userId;
+        return seated;
     }
 
     public releaseHold(userId: ActorId): boolean {

@@ -18,6 +18,8 @@ export interface RedisPort {
     compareAndExpire(key: string, expectedValue: string, ttlMs: number): Promise<boolean>;
     zAdd(key: string, score: number, member: string): Promise<void>;
     zRemove(key: string, member: string): Promise<void>;
+    /** 정렬셋 멤버를 점수 오름차순으로. 재우는 서버가 방을 넘길 상대를 찾는 데 쓴다. */
+    zRange(key: string, start: number, stop: number): Promise<string[]>;
     zRemoveByScore(key: string, min: number, max: number): Promise<number>;
     xGroupCreate(stream: string, group: string, startId: string): Promise<void>;
     xReadGroup(stream: string, group: string, consumer: string, blockMs: number, count: number): Promise<StreamEntry[]>;
@@ -148,6 +150,10 @@ export class RedisClient implements RedisPort {
     }
 
     public async zRemove(key: string, member: string): Promise<void> { await this.#client.zrem(key, member); }
+
+    public async zRange(key: string, start: number, stop: number): Promise<string[]> {
+        return this.#client.zrange(key, start, stop);
+    }
 
     public async zRemoveByScore(key: string, min: number, max: number): Promise<number> {
         return this.#client.zremrangebyscore(key, min, max);

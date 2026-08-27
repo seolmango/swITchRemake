@@ -6,6 +6,7 @@
  */
 
 import type { LobbyStats, RoomMode } from '../protocol/events';
+import type { SkillId } from '../protocol/skills';
 
 export const CONTROL_VERSION = 1;
 
@@ -25,6 +26,17 @@ export const CommandType = {
      * 것이다. 신호는 프로세스 옆에 있어야 보낼 수 있지만 Redis는 어디서든 닿는다.
      */
     DrainServer: 'DRAIN_SERVER',
+    /**
+     * 다른 서버가 들고 있던 방을 넘겨받는다.
+     *
+     * 재우기(`DRAIN_SERVER`)만으로는 방이 다 빌 때까지 몇 분을 기다려야 한다. 대기실에 앉아
+     * 있는 방은 옮겨도 되는데 — 시뮬레이션이 안 돌고 있어서 옮길 것이 명단과 방 정보뿐이다 —
+     * 그걸 옮기면 축소가 훨씬 빨라진다.
+     *
+     * **경기 중인 방은 옮기지 않는다.** 그러려면 세계 전체를 직렬화해야 하고, 그건 이득에 비해
+     * 위험이 크다. 경기가 끝나 대기실로 돌아온 순간이 기회다.
+     */
+    AdoptRoom: 'ADOPT_ROOM',
 } as const;
 export type CommandType = (typeof CommandType)[keyof typeof CommandType];
 
@@ -135,6 +147,40 @@ export interface ReleaseSeatPayload {
     userId: ActorId;
 }
 
+/**
+ * 옮겨 가는 명단 한 줄.
+ *
+ * 소켓은 옮길 수 없다 — 프로세스에 붙은 TCP 연결이다. 그래서 받는 쪽은 이 사람들을 **끊겼지만
+ * 유예 안에 있는 상태**로 만들어 둔다. 실제로 그것이 사실이고, 그러면 클라이언트의 기존 재접속
+ * 경로(`RESERVE_RESUME`)가 그대로 통한다 — 새 메시지도, 클라이언트 수정도 필요 없다.
+ */
+export interface AdoptedRoomMember {
+    userId: ActorId;
+    playerId: number;
+    slot: number;
+    nickname: string;
+    guest: boolean;
+    stats: LobbyStats | null;
+    loadout: SkillId;
+    joinedOrder: number;
+    colorIndex: number;
+    isHost: boolean;
+}
+
+export interface AdoptRoomPayload {
+    /** 엉뚱한 서버가 받지 않도록 보낸 쪽이 대상을 적는다. */
+    serverId: string;
+    roomId: string;
+    roomCode: string;
+    matchId: string;
+    name: string;
+    password: string | null;
+    capacity: number;
+    mapId: string;
+    mode: RoomMode;
+    members: AdoptedRoomMember[];
+}
+
 export interface DrainServerPayload {
     /** 엉뚱한 서버를 재우지 않도록 보낸 쪽이 대상을 적는다. 다르면 거절한다. */
     serverId: string;
@@ -173,6 +219,7 @@ export interface ControlCommandMap {
     [CommandType.ReleaseSeat]: { payload: ReleaseSeatPayload; result: Record<string, never> };
     [CommandType.KickUser]: { payload: KickUserPayload; result: Record<string, never> };
     [CommandType.DrainServer]: { payload: DrainServerPayload; result: DrainServerResult };
+    [CommandType.AdoptRoom]: { payload: AdoptRoomPayload; result: Record<string, never> };
 }
 
 /* ────────────────────────────── heartbeat ────────────────────────────── */

@@ -94,6 +94,7 @@ function validPayload(type: string, payload: unknown): boolean {
         case CommandType.ReleaseSeat: return releaseSeatPayload(payload);
         case CommandType.KickUser: return kickUserPayload(payload);
         case CommandType.DrainServer: return object(payload) && text(payload['serverId']);
+        case CommandType.AdoptRoom: return adoptRoomPayload(payload);
         default: return false;
     }
 }
@@ -114,6 +115,24 @@ export function decodeCommand(value: string): ControlCommand {
         throw new Error('Malformed control command');
     }
     return parsed as unknown as ControlCommand;
+}
+
+function adoptRoomPayload(payload: unknown): boolean {
+    if (!object(payload)) return false;
+    for (const field of ['serverId', 'roomId', 'roomCode', 'matchId', 'name', 'mapId', 'mode'] as const) {
+        if (!text(payload[field])) return false;
+    }
+    if (typeof payload['capacity'] !== 'number') return false;
+    if (payload['password'] !== null && !text(payload['password'])) return false;
+    const members = payload['members'];
+    if (!Array.isArray(members) || members.length === 0 || members.length > MAX_PLAYERS_PER_ROOM) return false;
+    return members.every((member: unknown) => object(member)
+        && (typeof member['userId'] === 'number' || text(member['userId']))
+        && typeof member['playerId'] === 'number'
+        && typeof member['slot'] === 'number'
+        && text(member['nickname'])
+        && typeof member['guest'] === 'boolean'
+        && typeof member['isHost'] === 'boolean');
 }
 
 export function encodeReply(reply: ControlReply): string { return JSON.stringify(reply); }

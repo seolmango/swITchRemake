@@ -8,6 +8,7 @@ import {
     type ControlReply,
     type CreateRoomPayload,
     type CreateRoomResult,
+    type AdoptRoomPayload,
     type DrainServerPayload,
     type DrainServerResult,
     type KickUserPayload,
@@ -287,6 +288,8 @@ export class CommandConsumer {
                 return this.#kickUser(command, command.payload as KickUserPayload);
             case CommandType.DrainServer:
                 return this.#drainServer(command, command.payload as DrainServerPayload);
+            case CommandType.AdoptRoom:
+                return this.#adoptRoom(command, command.payload as AdoptRoomPayload);
             default:
                 return failure(this.#options.serverId, command, ControlErrorCode.Internal);
         }
@@ -306,6 +309,33 @@ export class CommandConsumer {
         }
         this.#options.beginDrain();
         return success(this.#options.serverId, command, { remainingRooms: this.#options.rooms.size });
+    }
+
+    /**
+     * 다른 서버가 들고 있던 방을 넘겨받는다.
+     *
+     * 재우는 중인 서버는 받지 않는다. 곧 사라질 프로세스에 방을 얹으면 그 방이 한 번 더
+     * 옮겨 다녀야 하고, 사람들은 재접속을 두 번 겪는다.
+     */
+    #adoptRoom(command: ControlCommand, payload: AdoptRoomPayload): ControlReply<Record<string, never>> {
+        if (payload.serverId !== this.#options.serverId) {
+            return failure(this.#options.serverId, command, ControlErrorCode.RoomNotFound);
+        }
+        if (this.#options.isDraining()) {
+            return failure(this.#options.serverId, command, ControlErrorCode.ServerDraining);
+        }
+        const adopted = this.#options.rooms.adoptRoom(payload);
+        if (!adopted.ok) return failure(this.#options.serverId, command, adopted.code);
+        // 자리 표를 먼저 여기로 돌린다. 방 디렉터리만 바뀌고 표가 옛 서버를 가리키면 매칭 서버가
+        // 둘을 대조해 전원을 ROOM_UNAVAILABLE로 튕긴다.
+        void this.#options.registry.claimAdoptedRoom(
+            payload.roomId,
+            payload.members.map((member) => member.userId),
+        );
+        // 방이 여기 있다는 사실을 즉시 알린다. heartbeat 주기를 기다리면 그동안의 재접속이
+        // 옛 서버로 간다.
+        this.#options.registry.requestPublish();
+        return success(this.#options.serverId, command, {});
     }
 
     #reservation(

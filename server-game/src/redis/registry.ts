@@ -114,6 +114,43 @@ export class GameRegistry {
      * Publish the first directory change immediately.  Changes while a
      * publish is in flight are folded into exactly one trailing publish.
      */
+    /**
+     * 이 방은 이제 내 것이 아니다. **지우지 말고 잊는다.**
+     *
+     * 아래 정리 루프는 "내 방 목록에서 사라진 방"의 디렉터리 키를 지운다. 방이 끝났을 때는
+     * 맞는 동작이지만, 다른 서버로 넘긴 방에 그대로 적용하면 **방금 상대가 쓴 키를 지운다.**
+     * 그러면 매칭 서버가 그 방을 못 찾아 아무도 재접속하지 못한다 — 실제로 그랬다.
+     */
+    /**
+     * 넘겨받은 방의 사람들이 **여기로** 재접속하게 자리 표를 다시 쓴다.
+     *
+     * 매칭 서버의 재접속 경로는 방 디렉터리의 serverId와 사용자별 자리 표의 serverId가 **둘 다**
+     * 맞는지 본다(`rooms.service.ts`). 방만 옮기고 이걸 안 고치면 전원이 `ROOM_UNAVAILABLE`로
+     * 튕겨서, 방은 멀쩡히 여기 있는데 아무도 돌아오지 못한다.
+     *
+     * `setPx`로 덮어쓴다. 앞 서버가 남긴 표가 아직 살아 있을 수 있고, 그 표는 이미 죽은 서버를
+     * 가리키므로 지켜 줄 이유가 없다.
+     */
+    public async claimAdoptedRoom(roomId: string, userIds: readonly ActorId[]): Promise<void> {
+        for (const userId of userIds) {
+            await this.#options.redis.setPx(
+                this.#options.keys.userActiveRoom(userId),
+                JSON.stringify({
+                    state: 'assigned',
+                    requestId: `adopt:${this.#options.heartbeat.serverId}:${roomId}`,
+                    roomId,
+                    serverId: this.#options.heartbeat.serverId,
+                }),
+                ACTIVE_ROOM_TTL_MS,
+            );
+        }
+    }
+
+    public forgetRoom(roomId: string): void {
+        this.#lastProjectedRooms.delete(roomId);
+        this.#lastProjectedRoomCodes.delete(roomId);
+    }
+
     public requestPublish(): void {
         if (this.#publishing !== null) {
             this.#publishRequested = true;

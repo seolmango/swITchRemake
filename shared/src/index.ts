@@ -122,6 +122,8 @@ export {
     type ReserveJoinPayload,
     type ReserveResumePayload,
     type ReleaseSeatPayload,
+    type AdoptRoomPayload,
+    type AdoptedRoomMember,
     type DrainServerPayload,
     type DrainServerResult,
     type KickUserPayload,
