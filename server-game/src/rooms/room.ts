@@ -16,6 +16,7 @@ import {
     type LobbyPlayer,
     type PlayerRole as PlayerRoleValue,
     type RoomState as RoomStateValue,
+    type ServerMessage,
     type SkillId,
     type SkillRejection,
 } from 'shared';
@@ -158,6 +159,19 @@ export class Room {
     #countdownEndsAt: number | null = null;
     #postGameEndsAt: number | null = null;
     #startSnapshot: RoomStartSnapshot | null = null;
+    /**
+     * 지금 돌고 있는(또는 곧 시작할) 경기를 **나중에 들어온 연결에게 다시 알려 주기 위한** 사본.
+     *
+     * `game.starting`과 `game.started`는 그 순간에 방 전체로 한 번 나가고 끝이었다. 그래서 경기
+     * 도중에 재접속하거나 F5로 돌아온 사람은 두 메시지를 영원히 못 받았고, 화면은 "서버의 경기
+     * 시작 신호를 기다리고 있습니다"에서 멈춘 채 12초 뒤 실패로 떨어졌다. 방은 멀쩡히 PLAYING인데
+     * 본인만 못 들어가는 상태다.
+     *
+     * `gameplay`가 `game.starting`에만 실려 있다는 점도 같이 걸린다 — 못 받으면 쿨타임 표시와
+     * 스킬 사거리 원이 통째로 죽는다. 그래서 둘 다 보관했다가 그대로 다시 보낸다.
+     */
+    #resumeStarting: Extract<ServerMessage, { type: 'game.starting' }>['payload'] | null = null;
+    #resumeStarted: Extract<ServerMessage, { type: 'game.started' }>['payload'] | null = null;
 
     public constructor(options: RoomOptions) {
         if (options.ownerReservation.roomId !== options.id || options.ownerReservation.resume) {
@@ -324,7 +338,9 @@ export class Room {
         this.#options.lifecycle.connectionChanged(this.id, member.playerId, true);
 
         queueMicrotask(() => {
-            if (member.connection === connection && this.state !== RoomState.Closed) this.broadcastLobbyState();
+            if (member.connection !== connection || this.state === RoomState.Closed) return;
+            this.broadcastLobbyState();
+            this.#replayGameState(connection);
         });
         return true;
     }
@@ -472,15 +488,14 @@ export class Room {
         this.#directoryChanged();
         const startsAtTick = this.#options.getServerTick()
             + Math.ceil((this.#options.timing.countdownMs / 1000) * this.#options.simulationHz);
-        this.#broadcast({
-            type: 'game.starting',
-            payload: {
-                startsAtTick,
-                countdownMs: this.#options.timing.countdownMs,
-                mapId: this.#mapId,
-                gameplay: { ...this.#options.hudGameplay },
-            },
+        this.#resumeStarting = Object.freeze({
+            startsAtTick,
+            countdownMs: this.#options.timing.countdownMs,
+            mapId: this.#mapId,
+            gameplay: Object.freeze({ ...this.#options.hudGameplay }),
         });
+        this.#resumeStarted = null;
+        this.#broadcast({ type: 'game.starting', payload: this.#resumeStarting });
         return null;
     }
 
@@ -489,6 +504,9 @@ export class Room {
         const now = this.#now();
         this.#postGameEndsAt = now + this.#options.timing.postGameMs;
         this.#stateMachine.transition(RoomState.PostGame, now);
+        // 끝난 경기를 다시 알려 주면 안 된다. 이 뒤에 들어온 사람은 결과 화면을 봐야 한다.
+        this.#resumeStarting = null;
+        this.#resumeStarted = null;
         this.#directoryChanged();
         this.#broadcast({
             type: 'game.ended',
@@ -725,7 +743,8 @@ export class Room {
             }
             this.#countdownEndsAt = null;
             this.#stateMachine.transition(RoomState.Playing, now);
-            this.#broadcast({ type: 'game.started', payload: { startTick: started.startTick, taggerId: started.taggerId } });
+            this.#resumeStarted = Object.freeze({ startTick: started.startTick, taggerId: started.taggerId });
+            this.#broadcast({ type: 'game.started', payload: this.#resumeStarted });
             this.broadcastLobbyState();
         }
 
@@ -782,6 +801,28 @@ export class Room {
 
     #sendError(connection: Connection, requestId: number | null, code: ErrorCodeValue): void {
         connection.sendJson({ type: 'error', payload: { requestId, code, retryable: isRetryable(code) } });
+    }
+
+    /**
+     * 이미 시작한 경기를 방금 붙은 연결 하나에게만 다시 알린다.
+     *
+     * 두 메시지를 원래 순서대로 보낸다. `game.starting`이 클라이언트를 Countdown으로,
+     * `game.started`가 다시 Playing으로 놓기 때문에 순서가 뒤집히면 카운트다운에 멈춰 선다.
+     *
+     * 경기 중이면 `countdownMs`를 0으로 바꿔 보낸다. 카운트다운은 이미 끝났고, 남은 시간인 척하는
+     * 값을 보내면 언젠가 그걸 읽는 화면이 생겼을 때 조용히 틀린다. `startsAtTick`은 절대 tick이라
+     * 그대로 유효하다.
+     */
+    #replayGameState(connection: Connection): void {
+        const starting = this.#resumeStarting;
+        if (starting === null) return;
+        connection.sendJson({
+            type: 'game.starting',
+            payload: this.state === RoomState.Playing ? { ...starting, countdownMs: 0 } : starting,
+        });
+        if (this.#resumeStarted !== null) {
+            connection.sendJson({ type: 'game.started', payload: this.#resumeStarted });
+        }
     }
 
     #broadcast(message: Parameters<Connection['sendJson']>[0]): void {

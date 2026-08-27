@@ -336,3 +336,91 @@ test('결과를 내보낼 자리가 없으면 새 경기를 시작하지 않는�
     assert.equal(context.room.requestStart(1), null);
     assert.equal(context.room.state, RoomState.Countdown);
 });
+
+/** 경기가 돌고 있는 방을 만들고, 그 방에 재접속할 자리를 하나 비워 둔다. */
+async function playingRoom() {
+    const context = setup();
+    context.connect(context.owner);
+    const r2 = seat(2, 0);
+    const r3 = seat(3, 0);
+    assert.equal(context.room.reserveJoin(r2, 'secret'), null);
+    assert.equal(context.room.reserveJoin(r3, 'secret'), null);
+    const c2 = context.connect(r2);
+    context.connect(r3);
+    await Promise.resolve();
+    context.setNow(5_001);
+    assert.equal(context.room.requestStart(1), null);
+    context.setNow(8_001);
+    context.room.advance();
+    assert.equal(context.room.state, RoomState.Playing);
+    return { context, c2 };
+}
+
+test('경기 중에 재접속하면 game.starting과 game.started를 다시 받는다', async () => {
+    // 두 메시지는 시작하는 순간 한 번만 나갔다. 그래서 경기 도중에 끊겼다 돌아온 사람은
+    // 방이 멀쩡히 PLAYING인데도 "경기 시작 신호를 기다리는" 화면에서 영영 멈춰 있었다.
+    const { context, c2 } = await playingRoom();
+
+    context.room.disconnect(c2, 'network');
+    assert.equal(context.room.canReserveResume(2), null);
+    const resumed = seat(2, context.getNow(), true);
+    const back = context.connect(resumed);
+    await Promise.resolve();
+
+    const starting = back.messages.find((message) => message.type === 'game.starting');
+    const started = back.messages.find((message) => message.type === 'game.started');
+    assert.notEqual(starting, undefined, 'gameplay 수치가 여기에만 실려 있어 못 받으면 쿨타임·사거리가 죽는다');
+    assert.notEqual(started, undefined);
+    // 순서가 뒤집히면 클라이언트가 Countdown에 멈춰 선다.
+    assert.ok(
+        back.messages.indexOf(starting!) < back.messages.indexOf(started!),
+        'game.starting이 game.started보다 먼저 가야 한다',
+    );
+    // 카운트다운은 이미 끝났다. 남은 시간인 척하는 값을 보내면 언젠가 그걸 읽는 화면이 틀린다.
+    assert.equal(starting?.payload.countdownMs, 0);
+    assert.ok(Object.keys(starting?.payload.gameplay ?? {}).length > 0);
+});
+
+test('경기가 끝난 뒤에 들어온 사람에게는 다시 알리지 않는다', async () => {
+    // 끝난 경기를 시작했다고 알리면 결과 화면 대신 빈 경기 화면에 들어앉는다.
+    const { context, c2 } = await playingRoom();
+    assert.equal(context.room.finishGame([1, 3]), true);
+
+    context.room.disconnect(c2, 'network');
+    assert.equal(context.room.canReserveResume(2), null);
+    const resumed = seat(2, context.getNow(), true);
+    const back = context.connect(resumed);
+    await Promise.resolve();
+
+    assert.equal(back.messages.some((message) => message.type === 'game.starting'), false);
+    assert.equal(back.messages.some((message) => message.type === 'game.started'), false);
+});
+
+test('카운트다운 중에 재접속하면 game.starting만 받는다', async () => {
+    // 아직 시작하지 않았으므로 started는 없다. 그래도 gameplay는 지금 줘야 카운트다운이 끝나는
+    // 순간 화면이 준비돼 있다.
+    const context = setup();
+    context.connect(context.owner);
+    const r2 = seat(2, 0);
+    const r3 = seat(3, 0);
+    assert.equal(context.room.reserveJoin(r2, 'secret'), null);
+    assert.equal(context.room.reserveJoin(r3, 'secret'), null);
+    const c2 = context.connect(r2);
+    context.connect(r3);
+    await Promise.resolve();
+    context.setNow(5_001);
+    assert.equal(context.room.requestStart(1), null);
+    assert.equal(context.room.state, RoomState.Countdown);
+
+    context.room.disconnect(c2, 'network');
+    assert.equal(context.room.canReserveResume(2), null);
+    const resumed = seat(2, context.getNow(), true);
+    const back = context.connect(resumed);
+    await Promise.resolve();
+
+    const starting = back.messages.find((message) => message.type === 'game.starting');
+    assert.notEqual(starting, undefined);
+    // 카운트다운이 실제로 남아 있으므로 0으로 덮지 않는다.
+    assert.ok((starting?.payload.countdownMs ?? 0) > 0);
+    assert.equal(back.messages.some((message) => message.type === 'game.started'), false);
+});
