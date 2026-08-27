@@ -177,6 +177,7 @@ function harness() {
             protocolVersion: 2,
             rulesVersion: 'rules',
             mapBundleHash: 'hash',
+            internalAddress: () => 'http://127.0.0.1:4000',
             connectionCount: () => 2,
             loopLagMs: () => 3,
             isDraining: () => false,
@@ -470,6 +471,7 @@ test('a live game-server heartbeat claims its GAME_SERVER_ID, while an expired k
         rooms: h.rooms,
         heartbeat: {
             serverId: 'game-1', buildVersion: 'build', protocolVersion: 2, rulesVersion: 'rules', mapBundleHash: 'hash',
+            internalAddress: () => 'http://127.0.0.1:4000',
             connectionCount: () => 0, loopLagMs: () => 0, isDraining: () => false,
         },
     });

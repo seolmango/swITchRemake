@@ -44,6 +44,13 @@ export const INFRA = Object.freeze({
     PUBLIC_WS_PATH: optional('GAME_PUBLIC_WS_PATH', `/game-ws/${optional('GAME_SERVER_ID', 'local')}`),
     PORT: num('GAME_PORT', 4000),
     HOST: optional('GAME_HOST', '0.0.0.0'),
+    /**
+     * 게이트웨이가 이 프로세스에 닿을 때 쓸 호스트. heartbeat에 실린다.
+     *
+     * HOST와 다른 이유: HOST는 '무엇을 듣는가'(0.0.0.0)이고 이건 '어디로 오면 되는가'다.
+     * 0.0.0.0으로 접속할 수는 없다.
+     */
+    INTERNAL_HOST: optional('GAME_INTERNAL_HOST', '127.0.0.1'),
 
     /** Redis 키에 강제로 붙는 환경 prefix. 없으면 dev와 prod가 같은 keyspace를 쓰게 된다. */
     ENV: optional('APP_ENV', 'dev'),

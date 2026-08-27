@@ -191,6 +191,7 @@ async function main(): Promise<void> {
             protocolVersion: PROTOCOL_VERSION,
             rulesVersion: RULES_VERSION,
             mapBundleHash: bundle.mapBundleHash,
+            internalAddress: () => internalAddress(),
             connectionCount: () => transport.connectionCount(),
             loopLagMs: () => scheduler.getStats().loopLagMs,
             isDraining: () => draining,
@@ -221,6 +222,25 @@ async function main(): Promise<void> {
     });
 
     let draining = false;
+
+    /**
+     * 게이트웨이가 이 프로세스에 닿는 주소.
+     *
+     * 설정값이 아니라 **실제로 바인딩된 포트**를 읽는다. `GAME_PORT=0`으로 띄우면 설정값은 0이고
+     * 포트는 OS가 정하는데, 감독자가 프로세스를 늘릴 때 포트를 손으로 배정하지 않으려면 그 방식이
+     * 필요하다.
+     *
+     * 첫 heartbeat는 listen보다 먼저 나갈 수 있다. 그때는 빈 문자열을 준다 — 게이트웨이는 주소가
+     * 빈 서버를 후보에서 빼므로, 다음 heartbeat(2초)에 제대로 실릴 때까지 그 서버로 아무도
+     * 보내지 않는다. 여기서 던지면 서버가 아예 못 뜬다.
+     */
+    const internalAddress = (): string => {
+        try {
+            return `http://${INFRA.INTERNAL_HOST}:${transport.boundPort()}`;
+        } catch {
+            return '';
+        }
+    };
     /** draining 중 남은 방을 확인하는 주기. 경기가 분 단위라 촘촘할 이유가 없다. */
     const DRAIN_POLL_MS = 1_000;
 

@@ -15,9 +15,11 @@
     "game:build": "npm run build -w server-game",
     "game:dev": "npm run dev -w server-game",
     "game:start": "node scripts/start-game.cjs",
-    "test": "node scripts/run-workspaces.cjs test shared server-game server-match client",
-    "typecheck": "node scripts/run-workspaces.cjs typecheck shared server-game server-match client",
-    "build": "node scripts/run-workspaces.cjs build shared server-game server-match client"
+    "gateway:build": "npm run build -w server-gateway",
+    "gateway:start": "node server-gateway/dist/main.js",
+    "test": "node scripts/run-workspaces.cjs test shared server-game server-gateway server-match client",
+    "typecheck": "node scripts/run-workspaces.cjs typecheck shared server-game server-gateway server-match client",
+    "build": "node scripts/run-workspaces.cjs build shared server-game server-gateway server-match client"
   },
   "keywords": [],
   "author": "",
@@ -28,6 +30,7 @@
     "shared",
     "client",
     "server-game",
+    "server-gateway",
     "server-match"
   ]
 }

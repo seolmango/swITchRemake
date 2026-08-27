@@ -189,6 +189,17 @@ export interface GameServerHeartbeat {
     loopLagMs: number;
     draining: boolean;
     updatedAt: number;
+    /**
+     * 게이트웨이가 이 서버에 닿는 주소(`http://host:port`).
+     *
+     * **공개 주소가 아니다.** 사용자는 게이트웨이 한 곳만 알고, 자기가 어느 인게임 서버에
+     * 붙었는지 알 필요가 없다. 이 값은 게이트웨이가 경로(`/game-ws/{serverId}`)를 보고
+     * 어디로 넘길지 정하는 데만 쓴다.
+     *
+     * 정적 설정 파일이 아니라 heartbeat에 싣는 이유는, 서버가 늘고 줄 때 아무도 설정을
+     * 고치지 않아도 되게 하기 위해서다. 뜨면 알아서 경로가 생기고 죽으면 TTL로 사라진다.
+     */
+    internalAddress: string;
 }
 
 /** heartbeat 주기와 키 TTL. TTL은 주기의 3배라 한 번 걸러도 살아 있는 것으로 본다. */
