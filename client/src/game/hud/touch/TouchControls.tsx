@@ -9,7 +9,7 @@ import { HUD_FONT } from '../hudTheme.ts';
 import { ActionJoystick } from './ActionJoystick.tsx';
 import type { ActionMode } from './actionMode.ts';
 import { MoveJoystick } from './MoveJoystick.tsx';
-import { TOUCH_BASE_SIZE, actionWheelReach, placeAnchor } from './touchLayout.ts';
+import { TOUCH_BASE_SIZE, TOUCH_Z, actionWheelReach, placeAnchor } from './touchLayout.ts';
 import { useViewportSize } from './useViewportSize.ts';
 
 interface Props {
@@ -53,7 +53,7 @@ export const TouchControls: React.FC<Props> = ({
 
     return createPortal(
         <div style={{
-            position: 'fixed', inset: 0, zIndex: 60, pointerEvents: 'none',
+            position: 'fixed', inset: 0, zIndex: TOUCH_Z.controls, pointerEvents: 'none',
             fontFamily: HUD_FONT, touchAction: 'none',
         }}>
             <div style={{

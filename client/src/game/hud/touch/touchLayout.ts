@@ -1,5 +1,14 @@
 import type { TouchAnchor } from '../../../stores/useSettingsStore.ts';
 
+/**
+ * 터치 조작이 쓰는 쌓임 순서.
+ *
+ * 겹판과 선택기는 `document.body`로 따로 포털되므로 **서로 형제가 아니다.** z-index를 안 주면
+ * `z-index: auto`가 되는데, 그러면 게임 무대(`GameContainer`, z-index 1)보다 뒤에 그려진다.
+ * 좌표는 맞는데 화면에는 안 보이는 상태가 되고, 눌러도 아무 일도 안 일어나는 것처럼 보인다.
+ */
+export const TOUCH_Z = { controls: 60, wheel: 70 } as const;
+
 /** 기본 조이스틱 지름(px). 설정의 배율이 여기에 곱해진다. */
 export const TOUCH_BASE_SIZE = 132;
 

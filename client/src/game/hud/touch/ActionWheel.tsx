@@ -6,6 +6,7 @@ import { Color } from '../../../theme/color.ts';
 import type { ColorVisionMode } from '../../../theme/cvd.ts';
 import { emojiDataUri } from '../../emoji.ts';
 import { HUD_FONT, HUD_METRICS, mutedText, userColors } from '../hudTheme.ts';
+import { TOUCH_Z } from './touchLayout.ts';
 import type { ActionMode } from './actionMode.ts';
 import { useViewportSize } from './useViewportSize.ts';
 
@@ -47,7 +48,7 @@ export const ActionWheel: React.FC<Props> = ({ theme, colorVision, mode, players
     return createPortal(
         <div style={{
             position: 'fixed', inset: 0, display: 'grid', placeItems: 'center',
-            pointerEvents: 'none', fontFamily: HUD_FONT,
+            zIndex: TOUCH_Z.wheel, pointerEvents: 'none', fontFamily: HUD_FONT,
             background: `color-mix(in srgb, ${Color.black} ${theme === 1 ? 45 : 28}%, transparent)`,
             backdropFilter: 'blur(2px)',
         }}>
