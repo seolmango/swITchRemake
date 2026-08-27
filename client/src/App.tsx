@@ -18,8 +18,8 @@ import { SettingsPage } from './pages/SettingsPage.tsx';
 import { HowToPlayPage } from './pages/HowToPlayPage.tsx';
 import { GamePage } from './pages/GamePage.tsx';
 import { TrainingPage } from './pages/TrainingPage.tsx';
+import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { useAuthStore } from './stores/useAuthStore.ts';
-import { Navigate } from 'react-router-dom';
 import { Outlet } from 'react-router-dom';
 import { GameContainer } from './components/layout/GameContainer.tsx';
 
@@ -72,7 +72,7 @@ function App() {
                         <Route path="/how-to-play" element={<HowToPlayPage />} />
                         <Route path="/game" element={<GamePage />} />
                         <Route path="/training" element={<TrainingPage />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
+                        <Route path="*" element={<NotFoundPage />} />
                     </Route>
                 </Routes>
             </BrowserRouter>

@@ -62,6 +62,12 @@
       "kickedFromRoom": "이 방에서 강퇴되어 다시 참가할 수 없습니다."
     }
   },
+  "notFound": {
+    "title": "페이지 없음",
+    "heading": "그런 주소는 없어요",
+    "body": "주소가 잘못되었거나, 가려던 곳이 사라졌을 수 있어요.",
+    "goHome": "첫 화면으로"
+  },
   "lobby": {
     "roomAccessible": "{{name}} 대기실, 방 코드 {{code}}",
     "roomCode": "방 코드",

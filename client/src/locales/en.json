@@ -62,6 +62,12 @@
       "kickedFromRoom": "You were removed from this room and cannot rejoin it."
     }
   },
+  "notFound": {
+    "title": "Page not found",
+    "heading": "There is nothing here",
+    "body": "The address may be wrong, or the page it pointed to is gone.",
+    "goHome": "Back to start"
+  },
   "lobby": {
     "roomAccessible": "{{name}} lobby, room code {{code}}",
     "roomCode": "Room code",
