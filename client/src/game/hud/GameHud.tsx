@@ -105,7 +105,19 @@ export const GameHud: React.FC<Props> = ({
     const deadInMatch = mode !== EngineMode.Spectate && self !== null && !self.alive;
 
     return (
-        <div ref={rootRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', fontFamily: HUD_FONT }}>
+        <div
+            ref={rootRef}
+            /*
+             * HUD 뿌리에 이름을 붙여 둔다. 안쪽 조각들은 전부 인라인 스타일이라 밖에서 잡을
+             * 손잡이가 하나도 없었다 — 화면 자동 점검이 "경기 화면에 들어왔다"를 판정할 방법이
+             * 없으면 그 흐름은 점검할 수 없다.
+             */
+            className="game-hud"
+            data-hud-mode={mode}
+            data-hud-ready={matchReady ? 'true' : 'false'}
+            data-hud-spectating={spectating ? 'true' : 'false'}
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none', fontFamily: HUD_FONT }}
+        >
             <StatusBar
                 theme={theme}
                 spectating={spectating}

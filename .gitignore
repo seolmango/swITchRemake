@@ -8,3 +8,6 @@ dist-test/
 !.env.example
 .idea
 *.tmp.cjs
+e2e/artifacts/
+replays/
+server-game/replays/

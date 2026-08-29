@@ -6,6 +6,7 @@ import { DRIZZLE } from './database/database.module';
 import { sql } from 'drizzle-orm';
 import fastifyCookie from '@fastify/cookie';
 import { ConfigService } from '@nestjs/config';
+import { assertRateLimitPolicy } from './ratelimiter.guard';
 
 /** 서명 키가 세 종류인 이유는 토큰 종류를 나누기 위해서다. 같은 값이면 나눈 적이 없는 것과 같다. */
 const JWT_SECRET_KEYS = ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'JWT_GUEST_REFRESH_SECRET'] as const;
@@ -44,6 +45,7 @@ async function bootstrap() {
 
     const configService = app.get(ConfigService);
     assertDistinctJwtSecrets(configService);
+    assertRateLimitPolicy(configService.get<string>('APP_ENV'));
     const cookieSecret = configService.get<string>('JWT_REFRESH_SECRET');
     try {
         const db = app.get(DRIZZLE);
