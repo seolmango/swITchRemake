@@ -156,3 +156,24 @@ export {
     type VisibilityActor,
     type VisibilityResult,
 } from './visibility/types';
+
+export {
+    REPLAY_MAGIC,
+    REPLAY_CONTAINER_VERSION,
+    REPLAY_FORMAT_VERSION,
+    FRAMES_PER_CHUNK,
+    ReplayDecodeError,
+    buildReplayContainer,
+    parseReplayContainer,
+    decodeChunk,
+    verifyRootHash,
+    type ReplayCodec,
+    type ReplayEvent,
+    type RecordedFrame,
+    type RecordedVisibility,
+    type RecordedEvent,
+    type ChunkAccumulator,
+    type ReplayManifest,
+    type ChunkIndexEntry,
+    type ReplayContainer,
+} from './replay/format';

@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { decodeSnapshot, type Snapshot } from 'shared';
 import {
     decodeChunk,
+    nodeReplayCodec,
     parseReplayContainer,
     verifyRootHash,
     type ChunkIndexEntry,
@@ -51,8 +52,8 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 /** chunk 안에서 tick 이하 중 가장 가까운 keyframe부터 tileChanges를 누적 적용해 그 tick의 스냅샷을 만든다. */
-function reconstructAt(bytes: Uint8Array, entry: ChunkIndexEntry, tick: number): Snapshot | null {
-    const chunk = decodeChunk(bytes, entry);
+async function reconstructAt(bytes: Uint8Array, entry: ChunkIndexEntry, tick: number): Promise<Snapshot | null> {
+    const chunk = await decodeChunk(bytes, entry, nodeReplayCodec);
     const frames = chunk.frames.filter((f) => f.tick <= tick).sort((a, b) => a.tick - b.tick);
     const keyframe = frames[0];
     if (!keyframe) return null;
@@ -79,7 +80,7 @@ function reconstructAt(bytes: Uint8Array, entry: ChunkIndexEntry, tick: number):
     return { ...snapshot, tick: tickCursor, players, storm };
 }
 
-function main(): void {
+async function main(): Promise<void> {
     const options = parseArgs(process.argv.slice(2));
     const bytes = new Uint8Array(readFileSync(options.file));
     const { manifest, chunkIndex } = parseReplayContainer(bytes);
@@ -97,12 +98,12 @@ function main(): void {
     }
 
     if (options.verify) {
-        const rootOk = verifyRootHash(manifest, chunkIndex);
+        const rootOk = await verifyRootHash(manifest, chunkIndex, nodeReplayCodec);
         console.log(`\nrootHash 검증: ${rootOk ? 'OK' : 'FAIL'}`);
         let allOk = rootOk;
         for (const entry of chunkIndex) {
             try {
-                decodeChunk(bytes, entry);
+                await decodeChunk(bytes, entry, nodeReplayCodec);
                 console.log(`  chunk [${entry.startTick}..${entry.endTick}] OK`);
             } catch (error) {
                 allOk = false;
@@ -114,7 +115,7 @@ function main(): void {
 
     if (options.tick !== null) {
         const entry = [...chunkIndex].reverse().find((e) => e.startTick <= options.tick!);
-        const snapshot = entry ? reconstructAt(bytes, entry, options.tick) : null;
+        const snapshot = entry ? await reconstructAt(bytes, entry, options.tick) : null;
         if (!snapshot) {
             console.error(`\ntick ${options.tick}을 담은 chunk를 찾지 못했다.`);
             process.exit(1);
@@ -130,7 +131,7 @@ function main(): void {
         const frames: { tick: number; full: boolean; snapshot: Snapshot }[] = [];
         const events: RecordedEvent[] = [];
         for (const entry of chunkIndex) {
-            const chunk = decodeChunk(bytes, entry);
+            const chunk = await decodeChunk(bytes, entry, nodeReplayCodec);
             for (const frame of chunk.frames) {
                 const snapshot = decodeSnapshot(toArrayBuffer(frame.bytes));
                 frames.push({ tick: frame.tick, full: frame.full, snapshot });

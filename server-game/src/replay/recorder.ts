@@ -7,7 +7,7 @@
  */
 
 import type { ReplayHandleInfo } from 'shared';
-import { buildReplayContainer, REPLAY_FORMAT_VERSION, type ChunkAccumulator, type ReplayEvent, type ReplayManifest } from './format';
+import { buildReplayContainer, nodeReplayCodec, REPLAY_FORMAT_VERSION, type ChunkAccumulator, type ReplayEvent, type ReplayManifest } from './format';
 import type { ReplayStore } from './replay-store';
 
 export type { ReplayEvent } from './format';
@@ -158,10 +158,12 @@ export class MemoryReplayRecorder implements ReplayRecorder {
             mapBundleHash: this.#meta.mapBundleHash,
             visibilityCoreVersion: this.#meta.visibilityCoreVersion,
             participants: this.#meta.participants,
+            // 파일을 남에게 주는 순간, 언제 경기인지를 파일 밖에서 알 방법이 없다.
+            recordedAt: Date.now(),
         };
 
         try {
-            const container = buildReplayContainer(manifestBase, this.#chunks);
+            const container = await buildReplayContainer(manifestBase, this.#chunks, nodeReplayCodec);
             const storageKey = this.#storageKeyFor(this.#meta.matchId);
             await this.#store.put(storageKey, container.bytes);
             const handle: ReplayHandleInfo = {

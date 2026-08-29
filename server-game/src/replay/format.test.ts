@@ -11,6 +11,7 @@ import {
     verifyRootHash,
     type ChunkAccumulator,
     type ReplayManifest,
+    nodeReplayCodec,
 } from './format';
 
 function bytesOf(n: number): Uint8Array {
@@ -50,24 +51,24 @@ const MANIFEST_BASE: Omit<ReplayManifest, 'chunkCount' | 'rootHash'> = {
     ],
 };
 
-test('컨테이너를 만들고 파싱하면 manifest가 그대로 돌아온다', () => {
+test('컨테이너를 만들고 파싱하면 manifest가 그대로 돌아온다', async () => {
     const chunks = [makeChunk(2, FRAMES_PER_CHUNK, true), makeChunk(122, 10, false)];
-    const container = buildReplayContainer(MANIFEST_BASE, chunks);
+    const container = await buildReplayContainer(MANIFEST_BASE, chunks, nodeReplayCodec);
 
     const { manifest, chunkIndex } = parseReplayContainer(container.bytes);
     assert.equal(manifest.matchId, 'match-format-test');
     assert.equal(manifest.chunkCount, 2);
     assert.equal(manifest.rootHash, container.rootHash);
     assert.equal(chunkIndex.length, 2);
-    assert.ok(verifyRootHash(manifest, chunkIndex), 'rootHash가 chunk 해시 목록과 일치해야 한다');
+    assert.ok(await verifyRootHash(manifest, chunkIndex, nodeReplayCodec), 'rootHash가 chunk 해시 목록과 일치해야 한다');
 });
 
-test('chunk를 디코드하면 프레임·시야·이벤트가 순서대로 복원된다', () => {
+test('chunk를 디코드하면 프레임·시야·이벤트가 순서대로 복원된다', async () => {
     const chunks = [makeChunk(2, 3, true)];
-    const container = buildReplayContainer(MANIFEST_BASE, chunks);
+    const container = await buildReplayContainer(MANIFEST_BASE, chunks, nodeReplayCodec);
     const { chunkIndex } = parseReplayContainer(container.bytes);
 
-    const decoded = decodeChunk(container.bytes, chunkIndex[0]!);
+    const decoded = await decodeChunk(container.bytes, chunkIndex[0]!, nodeReplayCodec);
     assert.equal(decoded.frames.length, 3);
     assert.deepEqual(decoded.frames.map((f) => f.tick), [2, 4, 6]);
     assert.equal(decoded.frames[0]!.full, true);
@@ -79,25 +80,25 @@ test('chunk를 디코드하면 프레임·시야·이벤트가 순서대로 복�
     assert.deepEqual(decoded.events[0]!.event, { kind: 'tagged', playerId: 1, by: 2 });
 });
 
-test('chunk 해시가 어긋나면 손상으로 거부한다', () => {
+test('chunk 해시가 어긋나면 손상으로 거부한다', async () => {
     const chunks = [makeChunk(2, 2, false)];
-    const container = buildReplayContainer(MANIFEST_BASE, chunks);
+    const container = await buildReplayContainer(MANIFEST_BASE, chunks, nodeReplayCodec);
     const { chunkIndex } = parseReplayContainer(container.bytes);
     const tampered = new Uint8Array(container.bytes);
     // 압축된 chunk 영역 한 바이트를 뒤집는다. 해시 검증이 없으면 조용히 잘못된 프레임을 읽는다.
     tampered[chunkIndex[0]!.offset] = tampered[chunkIndex[0]!.offset]! ^ 0xff;
 
-    assert.throws(() => decodeChunk(tampered, chunkIndex[0]!), ReplayDecodeError);
+    await assert.rejects(decodeChunk(tampered, chunkIndex[0]!, nodeReplayCodec), ReplayDecodeError);
 });
 
-test('bad magic은 즉시 거부한다', () => {
+test('bad magic은 즉시 거부한다', async () => {
     const chunks = [makeChunk(2, 1, false)];
-    const container = buildReplayContainer(MANIFEST_BASE, chunks);
+    const container = await buildReplayContainer(MANIFEST_BASE, chunks, nodeReplayCodec);
     const corrupted = new Uint8Array(container.bytes);
     corrupted[0] = 0;
     assert.throws(() => parseReplayContainer(corrupted), ReplayDecodeError);
 });
 
-test('chunk가 하나도 없으면 컨테이너를 만들지 않는다', () => {
-    assert.throws(() => buildReplayContainer(MANIFEST_BASE, []));
+test('chunk가 하나도 없으면 컨테이너를 만들지 않는다', async () => {
+    await assert.rejects(buildReplayContainer(MANIFEST_BASE, [], nodeReplayCodec));
 });
