@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageLayout } from '../../components/layout/PageLayout.tsx';
 import { RoundBox } from '../../components/common/RoundBox.tsx';
@@ -19,6 +19,9 @@ export const RoomListPage: React.FC = () => {
     const [rooms, setRooms] = useState<RoomSummary[]>([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    // 강퇴·방 닫힘처럼 다른 화면에서 밀려 온 이유. 목록 조회가 성공하면 message를 비우므로
+    // 같은 칸에 넣어 두면 곧바로 지워진다. 따로 들고 있다가 할 말이 없을 때 보여 준다.
+    const handoff = (useLocation().state as { message?: string } | null)?.message ?? '';
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -71,7 +74,7 @@ export const RoomListPage: React.FC = () => {
                 <RoundButton width={88} height={88} type={2} content={<Icon name="next"/>} disabled={page >= totalPages} ariaLabel={t('nav.nextPage')} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}/>
                 <RoundButton width={88} height={88} type={2} content={<Icon name="refresh"/>} isLoading={loading} ariaLabel={t('rooms.refresh')} onClick={() => void loadRooms()}/>
             </nav>
-            <div className="status-message room-notice" role="status" aria-live="polite" style={{ color: themeColors(theme).muted }}>{message}</div>
+            <div className="status-message room-notice" role="status" aria-live="polite" style={{ color: themeColors(theme).muted }}>{message || handoff}</div>
             <div className="room-actions">
                 <RoundButton width={500} height={112} type={1} content={t('rooms.create')} onClick={() => navigate('/rooms/create')}/>
                 <RoundButton width={500} height={112} type={1} content={t('rooms.join')} onClick={() => navigate('/rooms/join')}/>

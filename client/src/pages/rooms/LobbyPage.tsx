@@ -92,6 +92,25 @@ export const LobbyPage: React.FC = () => {
             .catch(() => setResumeFailed(true));
     }, [currentRoomId, live]);
 
+    /**
+     * 강퇴당하거나 방이 닫히면 방 목록으로 돌려보낸다.
+     *
+     * 예전에는 오류 코드만 받아 두고 화면에 남았다. 그런데 그 순간 서버는 이 연결의 방을
+     * 이미 지웠으므로, 곧 "다시 연결하는 중"으로 넘어가 영원히 붙지 못한다 — 사용자는
+     * 자기가 강퇴당했다는 사실조차 못 본 채 멈춘 화면을 본다.
+     */
+    useEffect(() => {
+        if (!live) return;
+        const code = session.errorCode;
+        if (code !== 'KICKED' && code !== 'ROOM_CLOSED') return;
+        leavingRoom.current = true;
+        gameSession.disconnect();
+        navigate('/rooms', {
+            replace: true,
+            state: { message: t(code === 'KICKED' ? 'lobby.youWereKicked' : 'lobby.roomClosedNotice') },
+        });
+    }, [live, navigate, session.errorCode, session.errorEventId, t]);
+
     useEffect(() => {
         if (!live || !session.starting) return;
         transitioningToGame.current = true;
@@ -340,7 +359,7 @@ export const LobbyPage: React.FC = () => {
                 {skillPickerOpen && self && (
                     <div className="lobby-dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setSkillPickerOpen(false)}>
                         <section className="lobby-dialog is-skill-dialog" role="dialog" aria-modal="true" aria-labelledby="skill-dialog-title" onKeyDown={(event) => event.key === 'Escape' && setSkillPickerOpen(false)}>
-                            <span className="result-kicker">LOADOUT</span>
+                            <span className="result-kicker">{t('lobby.loadoutKicker')}</span>
                             <h2 id="skill-dialog-title">{t('lobby.changeSkill')}</h2>
                             <p>{t('lobby.changeSkillHelp')}</p>
                             <div className="lobby-skill-picker">
