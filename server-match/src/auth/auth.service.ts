@@ -58,12 +58,20 @@ interface AuthenticatedActor {
 }
 
 type RefreshResult =
-    | { kind: 'ok'; accessToken: string; refreshToken: string; nickname: string }
+    | {
+        kind: 'ok';
+        accessToken: string;
+        refreshToken: string;
+        nickname: string;
+        sessionId: string;
+        rotatedFromSessionId: string;
+    }
     | { kind: 'invalid' }
     | { kind: 'reuse' };
 
 // One NAT may issue identities for ten players and retry failed startup requests in one minute.
 const GUEST_AUTH_RATE_LIMIT_PER_MINUTE = 30;
+const REFRESH_ROTATION_GRACE_MS = 10_000;
 
 @Injectable()
 export class AuthService {
@@ -245,6 +253,13 @@ export class AuthService {
 
         const tokenHash = this.sessionSecurity.hashRefreshToken(refreshToken);
         const now = new Date();
+        let gracedSuccessorId: string | null = null;
+        try {
+            gracedSuccessorId = await this.redisService.get(this.rotationGraceKey(payload.sid));
+        } catch {
+            // Redis 장애가 인증 요청 자체를 막으면 이미 커밋된 회전 결과를 받을 수 없다.
+            gracedSuccessorId = null;
+        }
         const result = await this.db.transaction<RefreshResult>(async (tx) => {
             // SanctionService locks users before deleting sessions. Keep the same
             // lock order here so a concurrent ban cannot race token rotation.
@@ -277,21 +292,39 @@ export class AuthService {
                 return { kind: 'invalid' };
             }
 
-            if (session.revokedAt) {
-                await tx.update(schema.sessions).set({ revokedAt: now }).where(and(
-                    eq(schema.sessions.userId, session.userId),
-                    isNull(schema.sessions.revokedAt),
-                ));
-                return { kind: 'reuse' };
-            }
             if (session.userId !== user.id) {
                 return { kind: 'invalid' };
+            }
+
+            let sessionToRotate = session;
+            if (session.revokedAt) {
+                if (!gracedSuccessorId) {
+                    await tx.update(schema.sessions).set({ revokedAt: now }).where(and(
+                        eq(schema.sessions.userId, session.userId),
+                        isNull(schema.sessions.revokedAt),
+                    ));
+                    return { kind: 'reuse' };
+                }
+
+                const [successor] = await tx.select()
+                    .from(schema.sessions)
+                    .where(and(
+                        eq(schema.sessions.id, gracedSuccessorId),
+                        eq(schema.sessions.userId, user.id),
+                    ))
+                    .for('update');
+                if (!successor || successor.revokedAt || successor.expiresAt <= now) {
+                    return { kind: 'invalid' };
+                }
+
+                // 직전 응답의 쿠키가 반영되기 전 요청은 계정 탈취가 아니라 같은 회전의 경합이다.
+                sessionToRotate = successor;
             }
 
             await tx.update(schema.sessions).set({
                 revokedAt: now,
                 lastUsedAt: now,
-            }).where(eq(schema.sessions.id, session.id));
+            }).where(eq(schema.sessions.id, sessionToRotate.id));
 
             const tokens = this.buildTokens(user.id, user.email);
             const ip = this.sessionSecurity.protectIp(metadata.ip);
@@ -312,6 +345,8 @@ export class AuthService {
                 accessToken: tokens.accessToken,
                 refreshToken: tokens.refreshToken,
                 nickname: user.nickname,
+                sessionId: tokens.sessionId,
+                rotatedFromSessionId: sessionToRotate.id,
             };
         });
 
@@ -319,8 +354,29 @@ export class AuthService {
             throw new UnauthorizedException('Invalid refresh token');
         }
 
+        /*
+         * 유예 표는 회전한 세션과 방금 들고 온 세션 양쪽에 남긴다. 보통은 같은 값이지만
+         * 경합이 셋 이상 겹치면 다르다 — 같은 옛 토큰이 한 번 더 왔을 때도 최신 세션으로
+         * 이어져야 한다. 표가 옛 세션을 가리킨 채로 멈추면 그 요청만 401을 맞는다.
+         */
+        for (const staleSessionId of new Set([result.rotatedFromSessionId, payload.sid])) {
+            try {
+                await this.redisService.set(
+                    this.rotationGraceKey(staleSessionId),
+                    result.sessionId,
+                    REFRESH_ROTATION_GRACE_MS / 1000,
+                );
+            } catch {
+                // 커밋 뒤 Redis 기록 실패로 새 토큰 전달까지 실패하면 정상 사용자가 복구할 수 없다.
+            }
+        }
         await this.sessionService.purgeExpiredEncryptedIps(now);
-        return result;
+        return {
+            kind: result.kind,
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            nickname: result.nickname,
+        };
     }
 
     private async createSession(userId: number, email: string, nickname: string, metadata: RequestSessionMetadata) {
@@ -460,6 +516,10 @@ export class AuthService {
         } catch {
             throw new UnauthorizedException('Invalid refresh token');
         }
+    }
+
+    private rotationGraceKey(sessionId: string): string {
+        return `auth:rotate:${sessionId}`;
     }
 
     private guestSuffix(): string {
