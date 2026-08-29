@@ -19,6 +19,17 @@ interface IdRow extends Record<string, unknown> {
     id: string;
 }
 
+/**
+ * 기준 시각에서 며칠 전.
+ *
+ * SQL 안에서 `$1 - $2 * INTERVAL '1 day'`처럼 계산하지 않는다. 그러면 Postgres가 $1의 타입을
+ * 정하지 못해 드라이버가 Date를 실어 보내다 죽는다(ERR_INVALID_ARG_TYPE) — 그리고 정리 작업은
+ * 그 예외를 삼키고 조용히 아무것도 안 지운다. 자를 시각을 여기서 정해 값 하나로 넘긴다.
+ */
+function daysAgo(now: Date, days: number): string {
+    return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 @Injectable()
 export class RetentionService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(RetentionService.name);
@@ -104,7 +115,7 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
                      두면 이 창(window)이 전체 경기가 아니라 최근 며칠로 묶인다 — 10분마다 도는
                      작업이라 여기서 안 자르면 경기가 쌓일수록 비용이 같이 는다. 줄 주석(--)을
                      안 쓰는 이유는 한 줄로 눌리는 순간 뒤가 통째로 주석이 되기 때문이다. */
-                  AND match.ended_at >= ${now} - ${this.settings.replayDays} * INTERVAL '1 day'
+                  AND match.ended_at >= ${daysAgo(now, this.settings.replayDays)}::timestamptz
             ), candidates AS (
                 SELECT replay.id
                 FROM replays replay
@@ -183,7 +194,7 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
             WITH candidates AS (
                 SELECT match.match_id
                 FROM matches match
-                WHERE match.ended_at < ${now} - ${this.settings.matchDays} * INTERVAL '1 day'
+                WHERE match.ended_at < ${daysAgo(now, this.settings.matchDays)}::timestamptz
                   AND NOT EXISTS (
                       SELECT 1
                       FROM moderation_cases moderation_case

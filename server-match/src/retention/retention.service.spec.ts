@@ -55,7 +55,9 @@ test('참가자 한 명이라도 보관 중이면 제외하고 아무도 들고 
     assert.match(mark, /and not exists \( select 1 from ranked_user_matches retained/);
     // 파라미터 자리 번호($1, $2…)는 쿼리를 고칠 때마다 밀린다. 번호가 아니라 모양을 본다.
     assert.match(mark, /retained\.replay_rank <= \$\d+/);
-    assert.match(mark, /match\.ended_at >= \$\d+ - \$\d+ \* interval '1 day'/);
+    // 자를 시각은 JS에서 정해 값 하나로 넘긴다. SQL 안에서 계산하면 드라이버가 Date를
+    // 실어 보내다 죽고(ERR_INVALID_ARG_TYPE), 정리 작업은 그 예외를 삼켜 조용히 멈춘다.
+    assert.ok(mark.includes("match.ended_at >= $1::timestamptz"), '자를 시각은 값 하나로 넘어가야 한다');
     assert.match(mark, /set status = 'deleting'/);
     assert.match(mark, /limit 200/);
 });
