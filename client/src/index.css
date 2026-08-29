@@ -1873,3 +1873,19 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: #FFBDBD; }
 .replay-controls { display: flex; align-items: center; gap: 20px; }
 .replay-controls input[type='range'] { flex: 1; }
 .replay-position { color: var(--surface-muted); font-size: 16px; font-variant-numeric: tabular-nums; }
+
+/* 전적 줄의 리플레이 저장. 결과 표의 신고 버튼과 같은 규칙 — 그 줄에 손이 갔을 때만 드러난다. */
+.match-history-download {
+  padding: 4px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--profile-muted, #625F5C);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity .12s ease;
+}
+.match-history-list article:hover .match-history-download,
+.match-history-download:focus-visible { opacity: 1; }

@@ -288,7 +288,12 @@
     "deleteCodeSent": "A code was sent to your account email. Enter it within 5 minutes.",
     "deleteConfirm": "Delete account",
     "deleteFailed": "Could not delete the account. Try again shortly.",
-    "historyRetention": "Only the last {{days}} days of matches are kept. Older records are deleted."
+    "historyRetention": "Only the last {{days}} days of matches are kept. Older records are deleted.",
+    "replayDownload": "Save replay",
+    "replayDownloadLabel": "Save the replay of the match on {{date}}",
+    "replayGone": "This match’s replay is no longer kept.",
+    "replayDownloadFailed": "Could not fetch the replay.",
+    "replayHint": "Replays are kept for {{days}} days, or your {{count}} most recent matches. Save the ones you want."
   },
   "settings": {
     "title": "Settings",

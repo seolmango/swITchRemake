@@ -288,7 +288,12 @@
     "deleteCodeSent": "가입한 이메일로 인증 코드를 보냈습니다. 5분 안에 입력해 주세요.",
     "deleteConfirm": "탈퇴하기",
     "deleteFailed": "탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-    "historyRetention": "최근 {{days}}일 경기만 남습니다. 그보다 오래된 기록은 지워집니다."
+    "historyRetention": "최근 {{days}}일 경기만 남습니다. 그보다 오래된 기록은 지워집니다.",
+    "replayDownload": "리플레이 저장",
+    "replayDownloadLabel": "{{date}} 경기의 리플레이 저장",
+    "replayGone": "이 경기의 리플레이는 더 이상 남아 있지 않습니다.",
+    "replayDownloadFailed": "리플레이를 받지 못했습니다.",
+    "replayHint": "리플레이는 {{days}}일, 또는 최근 {{count}}경기까지 남습니다. 보고 싶은 경기는 저장해 두세요."
   },
   "settings": {
     "title": "설정",

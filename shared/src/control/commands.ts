@@ -321,6 +321,14 @@ export function makeKeys(env: string) {
         userActiveRoom: (userId: ActorId) => p(`user:${userId}:active-room`),
         guestSession: (sessionId: string) => p(`guest-session:${sessionId}`),
         roomRejoin: (roomId: string, userId: ActorId) => p(`room-rejoin:${roomId}:${userId}`),
+        /**
+         * 리플레이 파일 한 번짜리 내려받기 표.
+         *
+         * 매칭 서버가 "이 사람은 그 경기 참가자다"를 확인하고 만들고, 인게임 서버가 파일을 내주며
+         * 지운다. 파일 자체에는 권한이 없으므로 — 저장소 키만 알면 누구든 요청할 수 있으므로 —
+         * 표가 그 자리를 대신한다. 짧게 살고 한 번만 쓰인다.
+         */
+        replayTicket: (token: string) => p(`replay-ticket:${token}`),
         commands: (serverId: string) => p(`game-server:${serverId}:commands`),
         /**
          * 매칭 서버 인스턴스 하나가 자기 응답만 읽는 stream.

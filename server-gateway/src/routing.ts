@@ -10,6 +10,12 @@ import type { GameServerHeartbeat } from 'shared';
 /** 클라이언트가 좌석 승인으로 받는 경로. `/game-ws/{serverId}` 형태다. */
 const GAME_WS_PREFIX = '/game-ws/';
 const MAP_BUNDLE_PREFIX = '/map-bundles/';
+/*
+ * 리플레이 파일도 아무 서버나 준다. 로컬 저장소 구현에서는 같은 기계의 서버들이 한 디렉터리를
+ * 보기 때문이다. 저장소가 S3로 바뀌면 이 전제도 같이 사라진다 — 그때는 여기가 아니라 저장소가
+ * 주소를 준다.
+ */
+const REPLAY_PREFIX = '/replays/';
 
 export interface Backend {
     serverId: string;
@@ -41,7 +47,7 @@ export function resolveWebSocketBackend(
 }
 
 /**
- * 맵 번들을 받을 서버.
+ * 맵 번들과 리플레이 파일을 받을 서버.
  *
  * 번들은 해시로 주소가 정해지는 불변 데이터라 **어느 서버가 줘도 같다.** 그래서 아무나 골라도
  * 되고, 고르는 김에 한가한 쪽으로 보낸다.
@@ -53,7 +59,7 @@ export function resolveBundleBackend(
     path: string,
     servers: ReadonlyMap<string, GameServerHeartbeat>,
 ): Backend | null {
-    if (!path.startsWith(MAP_BUNDLE_PREFIX)) return null;
+    if (!path.startsWith(MAP_BUNDLE_PREFIX) && !path.startsWith(REPLAY_PREFIX)) return null;
     const candidates = [...servers.values()]
         .filter((server) => !server.draining && server.internalAddress.length > 0)
         // 동률을 serverId로 깨서 같은 상태면 늘 같은 곳으로 간다. 캐시가 한 곳에 모인다.

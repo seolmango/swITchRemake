@@ -91,3 +91,12 @@ test('같은 상태면 늘 같은 서버로 보낸다', () => {
 test('서버가 하나도 없으면 번들도 못 준다', () => {
     assert.equal(resolveBundleBackend('/map-bundles/abc.json', registry()), null);
 });
+
+test('리플레이 파일도 한가한 서버로 넘긴다', () => {
+    // 로컬 저장소에서는 같은 기계의 서버들이 한 디렉터리를 본다. 표를 확인하는 것은 어느 쪽이든 같다.
+    const servers = new Map([
+        ['game-1', server('game-1', { waitingRooms: 5 })],
+        ['game-2', server('game-2', { waitingRooms: 0 })],
+    ]);
+    assert.equal(resolveBundleBackend('/replays/match-1.swrp?ticket=abc', servers)?.serverId, 'game-2');
+});

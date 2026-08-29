@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, Req, Res } from '@nestjs/common';
 import { UserService } from "./user.service";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { RateLimiter } from "../ratelimiter.decorator";
@@ -7,6 +7,7 @@ import { DeleteUserDto } from './dto/delete-user.dto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { MatchHistoryQueryDto } from './dto/match-history-query.dto';
+import { ReplayDownloadService } from './replay-download.service';
 
 type AccountRequest = FastifyRequest & { user: { id: number; sessionId: string; guest: false } };
 
@@ -14,6 +15,7 @@ type AccountRequest = FastifyRequest & { user: { id: number; sessionId: string; 
 export class UserController {
     constructor(
         private readonly userService: UserService,
+        private readonly replayDownload: ReplayDownloadService,
     ) {}
 
     @Post('register')
@@ -47,6 +49,19 @@ export class UserController {
         @Query() query: MatchHistoryQueryDto,
     ) {
         return this.userService.getMatches(req.user.id, query.limit, query.cursor);
+    }
+
+    /**
+     * 리플레이를 받아 갈 표를 끊는다.
+     *
+     * 파일을 여기서 흘려보내지 않는다 — 수백 KB가 매칭 서버를 통과할 이유가 없고, 파일은
+     * 인게임 서버 디스크에 있다. 표만 주고 주소를 알려 준다.
+     */
+    @Post('me/matches/:matchId/replay-ticket')
+    @NeedAccount()
+    @RateLimiter({ anon: 0, guest: 0, account: 20, ttl: 60_000 })
+    async createReplayTicket(@Req() req: AccountRequest, @Param('matchId', new ParseUUIDPipe()) matchId: string) {
+        return this.replayDownload.createTicket(req.user.id, matchId);
     }
 
     @Post('me/delete-code')

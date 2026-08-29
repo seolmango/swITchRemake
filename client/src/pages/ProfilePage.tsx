@@ -13,6 +13,8 @@ import { ApiError } from '../api/http.ts';
 import { loginErrorMessage } from './auth/authErrorMessage.ts';
 import { getMyMatches, getMyStats, type UserMatchHistoryItem, type UserStats } from '../api/profile.ts';
 import { getRetentionSettings, type RetentionSettings } from '../api/config.ts';
+import { createReplayTicket } from '../api/profile.ts';
+import { gameHttpOrigin } from '../game/GameSession.ts';
 import { DeleteAccountDialog } from '../components/profile/DeleteAccountDialog.tsx';
 
 type RecordsState =
@@ -41,6 +43,24 @@ export const ProfilePage: React.FC = () => {
      * 숫자를 말한다. 못 받아 오면 아무 말도 하지 않는다 — 틀린 숫자보다 침묵이 낫다.
      */
     const [retention, setRetention] = useState<RetentionSettings | null>(null);
+    const [replayMessage, setReplayMessage] = useState('');
+
+    /*
+     * 표를 받아 그 주소로 보낸다. 파일은 인게임 서버가 준다 — 매칭 서버를 통과하지 않는다.
+     * 보관 기간이 지난 경기에는 404가 오고, 그때는 화면이 이유를 말해야 한다. 눌렀는데 아무
+     * 일도 안 일어나는 것이 제일 나쁘다.
+     */
+    const downloadReplay = useCallback(async (matchId: string) => {
+        setReplayMessage('');
+        try {
+            const ticket = await createReplayTicket(matchId);
+            window.location.href = `${gameHttpOrigin('/')}${ticket.path}`;
+        } catch (error) {
+            setReplayMessage(error instanceof ApiError && error.status === 404
+                ? t('profile.replayGone')
+                : t('profile.replayDownloadFailed'));
+        }
+    }, [t]);
 
     const loadRecords = useCallback(async () => {
         if (!authenticated) return;
@@ -239,13 +259,20 @@ export const ProfilePage: React.FC = () => {
                             <div>
                                 <span>{t('profile.historyKicker')}</span>
                                 <h2>{t('profile.recentMatches')}</h2>
-                                {retention && <small className="match-history-retention">{t('profile.historyRetention', { days: retention.matchDays })}</small>}
+                                {retention && (
+                                    <small className="match-history-retention">
+                                        {t('profile.historyRetention', { days: retention.matchDays })}
+                                        {' '}
+                                        {t('profile.replayHint', { days: retention.replayDays, count: retention.replayPerUserMatches })}
+                                    </small>
+                                )}
                             </div>
                             <button type="button" onClick={() => void loadRecords()} disabled={records.kind === 'loading'} aria-label={t('rooms.refresh')}><Icon name="refresh" size={28}/></button>
                         </header>
                         {records.kind === 'loading' && <div className="match-history-state" aria-busy="true">{t('profile.matchesLoading')}</div>}
                         {records.kind === 'failed' && <div className="match-history-state is-failed" role="alert">{t('profile.matchesLoadFailed')}</div>}
                         {records.kind === 'ready' && records.matches.length === 0 && <div className="match-history-state">{t('profile.noMatches')}</div>}
+                        {replayMessage && <div className="match-history-state is-failed" role="alert">{replayMessage}</div>}
                         {records.kind === 'ready' && records.matches.length > 0 && (
                             <div className="match-history-list" aria-label={t('profile.recentMatches')}>
                                 {records.matches.map((match) => (
@@ -261,6 +288,15 @@ export const ProfilePage: React.FC = () => {
                                             <span>{t('profile.matchSurvived', { duration: formatDuration(match.survivedMs) })}</span>
                                         </div>
                                         <time dateTime={match.endedAt}>{formatDate(match.endedAt)}</time>
+                                        <button
+                                            type="button"
+                                            className="match-history-download"
+                                            title={t('profile.replayDownload')}
+                                            aria-label={t('profile.replayDownloadLabel', { date: formatDate(match.endedAt) })}
+                                            onClick={() => void downloadReplay(match.matchId)}
+                                        >
+                                            <Icon name="external" size={22}/>
+                                        </button>
                                     </article>
                                 ))}
                             </div>

@@ -183,6 +183,24 @@ async function main(): Promise<void> {
             mapBundleHash: bundle.mapBundleHash,
         },
         mapBundleBody,
+        /*
+         * 표를 한 번만 쓰게 한다. 읽고 나서 지우는 것이 아니라 **지워진 사람만 읽는다** —
+         * 같은 표로 두 번 받는 경합을 그 순서가 막는다. 표가 가리키는 키와 요청한 키가 다르면
+         * 아무 일도 없었던 것처럼 404다.
+         */
+        ...(replayStore ? {
+            readReplay: async (storageKey: string, ticket: string) => {
+                const key = keys.replayTicket(ticket);
+                const claimed = await redis.get(key);
+                if (claimed !== storageKey) return null;
+                if (!await redis.compareAndDelete(key, storageKey)) return null;
+                try {
+                    return await replayStore.get(storageKey);
+                } catch {
+                    return null;
+                }
+            },
+        } : {}),
         getServerTick: () => serverTick,
         violationSink,
     });

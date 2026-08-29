@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { isIP } from 'node:net';
 import {
     CloseCode,
@@ -36,6 +36,39 @@ export interface WsServerMetadata {
     mapBundleHash: string;
 }
 
+
+/**
+ * 리플레이 파일 하나를 내준다.
+ *
+ * 표가 맞지 않으면 404다 — 403이 아니다. 파일이 있는지 없는지를 표 없이 알아낼 수 있으면
+ * 저장소 키를 훑어 무엇이 있는지 셀 수 있다.
+ */
+async function serveReplay(
+    request: IncomingMessage,
+    response: ServerResponse,
+    readReplay: (storageKey: string, ticket: string) => Promise<Uint8Array | null>,
+): Promise<void> {
+    try {
+        const url = new URL(request.url ?? '/', 'http://localhost');
+        const storageKey = decodeURIComponent(url.pathname.slice('/replays/'.length));
+        const ticket = url.searchParams.get('ticket') ?? '';
+        const body = ticket ? await readReplay(storageKey, ticket) : null;
+        if (!body) {
+            response.writeHead(404).end();
+            return;
+        }
+        response.writeHead(200, {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': body.byteLength,
+            // 브라우저가 열지 않고 저장하게 한다. 이 파일은 재생기가 읽는 것이지 화면이 아니다.
+            'Content-Disposition': `attachment; filename="${storageKey.replace(/[^A-Za-z0-9_.-]/g, '_')}"`,
+            'Cache-Control': 'no-store',
+        }).end(Buffer.from(body));
+    } catch {
+        response.writeHead(404).end();
+    }
+}
+
 export interface WsTransportOptions {
     host: string;
     port: number;
@@ -48,6 +81,13 @@ export interface WsTransportOptions {
     metadata: WsServerMetadata;
     /** Exact validated JSON bundle, served immutably by its advertised hash. */
     mapBundleBody?: string;
+    /**
+     * 표를 확인하고 리플레이 파일을 읽어 준다. 없으면 `/replays/`는 404다.
+     *
+     * 이 서버는 계정을 모른다 — 누가 받을 자격이 있는지는 매칭 서버가 판단하고 한 번짜리 표로
+     * 알려 준다. 여기서는 표가 그 파일을 가리키는지만 본다.
+     */
+    readReplay?: (storageKey: string, ticket: string) => Promise<Uint8Array | null>;
     getServerTick: () => number;
     violationSink: ViolationSink;
     rateLimiter?: AbuseRateLimiter;
@@ -218,6 +258,10 @@ export class WsTransport implements GameTransport {
                     ETag: `"${options.metadata.mapBundleHash}"`,
                     ...(corsOrigin ? { 'Access-Control-Allow-Origin': corsOrigin, Vary: 'Origin' } : {}),
                 }).end(options.mapBundleBody);
+                return;
+            }
+            if (request.method === 'GET' && request.url?.startsWith('/replays/') && options.readReplay) {
+                void serveReplay(request, response, options.readReplay);
                 return;
             }
             response.writeHead(404).end();

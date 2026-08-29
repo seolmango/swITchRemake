@@ -98,7 +98,8 @@ function websocketUrl(path: string): string {
     return url.toString();
 }
 
-function gameHttpOrigin(path: string): string {
+/** 인게임 서버가 파일을 내주는 주소. 맵 번들과 리플레이가 같은 곳에서 온다. */
+export function gameHttpOrigin(path: string): string {
     const configuredOrigin = (import.meta.env.VITE_GAME_WS_ORIGIN as string | undefined)?.trim();
     const url = new URL(path, configuredOrigin || window.location.origin);
     url.protocol = url.protocol === 'wss:' ? 'https:' : url.protocol === 'ws:' ? 'http:' : url.protocol;

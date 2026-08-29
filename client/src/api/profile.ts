@@ -49,3 +49,12 @@ export const getMyMatches = (options: { limit?: number; cursor?: string } = {}) 
     const suffix = query.size > 0 ? `?${query.toString()}` : '';
     return apiRequest<UserMatchHistoryPage>(`/users/me/matches${suffix}`, { method: 'GET' });
 };
+
+/**
+ * 리플레이를 받아 갈 한 번짜리 표를 끊는다.
+ *
+ * 파일은 인게임 서버 디스크에 있어서 매칭 서버를 통과하지 않는다. 여기서 받는 것은 주소뿐이고,
+ * 보관 기간이 지난 경기에는 404가 온다.
+ */
+export const createReplayTicket = (matchId: string) =>
+    apiRequest<{ path: string; expiresInMs: number }>(`/users/me/matches/${matchId}/replay-ticket`, { method: 'POST' });
