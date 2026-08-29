@@ -49,6 +49,13 @@ export class UserController {
         return this.userService.getMatches(req.user.id, query.limit, query.cursor);
     }
 
+    @Post('me/delete-code')
+    @NeedAccount()
+    @RateLimiter({ anon: 0, guest: 0, account: 5, ttl: 60_000 })
+    async sendDeleteCode(@Req() req: AccountRequest) {
+        return this.userService.sendDeleteCode(req.user.id);
+    }
+
     @Delete('me')
     @NeedAccount()
     async deleteMe(

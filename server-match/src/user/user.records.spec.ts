@@ -52,7 +52,7 @@ function historyService(pages: HistoryRow[][]) {
         },
     };
     return {
-        service: new UserService(db as never, {} as never, {} as never, {} as never),
+        service: new UserService(db as never, {} as never, {} as never, {} as never, {} as never),
         limits,
         selected: () => selectCount,
     };
@@ -105,7 +105,7 @@ test('stats response includes server-derived rates with one decimal precision', 
             }),
         }),
     };
-    const service = new UserService(db as never, {} as never, {} as never, {} as never);
+    const service = new UserService(db as never, {} as never, {} as never, {} as never, {} as never);
     // 100(1->2) + 150(2->3) = 250을 넘겼으므로 3레벨, 이번 레벨에서 10, 다음까지 200이다.
     assert.deepEqual(await service.getStats(7), {
         level: 3,

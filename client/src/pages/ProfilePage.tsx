@@ -9,8 +9,10 @@ import { getLoginSessions, revokeLoginSession, revokeOtherLoginSessions, type Lo
 import { useAuthStore } from '../stores/useAuthStore.ts';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../theme/color.ts';
+import { ApiError } from '../api/http.ts';
 import { loginErrorMessage } from './auth/authErrorMessage.ts';
 import { getMyMatches, getMyStats, type UserMatchHistoryItem, type UserStats } from '../api/profile.ts';
+import { DeleteAccountDialog } from '../components/profile/DeleteAccountDialog.tsx';
 
 type RecordsState =
     | { kind: 'loading' }
@@ -20,7 +22,7 @@ type RecordsState =
 export const ProfilePage: React.FC = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { status, nickname, logout } = useAuthStore();
+    const { status, nickname, logout, abandonSession } = useAuthStore();
     const theme = useSettingsStore((state) => state.theme);
     const colors = themeColors(theme);
     const authenticated = status === 'account';
@@ -32,6 +34,7 @@ export const ProfilePage: React.FC = () => {
     const drag = useRef<{ pointerId: number; lastY: number; scale: number } | null>(null);
     const [hasSessionOverflow, setHasSessionOverflow] = useState(false);
     const [records, setRecords] = useState<RecordsState>({ kind: 'loading' });
+    const [deleting, setDeleting] = useState(false);
 
     const loadRecords = useCallback(async () => {
         if (!authenticated) return;
@@ -208,7 +211,11 @@ export const ProfilePage: React.FC = () => {
                         <RoundButton width={170} height={76} type={0} content={t('auth.logout')} onClick={() => {
                             void logout()
                                 .then(() => navigate('/', { replace: true }))
-                                .catch((error: unknown) => setSessionMessage(loginErrorMessage(error, t)));
+                                .catch((error: unknown) => setSessionMessage(
+                                    error instanceof ApiError && error.status === 409
+                                        ? t('profile.logoutDuringRoom')
+                                        : loginErrorMessage(error, t),
+                                ));
                         }}/>
                     </div>
                 </div>
@@ -289,8 +296,31 @@ export const ProfilePage: React.FC = () => {
                         </button>
                     </footer>
                     </section>
+
+                    {/*
+                      * 탈퇴는 로그아웃 옆에 두지 않는다. 되돌릴 수 없는 것과 매일 누르는 것이
+                      * 나란히 있으면 언젠가 잘못 눌린다. 여기서는 문을 여는 것까지만 한다.
+                      */}
+                    <div
+                        className="profile-danger-zone"
+                        /* 옆 패널들과 같은 테두리·글자색을 쓴다. 여기만 밝으면 다크 모드에서 혼자 튄다. */
+                        style={{ '--profile-border': colors.panelBorder, '--profile-muted': colors.muted } as React.CSSProperties}
+                    >
+                        <span>{t('profile.dangerZone')}</span>
+                        <button type="button" onClick={() => setDeleting(true)}>{t('profile.deleteTitle')}</button>
+                    </div>
                 </div>
             </section>
+            {deleting && (
+                <DeleteAccountDialog
+                    onClose={() => setDeleting(false)}
+                    onDeleted={() => {
+                        // 계정이 사라졌으니 남은 토큰만 버리고 게스트로 내려간다. 로그아웃을
+                        // 부르면 진행 중인 방 때문에 409로 거절당해 화면이 그 자리에 멈춘다.
+                        void abandonSession().finally(() => navigate('/', { replace: true }));
+                    }}
+                />
+            )}
         </PageLayout>
     );
 };

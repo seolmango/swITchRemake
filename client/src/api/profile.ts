@@ -33,6 +33,13 @@ export interface UserMatchHistoryPage {
     nextCursor: string | null;
 }
 
+/** 탈퇴 인증 코드. 지금 로그인한 계정의 주소로 서버가 보낸다 — 화면은 주소를 몰라도 된다. */
+export const sendDeleteCode = () =>
+    apiRequest<{ sent: true }>('/users/me/delete-code', { method: 'POST' });
+
+export const deleteMyAccount = (code: string) =>
+    apiRequest<{ deleted: true }>('/users/me', { method: 'DELETE', body: { code } });
+
 export const getMyStats = () => apiRequest<UserStats>('/users/me/stats', { method: 'GET' });
 
 export const getMyMatches = (options: { limit?: number; cursor?: string } = {}) => {

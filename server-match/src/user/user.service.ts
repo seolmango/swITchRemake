@@ -3,11 +3,13 @@ import { DRIZZLE } from "../database/database.module";
 import { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from '../database/schema';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'node:crypto';
 import { CreateUserDto } from "./dto/create-user.dto";
 import { RedisService } from "../redis/redis.service";
 import { and, desc, eq, isNotNull, lt, or } from 'drizzle-orm';
 import { SanctionService } from '../sanction/sanction.service';
 import { SessionService } from '../session/session.service';
+import { EmailService } from '../email/email.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { levelFromXp } from 'shared';
 import { DEFAULT_STATS, nonNegativeInteger, percentage, readStoredStats, type StoredStats } from './stored-stats';
@@ -80,7 +82,29 @@ export class UserService {
         // Password changes must revoke every other authenticated session, so
         // this application service intentionally owns the SessionService dependency.
         private readonly sessionService: SessionService,
+        private readonly emailService: EmailService,
     ) {}
+
+    /**
+     * 탈퇴 인증 코드를 **지금 로그인한 계정의 주소로** 보낸다.
+     *
+     * 이미 있는 `POST /auth/verify`를 쓰지 않는 이유는 그쪽이 이메일을 본문으로 받기 때문이다.
+     * 그러면 화면이 사용자의 주소를 알고 있어야 하고, 남의 주소를 적어 보낼 수도 있게 된다.
+     * 지울 계정은 세션이 이미 알고 있으므로 아무것도 받을 필요가 없다.
+     */
+    async sendDeleteCode(userId: number): Promise<{ sent: true }> {
+        const [user] = await this.db.select({ email: schema.users.email, status: schema.users.accountStatus })
+            .from(schema.users)
+            .where(eq(schema.users.id, userId));
+        if (!user || user.status !== 'ACTIVE') throw new NotFoundException('User not found');
+
+        const code = String(randomInt(100_000, 1_000_000));
+        await this.redisService.set(`auth:code:delete:${user.email}`, code, 300);
+        if (!await this.emailService.sendDeleteAccountCodeEmail(user.email, code)) {
+            throw new InternalServerErrorException('Verification email send failed');
+        }
+        return { sent: true };
+    }
 
     async createUser(dto: CreateUserDto) {
         const { email, password, nickname, code } = dto;
