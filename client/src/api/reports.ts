@@ -97,3 +97,50 @@ export const ALLOWED_REPORT_TRANSITIONS: Readonly<Record<ReportStatus, readonly 
     DISMISSED: ['CLOSED'],
     CLOSED: [],
 };
+
+export interface AdminPlayer {
+    userId: number;
+    nickname: string;
+    accountStatus: string;
+    role: string;
+    createdAt: string;
+    activeSessions: number;
+    reportsAgainst: number;
+    reportsFiled: number;
+    matchesPlayed: number;
+}
+
+export interface AdminSanction {
+    id: string;
+    type: string;
+    scope: string;
+    startsAt: string;
+    expiresAt: string | null;
+    reason: string;
+    createdBy: string;
+    revokedAt: string | null;
+}
+
+export interface AdminAuditEntry {
+    id: number;
+    actor: string;
+    action: string;
+    target: string;
+    reason: string;
+    createdAt: string;
+}
+
+/** IP는 오지 않는다. 그 열람에는 별도 권한과 사유가 필요하고, 지금 역할 체계에는 그것이 없다. */
+export const lookupPlayer = (query: string) =>
+    apiRequest<{ player: AdminPlayer; sanctions: AdminSanction[] }>(
+        `/admin/players?q=${encodeURIComponent(query)}`,
+        { method: 'GET' },
+    );
+
+export const getAuditLog = (options: { limit?: number; before?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (options.limit !== undefined) query.set('limit', String(options.limit));
+    if (options.before !== undefined) query.set('before', String(options.before));
+    const suffix = query.size > 0 ? `?${query.toString()}` : '';
+    return apiRequest<{ items: AdminAuditEntry[]; nextBefore: number | null }>(`/admin/audit${suffix}`, { method: 'GET' });
+};

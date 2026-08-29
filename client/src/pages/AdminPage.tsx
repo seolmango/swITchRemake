@@ -5,6 +5,7 @@ import { PageLayout } from '../components/layout/PageLayout.tsx';
 import { RoundButton } from '../components/common/RoundButton.tsx';
 import { Icon } from '../components/common/Icon.tsx';
 import { getAdminOverview, type AdminOverview } from '../api/admin.ts';
+import { AdminInspect } from '../components/admin/AdminInspect.tsx';
 import {
     ALLOWED_REPORT_TRANSITIONS,
     getReportCase,
@@ -30,7 +31,7 @@ type State =
     | { kind: 'failed' }
     | { kind: 'ready'; overview: AdminOverview };
 
-type AdminTab = 'overview' | 'reports';
+type AdminTab = 'overview' | 'reports' | 'inspect';
 
 interface ReportQueueState {
     items: ReportQueueItem[];
@@ -139,6 +140,9 @@ export const AdminPage: React.FC = () => {
                         }}
                     >
                         {t('admin.tabReports')}
+                    </button>
+                    <button type="button" className="admin-toggle" aria-pressed={tab === 'inspect'} onClick={() => setTab('inspect')}>
+                        {t('admin.tabInspect')}
                     </button>
                 </nav>
 
@@ -295,6 +299,8 @@ export const AdminPage: React.FC = () => {
                         </footer>
                     </div>
                     )
+                ) : tab === 'inspect' ? (
+                    <AdminInspect time={time}/>
                 ) : (
                     <ReportQueue
                         state={reportQueue}
