@@ -81,3 +81,19 @@ export const sanctionReportCase = (caseId: string, input: { type: SanctionType; 
         `/admin/reports/${caseId}/sanction`,
         { method: 'POST', body: input },
     );
+
+/**
+ * 화면에 보여 줄 다음 상태들.
+ *
+ * **판정은 서버가 한다.** 이 표는 고를 수 없는 것을 메뉴에서 빼는 데만 쓴다 — 눌러 보고 나서야
+ * 거절당하는 메뉴는 운영자에게 거짓말을 하는 것과 같다. 서버 쪽 표(`reports.service.ts`의
+ * `ALLOWED_TRANSITIONS`)가 진짜이고, 여기가 뒤처지면 메뉴가 좁아질 뿐 통제는 안 뚫린다.
+ */
+export const ALLOWED_REPORT_TRANSITIONS: Readonly<Record<ReportStatus, readonly ReportStatus[]>> = {
+    OPEN: ['TRIAGED', 'DISMISSED'],
+    TRIAGED: ['REVIEWING', 'DISMISSED'],
+    REVIEWING: ['ACTIONED', 'DISMISSED'],
+    ACTIONED: ['CLOSED'],
+    DISMISSED: ['CLOSED'],
+    CLOSED: [],
+};

@@ -1621,6 +1621,113 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: #FFBDBD; }
 }
 .admin-toggle[aria-pressed='true'] { border-color: var(--admin-good); color: var(--admin-good); }
 
+/* 탭이 대시보드 높이를 밀어내지 않도록 본문만 남은 칸을 나눠 쓴다. */
+.admin-shell.has-tabs { grid-template-rows: 58px minmax(0, 1fr); }
+.admin-tabs { display: flex; align-items: stretch; gap: 12px; }
+.admin-tabs .admin-toggle { min-height: 0; min-width: 150px; justify-content: center; }
+.admin-overview {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 20px;
+}
+.admin-overview.has-degraded { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+
+.admin-reports { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 16px; }
+.admin-report-panel { width: 100%; }
+.admin-report-panel .admin-table-wrap th:nth-child(1) { width: 24%; }
+.admin-report-panel .admin-table-wrap th:nth-child(2) { width: 100px; }
+.admin-report-panel .admin-table-wrap th:nth-child(4) { width: 140px; }
+.admin-report-panel .admin-table-wrap th:nth-child(5) { width: 170px; }
+.admin-report-row { cursor: pointer; }
+.admin-report-row:hover td,
+.admin-report-row:focus-visible td { background: var(--surface); }
+.admin-report-row:focus-visible { outline: none; }
+.admin-report-target { min-width: 0; display: flex !important; align-items: center; gap: 10px; }
+.admin-report-target > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.admin-report-target .admin-badge { flex: 0 0 auto; padding: 3px 9px; font-size: 13px; }
+.admin-report-categories { line-height: 1.5; }
+.admin-report-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.admin-report-footer { min-height: 72px; display: flex; justify-content: flex-end; align-items: center; }
+.admin-report-footer .admin-toggle { min-width: 190px; justify-content: center; }
+.admin-toggle:disabled { opacity: .5; cursor: default; }
+
+/* 신고 내역과 두 처리 폼은 길이가 달라져도 닫기 버튼을 밀지 않게 각자 안에서 스크롤한다. */
+.lobby-dialog.admin-case-dialog {
+  width: min(1280px, calc(100% - 100px));
+  height: min(900px, calc(100% - 80px));
+  padding: 26px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  justify-items: stretch;
+  gap: 14px;
+  overflow: hidden;
+  text-align: left;
+}
+.admin-case-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.admin-case-header > div { min-width: 0; display: flex; align-items: center; gap: 14px; }
+.admin-case-header h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-case-summary { display: flex; justify-content: space-between; gap: 24px; }
+.admin-case-summary p { font-size: 17px; }
+.admin-case-section {
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  border: 4px solid var(--surface-border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-sizing: border-box;
+}
+.admin-case-section h3 { margin: 0; font-family: var(--font-display); font-size: 25px; font-weight: normal; }
+.admin-case-reporters { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; }
+.admin-case-reporters > div { min-height: 0; display: grid; align-content: start; gap: 9px; overflow: auto; }
+.admin-case-reporters article { padding: 10px 12px; border: 3px solid var(--surface-border); border-radius: 13px; }
+.admin-case-reporters article header { display: flex; align-items: center; gap: 13px; color: var(--surface-muted); font-size: 14px; }
+.admin-case-reporters article header strong { color: inherit; font-size: 17px; }
+.admin-case-reporters article header time { margin-left: auto; font-variant-numeric: tabular-nums; }
+.admin-case-reporters article p { margin-top: 7px; color: inherit; font-size: 16px; line-height: 1.4; white-space: pre-wrap; }
+.admin-case-actions-grid { min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.admin-case-actions-grid .admin-case-section { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: start; gap: 9px 12px; overflow: auto; }
+.admin-case-actions-grid h3,
+.admin-case-actions-grid label,
+.admin-case-actions-grid .admin-sanction-guest { grid-column: 1 / -1; }
+.admin-case-actions-grid label { display: grid; gap: 5px; }
+.admin-case-actions-grid label > span { color: var(--surface-muted); font-size: 14px; }
+.admin-case-actions-grid select,
+.admin-case-actions-grid input,
+.admin-case-actions-grid textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 3px solid var(--surface-border);
+  border-radius: 11px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  box-sizing: border-box;
+}
+.admin-case-actions-grid select { grid-column: 1 / -1; }
+.admin-case-actions-grid textarea { resize: vertical; }
+.admin-case-message { min-height: 44px; align-self: center; color: var(--admin-good) !important; font-size: 15px !important; }
+.admin-case-message[data-failed='true'] { color: var(--admin-bad) !important; }
+.admin-case-actions-grid button {
+  min-height: 44px;
+  padding: 0 16px;
+  align-self: center;
+  border: 3px solid currentColor;
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 700;
+}
+.admin-case-actions-grid button.is-status { color: var(--admin-good); }
+.admin-case-actions-grid button.is-sanction { color: var(--admin-bad); }
+.admin-case-actions-grid button:disabled { opacity: .5; cursor: default; }
+.admin-sanction-guest { align-self: center; color: var(--surface-muted) !important; font-size: 17px !important; }
+.admin-case-dialog > .is-bad { align-self: center; color: var(--admin-bad); text-align: center; }
+.admin-case-dialog .lobby-dialog-actions { justify-content: flex-end; }
+.admin-case-dialog .lobby-dialog-actions button { background: var(--surface); }
+
 
 /* 프로필의 되돌릴 수 없는 구역. 눈에 띄되 손이 먼저 가지는 않게 — 테두리만 경고색이다. */
 .profile-danger-zone {
