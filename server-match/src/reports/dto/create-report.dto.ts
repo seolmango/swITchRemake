@@ -18,7 +18,7 @@ export class CreateReportDto {
     @Type(() => Number)
     @IsInt()
     @Min(1)
-    targetPlayerId?: number;
+    targetPlayerId!: number;
 
     @IsIn(REPORT_CATEGORIES)
     category!: ReportCategory;

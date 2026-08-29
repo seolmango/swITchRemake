@@ -70,16 +70,7 @@ export class ReportsService {
     ) {}
 
     async create(reporterUserId: number, dto: CreateReportDto): Promise<CaseStatusRow> {
-        const hasTargetUser = dto.targetUserId !== undefined;
-        const hasTargetPlayer = dto.targetPlayerId !== undefined;
-        if (hasTargetUser === hasTargetPlayer) {
-            throw new BadRequestException({
-                code: 'INVALID_REPORT_TARGET',
-                message: 'Exactly one report target must be provided',
-            });
-        }
-        const requestedUserId = dto.targetUserId ?? null;
-        const requestedPlayerId = dto.targetPlayerId ?? null;
+        const requestedPlayerId = dto.targetPlayerId;
 
         try {
             return await this.db.transaction(async (tx) => {
@@ -109,14 +100,7 @@ export class ReportsService {
                         SELECT participant.user_id, participant.player_id, participant.nickname, participant.is_guest
                         FROM match_participants participant
                         WHERE participant.match_id = m.match_id
-                          AND (
-                              (${requestedUserId} IS NOT NULL
-                                  AND NOT participant.is_guest
-                                  AND participant.user_id = ${requestedUserId})
-                              OR (${requestedPlayerId} IS NOT NULL
-                                  AND participant.is_guest
-                                  AND participant.player_id = ${requestedPlayerId})
-                          )
+                          AND participant.player_id = ${requestedPlayerId}
                         LIMIT 1
                     ) target ON true
                     WHERE m.match_id = ${dto.matchId}
@@ -128,33 +112,25 @@ export class ReportsService {
                         message: 'The reporter did not participate in this match',
                     });
                 }
-                if (hasTargetPlayer && context.reporterPlayerId === requestedPlayerId) {
+                if (context.targetPlayerId === null) {
+                    throw new BadRequestException({
+                        code: 'INVALID_REPORT_TARGET',
+                        message: 'The target did not participate in this match',
+                    });
+                }
+                // 자리 번호로도, 계정으로도 자기 자신이면 안 된다. 한 사람이 두 자리를 갖는
+                // 일은 없지만, 둘 중 하나만 보면 나중에 그 전제가 바뀌었을 때 조용히 뚫린다.
+                if (context.reporterPlayerId === requestedPlayerId || context.targetUserId === reporterUserId) {
                     throw new BadRequestException({
                         code: 'SELF_REPORT',
                         message: 'A participant cannot report themselves',
                     });
                 }
-                if (hasTargetUser && (context.targetUserId === null || context.targetIsGuest)) {
+                // 게스트 사건은 닉네임을 사건에 박는다. 계정과 달리 나중에 이름을 되찾을 곳이 없다.
+                if (context.targetUserId === null && context.targetNickname === null) {
                     throw new BadRequestException({
                         code: 'INVALID_REPORT_TARGET',
-                        message: 'The target account did not participate in this match',
-                    });
-                }
-                if (hasTargetPlayer && (
-                    context.targetPlayerId === null
-                    || !context.targetIsGuest
-                    || context.targetUserId !== null
-                    || context.targetNickname === null
-                )) {
-                    throw new BadRequestException({
-                        code: 'INVALID_REPORT_TARGET',
-                        message: 'The target guest did not participate in this match',
-                    });
-                }
-                if (hasTargetUser && context.targetUserId === reporterUserId) {
-                    throw new BadRequestException({
-                        code: 'SELF_REPORT',
-                        message: 'A participant cannot report themselves',
+                        message: 'The target did not participate in this match',
                     });
                 }
                 /*
@@ -186,7 +162,7 @@ export class ReportsService {
                     }
                 }
 
-                const [moderationCase] = hasTargetUser
+                const [moderationCase] = context.targetUserId !== null
                     ? await tx.execute<CaseStatusRow>(sql`
                         INSERT INTO moderation_cases (match_id, target_user_id, status)
                         VALUES (${dto.matchId}, ${context.targetUserId}, 'OPEN')

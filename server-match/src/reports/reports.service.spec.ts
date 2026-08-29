@@ -12,7 +12,7 @@ const SANCTION_ID = '33333333-3333-4333-8333-333333333333';
 
 const dto = {
     matchId: MATCH_ID,
-    targetUserId: 2,
+    targetPlayerId: 2,
     category: 'CHEAT' as const,
     description: '충분히 긴 신고 설명입니다.',
 };
@@ -77,7 +77,6 @@ test('경기 참가자가 아닌 신고자는 403으로 거절한다', async () 
 });
 
 test('게스트 대상 신고가 사건을 만들고 경기 당시 닉네임을 박는다', async () => {
-    const { targetUserId: _targetUserId, ...baseDto } = dto;
     const db = scriptedDb([[
         [{
             ...validContext,
@@ -92,26 +91,16 @@ test('게스트 대상 신고가 사건을 만들고 경기 당시 닉네임을 
         [],
     ]]);
     const service = new ReportsService(db as never, noSanctions as never);
-    const result = await service.create(1, { ...baseDto, targetPlayerId: 7 });
+    const result = await service.create(1, { ...dto, targetPlayerId: 7 });
 
     assert.deepEqual(result, { caseId: CASE_ID, status: 'OPEN' });
     assert.match(JSON.stringify(db.queries[0][1]), /방문자칠/);
 });
 
-test('targetUserId와 targetPlayerId를 모두 주면 400으로 거절한다', async () => {
-    const db = scriptedDb([]);
-    const service = new ReportsService(db as never, noSanctions as never);
-    await rejectsCode(
-        service.create(1, { ...dto, targetPlayerId: 7 }),
-        BadRequestException,
-        'INVALID_REPORT_TARGET',
-    );
-});
-
 test('자기 신고는 400으로 거절한다', async () => {
-    const db = scriptedDb([[[{ ...validContext, targetUserId: 1 }]]]);
+    const db = scriptedDb([[[{ ...validContext, targetUserId: 1, targetPlayerId: 1 }]]]);
     const service = new ReportsService(db as never, noSanctions as never);
-    await rejectsCode(service.create(1, { ...dto, targetUserId: 1 }), BadRequestException, 'SELF_REPORT');
+    await rejectsCode(service.create(1, { ...dto, targetPlayerId: 1 }), BadRequestException, 'SELF_REPORT');
 });
 
 test('리플레이가 남아 있지 않은 경기의 신고는 400으로 거절한다', async () => {
