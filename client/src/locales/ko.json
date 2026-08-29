@@ -2,10 +2,7 @@
   "common": {
     "toggleTheme": "테마 전환",
     "loading": "불러오는 중…",
-    "save": "저장",
-    "cancel": "취소",
-    "comingSoon": "서버 기능 준비 중",
-    "demoData": "미리보기 데이터"
+    "cancel": "취소"
   },
   "nav": {
     "home": "홈",
@@ -13,7 +10,8 @@
     "previousPage": "이전 페이지",
     "nextPage": "다음 페이지",
     "profile": "프로필",
-    "settings": "설정"
+    "settings": "설정",
+    "admin": "운영자"
   },
   "serverStatus": {
     "checking": "서버 연결 중…",
@@ -117,6 +115,7 @@
     "moveToNumberLabel": "빈 {{slot}}번 자리로 이동",
     "selectEmptySlot": "눌러서 플레이어 번호 변경",
     "numberChanged": "플레이어 번호를 {{slot}}번으로 변경했습니다.",
+    "loadoutKicker": "LOADOUT",
     "changeSkill": "이동 스킬 변경",
     "changeSkillLabel": "현재 {{skill}}, 이동 스킬 변경",
     "changeSkillHelp": "다음 경기에서 사용할 이동 스킬을 선택하세요.",
@@ -131,6 +130,8 @@
     "kickConfirmTitle": "플레이어를 강퇴할까요?",
     "kickConfirmBody": "{{nickname}}님은 이 방이 유지되는 동안 다시 참가할 수 없습니다.",
     "hostPassedMessage": "{{nickname}}님에게 방장 권한을 넘겼습니다.",
+    "youWereKicked": "방장이 회원님을 방에서 내보냈습니다.",
+    "roomClosedNotice": "방이 닫혔습니다.",
     "kickedMessage": "{{nickname}}님을 방에서 내보냈습니다.",
     "leave": "방 나가기",
     "previewResult": "결과 화면 미리보기",
@@ -153,6 +154,7 @@
     "victory": "공동 승리",
     "victorySingle": "승리",
     "winnerDetail": "태그 {{tags}}회 · swITch {{success}}/{{tries}}",
+    "statsKicker": "MATCH STATS",
     "details": "플레이어 기록",
     "player": "플레이어",
     "tags": "태그 기록",
@@ -183,6 +185,13 @@
     "returnCountdown": "{{seconds}}초 뒤 대기실로 돌아갑니다",
     "returnNotice": "서버의 결과 표시 시간이 끝나면 같은 방으로 자동 복귀합니다.",
     "returnTimerLabel": "대기실 자동 복귀까지 남은 시간",
+    "xpTitle": "획득 경험치",
+    "xpPlayed": "참가",
+    "xpWin": "승리",
+    "xpTags": "태그",
+    "xpSwitches": "swITch",
+    "xpSurvival": "생존",
+    "xpLevel": "Lv.{{level}}",
     "invalidMatch": "올바른 경기 정보가 없어 결과를 불러올 수 없습니다."
   },
   "auth": {
@@ -202,11 +211,11 @@
     "goSignup": "계정이 없나요? 회원가입",
     "goLogin": "이미 계정이 있나요? 로그인",
     "forgot": "비밀번호를 잊으셨나요?",
-    "loginSuccess": "로그인했습니다.",
     "signupSuccess": "가입이 완료되었습니다. 이제 로그인할 수 있어요.",
     "resetTitle": "비밀번호 재설정",
     "resetAction": "새 비밀번호 설정",
-    "resetUnavailable": "메일 발송은 연결되어 있지만 비밀번호 변경 API는 아직 서버에 없습니다.",
+    "resetHelp": "가입한 이메일로 코드를 받은 뒤 새 비밀번호를 정하세요. 재설정하면 모든 기기에서 로그아웃됩니다.",
+    "resetSuccess": "비밀번호를 재설정했습니다. 새 비밀번호로 로그인해 주세요.",
     "changeTitle": "비밀번호 변경",
     "currentPassword": "현재 비밀번호",
     "newPassword": "새 비밀번호",
@@ -244,7 +253,6 @@
     "winRate": "승률",
     "switchRate": "스위치 성공률",
     "tags": "태그",
-    "level": "레벨",
     "levelProgress": "레벨 · {{into}}/{{next}}",
     "historyKicker": "MATCH HISTORY",
     "recentMatches": "최근 경기",
@@ -270,7 +278,15 @@
     "sessionRevoked": "선택한 기기에서 로그아웃했습니다.",
     "sessionActionFailed": "세션을 변경하지 못했습니다.",
     "otherSessionsRevoked": "다른 기기 {{count}}개에서 로그아웃했습니다.",
-    "sessionScrollHint": "드래그하거나 스크롤해서 더 많은 기기를 확인하세요."
+    "sessionScrollHint": "드래그하거나 스크롤해서 더 많은 기기를 확인하세요.",
+    "logoutDuringRoom": "진행 중인 방에서 나간 뒤 로그아웃할 수 있습니다.",
+    "dangerZone": "되돌릴 수 없는 작업",
+    "deleteTitle": "회원 탈퇴",
+    "deleteBody": "계정과 로그인 기록이 지워지고 모든 기기에서 로그아웃됩니다. 지난 경기 기록은 닉네임 없이 남습니다. 되돌릴 수 없습니다.",
+    "deleteSendCode": "인증 코드 받기",
+    "deleteCodeSent": "가입한 이메일로 인증 코드를 보냈습니다. 5분 안에 입력해 주세요.",
+    "deleteConfirm": "탈퇴하기",
+    "deleteFailed": "탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요."
   },
   "settings": {
     "title": "설정",
@@ -511,5 +527,43 @@
         "rotate": "{{rotateSeconds}}초 동안 술래가 바뀌지 않으면 러너 중 한 명이 무작위로 술래가 됩니다. 아무도 못 잡고 경기가 멈추는 것을 막습니다."
       }
     }
+  },
+  "admin": {
+    "title": "운영자",
+    "denied": "운영자 권한이 필요한 화면입니다.",
+    "loadFailed": "서버 상태를 불러오지 못했습니다.",
+    "registryDegraded": "Redis를 읽지 못했습니다. 서버 목록과 방·접속 수는 지금 값이 아닙니다.",
+    "kpiInGame": "인게임 접속",
+    "kpiInGameHint": "인게임 서버에 붙어 있는 연결(게스트 포함)",
+    "kpiRooms": "방",
+    "kpiRoomsHint": "대기 {{waiting}} · 진행 {{playing}}",
+    "kpiGameServers": "인게임 서버",
+    "kpiCapacity": "방 상한 합계 {{capacity}}",
+    "kpiTraffic": "분당 요청",
+    "kpiTrafficHint": "살아 있는 매칭 서버의 최근 1분 합계",
+    "kpiUsers": "활성 계정",
+    "kpiUsersHint": "세션 {{sessions}} · 오늘 가입 {{fresh}}",
+    "kpiMatches": "최근 1시간 경기",
+    "kpiMatchesHint": "24시간 {{day}} · 미기록 {{open}}",
+    "gameServers": "인게임 서버",
+    "matchServers": "매칭 서버",
+    "serverCount": "{{total}}개",
+    "colServer": "서버",
+    "colInstance": "인스턴스",
+    "colRooms": "방",
+    "colConnections": "접속",
+    "colLag": "루프 지연",
+    "colRpm": "분당 요청",
+    "colPending": "대기 명령",
+    "colState": "상태",
+    "roomSplit": "대기 {{waiting}} · 진행 {{playing}}",
+    "stateHealthy": "정상",
+    "stateDraining": "비우는 중",
+    "stateMismatch": "버전 불일치",
+    "stateStale": "응답 없음",
+    "noGameServers": "등록된 인게임 서버가 없습니다.",
+    "noMatchServers": "등록된 매칭 서버가 없습니다.",
+    "updatedAt": "{{time}} 기준",
+    "autoRefresh": "자동 갱신"
   }
 }

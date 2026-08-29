@@ -2,10 +2,7 @@
   "common": {
     "toggleTheme": "Toggle theme",
     "loading": "Loading…",
-    "save": "Save",
-    "cancel": "Cancel",
-    "comingSoon": "Server feature coming soon",
-    "demoData": "Preview data"
+    "cancel": "Cancel"
   },
   "nav": {
     "home": "Home",
@@ -13,7 +10,8 @@
     "previousPage": "Previous page",
     "nextPage": "Next page",
     "profile": "Profile",
-    "settings": "Settings"
+    "settings": "Settings",
+    "admin": "Admin"
   },
   "serverStatus": {
     "checking": "Connecting to server…",
@@ -117,6 +115,7 @@
     "moveToNumberLabel": "Move to open player number {{slot}}",
     "selectEmptySlot": "Select to change your number",
     "numberChanged": "Your player number is now {{slot}}.",
+    "loadoutKicker": "LOADOUT",
     "changeSkill": "Change movement skill",
     "changeSkillLabel": "Current skill: {{skill}}. Change movement skill",
     "changeSkillHelp": "Choose the movement skill to use in the next match.",
@@ -131,6 +130,8 @@
     "kickConfirmTitle": "Kick this player?",
     "kickConfirmBody": "{{nickname}} cannot rejoin while this room exists.",
     "hostPassedMessage": "Host privileges passed to {{nickname}}.",
+    "youWereKicked": "The host removed you from the room.",
+    "roomClosedNotice": "The room closed.",
     "kickedMessage": "{{nickname}} was removed from the room.",
     "leave": "Leave Room",
     "previewResult": "Preview Results",
@@ -153,6 +154,7 @@
     "victory": "CO-WINNER",
     "victorySingle": "WINNER",
     "winnerDetail": "{{tags}} tags · swITch {{success}}/{{tries}}",
+    "statsKicker": "MATCH STATS",
     "details": "Player records",
     "player": "Player",
     "tags": "Tag record",
@@ -183,6 +185,13 @@
     "returnCountdown": "Returning to the lobby in {{seconds}}s",
     "returnNotice": "You will return to the same room when the server's result period ends.",
     "returnTimerLabel": "Time remaining before automatic lobby return",
+    "xpTitle": "XP earned",
+    "xpPlayed": "Played",
+    "xpWin": "Win",
+    "xpTags": "Tags",
+    "xpSwitches": "swITch",
+    "xpSurvival": "Survival",
+    "xpLevel": "Lv.{{level}}",
     "invalidMatch": "The match result cannot be loaded because its identifier is invalid."
   },
   "auth": {
@@ -202,11 +211,11 @@
     "goSignup": "Need an account? Sign up",
     "goLogin": "Already have an account? Log in",
     "forgot": "Forgot your password?",
-    "loginSuccess": "You are logged in.",
     "signupSuccess": "Your account is ready. You can now log in.",
     "resetTitle": "Reset Password",
     "resetAction": "Set New Password",
-    "resetUnavailable": "Email delivery is connected, but the password reset API is not on the server yet.",
+    "resetHelp": "Get a code at your account email, then set a new password. Resetting signs you out everywhere.",
+    "resetSuccess": "Password reset. Sign in with your new password.",
     "changeTitle": "Change Password",
     "currentPassword": "Current password",
     "newPassword": "New password",
@@ -244,7 +253,6 @@
     "winRate": "Win rate",
     "switchRate": "Switch success",
     "tags": "Tags",
-    "level": "Level",
     "levelProgress": "Level · {{into}}/{{next}}",
     "historyKicker": "MATCH HISTORY",
     "recentMatches": "Recent matches",
@@ -270,7 +278,15 @@
     "sessionRevoked": "That device has been signed out.",
     "sessionActionFailed": "Could not update the session.",
     "otherSessionsRevoked": "Signed out {{count}} other devices.",
-    "sessionScrollHint": "Drag or scroll to see more devices."
+    "sessionScrollHint": "Drag or scroll to see more devices.",
+    "logoutDuringRoom": "Leave the active room before signing out.",
+    "dangerZone": "Irreversible",
+    "deleteTitle": "Delete account",
+    "deleteBody": "Your account and sign-in history are erased and every device is signed out. Past matches remain without your nickname. This cannot be undone.",
+    "deleteSendCode": "Send code",
+    "deleteCodeSent": "A code was sent to your account email. Enter it within 5 minutes.",
+    "deleteConfirm": "Delete account",
+    "deleteFailed": "Could not delete the account. Try again shortly."
   },
   "settings": {
     "title": "Settings",
@@ -511,5 +527,43 @@
         "rotate": "If the tagger has not changed for {{rotateSeconds}}s, a random runner becomes the tagger. It keeps a stalled match moving."
       }
     }
+  },
+  "admin": {
+    "title": "Admin",
+    "denied": "This page requires administrator access.",
+    "loadFailed": "Could not load server status.",
+    "registryDegraded": "Redis is unreachable. Server, room and connection counts are not current.",
+    "kpiInGame": "In-game",
+    "kpiInGameHint": "Connections held by game servers (guests included)",
+    "kpiRooms": "Rooms",
+    "kpiRoomsHint": "Waiting {{waiting}} · Playing {{playing}}",
+    "kpiGameServers": "Game servers",
+    "kpiCapacity": "Room capacity {{capacity}}",
+    "kpiTraffic": "Requests/min",
+    "kpiTrafficHint": "Last minute across live match servers",
+    "kpiUsers": "Active accounts",
+    "kpiUsersHint": "Sessions {{sessions}} · New today {{fresh}}",
+    "kpiMatches": "Matches (1h)",
+    "kpiMatchesHint": "24h {{day}} · Unrecorded {{open}}",
+    "gameServers": "Game servers",
+    "matchServers": "Match servers",
+    "serverCount": "{{total}}",
+    "colServer": "Server",
+    "colInstance": "Instance",
+    "colRooms": "Rooms",
+    "colConnections": "Conns",
+    "colLag": "Loop lag",
+    "colRpm": "Req/min",
+    "colPending": "Pending",
+    "colState": "State",
+    "roomSplit": "Waiting {{waiting}} · Playing {{playing}}",
+    "stateHealthy": "Healthy",
+    "stateDraining": "Draining",
+    "stateMismatch": "Version mismatch",
+    "stateStale": "No heartbeat",
+    "noGameServers": "No game servers registered.",
+    "noMatchServers": "No match servers registered.",
+    "updatedAt": "as of {{time}}",
+    "autoRefresh": "Auto refresh"
   }
 }
