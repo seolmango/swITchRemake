@@ -37,6 +37,11 @@ class FakeRedis {
         return count;
     }
     async sortedSetMembers(key: string): Promise<string[]> { return this.sorted.get(key) ?? []; }
+    readonly expired: string[] = [];
+    async expire(key: string): Promise<void> {
+        this.expired.push(key);
+    }
+
     async addStreamEntry(stream: string, field: string, value: string): Promise<string> {
         this.streamWrites.push({ stream, field, value });
         return '1-0';

@@ -21,6 +21,12 @@ import {
     type SeatGrant,
 } from 'shared';
 import { NETWORK } from '../config/network';
+
+/**
+ * 명령 stream의 수명. 짧게 잡으면 잠깐 멈춘 서버가 큐에 쌓인 명령을 통째로 잃는다.
+ * 응답 stream과 같은 값을 쓴다(매칭 서버의 REPLY_STREAM_TTL_SECONDS).
+ */
+const COMMAND_STREAM_TTL_MS = 300_000;
 import type { SeatReservation, TicketStore } from '../gateway/ticket-store';
 import type { RoomManager } from '../rooms/room-manager';
 import { CONTROL_STREAM_FIELDS, decodeCommand, decodeStoredReply, encodeReply, isControlRequestId } from './control-codec';
@@ -126,6 +132,11 @@ export class CommandConsumer {
                 NETWORK.STREAM_AUTOCLAIM_IDLE_MS,
                 count,
             );
+            /*
+             * 살아 있다는 신호. 감독자가 서버를 띄울 때마다 새 id를 쓰기 때문에, 갱신이 멈추면
+             * 사라지게 해 두지 않으면 죽은 서버의 명령 stream이 Redis에 영원히 쌓인다.
+             */
+            await this.#options.redis.expire(stream, COMMAND_STREAM_TTL_MS);
             fresh = await this.#options.redis.xReadGroup(
                 stream,
                 ConsumerGroup.Commands,

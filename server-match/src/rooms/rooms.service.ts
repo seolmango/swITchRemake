@@ -54,6 +54,8 @@ const ROOM_LIST_PAGE_SIZE = 20;
  * 프로세스가 죽으면 갱신이 멈추고 키가 사라진다 — 죽은 인스턴스의 stream이 Redis에 남지 않는다.
  */
 const REPLY_STREAM_TTL_SECONDS = 300;
+/** 인게임 서버의 명령 stream 수명. 읽는 쪽과 같은 값이어야 한다(server-game의 COMMAND_STREAM_TTL_MS). */
+const COMMAND_STREAM_TTL_SECONDS = 300;
 
 interface Actor {
     id: ActorId;
@@ -699,6 +701,13 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
                         CONTROL_STREAM_FIELDS.command,
                         encodeCommand(command),
                     );
+                    /*
+                     * 쓰는 쪽에서도 수명을 준다. 읽는 쪽(인게임 서버)이 루프마다 갱신하지만,
+                     * 이미 죽은 서버 앞으로 명령을 하나 넣으면 그 순간 키가 되살아나고 아무도
+                     * 갱신하지 않는다 — 그러면 감독자가 서버를 띄울 때마다 stream이 하나씩
+                     * 영원히 쌓인다.
+                     */
+                    await this.redis.expire(this.keys.commands(serverId), COMMAND_STREAM_TTL_SECONDS);
                 } catch (error) {
                     finishError(error as Error);
                     return;

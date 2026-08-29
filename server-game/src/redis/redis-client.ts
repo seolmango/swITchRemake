@@ -16,6 +16,8 @@ export interface RedisPort {
     delete(key: string): Promise<void>;
     compareAndDelete(key: string, expectedValue: string): Promise<boolean>;
     compareAndExpire(key: string, expectedValue: string, ttlMs: number): Promise<boolean>;
+    /** 값과 상관없이 수명만 늘린다. 살아 있는 동안만 남아야 하는 stream에 쓴다. */
+    expire(key: string, ttlMs: number): Promise<void>;
     zAdd(key: string, score: number, member: string): Promise<void>;
     zRemove(key: string, member: string): Promise<void>;
     /** 정렬셋 멤버를 점수 오름차순으로. 재우는 서버가 방을 넘길 상대를 찾는 데 쓴다. */
@@ -132,6 +134,10 @@ export class RedisClient implements RedisPort {
             expectedValue,
         );
         return result === 1;
+    }
+
+    public async expire(key: string, ttlMs: number): Promise<void> {
+        await this.#client.pexpire(key, ttlMs);
     }
 
     public async compareAndExpire(key: string, expectedValue: string, ttlMs: number): Promise<boolean> {

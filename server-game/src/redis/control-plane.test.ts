@@ -69,6 +69,8 @@ class FakeRedis implements RedisPort {
         this.log.push(`compare-del:${key}`);
         return true;
     }
+    readonly expired: string[] = [];
+    async expire(key: string, _ttlMs: number): Promise<void> { this.expired.push(key); }
     async compareAndExpire(key: string, expectedValue: string, ttlMs: number): Promise<boolean> {
         if (!this.ready) throw new Error('redis unavailable');
         this.log.push(`compare-expire:${key}`);
