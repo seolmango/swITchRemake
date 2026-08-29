@@ -1663,3 +1663,61 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: #FFBDBD; }
 }
 .delete-dialog-message { min-height: 26px; font-size: 17px !important; }
 .delete-dialog-message[data-failed='true'] { color: #FF7171 !important; }
+
+/* 결과 표의 신고 버튼. 평소에는 눈에 안 띄다가 그 줄에 손이 갔을 때 드러난다 — 늘 붉게 켜
+   두면 결과를 보는 화면이 아니라 고발하는 화면이 된다. */
+.result-report-button {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 4px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--surface-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity .12s ease, color .12s ease;
+}
+.result-table tr:hover .result-report-button,
+.result-report-button:focus-visible { opacity: 1; }
+.result-report-button:hover { color: #C64B4B; }
+
+.lobby-dialog.is-report-dialog { max-width: 560px; }
+.report-guest-notice { color: var(--surface-muted); font-size: 15px; }
+.report-categories {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.report-categories legend { padding: 0 0 8px; color: var(--surface-muted); font-size: 15px; }
+.report-categories button {
+  padding: 12px 14px;
+  border: 3px solid var(--surface-border);
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font-size: 17px;
+  cursor: pointer;
+}
+.report-categories button[aria-pressed='true'] { border-color: #C64B4B; color: #C64B4B; }
+.report-description { width: 100%; display: grid; gap: 6px; }
+.report-description > span { color: var(--surface-muted); font-size: 15px; }
+.report-description textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 3px solid var(--surface-border);
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 17px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.report-description > small { justify-self: end; color: var(--surface-muted); font-size: 14px; font-variant-numeric: tabular-nums; }

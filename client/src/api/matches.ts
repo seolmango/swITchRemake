@@ -46,6 +46,8 @@ export interface GameEndedEventPayload {
 
 export interface MatchPlayerResult {
     playerId: string;
+    /** 게스트는 계정이 없어 제재를 걸 수 없다. 신고 화면이 그 사실을 말해 준다. */
+    isGuest: boolean;
     slot: number;
     nickname: string;
     tagCount: number;

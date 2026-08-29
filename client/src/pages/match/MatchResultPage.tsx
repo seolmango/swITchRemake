@@ -5,8 +5,10 @@ import { PageLayout } from '../../components/layout/PageLayout.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
 import { Icon } from '../../components/common/Icon.tsx';
 import { MatchResultTable } from '../../components/match/MatchResultTable.tsx';
+import { ReportDialog } from '../../components/match/ReportDialog.tsx';
+import { useAuthStore } from '../../stores/useAuthStore.ts';
 import { MatchRewardCard } from '../../components/match/MatchRewardCard.tsx';
-import { getMatchResult, type MatchResultSnapshot } from '../../api/matches.ts';
+import { getMatchResult, type MatchPlayerResult, type MatchResultSnapshot } from '../../api/matches.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../../theme/color.ts';
 import { isInAppBrowser, openInExternalBrowser } from '../../utils/inAppBrowser.ts';
@@ -34,6 +36,9 @@ export const MatchResultPage: React.FC = () => {
     const [retryToken, setRetryToken] = useState(0);
     const [remainingSeconds, setRemainingSeconds] = useState(30);
     const [sharing, setSharing] = useState(false);
+    // 신고는 계정만 할 수 있다. 게스트에게 버튼을 보여 주면 눌러 보고 나서야 거절당한다.
+    const canReport = useAuthStore((state) => state.status) === 'account';
+    const [reporting, setReporting] = useState<MatchPlayerResult | null>(null);
     const eventReturnsAtValue = Number(searchParams.get('returns_at'));
     const eventReturnsAt = Number.isFinite(eventReturnsAtValue) && eventReturnsAtValue > 0 ? eventReturnsAtValue : null;
 
@@ -206,7 +211,11 @@ export const MatchResultPage: React.FC = () => {
                                 <h2 id="result-stats-title">{t('result.details')}</h2>
                             </div>
                         </header>
-                        <MatchResultTable players={result.players} winnerIds={winners.map((winner) => winner.playerId)} />
+                        <MatchResultTable
+                            players={result.players}
+                            winnerIds={winners.map((winner) => winner.playerId)}
+                            {...(canReport ? { onReport: setReporting } : {})}
+                        />
                         {result.reward && <MatchRewardCard reward={result.reward}/>}
                     </section>
                 </div>
@@ -228,6 +237,19 @@ export const MatchResultPage: React.FC = () => {
                     </div>
                 </footer>
             </section>
+            {reporting && result && (
+                <ReportDialog
+                    matchId={result.matchId}
+                    target={{
+                        playerId: reporting.slot,
+                        nickname: reporting.nickname,
+                        // 안내 문구를 고르는 데만 쓴다. 계정인지 게스트인지의 판정은 서버가
+                        // 명단을 보고 다시 한다 — 화면 말을 믿고 처리하지 않는다.
+                        isGuest: reporting.isGuest,
+                    }}
+                    onClose={() => setReporting(null)}
+                />
+            )}
         </PageLayout>
     );
 };

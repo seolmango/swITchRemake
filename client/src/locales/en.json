@@ -564,6 +564,72 @@
     "noGameServers": "No game servers registered.",
     "noMatchServers": "No match servers registered.",
     "updatedAt": "as of {{time}}",
-    "autoRefresh": "Auto refresh"
+    "autoRefresh": "Auto refresh",
+    "tabOverview": "Servers",
+    "tabReports": "Reports",
+    "reportsTitle": "Report queue",
+    "reportsEmpty": "Nothing to review.",
+    "reportsLoadFailed": "Could not load reports.",
+    "colTarget": "Target",
+    "colReports": "Reports",
+    "colCategories": "Categories",
+    "colUpdated": "Updated",
+    "guestBadge": "Guest",
+    "reportStatus": {
+      "OPEN": "Open",
+      "TRIAGED": "Triaged",
+      "REVIEWING": "Reviewing",
+      "ACTIONED": "Actioned",
+      "DISMISSED": "Dismissed",
+      "CLOSED": "Closed"
+    },
+    "caseTitle": "Case: {{nickname}}",
+    "caseMatch": "Match {{mapId}} · {{endedAt}}",
+    "caseReplayHeld": "Replay on hold",
+    "caseReplayGone": "No replay — statistics only",
+    "caseReporters": "Reports",
+    "caseTick": "tick {{tick}}",
+    "caseNote": "Internal note",
+    "caseStatusChange": "Change status",
+    "caseApply": "Apply",
+    "caseSanction": "Sanction",
+    "sanctionType": {
+      "WARN": "Warning",
+      "GAME_RESTRICT": "Play restriction",
+      "BAN": "Account ban"
+    },
+    "sanctionDays": "Days",
+    "sanctionDaysHint": "Leave empty for indefinite",
+    "sanctionReason": "Reason — recorded in the audit log",
+    "sanctionApply": "Apply sanction",
+    "sanctionGuestBlocked": "Guests have no account to sanction. Recording and closing the case is all that is possible.",
+    "sanctionDone": "Sanction applied.",
+    "actionFailed": "Could not complete the action."
+  },
+  "report": {
+    "button": "Report",
+    "buttonLabel": "Report {{nickname}}",
+    "title": "Report {{nickname}}",
+    "notice": "You can report while this match’s record is still kept.",
+    "categoryLabel": "What went wrong?",
+    "categories": {
+      "CHEAT": "Abnormal play or bot",
+      "ABUSE": "Inappropriate behaviour",
+      "GRIEFING": "Deliberate disruption",
+      "NICKNAME": "Inappropriate nickname"
+    },
+    "descriptionLabel": "What happened?",
+    "descriptionPlaceholder": "Describe what you saw. At least 10 characters.",
+    "descriptionHint": "{{count}}/500",
+    "submit": "Send report",
+    "sent": "Report received. Review takes time.",
+    "guestNotice": "Guests have no account to sanction. The report is still recorded.",
+    "errors": {
+      "duplicate": "You already reported this player.",
+      "window": "This match is no longer kept, so it cannot be reported.",
+      "target": "That player was not in this match.",
+      "self": "You cannot report yourself.",
+      "failed": "Could not send the report. Please try again shortly."
+    }
   }
 }

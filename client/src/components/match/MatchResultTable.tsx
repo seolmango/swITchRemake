@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { MatchPlayerResult } from '../../api/matches.ts';
+import { Icon } from '../common/Icon.tsx';
 import { Color } from '../../theme/color.ts';
 
 const formatSurvival = (survivedMs: number) => {
@@ -8,7 +9,14 @@ const formatSurvival = (survivedMs: number) => {
     return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
 };
 
-export const MatchResultTable: React.FC<{ players: MatchPlayerResult[]; winnerIds: string[] }> = ({ players, winnerIds }) => {
+interface Props {
+    players: MatchPlayerResult[];
+    winnerIds: string[];
+    /** 없으면 신고 버튼을 그리지 않는다. 게스트로 본 결과 화면이 그렇다 — 신고는 계정만 할 수 있다. */
+    onReport?: (player: MatchPlayerResult) => void;
+}
+
+export const MatchResultTable: React.FC<Props> = ({ players, winnerIds, onReport }) => {
     const { t } = useTranslation();
     return (
         <div className="result-table-wrap" tabIndex={0} aria-label={t('result.tableScrollLabel')}>
@@ -33,6 +41,17 @@ export const MatchResultTable: React.FC<{ players: MatchPlayerResult[]; winnerId
                                         <i style={{ background: ramp[0], borderColor: ramp[1], color: Color.black }}>{player.slot}</i>
                                         <span title={player.nickname}>{player.nickname}{player.isSelf ? ` · ${t('lobby.you')}` : ''}</span>
                                         {isWinner && <em>{t(winnerIds.length === 1 ? 'result.victorySingle' : 'result.victory')}</em>}
+                                        {onReport && !player.isSelf && (
+                                            <button
+                                                type="button"
+                                                className="result-report-button"
+                                                title={t('report.button')}
+                                                aria-label={t('report.buttonLabel', { nickname: player.nickname })}
+                                                onClick={() => onReport(player)}
+                                            >
+                                                <Icon name="flag" size={22}/>
+                                            </button>
+                                        )}
                                     </span>
                                 </td>
                                 <td>

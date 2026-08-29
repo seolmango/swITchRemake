@@ -74,8 +74,8 @@ test('returns the client MatchResultSnapshot and includes a guest participant wi
         playedAt: '2026-01-01T00:01:00.000Z',
         winners: ['1', '2'],
         players: [
-            { playerId: '1', slot: 1, nickname: 'Account', tagCount: 4, taggedCount: 1, switchSuccess: 2, switchTry: 3, survivedMs: 60_000, isSelf: false },
-            { playerId: '2', slot: 2, nickname: 'Guest_7KPW2M', tagCount: 1, taggedCount: 0, switchSuccess: 1, switchTry: 2, survivedMs: 60_000, isSelf: true },
+            { playerId: '1', slot: 1, isGuest: false, nickname: 'Account', tagCount: 4, taggedCount: 1, switchSuccess: 2, switchTry: 3, survivedMs: 60_000, isSelf: false },
+            { playerId: '2', slot: 2, isGuest: true, nickname: 'Guest_7KPW2M', tagCount: 1, taggedCount: 0, switchSuccess: 1, switchTry: 2, survivedMs: 60_000, isSelf: true },
         ],
         // 게스트에게는 쌓아 둘 계정이 없다.
         reward: null,

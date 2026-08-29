@@ -564,6 +564,72 @@
     "noGameServers": "등록된 인게임 서버가 없습니다.",
     "noMatchServers": "등록된 매칭 서버가 없습니다.",
     "updatedAt": "{{time}} 기준",
-    "autoRefresh": "자동 갱신"
+    "autoRefresh": "자동 갱신",
+    "tabOverview": "서버",
+    "tabReports": "신고",
+    "reportsTitle": "신고 큐",
+    "reportsEmpty": "처리할 신고가 없습니다.",
+    "reportsLoadFailed": "신고를 불러오지 못했습니다.",
+    "colTarget": "대상",
+    "colReports": "신고 수",
+    "colCategories": "분류",
+    "colUpdated": "최근",
+    "guestBadge": "게스트",
+    "reportStatus": {
+      "OPEN": "접수",
+      "TRIAGED": "분류됨",
+      "REVIEWING": "확인 중",
+      "ACTIONED": "조치함",
+      "DISMISSED": "기각",
+      "CLOSED": "종결"
+    },
+    "caseTitle": "사건 {{nickname}}",
+    "caseMatch": "경기 {{mapId}} · {{endedAt}}",
+    "caseReplayHeld": "리플레이 보존 중",
+    "caseReplayGone": "리플레이 없음 — 통계만 남았다",
+    "caseReporters": "신고 내역",
+    "caseTick": "{{tick}}틱",
+    "caseNote": "내부 메모",
+    "caseStatusChange": "상태 바꾸기",
+    "caseApply": "적용",
+    "caseSanction": "제재",
+    "sanctionType": {
+      "WARN": "경고",
+      "GAME_RESTRICT": "게임 이용 제한",
+      "BAN": "계정 정지"
+    },
+    "sanctionDays": "기간(일)",
+    "sanctionDaysHint": "비우면 무기한",
+    "sanctionReason": "사유 — 감사 로그에 남습니다",
+    "sanctionApply": "제재 걸기",
+    "sanctionGuestBlocked": "게스트는 계정이 없어 제재를 걸 수 없습니다. 기록하고 닫는 것까지가 가능한 전부입니다.",
+    "sanctionDone": "제재를 걸었습니다.",
+    "actionFailed": "처리하지 못했습니다."
+  },
+  "report": {
+    "button": "신고",
+    "buttonLabel": "{{nickname}} 신고하기",
+    "title": "{{nickname}} 신고",
+    "notice": "신고는 이 경기의 기록이 남아 있는 동안 할 수 있습니다.",
+    "categoryLabel": "무엇이 문제였나요?",
+    "categories": {
+      "CHEAT": "비정상 플레이 · 봇 의심",
+      "ABUSE": "부적절한 행위",
+      "GRIEFING": "고의 방해",
+      "NICKNAME": "부적절한 닉네임"
+    },
+    "descriptionLabel": "무슨 일이 있었나요?",
+    "descriptionPlaceholder": "본 것을 그대로 적어 주세요. 10자 이상.",
+    "descriptionHint": "{{count}}/500",
+    "submit": "신고 보내기",
+    "sent": "신고를 접수했습니다. 확인에는 시간이 걸립니다.",
+    "guestNotice": "게스트는 계정이 없어 제재를 걸 수 없습니다. 기록은 남습니다.",
+    "errors": {
+      "duplicate": "이미 신고한 상대입니다.",
+      "window": "이 경기의 기록이 남아 있지 않아 신고할 수 없습니다.",
+      "target": "이 경기의 참가자가 아닙니다.",
+      "self": "자기 자신은 신고할 수 없습니다.",
+      "failed": "신고를 보내지 못했습니다. 잠시 후 다시 시도해 주세요."
+    }
   }
 }

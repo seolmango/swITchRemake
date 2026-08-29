@@ -8,6 +8,7 @@ import { nonNegativeInteger, readStoredStats } from '../user/stored-stats';
 
 export interface MatchPlayerResult {
     playerId: string;
+    isGuest: boolean;
     slot: number;
     nickname: string;
     tagCount: number;
@@ -111,6 +112,9 @@ export class MatchesService {
                 switchSuccess: row.switchSuccess,
                 switchTry: row.switchTry,
                 survivedMs: row.survivedMs,
+                // 신고 화면이 "게스트는 제재를 걸 수 없다"를 정직하게 말하려면 필요하다.
+                // 계정 id는 싣지 않는다 — 화면이 알 필요가 없고, 알면 경기 밖으로 새 나간다.
+                isGuest: row.isGuest,
                 isSelf: row.userId !== null
                     ? row.userId === actorId
                     : assignment.isGuest && row.nickname === assignment.nickname,
