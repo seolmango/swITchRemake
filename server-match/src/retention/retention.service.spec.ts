@@ -125,3 +125,23 @@ test('보관 설정 파싱은 잘못된 env를 부팅 전에 거절한다', () =
         );
     }
 });
+
+test('삭제가 연달아 실패하면 그 회차를 접는다', async () => {
+    /*
+     * 실패는 대개 한 건짜리 사고가 아니라 상태다. 남은 행을 계속 두드리면 요청 하나마다 명령
+     * 시한을 꽉 채워 기다리고, 그 시간 동안 방 생성 같은 진짜 명령이 같은 줄에 선다.
+     */
+    const rows = Array.from({ length: 10 }, (_value, index) => ({
+        replayId: `replay-${index}`,
+        storageKey: `replays/${index}.rpl`,
+        serverId: 'dead-server',
+    }));
+    const state = harness({
+        liveServers: ['fallback'],
+        deleteReplay: async () => false,
+        execute: (_text, index) => index === 1 ? rows : [],
+    });
+    await state.service.runOnce();
+
+    assert.equal(state.replayRequests.length, 3, '세 번 연속 실패하면 나머지는 다음 회차로 미룬다');
+});

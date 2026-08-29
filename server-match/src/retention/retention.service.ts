@@ -26,6 +26,11 @@ interface IdRow extends Record<string, unknown> {
  * 정하지 못해 드라이버가 Date를 실어 보내다 죽는다(ERR_INVALID_ARG_TYPE) — 그리고 정리 작업은
  * 그 예외를 삼키고 조용히 아무것도 안 지운다. 자를 시각을 여기서 정해 값 하나로 넘긴다.
  */
+/** 한 회차에 파일을 지워 볼 최대 건수. 나머지는 다음 회차로 미룬다. */
+const DELETE_BATCH = 40;
+/** 이만큼 연속으로 실패하면 이번 회차는 접는다. 실패는 대개 한 건이 아니라 상태다. */
+const MAX_CONSECUTIVE_DELETE_FAILURES = 3;
+
 function daysAgo(now: Date, days: number): string {
     return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
 }
@@ -164,11 +169,27 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
                     AND hold.released_at IS NULL
               )
             ORDER BY replay.created_at, replay.id
-            LIMIT 200
+            LIMIT ${DELETE_BATCH}
         `);
         const live = new Set(liveServerIds);
         let deleted = 0;
+        let consecutiveFailures = 0;
         for (const row of rows) {
+            /*
+             * 몇 번 연속으로 실패하면 이 회차는 접는다.
+             *
+             * 실패는 대개 한 건짜리 사고가 아니라 상태다 — 인게임 서버에 리플레이 저장소가 없거나
+             * 제어 평면이 막혔거나. 그때 남은 행을 계속 두드리면 요청 하나마다 명령 시한을 꽉
+             * 채워 기다리고, 그 시간 동안 **방 생성 같은 진짜 명령이 같은 줄에 선다.** 지우는
+             * 일은 급하지 않다. 다음 회차에 다시 온다.
+             */
+            if (consecutiveFailures >= MAX_CONSECUTIVE_DELETE_FAILURES) {
+                this.logger.warn(
+                    `리플레이 삭제가 ${consecutiveFailures}번 연속 실패해 이번 회차를 멈춘다`
+                    + ` (남은 ${rows.length - deleted}건은 다음 회차로).`,
+                );
+                break;
+            }
             // 로컬 저장소는 같은 기계의 서버들이 디렉터리를 공유하므로 원 서버가 죽었을 때
             // 살아 있는 다른 서버가 지워도 같은 파일을 가리킨다.
             const serverId = live.has(row.serverId) ? row.serverId : liveServerIds[0];
@@ -176,7 +197,11 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
                 replayId: row.replayId,
                 storageKey: row.storageKey,
             });
-            if (!succeeded) continue;
+            if (!succeeded) {
+                consecutiveFailures += 1;
+                continue;
+            }
+            consecutiveFailures = 0;
 
             const removed = await this.db.execute<IdRow>(sql`
                 DELETE FROM replays
