@@ -2,7 +2,8 @@
   "common": {
     "toggleTheme": "Toggle theme",
     "loading": "Loading…",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "close": "Close"
   },
   "nav": {
     "home": "Home",

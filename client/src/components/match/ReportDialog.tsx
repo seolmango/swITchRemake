@@ -123,7 +123,8 @@ export const ReportDialog: React.FC<Props> = ({ matchId, target, onClose }) => {
                 <p className="delete-dialog-message" role="status" aria-live="polite" data-failed={failed ? 'true' : 'false'}>{message}</p>
 
                 <div className="lobby-dialog-actions">
-                    <button type="button" onClick={onClose}>{sent ? t('nav.back') : t('common.cancel')}</button>
+                    {/* 보낸 뒤에는 '취소'가 아니라 '닫기'다. 그리고 화면의 뒤로 가기와 이름이 겹치면 안 된다. */}
+                    <button type="button" onClick={onClose}>{sent ? t('common.close') : t('common.cancel')}</button>
                     {!sent && (
                         <button type="button" className="is-danger" disabled={!ready || busy} onClick={() => void submit()}>
                             {t('report.submit')}

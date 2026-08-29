@@ -2,7 +2,8 @@
   "common": {
     "toggleTheme": "테마 전환",
     "loading": "불러오는 중…",
-    "cancel": "취소"
+    "cancel": "취소",
+    "close": "닫기"
   },
   "nav": {
     "home": "홈",
