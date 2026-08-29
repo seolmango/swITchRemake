@@ -166,6 +166,11 @@ export class GameRegistry {
     }
 
     public trackSeat(roomId: string, userId: ActorId, requestId: string): void {
+        const pendingKey = releaseKey(roomId, userId);
+        const pending = this.#pendingReleases.get(pendingKey);
+        // 다시 살아난 자리의 이전 정리가 새 active-room claim까지 지우면 안 된다.
+        if (pending !== undefined && !pending.kicked) this.#pendingReleases.delete(pendingKey);
+
         let room = this.#trackedSeats.get(roomId);
         if (room === undefined) {
             room = new Map();
@@ -354,6 +359,12 @@ export class GameRegistry {
 
     async #flushPendingReleases(): Promise<void> {
         for (const [key, release] of this.#pendingReleases) {
+            const room = this.#options.rooms.get(release.roomId);
+            // Redis 대기 사이 명단에 돌아온 자리에 낡은 해제를 적용하면 재접속을 다시 막는다.
+            if (!release.kicked && room !== null && room.hasUser(release.userId)) {
+                this.#pendingReleases.delete(key);
+                continue;
+            }
             if (release.cooldown) {
                 const remainingMs = REJOIN_COOLDOWN_MS - (this.#now() - release.releasedAt);
                 if (remainingMs > 0) {
