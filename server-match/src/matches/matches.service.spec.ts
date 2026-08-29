@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { NotFoundException } from '@nestjs/common';
 import test from 'node:test';
+import { PROGRESSION, matchXpBreakdown } from 'shared';
 import { MatchesController } from './matches.controller';
 import { MatchesService } from './matches.service';
 
@@ -27,14 +28,21 @@ type MatchRow = {
     survivedMs: number | null;
 };
 
-function database(rows: MatchRow[], assignment: { nickname: string; isGuest: boolean } | null) {
+function database(
+    rows: MatchRow[],
+    assignment: { nickname: string; isGuest: boolean } | null,
+    account?: { stats: unknown },
+) {
+    // 순서대로 세 번 물어본다 — 경기+참가자, 배정, (계정 요청일 때만) 누적 XP.
     let selectCount = 0;
     return {
         select: () => {
-            if (selectCount++ === 0) {
+            const call = selectCount++;
+            if (call === 0) {
                 return { from: () => ({ leftJoin: () => ({ where: () => ({ orderBy: async () => rows }) }) }) };
             }
-            return { from: () => ({ where: () => ({ limit: async () => assignment ? [assignment] : [] }) }) };
+            const single = call === 1 ? (assignment ? [assignment] : []) : (account ? [account] : []);
+            return { from: () => ({ where: () => ({ limit: async () => single }) }) };
         },
     };
 }
@@ -69,7 +77,29 @@ test('returns the client MatchResultSnapshot and includes a guest participant wi
             { playerId: '1', slot: 1, nickname: 'Account', tagCount: 4, taggedCount: 1, switchSuccess: 2, switchTry: 3, survivedMs: 60_000, isSelf: false },
             { playerId: '2', slot: 2, nickname: 'Guest_7KPW2M', tagCount: 1, taggedCount: 0, switchSuccess: 1, switchTry: 2, survivedMs: 60_000, isSelf: true },
         ],
+        // 게스트에게는 쌓아 둘 계정이 없다.
+        reward: null,
     });
+});
+
+test('계정에게는 이 경기의 XP 내역과 지금 레벨이 함께 온다', async () => {
+    const service = new MatchesService(database(
+        completedRows(),
+        { nickname: 'Account', isGuest: false },
+        { stats: { xp: 120 } },
+    ) as never);
+    const result = await service.getResult(MATCH_ID, 7);
+    assert.ok(!('status' in result));
+
+    assert.deepEqual(result.reward, {
+        breakdown: matchXpBreakdown({ won: true, tagCount: 4, switchSuccess: 2, survivedMs: 60_000 }),
+        // 120 XP면 100을 쓰고 2레벨, 다음 비용은 150이다.
+        level: 2,
+        xpIntoLevel: 20,
+        xpForNextLevel: PROGRESSION.LEVEL_BASE_COST + PROGRESSION.LEVEL_COST_STEP,
+    });
+    // 생존시간이 실제로 XP에 들어갔는지 — 이 항목이 조용히 0이 되는 것이 가장 흔한 회귀다.
+    assert.equal(result.reward!.breakdown.survival, PROGRESSION.XP_PER_SURVIVED_MINUTE);
 });
 
 test('returns 404 for an unknown match', async () => {

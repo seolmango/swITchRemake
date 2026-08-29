@@ -5,6 +5,7 @@ import { PageLayout } from '../../components/layout/PageLayout.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
 import { Icon } from '../../components/common/Icon.tsx';
 import { MatchResultTable } from '../../components/match/MatchResultTable.tsx';
+import { MatchRewardCard } from '../../components/match/MatchRewardCard.tsx';
 import { getMatchResult, type MatchResultSnapshot } from '../../api/matches.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../../theme/color.ts';
@@ -201,11 +202,12 @@ export const MatchResultPage: React.FC = () => {
                     <section className="result-stats-panel" aria-labelledby="result-stats-title">
                         <header>
                             <div>
-                                <span className="result-kicker">MATCH STATS</span>
+                                <span className="result-kicker">{t('result.statsKicker')}</span>
                                 <h2 id="result-stats-title">{t('result.details')}</h2>
                             </div>
                         </header>
                         <MatchResultTable players={result.players} winnerIds={winners.map((winner) => winner.playerId)} />
+                        {result.reward && <MatchRewardCard reward={result.reward}/>}
                     </section>
                 </div>
                 <footer className="result-footer">

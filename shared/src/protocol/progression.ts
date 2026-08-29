@@ -17,6 +17,22 @@ export const PROGRESSION = Object.freeze({
     /** 스위치 성공. 시도만 한 것은 세지 않는다 — 아무 데나 누르는 것이 이득이면 안 된다. */
     XP_PER_SWITCH_SUCCESS: 15,
 
+    /**
+     * 살아 있던 1분당. 초 단위로 비례해 준다 — 59초와 60초 사이에 절벽이 있으면
+     * 마지막 1초를 버티려고 이상한 플레이를 한다.
+     *
+     * 승리(60)와 비슷한 무게로 잡았다. 다섯 판 중 이기는 건 한 판 뿐이지만 오래 버티는 건
+     * 매 판 할 수 있는 일이라, 이 항목이 "졌지만 잘 싸운 판"의 보상 대부분을 담당한다.
+     */
+    XP_PER_SURVIVED_MINUTE: 12,
+    /**
+     * 생존 XP를 세는 시간의 상한.
+     *
+     * 경기 길이는 자기장 타임라인이 정하지만 맵마다 다르고, 훈련장처럼 자기장이 멈춘 방도 있다.
+     * 상한이 없으면 "안 끝나는 방에서 가만히 서 있기"가 최고 효율이 된다.
+     */
+    XP_SURVIVAL_CAP_MS: 10 * 60 * 1_000,
+
     /** 1 -> 2레벨 비용. */
     LEVEL_BASE_COST: 100,
     /** 레벨이 하나 오를 때마다 다음 비용에 더해지는 값. 선형으로 늘어난다. */
@@ -27,14 +43,46 @@ export interface MatchXpInput {
     readonly won: boolean;
     readonly tagCount: number;
     readonly switchSuccess: number;
+    /**
+     * 살아 있던 시간. 경기 전체를 살아남았으면 경기 길이와 같다.
+     *
+     * 빠뜨리면 0으로 본다 — 이 항목이 생기기 전에 쓰인 호출부가 조용히 남의 XP를 깎지 않게.
+     */
+    readonly survivedMs?: number;
 }
 
-/** 한 경기에서 얻는 XP. 게스트에게는 부르지 않는다 — 쌓아 둘 계정이 없다. */
+/** XP를 어디서 얼마나 받았는지. 결과 화면이 이걸 그대로 줄 세운다. */
+export interface MatchXpBreakdown {
+    readonly played: number;
+    readonly win: number;
+    readonly tags: number;
+    readonly switches: number;
+    readonly survival: number;
+    readonly total: number;
+}
+
+/**
+ * 한 경기의 XP 내역. 게스트에게는 부르지 않는다 — 쌓아 둘 계정이 없다.
+ *
+ * 음수와 NaN을 여기서 막는다. 결과는 인게임 서버가 만들지만 스트림과 DB를 거쳐 오고,
+ * 한 번이라도 통과하면 한 판으로 남의 XP를 되돌릴 수 있다.
+ */
+export function matchXpBreakdown(input: MatchXpInput): MatchXpBreakdown {
+    const survivedMs = Math.min(
+        PROGRESSION.XP_SURVIVAL_CAP_MS,
+        Number.isFinite(input.survivedMs) ? Math.max(0, input.survivedMs!) : 0,
+    );
+    const played = PROGRESSION.XP_PER_MATCH;
+    const win = input.won ? PROGRESSION.XP_PER_WIN : 0;
+    const tags = Math.max(0, Math.floor(input.tagCount)) * PROGRESSION.XP_PER_TAG;
+    const switches = Math.max(0, Math.floor(input.switchSuccess)) * PROGRESSION.XP_PER_SWITCH_SUCCESS;
+    const survival = Math.floor(survivedMs / 60_000 * PROGRESSION.XP_PER_SURVIVED_MINUTE);
+    return { played, win, tags, switches, survival, total: played + win + tags + switches + survival };
+}
+
+/** 합계만 필요한 곳(결과 적재)이 쓴다. */
 export function matchXp(input: MatchXpInput): number {
-    return PROGRESSION.XP_PER_MATCH
-        + (input.won ? PROGRESSION.XP_PER_WIN : 0)
-        + Math.max(0, input.tagCount) * PROGRESSION.XP_PER_TAG
-        + Math.max(0, input.switchSuccess) * PROGRESSION.XP_PER_SWITCH_SUCCESS;
+    return matchXpBreakdown(input).total;
 }
 
 export interface LevelProgress {

@@ -68,8 +68,10 @@ export {
 export {
     PROGRESSION,
     matchXp,
+    matchXpBreakdown,
     levelFromXp,
     type LevelProgress,
+    type MatchXpBreakdown,
     type MatchXpInput,
 } from './protocol/progression';
 

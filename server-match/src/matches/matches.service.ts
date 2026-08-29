@@ -1,9 +1,10 @@
 import { ForbiddenException, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { and, asc, eq } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import type { ActorId } from 'shared';
+import { levelFromXp, matchXpBreakdown, type ActorId, type MatchXpBreakdown } from 'shared';
 import { DRIZZLE } from '../database/database.module';
 import * as schema from '../database/schema';
+import { nonNegativeInteger, readStoredStats } from '../user/stored-stats';
 
 export interface MatchPlayerResult {
     playerId: string;
@@ -17,6 +18,20 @@ export interface MatchPlayerResult {
     isSelf: boolean;
 }
 
+/**
+ * 이 경기로 요청자가 받은 XP. 게스트에게는 null이다 — 쌓아 둘 계정이 없다.
+ *
+ * 값을 따로 저장하지 않고 참가 기록에서 다시 센다. 레벨을 저장하지 않는 것과 같은 이유다 —
+ * 두 군데 적어 두면 곡선을 고치는 순간 어긋나고, 어느 쪽이 맞는지 아무도 모르게 된다.
+ */
+export interface MatchRewardSummary {
+    breakdown: MatchXpBreakdown;
+    /** 지금 시점의 레벨과 진행도. 이 경기 직후가 아니라 **읽는 시점** 기준이다. */
+    level: number;
+    xpIntoLevel: number;
+    xpForNextLevel: number;
+}
+
 /** Matches client/src/api/matches.ts's MatchResultSnapshot exactly. */
 export interface MatchResultSnapshot {
     matchId: string;
@@ -26,6 +41,7 @@ export interface MatchResultSnapshot {
     playedAt: string;
     winners: [string, string];
     players: MatchPlayerResult[];
+    reward: MatchRewardSummary | null;
 }
 
 export interface PendingMatchResult {
@@ -114,6 +130,47 @@ export class MatchesService {
             playedAt: match.endedAt.toISOString(),
             winners: [winnerIds[0]!, winnerIds[1] ?? winnerIds[0]!],
             players: players.map(({ isWinner: _isWinner, ...player }) => player),
+            reward: await this.rewardFor(actorId, rows),
+        };
+    }
+
+    /**
+     * 요청자가 계정이면 이 경기의 XP 내역과 지금 레벨을 만든다.
+     *
+     * 게스트는 null이다. `match_participants.user_id`로만 찾는 이유는 그 컬럼이 곧 XP가 실제로
+     * 들어간 계정이기 때문이다 — 닉네임으로 찾으면 게스트가 남의 보상 화면을 볼 수 있다.
+     */
+    private async rewardFor(
+        actorId: ActorId,
+        rows: Array<{
+            userId: number | null;
+            isWinner: boolean | null;
+            tagCount: number | null;
+            switchSuccess: number | null;
+            survivedMs: number | null;
+        }>,
+    ): Promise<MatchRewardSummary | null> {
+        if (typeof actorId !== 'number') return null;
+        const self = rows.find((row) => row.userId === actorId);
+        if (!self || self.isWinner === null || self.tagCount === null
+            || self.switchSuccess === null || self.survivedMs === null) return null;
+
+        const [account] = await this.db.select({ stats: schema.users.stats })
+            .from(schema.users)
+            .where(eq(schema.users.id, actorId))
+            .limit(1);
+        const xp = nonNegativeInteger(readStoredStats(account?.stats).xp);
+        const progress = levelFromXp(xp);
+        return {
+            breakdown: matchXpBreakdown({
+                won: self.isWinner,
+                tagCount: self.tagCount,
+                switchSuccess: self.switchSuccess,
+                survivedMs: self.survivedMs,
+            }),
+            level: progress.level,
+            xpIntoLevel: progress.xpIntoLevel,
+            xpForNextLevel: progress.xpForNextLevel,
         };
     }
 }

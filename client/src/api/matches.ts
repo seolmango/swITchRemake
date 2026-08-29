@@ -1,5 +1,5 @@
 import { apiRequest } from './http.ts';
-import type { LobbyStats, PlayerRole, SkillId } from 'shared';
+import type { LobbyStats, MatchXpBreakdown, PlayerRole, SkillId } from 'shared';
 
 /** Local presentation-only room model used by the demo lobby and lobby cards. */
 export type LobbyMap = string;
@@ -56,6 +56,14 @@ export interface MatchPlayerResult {
     isSelf: boolean;
 }
 
+/** 이 경기로 내가 받은 XP와 지금 레벨. 게스트에게는 null이다. */
+export interface MatchRewardSummary {
+    breakdown: MatchXpBreakdown;
+    level: number;
+    xpIntoLevel: number;
+    xpForNextLevel: number;
+}
+
 export interface MatchResultSnapshot {
     matchId: string;
     roomId: string;
@@ -67,6 +75,8 @@ export interface MatchResultSnapshot {
     /** The final two players. Both are co-winners and are stored without ordering. */
     winners: [string, string];
     players: MatchPlayerResult[];
+    /** 게스트와 예전 응답에는 없다. 없으면 보상 칸을 통째로 그리지 않는다. */
+    reward?: MatchRewardSummary | null;
 }
 
 export interface PendingMatchResult {

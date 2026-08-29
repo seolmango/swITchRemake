@@ -138,7 +138,12 @@ export class ResultService {
                 const won = winningUsers.has(player.userId!);
                 // 레벨은 쌓지 않는다. 누적 XP의 함수라서 두 군데 적으면 곡선을 바꾸는 순간 어긋난다.
                 // 세는 것은 읽을 때 한다(shared의 levelFromXp).
-                const xpGain = matchXp({ won, tagCount: player.tagCount, switchSuccess: player.switchSuccess });
+                const xpGain = matchXp({
+                    won,
+                    tagCount: player.tagCount,
+                    switchSuccess: player.switchSuccess,
+                    survivedMs: player.survivedMs,
+                });
                 await tx.execute(sql`
                     UPDATE ${schema.users}
                     SET stats = stats || jsonb_build_object(

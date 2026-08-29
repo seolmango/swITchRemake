@@ -1383,7 +1383,7 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: #FFBDBD; }
 .result-summary-grid span { color: var(--surface-muted); font-size: 15px; }
 .result-summary-grid strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 21px; }
 
-.result-stats-panel { display: grid; grid-template-rows: 104px minmax(0, 1fr); overflow: hidden; }
+.result-stats-panel { display: grid; grid-template-rows: 104px minmax(0, 1fr) auto; overflow: hidden; }
 .result-stats-panel > header { padding: 18px 26px; display: flex; align-items: center; justify-content: space-between; border-bottom: 4px solid var(--surface-border); }
 .result-stats-panel > header > div { display: grid; gap: 4px; }
 .result-stats-panel h2 { margin: 0; font-family: var(--font-display); font-size: 35px; font-weight: normal; }
@@ -1401,6 +1401,37 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: #FFBDBD; }
 .result-player-cell i { width: 46px; height: 46px; flex: 0 0 auto; display: grid; place-items: center; border: 4px solid; border-radius: 50%; font-style: normal; font-weight: 700; box-sizing: border-box; }
 .result-player-cell > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .result-player-cell em { flex: 0 0 auto; padding: 5px 9px; border-radius: 999px; background: var(--result-victory-fill); color: var(--result-dark-text); font-size: 14px; font-style: normal; font-weight: 700; }
+/* 이번 경기 XP. 표 밑에 붙는 한 줄짜리 띠라서 표의 스크롤을 잡아먹지 않는다. */
+.result-reward {
+  min-width: 0;
+  padding: 14px 26px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 26px;
+  border-top: 4px solid var(--surface-border);
+  box-sizing: border-box;
+}
+.result-reward > header { display: grid; gap: 2px; }
+.result-reward > header span { color: var(--surface-muted); font-size: 15px; letter-spacing: .08em; }
+.result-reward > header strong { font-family: var(--font-display); font-size: 32px; font-weight: normal; color: var(--result-victory-accent); font-variant-numeric: tabular-nums; }
+.result-reward ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+.result-reward li {
+  padding: 6px 13px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border: 3px solid var(--surface-border);
+  border-radius: 999px;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.result-reward li.is-empty { opacity: .4; }
+.result-reward li b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.result-reward-level { display: grid; grid-template-columns: auto 150px auto; align-items: center; gap: 11px; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.result-reward-level > div { height: 10px; overflow: hidden; border-radius: 999px; background: var(--surface-border); }
+.result-reward-level i { display: block; height: 100%; border-radius: inherit; background: var(--result-progress); }
+
 .result-footer { min-width: 0; padding: 14px 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; border-top: 5px solid var(--surface-border); box-sizing: border-box; overflow: hidden; }
 .result-footer > div { display: flex; gap: 18px; }
 .result-return-timer {
