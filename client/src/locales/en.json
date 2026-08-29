@@ -192,7 +192,8 @@
     "xpSwitches": "swITch",
     "xpSurvival": "Survival",
     "xpLevel": "Lv.{{level}}",
-    "invalidMatch": "The match result cannot be loaded because its identifier is invalid."
+    "invalidMatch": "The match result cannot be loaded because its identifier is invalid.",
+    "replayRetention": "This replay is kept for {{days}} days, or your {{count}} most recent matches."
   },
   "auth": {
     "login": "Log In",
@@ -286,7 +287,8 @@
     "deleteSendCode": "Send code",
     "deleteCodeSent": "A code was sent to your account email. Enter it within 5 minutes.",
     "deleteConfirm": "Delete account",
-    "deleteFailed": "Could not delete the account. Try again shortly."
+    "deleteFailed": "Could not delete the account. Try again shortly.",
+    "historyRetention": "Only the last {{days}} days of matches are kept. Older records are deleted."
   },
   "settings": {
     "title": "Settings",

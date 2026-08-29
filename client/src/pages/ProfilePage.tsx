@@ -12,6 +12,7 @@ import { Color, themeColors } from '../theme/color.ts';
 import { ApiError } from '../api/http.ts';
 import { loginErrorMessage } from './auth/authErrorMessage.ts';
 import { getMyMatches, getMyStats, type UserMatchHistoryItem, type UserStats } from '../api/profile.ts';
+import { getRetentionSettings, type RetentionSettings } from '../api/config.ts';
 import { DeleteAccountDialog } from '../components/profile/DeleteAccountDialog.tsx';
 
 type RecordsState =
@@ -35,6 +36,11 @@ export const ProfilePage: React.FC = () => {
     const [hasSessionOverflow, setHasSessionOverflow] = useState(false);
     const [records, setRecords] = useState<RecordsState>({ kind: 'loading' });
     const [deleting, setDeleting] = useState(false);
+    /*
+     * 보관 기간은 서버가 정한다. 화면이 30일을 직접 적으면 정책을 바꾸는 순간 화면만 옛
+     * 숫자를 말한다. 못 받아 오면 아무 말도 하지 않는다 — 틀린 숫자보다 침묵이 낫다.
+     */
+    const [retention, setRetention] = useState<RetentionSettings | null>(null);
 
     const loadRecords = useCallback(async () => {
         if (!authenticated) return;
@@ -78,6 +84,13 @@ export const ProfilePage: React.FC = () => {
 
     // 최초 로드와 재시도·새로고침 버튼이 같은 함수를 쓴다. 같은 fetch를 두 벌 두면 한쪽만 고쳐진다.
     useEffect(() => { void loadRecords(); }, [loadRecords]);
+
+    // 실패하면 조용히 넘어간다. 보관 기간을 못 읽었다고 전적 화면이 깨질 이유는 없다.
+    useEffect(() => {
+        let active = true;
+        void getRetentionSettings().then((value) => { if (active) setRetention(value); }).catch(() => undefined);
+        return () => { active = false; };
+    }, []);
 
     const revokeSession = async (session: LoginSession) => {
         setSessionAction(session.id);
@@ -226,6 +239,7 @@ export const ProfilePage: React.FC = () => {
                             <div>
                                 <span>{t('profile.historyKicker')}</span>
                                 <h2>{t('profile.recentMatches')}</h2>
+                                {retention && <small className="match-history-retention">{t('profile.historyRetention', { days: retention.matchDays })}</small>}
                             </div>
                             <button type="button" onClick={() => void loadRecords()} disabled={records.kind === 'loading'} aria-label={t('rooms.refresh')}><Icon name="refresh" size={28}/></button>
                         </header>

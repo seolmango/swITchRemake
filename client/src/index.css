@@ -1828,3 +1828,7 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: #FFBDBD; }
   box-sizing: border-box;
 }
 .report-description > small { justify-self: end; color: var(--surface-muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+
+/* 보관 기간 안내. 화면의 주인공이 아니라 각주다 — 작고 흐리게, 그러나 읽을 수는 있게. */
+.match-history-retention { display: block; margin-top: 4px; color: var(--profile-muted, #625F5C); font-size: 14px; }
+.result-retention-notice { font-size: 15px; }

@@ -7,6 +7,7 @@ import { Icon } from '../../components/common/Icon.tsx';
 import { MatchResultTable } from '../../components/match/MatchResultTable.tsx';
 import { ReportDialog } from '../../components/match/ReportDialog.tsx';
 import { useAuthStore } from '../../stores/useAuthStore.ts';
+import { getRetentionSettings, type RetentionSettings } from '../../api/config.ts';
 import { MatchRewardCard } from '../../components/match/MatchRewardCard.tsx';
 import { getMatchResult, type MatchPlayerResult, type MatchResultSnapshot } from '../../api/matches.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
@@ -39,6 +40,14 @@ export const MatchResultPage: React.FC = () => {
     // 신고는 계정만 할 수 있다. 게스트에게 버튼을 보여 주면 눌러 보고 나서야 거절당한다.
     const canReport = useAuthStore((state) => state.status) === 'account';
     const [reporting, setReporting] = useState<MatchPlayerResult | null>(null);
+    // 리플레이가 언제까지 남는지. 신고할 수 있는 기간이기도 하다.
+    const [retention, setRetention] = useState<RetentionSettings | null>(null);
+
+    useEffect(() => {
+        let active = true;
+        void getRetentionSettings().then((value) => { if (active) setRetention(value); }).catch(() => undefined);
+        return () => { active = false; };
+    }, []);
     const eventReturnsAtValue = Number(searchParams.get('returns_at'));
     const eventReturnsAt = Number.isFinite(eventReturnsAtValue) && eventReturnsAtValue > 0 ? eventReturnsAtValue : null;
 
@@ -225,6 +234,11 @@ export const MatchResultPage: React.FC = () => {
                     <div>
                             <strong>{t('result.returnCountdown', { seconds: remainingSeconds })}</strong>
                             <span role="status" aria-live="polite" style={{ color: colors.muted }}>{message || t('result.returnNotice')}</span>
+                            {retention && (
+                                <span className="result-retention-notice" style={{ color: colors.muted }}>
+                                    {t('result.replayRetention', { days: retention.replayDays, count: retention.replayPerUserMatches })}
+                                </span>
+                            )}
                         </div>
                         <div className="result-timer-track" role="progressbar" aria-label={t('result.returnTimerLabel')} aria-valuemin={0} aria-valuemax={30} aria-valuenow={remainingSeconds}>
                             <i style={{ width: `${Math.min(100, remainingSeconds / 30 * 100)}%` }}/>
