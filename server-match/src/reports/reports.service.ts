@@ -11,9 +11,12 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { alias } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '../database/database.module';
 import * as schema from '../database/schema';
+import { SanctionService } from '../sanction/sanction.service';
 import { CreateReportDto, type ReportCategory } from './dto/create-report.dto';
 import { type ReportStatus } from './dto/report-queue-query.dto';
+import { SanctionReportDto } from './dto/sanction-report.dto';
 import { UpdateReportStatusDto } from './dto/update-report-status.dto';
+import { retentionSettings } from '../retention/retention.settings';
 
 /** 리플레이가 이 상태들 중 하나면 아직 증거가 남아 있다. `deleting`/`deleted`는 이미 늦었다. */
 const LIVE_REPLAY_STATUSES = new Set(['recording', 'finalizing', 'available']);
@@ -40,7 +43,10 @@ interface ReportContextRow {
     [key: string]: unknown;
     endedAt: Date | string | null;
     reporterParticipates: boolean;
+    reporterPlayerId: number | null;
     targetUserId: number | null;
+    targetPlayerId: number | null;
+    targetNickname: string | null;
     targetIsGuest: boolean | null;
     replayStatus: string | null;
 }
@@ -51,11 +57,30 @@ interface CaseStatusRow {
     status: ReportStatus;
 }
 
+interface SanctionCaseRow extends CaseStatusRow {
+    matchId: string;
+    targetUserId: number | null;
+}
+
 @Injectable()
 export class ReportsService {
-    constructor(@Inject(DRIZZLE) private readonly db: PostgresJsDatabase<typeof schema>) {}
+    constructor(
+        @Inject(DRIZZLE) private readonly db: PostgresJsDatabase<typeof schema>,
+        @Inject(SanctionService) private readonly sanctions: SanctionService,
+    ) {}
 
     async create(reporterUserId: number, dto: CreateReportDto): Promise<CaseStatusRow> {
+        const hasTargetUser = dto.targetUserId !== undefined;
+        const hasTargetPlayer = dto.targetPlayerId !== undefined;
+        if (hasTargetUser === hasTargetPlayer) {
+            throw new BadRequestException({
+                code: 'INVALID_REPORT_TARGET',
+                message: 'Exactly one report target must be provided',
+            });
+        }
+        const requestedUserId = dto.targetUserId ?? null;
+        const requestedPlayerId = dto.targetPlayerId ?? null;
+
         try {
             return await this.db.transaction(async (tx) => {
                 const [context] = await tx.execute<ReportContextRow>(sql`
@@ -65,7 +90,15 @@ export class ReportsService {
                                WHERE reporter.match_id = m.match_id
                                  AND reporter.user_id = ${reporterUserId}
                            ) AS "reporterParticipates",
+                           (
+                               SELECT reporter.player_id FROM match_participants reporter
+                               WHERE reporter.match_id = m.match_id
+                                 AND reporter.user_id = ${reporterUserId}
+                               LIMIT 1
+                           ) AS "reporterPlayerId",
                            target.user_id AS "targetUserId",
+                           target.player_id AS "targetPlayerId",
+                           target.nickname AS "targetNickname",
                            target.is_guest AS "targetIsGuest",
                            (
                                SELECT replay.status FROM replays replay
@@ -73,14 +106,17 @@ export class ReportsService {
                            ) AS "replayStatus"
                     FROM matches m
                     LEFT JOIN LATERAL (
-                        SELECT participant.user_id, participant.is_guest
+                        SELECT participant.user_id, participant.player_id, participant.nickname, participant.is_guest
                         FROM match_participants participant
                         WHERE participant.match_id = m.match_id
                           AND (
-                              participant.user_id = ${dto.targetUserId}
-                              OR (participant.is_guest AND participant.player_id = ${dto.targetUserId})
+                              (${requestedUserId} IS NOT NULL
+                                  AND NOT participant.is_guest
+                                  AND participant.user_id = ${requestedUserId})
+                              OR (${requestedPlayerId} IS NOT NULL
+                                  AND participant.is_guest
+                                  AND participant.player_id = ${requestedPlayerId})
                           )
-                        ORDER BY (participant.user_id IS NOT NULL) DESC
                         LIMIT 1
                     ) target ON true
                     WHERE m.match_id = ${dto.matchId}
@@ -92,14 +128,30 @@ export class ReportsService {
                         message: 'The reporter did not participate in this match',
                     });
                 }
-                // 게스트는 계정 ID가 없어 제재를 연결할 곳이 없으므로 신고 대상이 될 수 없다.
-                if (context.targetUserId === null || context.targetIsGuest) {
+                if (hasTargetPlayer && context.reporterPlayerId === requestedPlayerId) {
                     throw new BadRequestException({
-                        code: 'INVALID_REPORT_TARGET',
-                        message: 'The target must be an account participant in this match',
+                        code: 'SELF_REPORT',
+                        message: 'A participant cannot report themselves',
                     });
                 }
-                if (context.targetUserId === reporterUserId) {
+                if (hasTargetUser && (context.targetUserId === null || context.targetIsGuest)) {
+                    throw new BadRequestException({
+                        code: 'INVALID_REPORT_TARGET',
+                        message: 'The target account did not participate in this match',
+                    });
+                }
+                if (hasTargetPlayer && (
+                    context.targetPlayerId === null
+                    || !context.targetIsGuest
+                    || context.targetUserId !== null
+                    || context.targetNickname === null
+                )) {
+                    throw new BadRequestException({
+                        code: 'INVALID_REPORT_TARGET',
+                        message: 'The target guest did not participate in this match',
+                    });
+                }
+                if (hasTargetUser && context.targetUserId === reporterUserId) {
                     throw new BadRequestException({
                         code: 'SELF_REPORT',
                         message: 'A participant cannot report themselves',
@@ -110,22 +162,49 @@ export class ReportsService {
                  * 받아 두면 조사할 수 없고, 사용자에게는 받아만 놓는 창구가 된다. 보관 정책이
                  * 바뀌면 신고 창도 따라 움직여야 하는데, 날짜를 따로 적어 두면 그 순간 갈라진다.
                  *
-                 * 진행 중인 경기는 예외다 — 리플레이 행은 경기가 끝나야 생긴다.
+                 * 예외가 둘이다. 진행 중인 경기는 리플레이 행이 아직 없다(경기가 끝나야 생긴다).
+                 * 기록이 아예 없는 경기도 마찬가지로 행이 없는데, 그때 신고를 막으면 **결과 화면의
+                 * 신고 버튼이 죽는다** — 의심이 가장 선명한 순간이 바로 거기다. 증거 없이 받는
+                 * 신고라도 참가자 기록과 반복 패턴은 남으므로, 리플레이가 살아 있었을 기간
+                 * 만큼은 받는다.
                  */
-                if (context.endedAt !== null && !LIVE_REPLAY_STATUSES.has(context.replayStatus ?? '')) {
+                const replayStatus = context.replayStatus;
+                if (context.endedAt !== null && replayStatus !== null && !LIVE_REPLAY_STATUSES.has(replayStatus)) {
                     throw new BadRequestException({
                         code: 'REPLAY_UNAVAILABLE',
                         message: 'The replay for this match is no longer retained',
                     });
                 }
+                if (context.endedAt !== null && replayStatus === null) {
+                    const endedAt = new Date(context.endedAt).getTime();
+                    const windowMs = retentionSettings().replayDays * 24 * 60 * 60 * 1000;
+                    if (!Number.isFinite(endedAt) || Date.now() - endedAt > windowMs) {
+                        throw new BadRequestException({
+                            code: 'REPORT_WINDOW_EXPIRED',
+                            message: 'The report window for this match has expired',
+                        });
+                    }
+                }
 
-                const [moderationCase] = await tx.execute<CaseStatusRow>(sql`
-                    INSERT INTO moderation_cases (match_id, target_user_id, status)
-                    VALUES (${dto.matchId}, ${dto.targetUserId}, 'OPEN')
-                    ON CONFLICT (match_id, target_user_id) DO UPDATE
-                    SET target_user_id = EXCLUDED.target_user_id
-                    RETURNING id AS "caseId", status
-                `);
+                const [moderationCase] = hasTargetUser
+                    ? await tx.execute<CaseStatusRow>(sql`
+                        INSERT INTO moderation_cases (match_id, target_user_id, status)
+                        VALUES (${dto.matchId}, ${context.targetUserId}, 'OPEN')
+                        ON CONFLICT (match_id, target_user_id) WHERE target_user_id IS NOT NULL DO UPDATE
+                        SET target_user_id = EXCLUDED.target_user_id
+                        RETURNING id AS "caseId", status
+                    `)
+                    : await tx.execute<CaseStatusRow>(sql`
+                        INSERT INTO moderation_cases (
+                            match_id, target_user_id, target_player_id, target_nickname, status
+                        )
+                        VALUES (
+                            ${dto.matchId}, NULL, ${context.targetPlayerId}, ${context.targetNickname}, 'OPEN'
+                        )
+                        ON CONFLICT (match_id, target_player_id) WHERE target_user_id IS NULL DO UPDATE
+                        SET target_nickname = EXCLUDED.target_nickname
+                        RETURNING id AS "caseId", status
+                    `);
                 if (!moderationCase) throw new Error('Failed to create moderation case');
 
                 await tx.execute(sql`
@@ -194,7 +273,9 @@ export class ReportsService {
             caseId: schema.moderationCases.id,
             matchId: schema.moderationCases.matchId,
             targetUserId: schema.moderationCases.targetUserId,
-            targetNickname: target.nickname,
+            targetPlayerId: schema.moderationCases.targetPlayerId,
+            targetNickname: schema.moderationCases.targetNickname,
+            targetAccountNickname: target.nickname,
             status: schema.moderationCases.status,
             reportCount: schema.moderationCases.reportCount,
             updatedAt: schema.moderationCases.updatedAt,
@@ -205,13 +286,15 @@ export class ReportsService {
             griefingCount: sql<number>`count(*) filter (where ${schema.reports.category} = 'GRIEFING')`,
             nicknameCount: sql<number>`count(*) filter (where ${schema.reports.category} = 'NICKNAME')`,
         }).from(schema.moderationCases)
-            .innerJoin(target, eq(target.id, schema.moderationCases.targetUserId))
+            .leftJoin(target, eq(target.id, schema.moderationCases.targetUserId))
             .innerJoin(schema.reports, eq(schema.reports.caseId, schema.moderationCases.id))
             .where(and(inArray(schema.moderationCases.status, statuses), cursorCondition))
             .groupBy(
                 schema.moderationCases.id,
                 schema.moderationCases.matchId,
                 schema.moderationCases.targetUserId,
+                schema.moderationCases.targetPlayerId,
+                schema.moderationCases.targetNickname,
                 target.nickname,
                 schema.moderationCases.status,
                 schema.moderationCases.reportCount,
@@ -230,7 +313,9 @@ export class ReportsService {
         const items = page.map((row) => ({
             caseId: row.caseId,
             matchId: row.matchId,
-            target: { userId: row.targetUserId, nickname: row.targetNickname },
+            target: row.targetUserId !== null
+                ? { kind: 'account' as const, userId: row.targetUserId, nickname: row.targetAccountNickname! }
+                : { kind: 'guest' as const, playerId: row.targetPlayerId!, nickname: row.targetNickname! },
             status: row.status,
             reportCount: row.reportCount,
             categories: {
@@ -259,7 +344,9 @@ export class ReportsService {
             caseId: schema.moderationCases.id,
             matchId: schema.moderationCases.matchId,
             targetUserId: schema.moderationCases.targetUserId,
-            targetNickname: target.nickname,
+            targetPlayerId: schema.moderationCases.targetPlayerId,
+            targetNickname: schema.moderationCases.targetNickname,
+            targetAccountNickname: target.nickname,
             status: schema.moderationCases.status,
             reportCount: schema.moderationCases.reportCount,
             assignee: schema.moderationCases.assignee,
@@ -271,7 +358,7 @@ export class ReportsService {
             replayId: schema.replays.id,
             holdId: schema.replayHolds.id,
         }).from(schema.moderationCases)
-            .innerJoin(target, eq(target.id, schema.moderationCases.targetUserId))
+            .leftJoin(target, eq(target.id, schema.moderationCases.targetUserId))
             .innerJoin(schema.matches, eq(schema.matches.matchId, schema.moderationCases.matchId))
             .leftJoin(schema.replays, eq(schema.replays.matchId, schema.moderationCases.matchId))
             .leftJoin(schema.replayHolds, and(
@@ -301,7 +388,17 @@ export class ReportsService {
         return {
             caseId: moderationCase.caseId,
             matchId: moderationCase.matchId,
-            target: { userId: moderationCase.targetUserId, nickname: moderationCase.targetNickname },
+            target: moderationCase.targetUserId !== null
+                ? {
+                    kind: 'account' as const,
+                    userId: moderationCase.targetUserId,
+                    nickname: moderationCase.targetAccountNickname!,
+                }
+                : {
+                    kind: 'guest' as const,
+                    playerId: moderationCase.targetPlayerId!,
+                    nickname: moderationCase.targetNickname!,
+                },
             status: moderationCase.status,
             reportCount: moderationCase.reportCount,
             assignee: moderationCase.assignee,
@@ -323,6 +420,75 @@ export class ReportsService {
                 createdAt: report.createdAt.toISOString(),
             })),
         };
+    }
+
+    async sanction(caseId: string, actorUserId: number, dto: SanctionReportDto) {
+        if (dto.type === 'WARN' && dto.days !== undefined) {
+            throw new BadRequestException({
+                code: 'INVALID_SANCTION_DURATION',
+                message: 'WARN sanctions cannot have a duration',
+            });
+        }
+
+        return this.db.transaction(async (tx) => {
+            const [moderationCase] = await tx.execute<SanctionCaseRow>(sql`
+                SELECT id AS "caseId", match_id AS "matchId", target_user_id AS "targetUserId", status
+                FROM moderation_cases
+                WHERE id = ${caseId}
+                FOR UPDATE
+            `);
+            if (!moderationCase) {
+                throw new NotFoundException({ code: 'REPORT_CASE_NOT_FOUND', message: 'Moderation case not found' });
+            }
+            if (moderationCase.status === 'CLOSED') {
+                throw new ConflictException({
+                    code: 'REPORT_CASE_CLOSED',
+                    message: 'Closed moderation cases cannot be sanctioned',
+                });
+            }
+            if (moderationCase.targetUserId === null) {
+                throw new BadRequestException({
+                    code: 'GUEST_TARGET_NOT_SANCTIONABLE',
+                    message: 'Guest report targets do not have an account to sanction',
+                });
+            }
+
+            const startsAt = new Date();
+            const expiresAt = dto.days === undefined
+                ? null
+                : new Date(startsAt.getTime() + dto.days * 24 * 60 * 60 * 1000);
+            const actor = `admin:${actorUserId}`;
+            /*
+             * 같은 트랜잭션 안에서 건다. 따로 돌면 제재만 커밋되고 사건은 OPEN으로 남는 순간이
+             * 생기는데, 그건 "밴은 됐는데 아무도 처리했다고 기록하지 않은" 상태다.
+             */
+            const sanction = await this.sanctions.apply({
+                userId: moderationCase.targetUserId,
+                type: dto.type,
+                scope: 'account',
+                startsAt,
+                expiresAt,
+                reason: dto.reason,
+                evidenceMatchId: moderationCase.matchId,
+                actor,
+                requestMeta: { caseId },
+            }, tx);
+
+            await tx.update(schema.moderationCases).set({
+                status: 'ACTIONED',
+                updatedAt: new Date(),
+            }).where(eq(schema.moderationCases.id, caseId));
+            await tx.insert(schema.adminAuditLog).values({
+                actor,
+                action: 'report.sanction',
+                targetType: 'moderation_case',
+                targetId: caseId,
+                reason: dto.reason,
+                requestMeta: { caseId, sanctionId: sanction.id, type: dto.type },
+            });
+
+            return { caseId, status: 'ACTIONED' as const, sanctionId: sanction.id };
+        });
     }
 
     async updateStatus(caseId: string, actorUserId: number, dto: UpdateReportStatusDto): Promise<CaseStatusRow> {

@@ -142,7 +142,9 @@ export const replays = pgTable('replays', {
 export const moderationCases = pgTable('moderation_cases', {
     id: uuid('id').defaultRandom().primaryKey(),
     matchId: uuid('match_id').notNull().references(() => matches.matchId, { onDelete: 'cascade' }),
-    targetUserId: integer('target_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+    targetUserId: integer('target_user_id').references(() => users.id, { onDelete: 'restrict' }),
+    targetPlayerId: integer('target_player_id'),
+    targetNickname: varchar('target_nickname', { length: 20 }),
     status: reportStatusEnum('status').default('OPEN').notNull(),
     assignee: varchar('assignee', { length: 255 }),
     note: text('note'),
@@ -150,8 +152,18 @@ export const moderationCases = pgTable('moderation_cases', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
-    unique('moderation_cases_match_id_target_user_id_unique').on(table.matchId, table.targetUserId),
+    uniqueIndex('moderation_cases_match_account_target_unique')
+        .on(table.matchId, table.targetUserId)
+        .where(sql`${table.targetUserId} IS NOT NULL`),
+    uniqueIndex('moderation_cases_match_guest_target_unique')
+        .on(table.matchId, table.targetPlayerId)
+        .where(sql`${table.targetUserId} IS NULL`),
     index('moderation_cases_status_updated_at_idx').on(table.status, table.updatedAt),
+    check('moderation_cases_target_identity', sql`
+        (${table.targetUserId} IS NOT NULL AND ${table.targetPlayerId} IS NULL)
+        OR
+        (${table.targetUserId} IS NULL AND ${table.targetPlayerId} IS NOT NULL AND ${table.targetNickname} IS NOT NULL)
+    `),
 ]);
 
 export const reports = pgTable('reports', {

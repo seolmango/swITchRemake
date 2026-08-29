@@ -16,6 +16,9 @@ type SanctionType = typeof schema.sanctionTypeEnum.enumValues[number];
 type AccountStatus = typeof schema.accountStatusEnum.enumValues[number];
 type RequestMeta = Record<string, unknown>;
 
+/** 트랜잭션 핸들. drizzle의 콜백 인자와 같은 모양이면 된다. */
+type SanctionTransaction = Parameters<Parameters<PostgresJsDatabase<typeof schema>['transaction']>[0]>[0];
+
 export interface ApplySanctionInput {
     userId: number;
     type: SanctionType;
@@ -52,7 +55,14 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
-    async apply(input: ApplySanctionInput) {
+    /**
+     * 제재를 건다.
+     *
+     * `tx`를 주면 **부르는 쪽의 트랜잭션 안에서** 돈다. 신고 사건에서 제재를 걸 때가 그렇다 —
+     * 따로 돌면 제재만 커밋되고 사건은 그대로 남는 경우가 생기고, 그때 남는 것은 "밴은 됐는데
+     * 아무도 처리했다고 기록하지 않은" 상태다. 부르는 쪽이 없으면 예전처럼 스스로 연다.
+     */
+    async apply(input: ApplySanctionInput, tx?: SanctionTransaction) {
         const now = new Date();
         const startsAt = input.startsAt ?? now;
         const expiresAt = input.expiresAt ?? null;
@@ -60,7 +70,7 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
             throw new ConflictException('Sanction expiration must be after its start');
         }
 
-        return this.db.transaction(async (tx) => {
+        const run = async (tx: SanctionTransaction) => {
             const [user] = await tx.select({
                 id: schema.users.id,
                 status: schema.users.accountStatus,
@@ -107,7 +117,9 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
             });
 
             return sanction;
-        });
+        };
+
+        return tx ? run(tx) : this.db.transaction(run);
     }
 
     async revoke(

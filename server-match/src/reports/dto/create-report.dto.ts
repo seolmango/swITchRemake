@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min, ValidateIf } from 'class-validator';
 
 export const REPORT_CATEGORIES = ['CHEAT', 'ABUSE', 'GRIEFING', 'NICKNAME'] as const;
 export type ReportCategory = typeof REPORT_CATEGORIES[number];
@@ -8,10 +8,17 @@ export class CreateReportDto {
     @IsUUID()
     matchId!: string;
 
+    @ValidateIf((_object, value) => value !== undefined)
     @Type(() => Number)
     @IsInt()
     @Min(1)
-    targetUserId!: number;
+    targetUserId?: number;
+
+    @ValidateIf((_object, value) => value !== undefined)
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    targetPlayerId?: number;
 
     @IsIn(REPORT_CATEGORIES)
     category!: ReportCategory;
