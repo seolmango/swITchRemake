@@ -10,6 +10,7 @@ import { PROTOCOL_VERSION, type RecordedFrame } from 'shared';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
 import { themeColors } from '../theme/color.ts';
 import { frameBuffer, loadFrames, openReplay, ReplayOpenError, type OpenedReplay, type ReplayVerification } from '../replay/replayFile.ts';
+import { loadReplayVerifier } from '../replay/browserVerifier.ts';
 
 /** 인게임 서버가 맵 번들을 내주는 주소. 살아 있는 세션이 없으므로 GameSession과 같은 규칙으로 만든다. */
 function gameHttpOrigin(): string {
@@ -33,6 +34,7 @@ export const ReplayPage: React.FC = () => {
     const [playing, setPlaying] = useState(false);
     const [position, setPosition] = useState(0);
     const engineRef = useRef<SwitchEngine | null>(null);
+    const verifierRef = useRef(loadReplayVerifier());
     const mapReady = useRef(false);
 
     const replay = state.kind === 'ready' ? state.replay : null;
@@ -45,7 +47,8 @@ export const ReplayPage: React.FC = () => {
         mapReady.current = false;
         try {
             const bytes = new Uint8Array(await file.arrayBuffer());
-            const opened = await openReplay(bytes);
+            // 공개키는 파일마다 다시 받지 않는다. 못 받아도 재생은 되고 '확인할 수 없음'이 된다.
+            const opened = await openReplay(bytes, await verifierRef.current);
             // 프레임은 전부 미리 푼다. 경기가 10분을 넘지 않아서 메모리가 감당되고,
             // 그 대신 어디로든 즉시 되감을 수 있다.
             const all: RecordedFrame[] = [];

@@ -1,4 +1,5 @@
 import {
+    checkReplaySignature,
     decodeChunk,
     parseReplayContainer,
     ReplayDecodeError,
@@ -6,6 +7,7 @@ import {
     type ChunkIndexEntry,
     type RecordedFrame,
     type ReplayManifest,
+    type ReplayVerifier,
 } from 'shared';
 import { browserReplayCodec } from './browserCodec.ts';
 
@@ -46,7 +48,7 @@ export class ReplayOpenError extends Error {
  * 재생을 시작하기 전에 chunk를 전부 풀지는 않는다 — 큰 파일에서 화면이 멈춘다. rootHash만
  * 맞춰 보고, 실제 chunk 해시는 그 chunk를 풀 때 `decodeChunk`가 확인한다.
  */
-export async function openReplay(bytes: Uint8Array): Promise<OpenedReplay> {
+export async function openReplay(bytes: Uint8Array, verifier?: ReplayVerifier): Promise<OpenedReplay> {
     let parsed: { manifest: ReplayManifest; chunkIndex: ChunkIndexEntry[] };
     try {
         parsed = parseReplayContainer(bytes);
@@ -58,13 +60,19 @@ export async function openReplay(bytes: Uint8Array): Promise<OpenedReplay> {
     }
 
     const rootOk = await verifyRootHash(parsed.manifest, parsed.chunkIndex, browserReplayCodec);
-    return {
-        bytes,
-        manifest: parsed.manifest,
-        chunkIndex: parsed.chunkIndex,
-        // 서명이 아직 없다. 붙기 전까지 성한 파일이 갈 수 있는 최선은 '확인할 수 없음'이다.
-        verification: rootOk ? 'unverified' : 'modified',
-    };
+    /*
+     * 순서가 중요하다. 해시가 이미 깨졌으면 서명을 볼 것도 없이 바뀐 파일이다 — 서명이 맞더라도
+     * 그 서명은 지금 이 바이트에 대한 것이 아니다.
+     */
+    let verification: ReplayVerification = rootOk ? 'unverified' : 'modified';
+    if (rootOk && verifier) {
+        const signature = await checkReplaySignature(bytes, verifier);
+        // 'absent'와 'unknown-key'는 둘 다 확인할 수 없다는 사실 진술이다. 'forged'만 경고다.
+        if (signature === 'signed') verification = 'verified';
+        else if (signature === 'forged') verification = 'modified';
+    }
+
+    return { bytes, manifest: parsed.manifest, chunkIndex: parsed.chunkIndex, verification };
 }
 
 /** chunk 하나를 풀어 프레임만 꺼낸다. 해시 검증은 `decodeChunk`가 한다. */

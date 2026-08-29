@@ -26,6 +26,7 @@ import { GameRegistry } from './redis/registry';
 import { ResultOutbox } from './redis/result-outbox';
 import { MemoryReplayRecorder, NullReplayRecorder, type ReplayRecorder } from './replay/recorder';
 import { LocalReplayStore } from './replay/replay-store';
+import { replaySignerFrom } from './replay/signing';
 import { handOffWaitingRooms } from './rooms/hand-off';
 import { RoomManager } from './rooms/room-manager';
 import { Scheduler } from './simulation/scheduler';
@@ -58,13 +59,24 @@ async function main(): Promise<void> {
     // ── 리플레이 ──
     // `s3`는 아직 구현이 없다. 그 상태로 켜져 있으면 조용히 기록을 잃는 것보다 꺼서 알리는 편이 낫다.
     const replayStore = INFRA.REPLAY_STORE === 'local' ? new LocalReplayStore(INFRA.REPLAY_LOCAL_DIR) : null;
+    const replaySigner = replaySignerFrom({
+        privateKeyBase64: INFRA.REPLAY_SIGNING_KEY,
+        keyId: INFRA.REPLAY_SIGNING_KEY_ID,
+    });
     if (INFRA.REPLAY_ENABLED && replayStore === null) {
         console.warn(`[swITch] REPLAY_STORE=${INFRA.REPLAY_STORE}은 아직 구현되지 않았다. 리플레이 기록을 끈다.`);
     }
     const replayEnabled = INFRA.REPLAY_ENABLED && replayStore !== null;
     log(`  replay         ${replayEnabled ? `on (local -> ${INFRA.REPLAY_LOCAL_DIR})` : 'off'}`);
     const replayRecorderFactory = (): ReplayRecorder =>
-        replayEnabled && replayStore ? new MemoryReplayRecorder({ store: replayStore }) : new NullReplayRecorder();
+        replayEnabled && replayStore
+            ? new MemoryReplayRecorder({
+                store: replayStore,
+                // 키가 없으면 서명하지 않는다. 키가 있는데 못 읽으면 여기서 부팅이 멈춘다 —
+                // 서명하라고 키를 줬는데 조용히 서명 없이 도는 것이 제일 나쁘다.
+                ...(replaySigner ? { signer: replaySigner } : {}),
+            })
+            : new NullReplayRecorder();
 
     if (INFRA.ALLOWED_ORIGINS.length === 0) {
         // 비어 있으면 upgrade를 전부 거절한다. 조용히 전체 허용으로 열리는 것보다 낫다.

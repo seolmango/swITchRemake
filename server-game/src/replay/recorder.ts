@@ -7,6 +7,7 @@
  */
 
 import type { ReplayHandleInfo } from 'shared';
+import { signReplayContainer, type ReplaySigner } from 'shared';
 import { buildReplayContainer, nodeReplayCodec, REPLAY_FORMAT_VERSION, type ChunkAccumulator, type ReplayEvent, type ReplayManifest } from './format';
 import type { ReplayStore } from './replay-store';
 
@@ -69,6 +70,8 @@ export interface MemoryReplayRecorderOptions {
     readonly storageKeyFor?: (matchId: string) => string;
     /** 시야 bitmask 기록. 용량과 조사 정확도의 교환이라 끌 수 있게 둔다. */
     readonly recordVisibility?: boolean;
+    /** 없으면 서명하지 않는다. 개발 중에 만든 파일에는 서명이 없는 것이 정상이다. */
+    readonly signer?: ReplaySigner;
 }
 
 /**
@@ -79,6 +82,7 @@ export interface MemoryReplayRecorderOptions {
  */
 export class MemoryReplayRecorder implements ReplayRecorder {
     readonly #store: ReplayStore;
+    readonly #signer: ReplaySigner | null;
     readonly #storageKeyFor: (matchId: string) => string;
     readonly #recordVisibility: boolean;
 
@@ -92,6 +96,7 @@ export class MemoryReplayRecorder implements ReplayRecorder {
 
     constructor(options: MemoryReplayRecorderOptions) {
         this.#store = options.store;
+        this.#signer = options.signer ?? null;
         this.#storageKeyFor = options.storageKeyFor ?? ((matchId) => `${matchId}.swrp`);
         this.#recordVisibility = options.recordVisibility ?? true;
     }
@@ -164,13 +169,20 @@ export class MemoryReplayRecorder implements ReplayRecorder {
 
         try {
             const container = await buildReplayContainer(manifestBase, this.#chunks, nodeReplayCodec);
+            /*
+             * 서명은 컨테이너를 다 만든 뒤에 뒤에 붙인다. 서명 대상이 "앞의 바이트 전부"라서
+             * 순서가 뒤집히면 안 된다. 서명자가 없으면 그대로 저장한다 — 서명 없는 파일도
+             * 재생은 되고, 재생기가 '확인할 수 없음'으로 표시한다.
+             */
+            const signer = this.#signer;
+            const bytes = signer ? await signReplayContainer(container.bytes, signer) : container.bytes;
             const storageKey = this.#storageKeyFor(this.#meta.matchId);
-            await this.#store.put(storageKey, container.bytes);
+            await this.#store.put(storageKey, bytes);
             const handle: ReplayHandleInfo = {
                 storageKey,
                 formatVersion: REPLAY_FORMAT_VERSION,
                 chunkCount: container.chunkCount,
-                sizeBytes: container.sizeBytes,
+                sizeBytes: bytes.byteLength,
                 rootHash: container.rootHash,
             };
             this.#release();

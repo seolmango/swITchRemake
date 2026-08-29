@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
-import { buildReplayContainer, type ChunkAccumulator, type ReplayCodec, type ReplayManifest } from 'shared';
+import { buildReplayContainer, signReplayContainer, type ChunkAccumulator, type ReplayCodec, type ReplayManifest } from 'shared';
 import { browserReplayCodec } from './browserCodec.ts';
 import { openReplay, loadFrames } from './replayFile.ts';
 
@@ -82,5 +82,60 @@ describe('브라우저 리플레이 코덱', () => {
     it('리플레이가 아닌 파일은 읽을 수 없다고 말한다', async () => {
         await expect(openReplay(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])))
             .rejects.toMatchObject({ verification: 'unsupported' });
+    });
+});
+
+describe('리플레이 서명', () => {
+    /** 노드가 서명하고 브라우저 경로가 검증한다. 양쪽이 갈라지면 여기서 걸린다. */
+    async function signedContainer() {
+        const { generateKeyPairSync, sign: nodeSign } = await import('node:crypto');
+        const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+        const container = await buildReplayContainer(MANIFEST, [chunk], nodeCodec);
+        const bytes = await signReplayContainer(container.bytes, {
+            keyId: 'test-key-1',
+            async sign(message) {
+                const signature = nodeSign(null, message, privateKey);
+                return new Uint8Array(signature.buffer, signature.byteOffset, signature.byteLength);
+            },
+        });
+        const jwk = publicKey.export({ format: 'jwk' }) as { x?: string };
+        return { bytes, publicKeyBase64: Buffer.from(jwk.x ?? '', 'base64url').toString('base64') };
+    }
+
+    function verifierFor(entries: Record<string, string>) {
+        return {
+            async verify(keyId: string, message: Uint8Array, signature: Uint8Array) {
+                const base64 = entries[keyId];
+                if (!base64) return null;
+                const raw = Uint8Array.from(Buffer.from(base64, 'base64'));
+                const key = await crypto.subtle.importKey('raw', raw as BufferSource, { name: 'Ed25519' }, false, ['verify']);
+                return crypto.subtle.verify('Ed25519', key, signature as BufferSource, message as BufferSource);
+            },
+        };
+    }
+
+    it('서명한 파일은 검증됨으로 열린다', async () => {
+        const { bytes, publicKeyBase64 } = await signedContainer();
+        const opened = await openReplay(bytes, verifierFor({ 'test-key-1': publicKeyBase64 }));
+        expect(opened.verification).toBe('verified');
+        // 트레일러가 붙어도 앞의 내용은 그대로 읽힌다.
+        expect(opened.manifest.matchId).toBe('match-1');
+        expect((await loadFrames(opened, 0)).length).toBe(2);
+    });
+
+    it('모르는 키로 서명된 파일은 위조가 아니라 확인 불가다', async () => {
+        const { bytes } = await signedContainer();
+        const opened = await openReplay(bytes, verifierFor({}));
+        expect(opened.verification).toBe('unverified');
+    });
+
+    it('서명 뒤에 내용을 고치면 위조로 잡힌다', async () => {
+        const { bytes, publicKeyBase64 } = await signedContainer();
+        const tampered = bytes.slice();
+        // manifest 안의 buildId 한 글자. 해시는 chunk만 덮으므로 여기는 서명만이 잡는다.
+        const marker = tampered.indexOf('test-build'.charCodeAt(0));
+        tampered[marker] = 'x'.charCodeAt(0);
+        const opened = await openReplay(tampered, verifierFor({ 'test-key-1': publicKeyBase64 }));
+        expect(opened.verification).toBe('modified');
     });
 });

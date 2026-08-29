@@ -177,3 +177,17 @@ export {
     type ChunkIndexEntry,
     type ReplayContainer,
 } from './replay/format';
+
+export {
+    SIGNATURE_MAGIC,
+    SIGNATURE_KEY_ID_BYTES,
+    SIGNATURE_BYTES,
+    SIGNATURE_TRAILER_BYTES,
+    readSignature,
+    signReplayContainer,
+    checkReplaySignature,
+    type ReplaySigner,
+    type ReplayVerifier,
+    type ReplaySignature,
+    type SignatureCheck,
+} from './replay/signature';
