@@ -46,6 +46,15 @@ export interface LobbyMember {
     /** admitReservation과 onConnect 사이의 짧은 구간을 나타낸다. */
     admissionPendingUntil: number | null;
     reconnectUntil: number | null;
+    /**
+     * 재접속 유예가 끝났는데도 자리를 남겨 둔 상태. 경기 중에만 켜진다.
+     *
+     * 유예가 끝나면 그 사람은 탈락한다 — 자리를 비워 두면 경기가 안 끝나기 때문이다. 그런데
+     * 명단에서까지 빼면 **돌아올 방 자체가 사라진다.** 죽은 사람은 원래 관전하다 결과 화면까지
+     * 가는데, 새로고침이 느렸다는 이유로 그 사람만 방 밖으로 나가떨어졌다. 탈락은 그대로 두고
+     * 자리만 남긴다. 경기가 끝나 대기실로 돌아갈 때 정리한다.
+     */
+    timedOut: boolean;
     latestInput: InputState | null;
     lastInputSequence: number | null;
 }
@@ -145,6 +154,7 @@ export class LobbyRoster {
             connection: null,
             admissionPendingUntil: hold.reservation.expiresAt,
             reconnectUntil: null,
+            timedOut: false,
             latestInput: null,
             lastInputSequence: null,
         };
@@ -178,6 +188,7 @@ export class LobbyRoster {
             connection: null,
             admissionPendingUntil: null,
             reconnectUntil,
+            timedOut: false,
             latestInput: null,
             lastInputSequence: null,
         };

@@ -302,10 +302,13 @@ export class Room {
         this.advance(now);
         if (this.state === RoomState.Closed) return ControlErrorCode.RoomNotFound;
         const member = this.#roster.getByUser(userId);
-        if (member === null || member.connection !== null || member.admissionPendingUntil !== null
-            || member.reconnectUntil === null || member.reconnectUntil <= now) {
+        if (member === null || member.connection !== null || member.admissionPendingUntil !== null) {
             return ControlErrorCode.NoGraceSlot;
         }
+        // 유예 안이거나, 유예는 끝났지만 경기 중이라 자리가 남아 있는 경우다. 뒤쪽은 이미
+        // 탈락한 사람이고 돌아오면 관전으로 들어간다.
+        const withinGrace = member.reconnectUntil !== null && member.reconnectUntil > now;
+        if (!withinGrace && !member.timedOut) return ControlErrorCode.NoGraceSlot;
         return null;
     }
 
@@ -424,11 +427,12 @@ export class Room {
         const member = this.#roster.getByUser(connection.userId);
         if (member === null || member.playerId !== connection.playerId || member.connection !== null
             || member.admissionPendingUntil === null || member.admissionPendingUntil <= now) return false;
-        if (connection.resume !== (member.reconnectUntil !== null)) return false;
+        if (connection.resume !== (member.reconnectUntil !== null || member.timedOut)) return false;
 
         member.connection = connection;
         member.admissionPendingUntil = null;
         member.reconnectUntil = null;
+        member.timedOut = false;
         member.latestInput = null;
         member.lastInputSequence = null;
         this.#options.lifecycle.connectionChanged(this.id, member.playerId, true);
@@ -818,7 +822,15 @@ export class Room {
             if (member.connection === null && member.admissionPendingUntil === null
                 && member.reconnectUntil !== null && member.reconnectUntil <= now) {
                 this.#options.lifecycle.participantTimedOut(this.id, member.playerId);
-                this.#removeMember(member.userId, 'reconnect-timeout', false);
+                if (this.state === RoomState.Playing || this.state === RoomState.PostGame) {
+                    // 탈락은 위에서 끝났다. 자리는 경기가 끝날 때까지 남겨 둔다 — 돌아오면
+                    // 관전으로 들어간다. 대기실이었다면 붙들 이유가 없으니 그냥 뺀다.
+                    member.reconnectUntil = null;
+                    member.timedOut = true;
+                    this.broadcastLobbyState();
+                } else {
+                    this.#removeMember(member.userId, 'reconnect-timeout', false);
+                }
             }
         }
 
@@ -845,6 +857,15 @@ export class Room {
         }
 
         if (this.state === RoomState.PostGame && this.#postGameEndsAt !== null && now >= this.#postGameEndsAt) {
+            // 경기 내내 안 돌아온 사람의 자리를 여기서 놓는다. 대기실에서까지 붙들고 있으면
+            // 그 방은 영영 안 찬다 — 여기가 자리가 진짜로 비는 순간이다.
+            for (const member of this.#roster.members()) {
+                if (member.timedOut && member.connection === null) {
+                    this.#removeMember(member.userId, 'reconnect-timeout', false);
+                }
+            }
+            // 마지막 한 명까지 안 돌아왔으면 위에서 방이 닫혔다. 그 뒤로는 할 일이 없다.
+            if (this.#roster.size === 0) return;
             for (const member of this.#roster.members()) {
                 member.role = PlayerRole.Player;
                 member.spectatorEligible = false;

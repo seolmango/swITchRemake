@@ -471,3 +471,37 @@ test('아무도 안 붙어 있는 방은 넘기지 않는다', () => {
 });
 
 
+
+test('경기 중 유예가 끝나면 탈락하되 자리는 남고, 돌아오면 관전으로 들어간다', async () => {
+    // 유예가 끝나면 탈락은 맞다 — 자리를 비워 두면 경기가 안 끝난다. 그런데 명단에서까지
+    // 빼면 돌아올 방이 사라진다. 죽은 사람은 원래 관전하다 결과 화면까지 가는데,
+    // 새로고침이 느렸다는 이유로 그 사람만 방 밖으로 나가떨어졌다.
+    const { context, c2 } = await playingRoom();
+    context.room.disconnect(c2, 'network');
+
+    context.setNow(context.getNow() + 10_001);
+    context.room.advance();
+
+    assert.deepEqual(context.lifecycle.timeouts, [2], '탈락은 그대로 일어나야 한다');
+    assert.notEqual(context.room.memberByUser(2), null, '자리는 남아 있어야 한다');
+    assert.equal(context.room.canReserveResume(2), null, '유예가 끝나도 경기 중이면 돌아올 수 있다');
+
+    const back = context.connect(seat(2, context.getNow(), true));
+    await Promise.resolve();
+    assert.notEqual(back.messages.find((message) => message.type === 'game.started'), undefined);
+});
+
+test('대기실에서 유예가 끝나면 예전처럼 자리를 놓는다', () => {
+    // 대기실 자리는 붙들 이유가 없다. 붙들면 그 방은 영영 안 찬다.
+    const context = setup();
+    const c1 = context.connect(context.owner);
+    const r2 = seat(2, 0);
+    context.room.reserveJoin(r2, 'secret');
+    context.connect(r2);
+    context.room.disconnect(c1, 'network');
+
+    context.setNow(10_001);
+    context.room.advance();
+    assert.equal(context.room.memberByUser(1), null);
+    assert.notEqual(context.room.canReserveResume(1), null);
+});

@@ -109,8 +109,21 @@ test.describe('경기 · 도중 이탈 · 결과', () => {
 
         await page.waitForTimeout(3_000);
         await page.reload();
+        /*
+         * 돌아오는 곳이 둘이다. 새로고침이 재접속 유예(10초) 안에 끝나면 그 경기로 돌아간다.
+         * 넘기면 탈락하는데, 3인 경기에서 한 명이 빠지면 남은 둘이 공동 우승이라 경기가 그
+         * 자리에서 끝나고 돌아온 사람은 방에 있다. 둘 다 정상이고, 어느 쪽이 될지는 그 순간의
+         * 새로고침 속도가 정한다 — 한쪽만 적으면 이 점검은 기계 성능에 따라 흔들린다.
+         *
+         * 이 점검이 지키는 것은 **돌아올 방이 있다**는 것이다. 예전에는 유예를 넘기면 명단에서
+         * 통째로 빠져서 resume이 거절당했고, 화면은 복구 실패에 갇혔다.
+         */
+        await expect(
+            page.locator('.game-hud[data-hud-ready="true"]')
+                .or(page.getByRole('button', { name: T.lobby.leave })),
+        ).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByText(T.lobby.resumeFailed)).toHaveCount(0);
         // 시작 신호를 놓친 연결이 "시작을 기다리는" 화면에 갇히던 버그가 여기서 잡힌다.
-        await expect(page.locator('.game-hud[data-hud-ready="true"]')).toBeVisible({ timeout: 60_000 });
         await expect(page.getByText(T.game.waitingStart)).toHaveCount(0);
 
         for (const player of guests) await player.close();
