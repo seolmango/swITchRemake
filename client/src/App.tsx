@@ -19,6 +19,7 @@ import { HowToPlayPage } from './pages/HowToPlayPage.tsx';
 import { GamePage } from './pages/GamePage.tsx';
 import { TrainingPage } from './pages/TrainingPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
+import { ReplayPage } from './pages/ReplayPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { useAuthStore } from './stores/useAuthStore.ts';
 import { Outlet } from 'react-router-dom';
@@ -74,6 +75,7 @@ function App() {
                         <Route path="/game" element={<GamePage />} />
                         <Route path="/training" element={<TrainingPage />} />
                         <Route path="/admin" element={<AdminPage />} />
+                        <Route path="/replay" element={<ReplayPage />} />
                         <Route path="*" element={<NotFoundPage />} />
                     </Route>
                 </Routes>

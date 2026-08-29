@@ -1832,3 +1832,44 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: #FFBDBD; }
 /* 보관 기간 안내. 화면의 주인공이 아니라 각주다 — 작고 흐리게, 그러나 읽을 수는 있게. */
 .match-history-retention { display: block; margin-top: 4px; color: var(--profile-muted, #625F5C); font-size: 14px; }
 .result-retention-notice { font-size: 15px; }
+
+/* ───────────────────────── 리플레이 재생기 ───────────────────────── */
+.replay-shell { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 20px; }
+.replay-dropzone {
+  min-height: 320px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 40px;
+  border: 4px dashed var(--surface-border);
+  border-radius: 20px;
+  color: var(--surface-muted);
+  text-align: center;
+  cursor: pointer;
+}
+.replay-dropzone strong { font-family: var(--font-display); font-size: 30px; font-weight: normal; }
+.replay-dropzone input[type='file'] { display: none; }
+.replay-error { margin: 0; color: #C64B4B; font-size: 17px; display: grid; gap: 4px; }
+.replay-error small { color: var(--surface-muted); font-size: 14px; word-break: break-all; }
+
+.replay-meta { display: grid; grid-template-columns: 260px 1fr auto; gap: 24px; align-items: start; }
+.replay-verdict { display: grid; gap: 4px; padding: 14px 18px; border: 4px solid var(--surface-border); border-radius: 14px; }
+.replay-verdict strong { font-size: 22px; }
+.replay-verdict small { color: var(--surface-muted); font-size: 14px; line-height: 1.4; }
+/* 확인할 수 없는 것과 바뀐 것은 다른 사실이다. 색으로도 갈라 둔다. */
+.replay-verdict.is-verified { border-color: var(--admin-good, #4B9B6E); }
+.replay-verdict.is-modified { border-color: #C64B4B; }
+.replay-verdict.is-unverified { border-color: var(--admin-warn, #C8912F); }
+.replay-meta dl { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 20px; }
+.replay-meta dl > div { display: grid; gap: 2px; min-width: 0; }
+.replay-meta dt { color: var(--surface-muted); font-size: 14px; }
+.replay-meta dd { margin: 0; font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.replay-participants { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 16px; }
+.replay-participants li { display: flex; align-items: center; gap: 8px; }
+.replay-participants i { width: 26px; height: 26px; display: grid; place-items: center; border: 3px solid var(--surface-border); border-radius: 50%; font-style: normal; font-size: 14px; }
+
+.replay-stage { min-height: 0; position: relative; border: 4px solid var(--surface-border); border-radius: 16px; overflow: hidden; }
+.replay-controls { display: flex; align-items: center; gap: 20px; }
+.replay-controls input[type='range'] { flex: 1; }
+.replay-position { color: var(--surface-muted); font-size: 16px; font-variant-numeric: tabular-nums; }

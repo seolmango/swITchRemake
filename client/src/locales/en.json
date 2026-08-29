@@ -633,5 +633,36 @@
       "self": "You cannot report yourself.",
       "failed": "Could not send the report. Please try again shortly."
     }
+  },
+  "replay": {
+    "title": "Replay player",
+    "about": "About this replay",
+    "dropHint": "Drop a replay file here, or click to choose one",
+    "dropSub": "No server and no sign-in needed. Just the file.",
+    "reading": "Reading the file…",
+    "recordedAt": "Recorded",
+    "recordedAtUnknown": "Unknown (older format)",
+    "map": "Map",
+    "duration": "Length",
+    "build": "Build",
+    "rules": "Rules",
+    "protocol": "Protocol",
+    "protocolMismatch": "differs from the current version",
+    "play": "Play",
+    "pause": "Pause",
+    "seek": "Playback position",
+    "mapFailed": "Could not fetch this replay’s map. The server may no longer keep that bundle.",
+    "verify": {
+      "verified": "Verified",
+      "modified": "Contents changed",
+      "unverified": "Cannot be verified",
+      "unsupported": "Unreadable file"
+    },
+    "verifyHint": {
+      "verified": "Signed by the server and unchanged.",
+      "modified": "Chunk hashes do not match. The file is damaged or someone edited it.",
+      "unverified": "This file is not signed by the server. We cannot confirm it came from a real match.",
+      "unsupported": "It cannot be read safely. Wrong format, or not a replay file."
+    }
   }
 }
