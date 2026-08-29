@@ -11,6 +11,7 @@ import {
     serial,
     text,
     timestamp,
+    unique,
     uniqueIndex,
     uuid,
     varchar,
@@ -27,6 +28,8 @@ export const accountStatusEnum = pgEnum('account_status', ['ACTIVE', 'BANNED', '
 export const userRoleEnum = pgEnum('user_role', ['USER', 'ADMIN']);
 export const sanctionTypeEnum = pgEnum('sanction_type', ['WARN', 'GAME_RESTRICT', 'BAN']);
 export const replayStatusEnum = pgEnum('replay_status', ['recording', 'finalizing', 'available', 'deleting', 'deleted']);
+export const reportCategoryEnum = pgEnum('report_category', ['CHEAT', 'ABUSE', 'GRIEFING', 'NICKNAME']);
+export const reportStatusEnum = pgEnum('report_status', ['OPEN', 'TRIAGED', 'REVIEWING', 'ACTIONED', 'DISMISSED', 'CLOSED']);
 
 export const users = pgTable('users', {
     id: serial('id').primaryKey(),
@@ -134,6 +137,45 @@ export const replays = pgTable('replays', {
 }, (table) => [
     check('replays_root_hash_format', sql`${table.rootHash} ~ '^[0-9a-f]{64}$'`),
     check('replays_nonnegative_sizes', sql`${table.formatVersion} > 0 AND ${table.chunkCount} > 0 AND ${table.sizeBytes} > 0`),
+]);
+
+export const moderationCases = pgTable('moderation_cases', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    matchId: uuid('match_id').notNull().references(() => matches.matchId, { onDelete: 'cascade' }),
+    targetUserId: integer('target_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+    status: reportStatusEnum('status').default('OPEN').notNull(),
+    assignee: varchar('assignee', { length: 255 }),
+    note: text('note'),
+    reportCount: integer('report_count').default(0).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+    unique('moderation_cases_match_id_target_user_id_unique').on(table.matchId, table.targetUserId),
+    index('moderation_cases_status_updated_at_idx').on(table.status, table.updatedAt),
+]);
+
+export const reports = pgTable('reports', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    caseId: uuid('case_id').notNull().references(() => moderationCases.id, { onDelete: 'cascade' }),
+    reporterUserId: integer('reporter_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+    category: reportCategoryEnum('category').notNull(),
+    tick: integer('tick'),
+    description: text('description').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+    unique('reports_case_id_reporter_user_id_unique').on(table.caseId, table.reporterUserId),
+    index('reports_case_id_idx').on(table.caseId),
+]);
+
+export const replayHolds = pgTable('replay_holds', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    replayId: uuid('replay_id').notNull().references(() => replays.id, { onDelete: 'restrict' }),
+    caseId: uuid('case_id').notNull().references(() => moderationCases.id, { onDelete: 'restrict' }),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    releasedAt: timestamp('released_at', { withTimezone: true }),
+}, (table) => [
+    unique('replay_holds_replay_id_case_id_unique').on(table.replayId, table.caseId),
 ]);
 
 export const sanctions = pgTable('sanctions', {
