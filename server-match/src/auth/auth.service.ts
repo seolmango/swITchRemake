@@ -20,6 +20,7 @@ import { EmailAuthType, SendEmailDto } from './dto/email-auth.dto';
 import { DRIZZLE } from '../database/database.module';
 import * as schema from '../database/schema';
 import { LoginDto } from './dto/login.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SessionSecurityService } from '../session/session-security.service';
 import { SessionService } from '../session/session.service';
 import { SanctionService } from '../sanction/sanction.service';
@@ -103,6 +104,37 @@ export class AuthService {
         }
 
         return { message: 'Verification code sent successfully' };
+    }
+
+    /**
+     * 비밀번호를 잊은 사람이 메일 코드로 다시 정한다.
+     *
+     * **없는 계정에도 성공을 돌려준다.** 응답이 갈리면 이 엔드포인트가 곧 "이 메일이 가입돼
+     * 있는지" 조회기가 된다. 코드는 어차피 그 주소로만 갔으므로, 모르는 주소에는 코드가 없다.
+     *
+     * 성공하면 **그 계정의 모든 세션을 끊는다.** 비밀번호를 되찾는 상황은 대개 남이 들어와
+     * 있을지도 모르는 상황이고, 그때 남의 세션을 살려 두면 되찾은 것이 아니다.
+     */
+    async resetPassword(dto: ResetPasswordDto): Promise<{ reset: boolean }> {
+        const redisKey = `auth:code:${EmailAuthType.RESET_PASSWORD}:${dto.email}`;
+        const savedCode = await this.redisService.get(redisKey);
+        if (!savedCode || savedCode !== dto.code) {
+            throw new HttpException('Invalid or expired verification code', HttpStatus.BAD_REQUEST);
+        }
+        // 코드는 맞든 틀리든 한 번 쓰면 사라진다. 남겨 두면 같은 코드로 계속 시도할 수 있다.
+        await this.redisService.del(redisKey);
+
+        const [user] = await this.db.select({ id: schema.users.id, accountStatus: schema.users.accountStatus })
+            .from(schema.users)
+            .where(eq(schema.users.email, dto.email));
+        if (!user || user.accountStatus !== 'ACTIVE') return { reset: true };
+
+        const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+        await this.db.update(schema.users)
+            .set({ passwordHash, updatedAt: new Date() })
+            .where(eq(schema.users.id, user.id));
+        await this.sessionService.revokeAll(user.id);
+        return { reset: true };
     }
 
     async login(dto: LoginDto, metadata: RequestSessionMetadata) {

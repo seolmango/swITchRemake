@@ -16,5 +16,10 @@ export const loginUser = async (email: string, password: string) => {
     return result;
 };
 
+export const resetPassword = (input: { email: string; code: string; newPassword: string }) =>
+    apiRequest<{ reset: boolean }>('/auth/password/reset', {
+        method: 'POST', auth: false, retryAuth: false, body: input,
+    });
+
 export const changePassword = (input: { currentPassword: string; newPassword: string }) =>
     apiRequest<{ revokedCount: number }>('/users/me/password', { method: 'POST', body: input });

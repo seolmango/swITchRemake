@@ -2,6 +2,7 @@ import { Controller, Post, Body, Res, Req, UnauthorizedException } from '@nestjs
 import { AuthService } from "./auth.service";
 import { SendEmailDto } from "./dto/email-auth.dto";
 import { LoginDto} from "./dto/login.dto";
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RateLimiter } from "../ratelimiter.decorator";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { ConfigService } from "@nestjs/config";
@@ -18,6 +19,13 @@ export class AuthController {
     @RateLimiter({ anon: 5, guest: 5, account: 7, ttl: 60000 })
     async sendVerificationEmail(@Body() sendEmailDto: SendEmailDto) {
         return this.authService.sendVerificationCodeEmail(sendEmailDto);
+    }
+
+    @Post('password/reset')
+    // 코드를 맞힐 때까지 두드리는 것을 막는다. 정상 사용자는 한 번이면 된다.
+    @RateLimiter({ anon: 5, guest: 5, account: 5, ttl: 60_000 })
+    async resetPassword(@Body() dto: ResetPasswordDto) {
+        return this.authService.resetPassword(dto);
     }
 
     @Post('login')

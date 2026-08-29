@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageLayout } from '../../components/layout/PageLayout.tsx';
 import { RoundBox } from '../../components/common/RoundBox.tsx';
@@ -22,6 +22,8 @@ export const LoginPage: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [touched, setTouched] = useState(false);
+    // 가입·재설정을 마치고 넘어온 안내. 실패 문구와 색을 나눠야 해서 따로 둔다.
+    const handoff = (useLocation().state as { message?: string } | null)?.message ?? '';
     const [message, setMessage] = useState('');
     const valid = isEmail(email) && isPassword(password);
 
@@ -47,7 +49,7 @@ export const LoginPage: React.FC = () => {
                 <TextField ref={emailRef} label={t('auth.email')} placeholder={t('auth.emailPlaceholder')} autoComplete="email" inputMode="email" value={email} error={touched && !isEmail(email) ? t('auth.invalidEmail') : undefined} onChange={setEmail}/>
                 <TextField label={t('auth.password')} placeholder={t('auth.passwordPlaceholder')} autoComplete="current-password" type="password" value={password} error={touched && !isPassword(password) ? t('auth.invalidPassword') : undefined} onChange={setPassword}/>
                 <InlineLink onClick={() => navigate('/reset-password')} style={{ justifySelf: 'center' }}>{t('auth.forgot')}</InlineLink>
-                <div className="status-message" role="status" style={{ color: message ? Color.red[2] : themeColors(theme).muted }}>{message}</div>
+                <div className="status-message" role="status" style={{ color: message ? Color.red[2] : themeColors(theme).muted }}>{message || handoff}</div>
                 <RoundButton width={460} height={104} type={1} content={t('auth.login')} disabled={!valid || pending} isLoading={pending} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
             </div>
         </PageLayout>

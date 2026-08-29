@@ -99,6 +99,23 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
         return revoked.length;
     }
 
+    /**
+     * 이 계정의 살아 있는 세션을 전부 끊는다.
+     *
+     * 비밀번호 재설정이 쓴다. 되찾는 상황은 대개 남이 들어와 있을지도 모르는 상황이라,
+     * 남의 세션을 살려 두면 비밀번호만 바뀌고 접근은 그대로 남는다.
+     */
+    async revokeAll(userId: number): Promise<number> {
+        const revoked = await this.db.update(schema.sessions).set({
+            revokedAt: new Date(),
+        }).where(and(
+            eq(schema.sessions.userId, userId),
+            isNull(schema.sessions.revokedAt),
+        )).returning({ id: schema.sessions.id });
+
+        return revoked.length;
+    }
+
     async assertOwnedActiveSession(userId: number, sessionId: string): Promise<void> {
         const [session] = await this.db.select({ id: schema.sessions.id })
             .from(schema.sessions)
