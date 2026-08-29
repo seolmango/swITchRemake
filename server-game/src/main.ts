@@ -216,6 +216,8 @@ async function main(): Promise<void> {
         // 명령 처리를 막지 않도록 기다리지 않고 시작만 시킨다. 남은 사람의 재접속 예약이
         // 이 소비자를 지나가므로 여기서 멈추면 안 된다.
         beginDrain: () => { void shutdown('DRAIN_SERVER'); },
+        // 보관 기간이 끝난 파일을 지우는 손. 언제 지울지는 DB를 든 매칭 서버가 정한다.
+        ...(replayStore ? { deleteReplay: (storageKey: string) => replayStore.delete(storageKey) } : {}),
         resolveMapId: (mapId) => {
             if (mapId !== 'random' || bundle.maps[mapId] !== undefined) return mapId;
             // 훈련장 맵은 추첨에서 뺀다. 넣어 두면 공개 방을 만든 사람이 이따금 연습장에 떨어진다.

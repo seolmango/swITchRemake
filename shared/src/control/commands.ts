@@ -37,6 +37,17 @@ export const CommandType = {
      * 위험이 크다. 경기가 끝나 대기실로 돌아온 순간이 기회다.
      */
     AdoptRoom: 'ADOPT_ROOM',
+    /**
+     * 보관 기간이 끝난 리플레이 파일을 지운다.
+     *
+     * 파일은 인게임 서버의 디스크에 있고 그 행은 매칭 서버의 DB에 있다. 지울 때를 아는 쪽과
+     * 지울 수 있는 쪽이 다르다는 뜻이라, 아는 쪽이 명령을 보낸다. `replays.status`의
+     * `deleting` -> `deleted`가 이미 이 흐름을 예고하고 있었다.
+     *
+     * 이미 없는 파일에도 성공으로 답한다. 지우는 명령은 몇 번 와도 결과가 같아야 하고,
+     * 없는 파일에 실패로 답하면 정리 작업이 영원히 같은 행을 다시 집어 든다.
+     */
+    DeleteReplay: 'DELETE_REPLAY',
 } as const;
 export type CommandType = (typeof CommandType)[keyof typeof CommandType];
 
@@ -212,6 +223,13 @@ export interface CreateRoomResult extends SeatGrant {
     mapId: string;
 }
 
+export interface DeleteReplayPayload {
+    /** `replays.id`. 응답을 받은 매칭 서버가 어느 행을 지울지 찾는 값이다. */
+    replayId: string;
+    /** 저장소 키. 인게임 서버는 이것만 있으면 파일을 찾는다. */
+    storageKey: string;
+}
+
 export interface ControlCommandMap {
     [CommandType.CreateRoom]: { payload: CreateRoomPayload; result: CreateRoomResult };
     [CommandType.ReserveJoin]: { payload: ReserveJoinPayload; result: SeatGrant };
@@ -220,6 +238,7 @@ export interface ControlCommandMap {
     [CommandType.KickUser]: { payload: KickUserPayload; result: Record<string, never> };
     [CommandType.DrainServer]: { payload: DrainServerPayload; result: DrainServerResult };
     [CommandType.AdoptRoom]: { payload: AdoptRoomPayload; result: Record<string, never> };
+    [CommandType.DeleteReplay]: { payload: DeleteReplayPayload; result: Record<string, never> };
 }
 
 /* ────────────────────────────── heartbeat ────────────────────────────── */

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+    type DeleteReplayPayload,
     CONTROL_VERSION,
     CommandType,
     ConsumerGroup,
@@ -46,6 +47,13 @@ export interface CommandConsumerOptions {
      * 계속 돌아야 하는 바로 그 경로다.
      */
     readonly beginDrain?: () => void;
+    /**
+     * DELETE_REPLAY 명령을 받았을 때 파일을 지울 것. 리플레이 기록이 꺼진 서버에는 없다.
+     *
+     * 없으면 명령을 거절한다 — 지우지 않고 지웠다고 답하면 매칭 서버가 행을 지우고 파일만
+     * 디스크에 남는다. 아무도 그 파일을 다시 찾지 못한다.
+     */
+    readonly deleteReplay?: (storageKey: string) => Promise<void>;
     readonly now?: () => number;
     readonly roomIdFactory?: () => string;
     readonly logger?: (message: string, error?: unknown) => void;
@@ -290,6 +298,8 @@ export class CommandConsumer {
                 return this.#drainServer(command, command.payload as DrainServerPayload);
             case CommandType.AdoptRoom:
                 return this.#adoptRoom(command, command.payload as AdoptRoomPayload);
+            case CommandType.DeleteReplay:
+                return this.#deleteReplay(command, command.payload as DeleteReplayPayload);
             default:
                 return failure(this.#options.serverId, command, ControlErrorCode.Internal);
         }
@@ -436,6 +446,27 @@ export class CommandConsumer {
         } catch {
             return failure(this.#options.serverId, command, ControlErrorCode.Internal);
         }
+    }
+
+    /**
+     * 보관 기간이 끝난 리플레이 파일을 지운다.
+     *
+     * 이미 없는 파일도 성공이다(`rm`이 force로 돈다). 같은 명령이 두 번 와도 결과가 같아야
+     * 정리 작업이 안심하고 재시도할 수 있다.
+     */
+    async #deleteReplay(command: ControlCommand, payload: DeleteReplayPayload): Promise<ControlReply<Record<string, never>>> {
+        const remove = this.#options.deleteReplay;
+        if (remove === undefined) {
+            this.#options.logger?.('DELETE_REPLAY를 받았지만 이 서버에는 리플레이 저장소가 없다');
+            return failure(this.#options.serverId, command, ControlErrorCode.Internal);
+        }
+        try {
+            await remove(payload.storageKey);
+        } catch (error) {
+            this.#options.logger?.('리플레이 파일 삭제 실패', error);
+            return failure(this.#options.serverId, command, ControlErrorCode.Internal);
+        }
+        return success(this.#options.serverId, command, {});
     }
 
     #releaseSeat(command: ControlCommand, payload: ReleaseSeatPayload): ControlReply<Record<string, never>> {
