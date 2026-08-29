@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type IconName = 'home' | 'person' | 'settings' | 'back' | 'next' | 'refresh' | 'lock' | 'unlock' | 'users' | 'moon' | 'sun' | 'globe' | 'check' | 'keyboard' | 'touch' | 'gamepad' | 'trophy' | 'timer' | 'crown' | 'remove' | 'swap' | 'share' | 'external';
+export type IconName = 'home' | 'person' | 'settings' | 'back' | 'next' | 'refresh' | 'lock' | 'unlock' | 'users' | 'moon' | 'sun' | 'globe' | 'check' | 'keyboard' | 'touch' | 'gamepad' | 'trophy' | 'timer' | 'crown' | 'remove' | 'swap' | 'share' | 'external' | 'shield';
 
 interface IconProps {
     name: IconName;
@@ -27,6 +27,7 @@ const paths: Record<IconName, React.ReactNode> = {
     gamepad: <><path d="M7 8h10a5 5 0 0 1 4.8 6.3l-1 3.6a2.5 2.5 0 0 1-4.2 1.1l-1.8-2H9.2l-1.8 2a2.5 2.5 0 0 1-4.2-1.1l-1-3.6A5 5 0 0 1 7 8Z"/><path d="M7 12v4M5 14h4M16 13h.01M19 15h.01"/></>,
     trophy: <><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM12 13v4M8 21h8M10 17h4"/><path d="M8 6H4v2a4 4 0 0 0 4 4M16 6h4v2a4 4 0 0 1-4 4"/></>,
     timer: <><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6M12 2v3"/></>,
+    shield: <><path d="M12 3l7 3v5.5c0 4.4-2.9 7.7-7 9.5-4.1-1.8-7-5.1-7-9.5V6l7-3Z"/><path d="m9 12 2.2 2.2L15.5 10"/></>,
     crown: <><path d="m3 7 4.5 4L12 5l4.5 6L21 7l-2 11H5L3 7Z"/><path d="M5 21h14"/></>,
     remove: <><circle cx="9" cy="8" r="3"/><path d="M3 20c.6-4 2.6-6 6-6 1.4 0 2.6.3 3.5 1M16 14l5 5M21 14l-5 5"/></>,
     swap: <><path d="M7 7h12l-3-3M19 7l-3 3M17 17H5l3 3M5 17l3-3"/></>,

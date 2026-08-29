@@ -22,6 +22,13 @@
       "when": 1787625480877,
       "tag": "0002_rematch_per_room",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787829329633,
+      "tag": "0003_admin_role",
+      "breakpoints": true
     }
   ]
 }

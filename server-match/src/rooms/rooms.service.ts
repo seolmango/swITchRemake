@@ -155,6 +155,11 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         this.pending.clear();
     }
 
+    /** 인게임 서버의 응답을 기다리고 있는 제어 명령 수. 운영자 화면이 밀림을 읽는 값이다. */
+    pendingCommandCount(): number {
+        return this.pending.size;
+    }
+
     async list(page = 1) {
         const safePage = Number.isInteger(page) && page > 0 ? page : 1;
         const ids = await this.redis.sortedSetMembers(this.keys.roomsWaiting(), 0, -1);

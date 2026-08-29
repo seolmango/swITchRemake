@@ -1494,3 +1494,172 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: #FFBDBD; }
   border-radius: 50%;
   background: var(--guide-red);
 }
+
+/* ───────────────────────── 운영자 대시보드 ───────────────────────── */
+
+.admin-shell {
+  position: absolute;
+  left: 110px;
+  right: 110px;
+  top: 150px;
+  bottom: 65px;
+  padding: 24px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 20px;
+  border: 7px solid var(--surface-border);
+  border-radius: 30px;
+  background: var(--surface);
+  color: var(--admin-text);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.admin-shell.is-denied { grid-template-rows: minmax(0, 1fr); place-items: center; }
+.admin-state { display: grid; gap: 22px; justify-items: center; align-content: center; font-size: 26px; }
+
+.admin-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
+.admin-kpi {
+  min-width: 0;
+  padding: 16px 20px;
+  display: grid;
+  gap: 4px;
+  border: 5px solid var(--surface-border);
+  border-radius: 22px;
+  background: var(--surface-field);
+  box-sizing: border-box;
+}
+.admin-kpi > span { color: var(--surface-muted); font-size: 17px; }
+.admin-kpi > strong { font-family: var(--font-display); font-size: 46px; font-weight: normal; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.admin-kpi > small { color: var(--surface-muted); font-size: 15px; line-height: 1.35; }
+
+.admin-degraded {
+  margin: 0;
+  padding: 12px 20px;
+  border: 4px solid var(--admin-bad);
+  border-radius: 18px;
+  color: var(--admin-bad);
+  font-size: 19px;
+}
+
+.admin-tables { min-height: 0; display: grid; grid-template-columns: 1.45fr 1fr; gap: 20px; }
+.admin-panel {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 74px minmax(0, 1fr);
+  border: 5px solid var(--surface-border);
+  border-radius: 24px;
+  background: var(--surface-field);
+  overflow: hidden;
+}
+.admin-panel > header {
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 4px solid var(--surface-border);
+}
+.admin-panel h2 { margin: 0; font-family: var(--font-display); font-size: 30px; font-weight: normal; }
+.admin-panel > header span { color: var(--surface-muted); font-size: 17px; }
+
+.admin-table-wrap { min-height: 0; overflow: auto; scrollbar-gutter: stable; }
+.admin-table-wrap table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 18px; }
+/*
+ * 서버 이름은 운영자가 실제로 찾아가야 하는 값이라 잘리면 쓸모가 없다. 나머지 칸은 전부
+ * 짧은 숫자라서, 남는 폭을 첫 칸에 몰아 준다.
+ */
+.admin-table-wrap th:first-child { width: 42%; }
+.admin-table-wrap th:last-child { width: 96px; }
+.admin-table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 52px;
+  padding: 0 18px;
+  background: var(--surface);
+  color: var(--surface-muted);
+  text-align: left;
+  font-size: 15px;
+  font-weight: 500;
+}
+.admin-table-wrap td { padding: 12px 18px; border-top: 3px solid var(--surface-border); vertical-align: middle; }
+.admin-table-wrap td > strong { display: block; font-size: 20px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-table-wrap td > small { display: block; margin-top: 3px; color: var(--surface-muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-table-wrap tr.is-stale { opacity: .5; }
+.admin-empty { color: var(--surface-muted); text-align: center; font-size: 18px; }
+.admin-table-wrap .is-warn { color: var(--admin-warn); }
+.admin-table-wrap .is-bad { color: var(--admin-bad); }
+
+.admin-badge {
+  display: inline-block;
+  padding: 5px 13px;
+  border: 3px solid currentColor;
+  border-radius: 999px;
+  font-size: 15px;
+  font-style: normal;
+  white-space: nowrap;
+}
+.admin-badge.is-good { color: var(--admin-good); }
+.admin-badge.is-warn { color: var(--admin-warn); }
+.admin-badge.is-bad { color: var(--admin-bad); }
+
+.admin-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; color: var(--surface-muted); font-size: 18px; }
+.admin-footer > div { display: flex; align-items: center; gap: 16px; }
+.admin-toggle {
+  min-height: 72px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 4px solid var(--surface-border);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--admin-text);
+  cursor: pointer;
+  font-size: 18px;
+}
+.admin-toggle[aria-pressed='true'] { border-color: var(--admin-good); color: var(--admin-good); }
+
+
+/* 프로필의 되돌릴 수 없는 구역. 눈에 띄되 손이 먼저 가지는 않게 — 테두리만 경고색이다. */
+.profile-danger-zone {
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 4px solid var(--profile-border, #C6C6C6);
+  border-radius: 22px;
+  box-sizing: border-box;
+}
+.profile-danger-zone > span { color: var(--profile-muted, #625F5C); font-size: 15px; letter-spacing: .06em; }
+.profile-danger-zone > button {
+  min-height: 48px;
+  padding: 0 18px;
+  border: 4px solid #FF7171;
+  border-radius: 16px;
+  background: transparent;
+  color: #FF7171;
+  cursor: pointer;
+  font-size: 17px;
+}
+.profile-danger-zone > button:hover { background: #FFBDBD; color: #3B3B3B; }
+
+.delete-code-field { width: 100%; display: grid; gap: 8px; justify-items: center; }
+.delete-code-field > span { color: var(--surface-muted); font-size: 16px; }
+.delete-code-field > input {
+  width: 260px;
+  height: 62px;
+  padding: 0 16px;
+  border: 4px solid var(--surface-border);
+  border-radius: 16px;
+  background: transparent;
+  color: inherit;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 30px;
+  letter-spacing: .28em;
+}
+.delete-dialog-message { min-height: 26px; font-size: 17px !important; }
+.delete-dialog-message[data-failed='true'] { color: #FF7171 !important; }

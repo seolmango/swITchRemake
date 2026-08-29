@@ -256,6 +256,29 @@ export interface GameServerHeartbeat {
     maxRooms: number;
 }
 
+/**
+ * 매칭 서버 인스턴스가 자기 상태를 알리는 heartbeat.
+ *
+ * 게임 서버의 것과 같은 주기·TTL을 쓴다. **라우팅에는 쓰지 않는다** — 매칭 서버 앞에는
+ * 이미 리버스 프록시가 있고 이 값은 운영자 화면이 "몇 개가 살아 있고 얼마나 받고 있는지"를
+ * 보는 데만 쓴다. 그래서 주소를 싣지 않는다.
+ */
+export interface MatchServerHeartbeat {
+    instanceId: string;
+    buildVersion: string;
+    protocolVersion: number;
+    /**
+     * 최근 60초 동안 이 인스턴스가 처리한 HTTP 요청 수.
+     *
+     * 요청마다 Redis를 두드리지 않는다 — 그러면 측정이 부하가 된다. 프로세스 안에서 초 단위
+     * 링버퍼로 세고 heartbeat에 실어 보낸다.
+     */
+    requestsPerMinute: number;
+    /** 인게임 서버의 응답을 기다리고 있는 제어 명령 수. 밀리면 여기부터 부푼다. */
+    pendingCommands: number;
+    updatedAt: number;
+}
+
 /** heartbeat 주기와 키 TTL. TTL은 주기의 3배라 한 번 걸러도 살아 있는 것으로 본다. */
 export const HEARTBEAT_INTERVAL_MS = 2_000;
 export const HEARTBEAT_TTL_MS = 6_000;
@@ -271,6 +294,8 @@ export function makeKeys(env: string) {
     return {
         gameServer: (serverId: string) => p(`game-server:${serverId}`),
         gameServersAlive: () => p('game-servers:alive'),
+        matchServer: (instanceId: string) => p(`match-server:${instanceId}`),
+        matchServersAlive: () => p('match-servers:alive'),
         room: (roomId: string) => p(`room:${roomId}`),
         roomCode: (roomCode: string) => p(`room-code:${roomCode}`),
         roomsWaiting: () => p('rooms:waiting'),

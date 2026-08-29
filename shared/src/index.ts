@@ -131,6 +131,7 @@ export {
     type KickUserPayload,
     type SeatGrant,
     type GameServerHeartbeat,
+    type MatchServerHeartbeat,
     type RedisKeys,
 } from './control/commands';
 

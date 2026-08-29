@@ -107,6 +107,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return this.client.zrange(key, start, stop);
     }
 
+    async addToSortedSet(key: string, score: number, member: string): Promise<void> {
+        await this.client.zadd(key, score, member);
+    }
+
+    /** 점수 범위로 지운다. heartbeat 목록에서 TTL을 넘긴 항목을 걷어내는 데 쓴다. */
+    async removeFromSortedSetByScore(key: string, min: number, max: number): Promise<void> {
+        await this.client.zremrangebyscore(key, min, max);
+    }
+
     async addStreamEntry(
         stream: string,
         field: string,

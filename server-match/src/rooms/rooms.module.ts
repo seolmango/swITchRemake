@@ -9,5 +9,7 @@ import { SanctionModule } from '../sanction/sanction.module';
     imports: [ResultsModule, SessionModule, SanctionModule],
     controllers: [RoomsController],
     providers: [RoomsService],
+    // 운영자 화면이 밀려 있는 제어 명령 수를 읽는다.
+    exports: [RoomsService],
 })
 export class RoomsModule {}

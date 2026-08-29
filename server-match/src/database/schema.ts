@@ -18,6 +18,13 @@ import {
 import { sql } from 'drizzle-orm';
 
 export const accountStatusEnum = pgEnum('account_status', ['ACTIVE', 'BANNED', 'DELETED']);
+/**
+ * 운영 권한. 지금은 둘뿐이지만 enum으로 둔 이유는 `FUTURE.md` §3.1이 support/moderator/security를
+ * 나누기로 하고 있어서다 — boolean이면 그때 컬럼을 갈아야 한다. Postgres는 enum에 값을 덧붙일 수 있다.
+ *
+ * **역할은 토큰에 싣지 않는다.** 강등된 사람의 액세스 토큰이 만료될 때까지 관리자로 남으면 안 된다.
+ */
+export const userRoleEnum = pgEnum('user_role', ['USER', 'ADMIN']);
 export const sanctionTypeEnum = pgEnum('sanction_type', ['WARN', 'GAME_RESTRICT', 'BAN']);
 export const replayStatusEnum = pgEnum('replay_status', ['recording', 'finalizing', 'available', 'deleting', 'deleted']);
 
@@ -27,6 +34,7 @@ export const users = pgTable('users', {
     passwordHash: text('password_hash').notNull(),
     nickname: varchar('nickname', { length: 20 }).notNull().unique(),
     accountStatus: accountStatusEnum('account_status').default('ACTIVE').notNull(),
+    role: userRoleEnum('role').default('USER').notNull(),
     stats: jsonb('stats').default({ level: 0, xp: 0, games: 0, wins: 0, sw_try: 0, sw_su: 0, kill: 0, death_order: 0 }).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
