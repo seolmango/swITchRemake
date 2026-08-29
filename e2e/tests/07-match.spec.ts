@@ -91,23 +91,14 @@ test.describe('경기 · 도중 이탈 · 결과', () => {
     });
 
     /**
-     * **알려진 실패.** 경기 중 새로고침하면 자리 표가 사라져 돌아가지 못할 때가 있다.
+     * 한동안 실패하던 흐름이다. 새로고침으로 WebSocket이 끊긴 직후 registry가 큐에 넣어
+     * 둔 낡은 자리 해제가, 그 사이 되살아난 `user:{id}:active-room`을 지우고 있었다
+     * (a8830f0). flush 직전에 명단을 다시 보게 고쳤다.
      *
-     * 재현하며 본 것: 새로고침으로 WebSocket이 끊긴 직후(1초 안쪽) 인게임 서버가 그 사람의
-     * `user:{id}:active-room` 표를 지운다(Redis MONITOR에서 compareAndDelete로 확인). 그러면
-     * 매칭 서버의 `POST /rooms/:id/resume`이 `NO_ACTIVE_ROOM`으로 409를 돌려주고, 화면은
-     * "이 방의 연결을 복구할 수 없습니다"에 갇힌다.
-     *
-     * 표를 지우는 곳은 registry의 `#synchronizeTrackedSeats` -> `#flushPendingReleases`이고,
-     * 그 경로는 `room.hasUser(userId)`가 false일 때만 탄다. 그런데 `Room#disconnect`는
-     * 10초(`RECONNECT_GRACE_MS`)의 유예를 두고 명단에 남겨 두기로 되어 있다. 둘 중 하나가
-     * 약속을 안 지키고 있다. 매번 실패하지는 않는다 — 유예가 살아 있을 때는 복구된다.
-     *
-     * 매번 실패하지는 않아서 `test.fail()` 대신 `fixme`로 둔다 — 가끔 통과하는 것을
-     * "실패해야 한다"고 적으면 그 통과가 다시 빨간불이 되어, 결국 아무도 결과를 안 믿게 된다.
+     * 경합이라 매번 재현되지 않았다. 그래서 이 점검이 통과한다고 해서 다 끝났다는 뜻은
+     * 아니고, 다시 빨간불이 되면 그때는 같은 자리를 의심하면 된다.
      */
     test('경기 중 새로고침하면 그 경기로 돌아간다', async ({ page, browser }) => {
-        test.fixme(true, '인게임 새로고침 시 자리 표가 조기 회수되는 버그 (docs/TASKS.md A절)');
         const host = await signUpAndLogIn(page, 'resume');
         const context = await browser.newContext();
         const { guests } = await threePlayerRoom(page, context, 'F');
