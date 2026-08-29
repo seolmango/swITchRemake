@@ -18,6 +18,7 @@ import { ResultsModule } from './results/results.module';
 import { MatchesModule } from './matches/matches.module';
 import { AdminModule } from './admin/admin.module';
 import { ReportsModule } from './reports/reports.module';
+import { RetentionModule } from './retention/retention.module';
 
 @Module({
     imports: [
@@ -41,6 +42,7 @@ import { ReportsModule } from './reports/reports.module';
         MatchesModule,
         AdminModule,
         ReportsModule,
+        RetentionModule,
         HealthModule,
     ],
     controllers: [],

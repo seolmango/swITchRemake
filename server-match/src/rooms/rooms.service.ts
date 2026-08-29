@@ -26,6 +26,7 @@ import {
     type ControlCommand,
     type ControlReply,
     type CreateRoomResult,
+    type DeleteReplayPayload,
     type GameServerHeartbeat,
     type LobbyStats,
     type SeatGrant,
@@ -158,6 +159,25 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     /** 인게임 서버의 응답을 기다리고 있는 제어 명령 수. 운영자 화면이 밀림을 읽는 값이다. */
     pendingCommandCount(): number {
         return this.pending.size;
+    }
+
+    async requestReplayDeletion(serverId: string, payload: DeleteReplayPayload): Promise<boolean> {
+        const issuedAt = Date.now();
+        try {
+            const reply = await this.sendCommand<Record<string, never>>(serverId, {
+                v: CONTROL_VERSION,
+                requestId: randomUUID(),
+                type: CommandType.DeleteReplay,
+                issuedAt,
+                deadlineAt: issuedAt + COMMAND_DEADLINE_MS,
+                replyTo: this.replyStream,
+                payload,
+            });
+            return reply.ok;
+        } catch {
+            // 정리 회차가 끊기면 뒤의 파일도 재시도하지 못한다. 실패한 행만 deleting으로 남긴다.
+            return false;
+        }
     }
 
     async list(page = 1) {

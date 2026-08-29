@@ -12,12 +12,15 @@ export interface RetentionSettings {
     replayDays: number;
     /** 한 사람이 보관하는 최근 경기 수. */
     replayPerUserMatches: number;
+    /** 정리 회차 사이의 간격(분). */
+    intervalMinutes: number;
 }
 
 export const RETENTION_DEFAULTS: RetentionSettings = {
     matchDays: 30,
     replayDays: 7,
     replayPerUserMatches: 50,
+    intervalMinutes: 10,
 };
 
 const positiveInteger = (raw: string | undefined, fallback: number): number => {
@@ -36,6 +39,10 @@ export function retentionSettings(env: NodeJS.ProcessEnv = process.env): Retenti
         replayPerUserMatches: positiveInteger(
             env.REPLAY_RETENTION_MAX_MATCHES,
             RETENTION_DEFAULTS.replayPerUserMatches,
+        ),
+        intervalMinutes: positiveInteger(
+            env.RETENTION_INTERVAL_MINUTES,
+            RETENTION_DEFAULTS.intervalMinutes,
         ),
     };
 }
