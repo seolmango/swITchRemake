@@ -18,7 +18,14 @@ import { connect, type Socket } from 'node:net';
 import Redis from 'ioredis';
 import { makeKeys } from 'shared';
 import { RegistryView } from './registry-view';
-import { resolveBundleBackend, resolveWebSocketBackend, type Backend } from './routing';
+import {
+    filterHttpRequestHeaders,
+    filterHttpResponseHeaders,
+    filterWebSocketRequestHeaders,
+    resolveBundleRoute,
+    resolveWebSocketRoute,
+    type Backend,
+} from './routing';
 
 const log = (message: string): void => { console.log(`[gateway] ${message}`); };
 
@@ -50,7 +57,8 @@ async function main(): Promise<void> {
     // 프록시가 먼저 끊으면 백엔드는 멀쩡한데 사용자만 튕긴다. 인게임 서버 쪽 타임아웃보다 길게 둔다.
     server.keepAliveTimeout = 65_000;
     server.headersTimeout = 70_000;
-    server.requestTimeout = 0;
+    // 공개 프록시에서는 끝나지 않는 요청 본문이 연결을 무기한 차지하지 못하게 상한이 필요하다.
+    server.requestTimeout = 30_000;
 
     await new Promise<void>((resolve) => { server.listen(PORT, HOST, resolve); });
     log(`시작. ${HOST}:${PORT} — 인게임 서버 ${view.servers.size}대 확인`);
@@ -66,7 +74,7 @@ async function main(): Promise<void> {
     process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
-/** 맵 번들 등 평범한 HTTP 요청. 헤더와 본문을 그대로 옮긴다. */
+/** 맵 번들 등 평범한 HTTP 요청. */
 function handleRequest(view: RegistryView, req: IncomingMessage, res: ServerResponse): void {
     const path = req.url ?? '/';
     if (path === '/healthz') {
@@ -75,24 +83,30 @@ function handleRequest(view: RegistryView, req: IncomingMessage, res: ServerResp
         return;
     }
 
-    const backend = resolveBundleBackend(path, view.servers);
-    if (backend === null) {
+    const resolution = resolveBundleRoute(path, view.servers);
+    if (resolution.kind === 'not-found') {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('not found');
+        return;
+    }
+    if (resolution.kind === 'unavailable') {
         res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
         res.end('no game server available');
         return;
     }
 
-    const target = new URL(path, backend.address);
+    const { backend, path: targetPath } = resolution.route;
+    const target = new URL(backend.address);
     const proxied = httpRequest(
         {
             hostname: target.hostname,
             port: target.port,
-            path: target.pathname + target.search,
+            path: targetPath,
             method: req.method ?? 'GET',
-            headers: req.headers,
+            headers: filterHttpRequestHeaders(req.headers, req.socket.remoteAddress),
         },
         (upstream) => {
-            res.writeHead(upstream.statusCode ?? 502, upstream.headers);
+            res.writeHead(upstream.statusCode ?? 502, filterHttpResponseHeaders(upstream.headers));
             upstream.pipe(res);
         },
     );
@@ -113,19 +127,25 @@ function handleRequest(view: RegistryView, req: IncomingMessage, res: ServerResp
  */
 function handleUpgrade(view: RegistryView, req: IncomingMessage, socket: Socket, head: Buffer): void {
     const path = req.url ?? '/';
-    const backend = resolveWebSocketBackend(path, view.servers);
-    if (backend === null) {
+    const resolution = resolveWebSocketRoute(path, view.servers);
+    if (resolution.kind === 'not-found') {
+        socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
+        return;
+    }
+    if (resolution.kind === 'unavailable') {
         // 지금은 없는 서버다. 방이 옮겨 갔거나 막 사라진 것이므로 클라이언트가 매칭 서버에
         // 다시 물어보게 한다 — 그 경로가 새 주소를 알려 준다.
         socket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n');
         return;
     }
 
+    const { backend, path: targetPath } = resolution.route;
     const target = new URL(backend.address);
     const upstream = connect(Number(target.port), target.hostname, () => {
-        const headers = [`GET ${path} HTTP/1.1`];
-        for (const [name, value] of Object.entries(req.headers)) {
-            if (value === undefined) continue;
+        const headers = [`GET ${targetPath} HTTP/1.1`];
+        for (const [name, value] of Object.entries(
+            filterWebSocketRequestHeaders(req.headers, req.socket.remoteAddress),
+        )) {
             for (const single of Array.isArray(value) ? value : [value]) headers.push(`${name}: ${single}`);
         }
         upstream.write(`${headers.join('\r\n')}\r\n\r\n`);

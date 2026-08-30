@@ -7,7 +7,36 @@ import { ConnectionManager } from '../gateway/connection-manager';
 import { TicketAuthenticator } from '../gateway/ticket-auth';
 import { InMemoryTicketStore } from '../gateway/ticket-store';
 import { AbuseRateLimiter } from '../gateway/rate-limit';
-import { WsTransport } from './ws-transport';
+import { resolveClientIp, WsTransport } from './ws-transport';
+
+function requestFrom(peer: string, forwarded?: string): Parameters<typeof resolveClientIp>[0] {
+    return {
+        socket: { remoteAddress: peer },
+        headers: forwarded === undefined ? {} : { 'x-forwarded-for': forwarded },
+    } as Parameters<typeof resolveClientIp>[0];
+}
+
+describe('client ip', () => {
+    const trusted = ['10.0.0.0/8'];
+
+    it('낯선 소켓이 직접 붙으면 헤더를 보지 않는다', () => {
+        assert.equal(resolveClientIp(requestFrom('203.0.113.7', '198.51.100.1'), trusted), '203.0.113.7');
+    });
+
+    it('신뢰하는 홉 뒤에서는 사슬의 오른쪽부터 홉을 걷어낸다', () => {
+        // 왼쪽 끝은 클라이언트가 직접 적은 값이다. 프록시는 뒤에 이어 붙일 뿐 지우지 않는다.
+        const request = requestFrom('10.0.0.9', '1.2.3.4, 203.0.113.7, 10.0.0.8');
+        assert.equal(resolveClientIp(request, trusted), '203.0.113.7');
+    });
+
+    it('사슬이 전부 우리 홉이면 직접 본 주소를 쓴다', () => {
+        assert.equal(resolveClientIp(requestFrom('10.0.0.9', '10.0.0.8'), trusted), '10.0.0.9');
+    });
+
+    it('IPv4-mapped와 대괄호 표기를 같은 주소로 본다', () => {
+        assert.equal(resolveClientIp(requestFrom('10.0.0.9', '::ffff:203.0.113.7'), trusted), '203.0.113.7');
+    });
+});
 
 async function fixture(authTimeoutMs = 200, rateLimiter?: AbuseRateLimiter) {
     // Three tabs can open their handshakes at once behind one NAT before any has authenticated.

@@ -127,13 +127,36 @@ function addressMatches(address: string, rule: string): boolean {
     return (addressNumber & mask) === (networkNumber & mask);
 }
 
+/**
+ * 이 요청을 실제로 보낸 사람의 주소.
+ *
+ * 전달 사슬은 **오른쪽부터** 읽는다. 각 홉이 자기가 본 주소를 뒤에 잇기 때문에, 오른쪽 끝에서
+ * 신뢰하는 홉을 걷어내다 처음 만나는 낯선 주소가 우리가 아는 한 가장 앞쪽의 진짜 발신자다.
+ *
+ * 왼쪽 끝을 쓰면 안 된다. 그 자리는 **클라이언트가 직접 적은 값**이고, 프록시는 그 뒤에 이어
+ * 붙일 뿐 지우지 않는다. 예전에는 그 값을 그대로 썼기 때문에 헤더 한 줄로 IP당 연결 제한을
+ * 피할 수 있었다.
+ *
+ * 그래서 이 목록에는 우리 앞에 실제로 있는 홉(게이트웨이, 그 앞의 리버스 프록시)을 전부
+ * 적어야 한다. 하나라도 빠지면 그 홉의 주소가 모든 사용자의 주소로 보인다.
+ */
 export function resolveClientIp(request: IncomingMessage, trustedProxies: readonly string[]): string {
     const peer = normalizeIp(request.socket.remoteAddress);
-    if (!trustedProxies.some((rule) => addressMatches(peer, rule))) return peer;
+    const trusted = (address: string): boolean => trustedProxies.some((rule) => addressMatches(address, rule));
+    if (!trusted(peer)) return peer;
+
     const forwarded = request.headers['x-forwarded-for'];
-    const candidate = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0];
-    const normalized = normalizeIp(candidate?.trim());
-    return isIP(normalized) === 0 ? peer : normalized;
+    const chain = (Array.isArray(forwarded) ? forwarded : [forwarded ?? ''])
+        .flatMap((value) => value.split(','))
+        .map((value) => normalizeIp(value.trim()))
+        .filter((value) => isIP(value) !== 0);
+
+    for (let index = chain.length - 1; index >= 0; index -= 1) {
+        const address = chain[index] as string;
+        if (!trusted(address)) return address;
+    }
+    // 사슬이 비었거나 전부 우리 홉이다. 그러면 우리가 직접 본 주소가 최선이다.
+    return peer;
 }
 
 function canonicalOrigin(value: string): string | null {
