@@ -182,22 +182,34 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
+    /**
+     * 방 목록 한 쪽.
+     *
+     * **Redis에서 그 쪽만 읽는다.** 예전에는 대기 중인 방을 전부 읽어 요약한 뒤 20개로 잘랐다.
+     * 방이 500개면 목록 한 번에 방 GET 500번 + 서버 heartbeat GET 500번이었고, 그건 사람이
+     * 가장 자주 누르는 화면이다.
+     *
+     * 그래서 `total`은 집합의 크기다 - 방금 죽은 서버의 방이 잠깐 섞여 실제 표시 수보다 클 수
+     * 있다. 등록부가 heartbeat TTL(6초)마다 그런 항목을 걷어내므로 잠깐이고, 정확한 수를 위해
+     * 매번 전부 읽는 값보다 이쪽이 싸다.
+     */
     async list(page = 1) {
         const safePage = Number.isInteger(page) && page > 0 ? page : 1;
-        const ids = await this.redis.sortedSetMembers(this.keys.roomsWaiting(), 0, -1);
-        const rooms = (await Promise.all(ids.map((id) => this.readLiveRoom(id))))
-            .filter((room): room is RoomDirectoryEntry => room !== null)
-            .map((room) => this.toSummary(room));
-        const total = rooms.length;
+        const total = await this.redis.sortedSetSize(this.keys.roomsWaiting());
         const totalPages = Math.max(1, Math.ceil(total / ROOM_LIST_PAGE_SIZE));
         const currentPage = Math.min(safePage, totalPages);
         const offset = (currentPage - 1) * ROOM_LIST_PAGE_SIZE;
-        return {
-            rooms: rooms.slice(offset, offset + ROOM_LIST_PAGE_SIZE),
-            page: currentPage,
-            totalPages,
-            total,
-        };
+        const ids = await this.redis.sortedSetMembers(
+            this.keys.roomsWaiting(),
+            offset,
+            offset + ROOM_LIST_PAGE_SIZE - 1,
+        );
+        // 한 쪽의 방은 대부분 같은 서버에 몰려 있다. heartbeat를 방마다 다시 읽을 이유가 없다.
+        const servers = new Map<string, GameServerHeartbeat | null>();
+        const rooms = (await Promise.all(ids.map((id) => this.readLiveRoom(id, servers))))
+            .filter((room): room is RoomDirectoryEntry => room !== null)
+            .map((room) => this.toSummary(room));
+        return { rooms, page: currentPage, totalPages, total };
     }
 
     async create(principal: ActorId | RoomPrincipal, dto: CreateRoomDto, clientIp?: string) {
@@ -641,7 +653,18 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         return server.waitingRooms + server.playingRooms + server.connections / MAX_PLAYERS_PER_ROOM + server.loopLagMs / 1000;
     }
 
-    private async readServer(serverId: string): Promise<GameServerHeartbeat | null> {
+    private async readServer(
+        serverId: string,
+        cache?: Map<string, GameServerHeartbeat | null>,
+    ): Promise<GameServerHeartbeat | null> {
+        const cached = cache?.get(serverId);
+        if (cached !== undefined) return cached;
+        const server = await this.#readServerUncached(serverId);
+        cache?.set(serverId, server);
+        return server;
+    }
+
+    async #readServerUncached(serverId: string): Promise<GameServerHeartbeat | null> {
         const raw = await this.redis.get(this.keys.gameServer(serverId));
         if (!raw) {
             return null;
@@ -654,14 +677,17 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
-    private async readLiveRoom(roomId: string): Promise<RoomDirectoryEntry | null> {
+    private async readLiveRoom(
+        roomId: string,
+        servers?: Map<string, GameServerHeartbeat | null>,
+    ): Promise<RoomDirectoryEntry | null> {
         const raw = await this.redis.get(this.keys.room(roomId));
         if (!raw) {
             return null;
         }
         try {
             const room = JSON.parse(raw) as RoomDirectoryEntry;
-            if (!room.serverId || !(await this.readServer(room.serverId))) {
+            if (!room.serverId || !(await this.readServer(room.serverId, servers))) {
                 return null;
             }
             return room;

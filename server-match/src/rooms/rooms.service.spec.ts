@@ -36,7 +36,13 @@ class FakeRedis {
         await this.set(key, String(count), ttl);
         return count;
     }
-    async sortedSetMembers(key: string): Promise<string[]> { return this.sorted.get(key) ?? []; }
+    readonly rangeReads: { key: string; start: number; stop: number }[] = [];
+    async sortedSetMembers(key: string, start = 0, stop = -1): Promise<string[]> {
+        this.rangeReads.push({ key, start, stop });
+        const members = this.sorted.get(key) ?? [];
+        return stop === -1 ? members.slice(start) : members.slice(start, stop + 1);
+    }
+    async sortedSetSize(key: string): Promise<number> { return (this.sorted.get(key) ?? []).length; }
     readonly expired: string[] = [];
     async expire(key: string): Promise<void> {
         this.expired.push(key);
@@ -356,4 +362,26 @@ test('전부 가득 차면 배정할 서버가 없다', async () => {
     const service = makeService(redis);
 
     await assert.rejects(() => (service as any).selectServer());
+});
+
+test('방 목록은 요청한 쪽만 Redis에서 읽는다', async () => {
+    const redis = new FakeRedis();
+    const roomIds = Array.from({ length: 45 }, (_, index) => `room-${index}`);
+    redis.sorted.set('dev:rooms:waiting', roomIds);
+    for (const roomId of roomIds) {
+        await redis.set(`dev:room:${roomId}`, JSON.stringify({
+            roomId, serverId: 'game-1', name: roomId, roomCode: 'ABC234', playerCount: 1, capacity: 8, status: 'WAITING',
+        }), 30);
+    }
+    await redis.set('dev:game-server:game-1', JSON.stringify({ serverId: 'game-1', protocolVersion: PROTOCOL_VERSION }), 30);
+    const service = makeService(redis);
+
+    const page = await service.list(2);
+
+    assert.equal(page.total, 45);
+    assert.equal(page.totalPages, 3);
+    assert.equal(page.rooms.length, 20);
+    assert.equal(page.rooms[0]?.id, 'room-20');
+    // 방이 500개여도 목록 한 번은 20개만 읽어야 한다. 사람이 가장 자주 누르는 화면이다.
+    assert.deepEqual(redis.rangeReads, [{ key: 'dev:rooms:waiting', start: 20, stop: 39 }]);
 });

@@ -107,6 +107,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return this.client.zrange(key, start, stop);
     }
 
+    async sortedSetSize(key: string): Promise<number> {
+        return this.client.zcard(key);
+    }
+
     async addToSortedSet(key: string, score: number, member: string): Promise<void> {
         await this.client.zadd(key, score, member);
     }
