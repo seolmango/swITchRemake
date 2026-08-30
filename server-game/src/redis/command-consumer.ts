@@ -338,7 +338,7 @@ export class CommandConsumer {
      * 재우는 중인 서버는 받지 않는다. 곧 사라질 프로세스에 방을 얹으면 그 방이 한 번 더
      * 옮겨 다녀야 하고, 사람들은 재접속을 두 번 겪는다.
      */
-    #adoptRoom(command: ControlCommand, payload: AdoptRoomPayload): ControlReply<Record<string, never>> {
+    async #adoptRoom(command: ControlCommand, payload: AdoptRoomPayload): Promise<ControlReply<Record<string, never>>> {
         if (payload.serverId !== this.#options.serverId) {
             return failure(this.#options.serverId, command, ControlErrorCode.RoomNotFound);
         }
@@ -349,10 +349,23 @@ export class CommandConsumer {
         if (!adopted.ok) return failure(this.#options.serverId, command, adopted.code);
         // 자리 표를 먼저 여기로 돌린다. 방 디렉터리만 바뀌고 표가 옛 서버를 가리키면 매칭 서버가
         // 둘을 대조해 전원을 ROOM_UNAVAILABLE로 튕긴다.
-        void this.#options.registry.claimAdoptedRoom(
-            payload.roomId,
-            payload.members.map((member) => member.userId),
-        );
+        //
+        // 기다린다. 예전에는 던져 놓고 성공을 답했는데, 그러면 표가 실제로 옮겨졌는지 모르는 채
+        // 인계가 확정되고 Redis 실패는 unhandled rejection으로 프로세스를 내린다. 일부만 옮겨진
+        // 방은 그 사람들만 돌아오지 못하는, 가장 알아채기 어려운 상태다.
+        try {
+            await this.#options.registry.claimAdoptedRoom(
+                payload.roomId,
+                payload.members.map((member) => member.userId),
+            );
+        } catch (error: unknown) {
+            this.#logger(`인계받은 방의 자리 표를 옮기지 못했다 roomId=${payload.roomId}`, error);
+            // 방을 접어 두면 넘긴 쪽이 다시 시도할 수 있다. 표가 옛 서버를 가리키는 채로 두는
+            // 편이, 여기 있지만 아무도 못 찾는 방으로 두는 것보다 낫다.
+            adopted.value.close();
+            this.#options.rooms.sweep();
+            return failure(this.#options.serverId, command, ControlErrorCode.Internal);
+        }
         // 방이 여기 있다는 사실을 즉시 알린다. heartbeat 주기를 기다리면 그동안의 재접속이
         // 옛 서버로 간다.
         this.#options.registry.requestPublish();

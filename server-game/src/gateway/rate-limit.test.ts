@@ -17,6 +17,21 @@ it('keeps user/IP abuse streaks across connection replacement', () => {
     }
 });
 
+it('지나간 창의 버킷과 끝난 쿨다운을 스스로 회수한다', () => {
+    let now = 0;
+    const limiter = new AbuseRateLimiter(() => now);
+    // 게스트는 접속마다 새 신원이라, 회수가 없으면 이 지도는 접속 수만큼 자란다.
+    for (let connectionId = 1; connectionId <= 200; connectionId += 1) {
+        limiter.check('input', { connectionId, ip: '1.2.3.4', userId: `g:${connectionId}` }, 90, 1_000);
+        limiter.cooldown('emoji', { connectionId, ip: '1.2.3.4', userId: `g:${connectionId}` }, 1_000, ['user']);
+    }
+    assert.ok(limiter.size() >= 400);
+
+    now = 60_000;
+    limiter.check('input', { connectionId: 201, ip: '1.2.3.4', userId: 'g:201' }, 90, 1_000);
+    assert.ok(limiter.size() <= 3, `회수 뒤에도 ${limiter.size()}개가 남았다`);
+});
+
 it('does not combine per-connection traffic from clients sharing an IP', () => {
     const limiter = new AbuseRateLimiter(() => 100);
     const policy = { scopes: ['connection', 'user'] as const };

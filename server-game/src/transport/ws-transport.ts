@@ -427,7 +427,6 @@ export class WsTransport implements GameTransport {
             this.#sockets.delete(socket);
             this.#options.connections.close(open.id);
             this.#rateLimitViolations.flushConnection(open.id);
-            this.#rateLimiter.releaseConnection(open.id);
             if (authenticated !== null) this.#handlers?.onDisconnect(authenticated, reason.toString('utf8'));
         });
         socket.on('error', () => { /* close performs the single cleanup path */ });

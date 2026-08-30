@@ -307,11 +307,10 @@ async function main(): Promise<void> {
     // ── 시계 ──
     // 방 상태 전이(카운트다운, POST_GAME, 재접속 유예)는 시뮬레이션 tick이 아니라 실제 시각으로 돈다.
     // 경기가 없는 방도 진행돼야 하므로 스케줄러와 분리한다.
+    // sweep이 방마다 advance를 부른다. 예전에는 그 위에서 한 번 더 돌아 모든 방이 100ms마다
+    // 두 번 전이했고, advance는 방 목록 표시값을 JSON으로 두 번 뜨므로 그 비용도 두 배였다.
     const roomTimer = setInterval(() => {
         serverTick += 1;
-        for (const projection of rooms.projections()) {
-            rooms.get(projection.roomId)?.advance();
-        }
         rooms.sweep();
     }, 100);
 
