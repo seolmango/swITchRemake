@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { anchorFromPoint, placeAnchor } from './touchLayout.ts';
+import { playerLabel } from './playerLabel.ts';
+import { anchorFromPoint, placeAnchor } from './touch/touchLayout.ts';
+
+describe('playerLabel', () => {
+    it('shows the one-based playerId without an offset', () => {
+        expect(playerLabel(1)).toBe('1');
+        expect(playerLabel(8)).toBe('8');
+    });
+});
 
 const viewport = { width: 800, height: 400 };
 
