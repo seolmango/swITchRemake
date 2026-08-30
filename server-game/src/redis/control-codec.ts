@@ -6,6 +6,7 @@ import {
     type ControlCommand,
     type ControlReply,
     type CreateRoomPayload,
+    type DeleteReplayPayload,
     type KickUserPayload,
     type ReleaseSeatPayload,
     type ReserveJoinPayload,
@@ -86,6 +87,17 @@ function kickUserPayload(value: unknown): value is KickUserPayload {
         && boundedText(value['reason'], 256);
 }
 
+function deleteReplayPayload(value: unknown): value is DeleteReplayPayload {
+    return object(value) && boundedText(value['replayId'], 128) && boundedText(value['storageKey'], 1024);
+}
+
+/**
+ * 여기 없는 명령은 malformed로 거절된다.
+ *
+ * `DeleteReplay`가 빠져 있었다. 소비자에는 처리기가 멀쩡히 있었는데 이 목록을 지나지 못해서
+ * 리플레이 삭제 명령이 **하나도** 도달하지 못했고, 보관 기간이 지난 파일이 디스크에 계속
+ * 남았다. 명령을 더할 때 여기도 같이 늘리지 않으면 같은 일이 반복된다.
+ */
 function validPayload(type: string, payload: unknown): boolean {
     switch (type) {
         case CommandType.CreateRoom: return createRoomPayload(payload);
@@ -95,6 +107,7 @@ function validPayload(type: string, payload: unknown): boolean {
         case CommandType.KickUser: return kickUserPayload(payload);
         case CommandType.DrainServer: return object(payload) && text(payload['serverId']);
         case CommandType.AdoptRoom: return adoptRoomPayload(payload);
+        case CommandType.DeleteReplay: return deleteReplayPayload(payload);
         default: return false;
     }
 }

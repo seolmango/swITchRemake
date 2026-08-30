@@ -343,6 +343,41 @@ test('command codec가 wire 계약과 입력 상한을 강제한다', () => {
     })));
 });
 
+/**
+ * 코덱의 허용 목록에서 빠진 명령은 소비자에 처리기가 있어도 도달하지 못한다.
+ *
+ * 실제로 `DELETE_REPLAY`가 그랬다. 처리기는 멀쩡한데 코덱이 malformed로 잘라서 리플레이가
+ * 한 건도 지워지지 않았다. 명령 종류를 늘리면 이 표도 함께 늘어나야 실패가 여기서 잡힌다.
+ */
+test('모든 CommandType이 코덱을 통과한다', () => {
+    const samples: Record<string, unknown> = {
+        [CommandType.CreateRoom]: createCommand('all-create').payload,
+        [CommandType.ReserveJoin]: { roomId: 'room-1', userId: 1, nickname: 'p', stats: null, password: null },
+        [CommandType.ReserveResume]: { roomId: 'room-1', userId: 1 },
+        [CommandType.ReleaseSeat]: { roomId: 'room-1', userId: 1 },
+        [CommandType.KickUser]: { roomId: 'room-1', userId: 1, reason: 'kicked' },
+        [CommandType.DrainServer]: { serverId: 'game-1' },
+        [CommandType.AdoptRoom]: {
+            serverId: 'game-1', roomId: 'room-1', roomCode: 'ABC234', matchId: 'match-1',
+            name: 'room', mapId: 'map', mode: 'MATCH', password: null, capacity: 8,
+            members: [{
+                userId: 1, playerId: 1, slot: 1, nickname: 'p', guest: false, stats: null,
+                loadout: 'DASH', joinedOrder: 0, colorIndex: 0, isHost: true,
+            }],
+        },
+        [CommandType.DeleteReplay]: { replayId: 'replay-1', storageKey: 'match-1.swrp' },
+    };
+
+    for (const type of Object.values(CommandType)) {
+        const payload = samples[type];
+        assert.ok(payload !== undefined, `${type}의 표본이 없다 — 명령을 더했으면 이 표도 더해야 한다`);
+        assert.doesNotThrow(
+            () => decodeCommand(JSON.stringify(command(`all-${type}`, type, payload))),
+            `${type}이 코덱을 통과하지 못한다`,
+        );
+    }
+});
+
 test('JOIN/RESUME/RELEASE/KICK 명령이 같은 RoomManager와 TicketStore를 사용한다', async () => {
     const h = harness();
     const send = async (id: string, value: ControlCommand): Promise<ControlReply> => {
