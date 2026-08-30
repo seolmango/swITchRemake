@@ -5,7 +5,7 @@ import { NETWORK } from './network';
  * 밸런스 수치. 환경 변수가 아니라 버전 관리되는 타입 안전한 파일에 둔다.
  *
  * 이동 속도와 스킬 수치는 **레거시에서 역산한 값**이다. 레거시 클라이언트는 30Hz로 돌면서
- * milli-tile 단위로 이동량을 보냈고(`legacy/public/main.js:272-275`), 타일은 256px다.
+ * milli-tile 단위로 이동량을 보냈고(레거시 `main.js:272-275`), 타일은 256px다.
  *
  *   58 milli-tile/tick × 30 tick/s = 1.74 tile/s × 256 px/tile ≈ 445 px/s
  *
@@ -77,7 +77,7 @@ export const SPEED = Object.freeze({
  * 중 하나. 술래가 되면 switch 슬롯이 비활성이라 사실상 고른 스킬 하나만 남는다.
  *
  * 쿨타임은 **술래일 때 두 배로 빨리 찬다.** 레거시가 매 tick 2씩 깎았다
- * (`legacy/public/main.js:275`). 쫓는 쪽이 더 자주 쓸 수 있어야 추격이 성립한다.
+ * (레거시 `main.js:275`). 쫓는 쪽이 더 자주 쓸 수 있어야 추격이 성립한다.
  */
 export const SKILLS = Object.freeze({
     /**

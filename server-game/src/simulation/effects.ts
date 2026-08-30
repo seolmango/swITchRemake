@@ -72,7 +72,7 @@ export function currentSpeed(player: PlayerState): number {
 /**
  * 쿨타임을 tick 단위로 깎는다.
  *
- * 술래는 두 배로 빨리 찬다. 레거시가 매 tick 2씩 깎았고(`legacy/public/main.js:275`),
+ * 술래는 두 배로 빨리 찬다. 레거시가 매 tick 2씩 깎았고(레거시 `main.js:275`),
  * 쫓는 쪽이 스킬을 더 자주 써야 추격이 성립한다.
  */
 /**

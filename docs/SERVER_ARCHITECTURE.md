@@ -8,7 +8,9 @@
 
 - 클라이언트 렌더링 및 서버 스냅샷 프로토콜: `docs/ENGINE.md`
 - 맵 빌드 도구: `tools/MapBuilder/builder.py`
-- 레거시 게임 루프 참고 코드: `legacy/app.js`
+- 레거시 게임 루프 참고 코드: 저장소에서 지웠다. 주석이 인용하는 `app.js`, `public/main.js`,
+  `public/script/RenderingManager.js`는 `git show c425547:legacy/app.js`처럼 꺼내 본다.
+  이전 React 클라이언트도 같은 커밋의 `switch-again-client-main/`에 있다.
 - 경기 기록과 재생: `docs/REPLAY.md`
 - 아직 구상 단계인 운영·공유 기능: `docs/FUTURE.md`
 

@@ -16,7 +16,7 @@ interface SwitchEntry {
 
 /**
  * 스위치를 시도한 자리에 사거리만큼의 원을 남긴다. 레거시의 연출을 그대로 옮겼다
- * (`switch-again-client-main/src/components/Game/Engine.js`의 skill.type 1~8 분기).
+ * (이전 React 클라이언트 `Engine.js`의 skill.type 1~8 분기).
  *
  * 색이 대상에게서 오는 것이 핵심이다. 주변 사람은 "누가 누구를 노렸는지"를 색으로 읽는다.
  * 시전자 색으로 칠하면 그 정보가 사라진다.
