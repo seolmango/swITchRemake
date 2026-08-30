@@ -11,6 +11,7 @@ const ERROR_KEYS: Readonly<Record<string, string>> = {
     RejoinCooldown: 'rooms.errors.rejoinCooldown',
     KICKED_FROM_ROOM: 'rooms.errors.kickedFromRoom',
     KickedFromRoom: 'rooms.errors.kickedFromRoom',
+    GAME_RESTRICTED: 'rooms.errors.gameRestricted',
     ACTIVE_ROOM_MISSING: 'lobby.resumeFailed',
 };
 

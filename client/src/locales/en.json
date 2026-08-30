@@ -58,7 +58,8 @@
       "joinRateLimited": "Too many join attempts. Try again shortly.",
       "joinRateLimitedRetry": "Too many join attempts. Try again in {{seconds}} seconds.",
       "rejoinCooldown": "Please wait a moment before rejoining this room.",
-      "kickedFromRoom": "You were removed from this room and cannot rejoin it."
+      "kickedFromRoom": "You were removed from this room and cannot rejoin it.",
+      "gameRestricted": "This account is restricted from playing. Contact support if you think this is a mistake."
     }
   },
   "notFound": {

@@ -58,7 +58,8 @@
       "joinRateLimited": "참가 요청이 너무 많습니다. 잠시 후 다시 시도하세요.",
       "joinRateLimitedRetry": "참가 요청이 너무 많습니다. {{seconds}}초 뒤 다시 시도하세요.",
       "rejoinCooldown": "방을 나간 뒤에는 잠시 후 다시 참가할 수 있습니다.",
-      "kickedFromRoom": "이 방에서 강퇴되어 다시 참가할 수 없습니다."
+      "kickedFromRoom": "이 방에서 강퇴되어 다시 참가할 수 없습니다.",
+      "gameRestricted": "이 계정은 경기 참여가 제한되어 있습니다. 잘못된 조치라고 생각되면 문의해 주세요."
     }
   },
   "notFound": {

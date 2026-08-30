@@ -56,6 +56,33 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
     }
 
     /**
+     * 이 계정이 지금 경기 제한을 받고 있는가.
+     *
+     * BAN과 달리 계정 상태 컬럼을 바꾸지 않는다 - 로그인은 되고 경기만 막는 처분이라, 상태로
+     * 표현하면 밴과 구분이 사라진다. 그래서 판정할 때마다 활성 제재를 본다.
+     *
+     * 예전에는 이 타입이 `sanctions` 행으로 저장되기만 하고 **아무 데서도 읽히지 않았다.**
+     * 운영자는 제한을 걸었다고 믿고 대상은 그대로 놀았다.
+     */
+    async isGameRestricted(userId: number, now = new Date()): Promise<boolean> {
+        const [restriction] = await this.db.select({ id: schema.sanctions.id })
+            .from(schema.sanctions)
+            .leftJoin(
+                schema.sanctionRevocations,
+                eq(schema.sanctionRevocations.sanctionId, schema.sanctions.id),
+            )
+            .where(and(
+                eq(schema.sanctions.userId, userId),
+                eq(schema.sanctions.type, 'GAME_RESTRICT'),
+                lte(schema.sanctions.startsAt, now),
+                or(isNull(schema.sanctions.expiresAt), gt(schema.sanctions.expiresAt, now)),
+                isNull(schema.sanctionRevocations.sanctionId),
+            ))
+            .limit(1);
+        return restriction !== undefined;
+    }
+
+    /**
      * 제재를 건다.
      *
      * `tx`를 주면 **부르는 쪽의 트랜잭션 안에서** 돈다. 신고 사건에서 제재를 걸 때가 그렇다 —

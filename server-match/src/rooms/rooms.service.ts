@@ -508,6 +508,14 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         if (status !== 'ACTIVE') {
             throw new ForbiddenException('Account is not active');
         }
+        // 경기 제한은 로그인은 두고 방만 막는 처분이다. 방으로 들어오는 길이 전부 여기를
+        // 지나므로 판정도 여기 한 곳에 둔다.
+        if (await this.sanctions.isGameRestricted(user.id)) {
+            throw new ForbiddenException({
+                code: 'GAME_RESTRICTED',
+                message: 'This account is restricted from playing',
+            });
+        }
         return { id: user.id, nickname: user.nickname, guest: false, stats: lobbyStatsFrom(user.stats) };
     }
 

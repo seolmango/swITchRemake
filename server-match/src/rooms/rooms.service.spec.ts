@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
 import { CONTROL_VERSION, CommandType, ControlErrorCode, PROTOCOL_VERSION, type ControlCommand, type ControlReply } from 'shared';
 import { RoomsService } from './rooms.service';
 
@@ -62,7 +62,7 @@ function makeService(redis = new FakeRedis(), stats: unknown = null): RoomsServi
             }),
         }),
     };
-    const sanctions = { reconcileLoginStatus: async () => 'ACTIVE' };
+    const sanctions = { reconcileLoginStatus: async () => 'ACTIVE', isGameRestricted: async () => false };
     const results = {
         addAssignmentByRoom: async () => '11111111-1111-4111-8111-111111111111',
         removeAssignment: async () => undefined,
@@ -384,4 +384,24 @@ test('방 목록은 요청한 쪽만 Redis에서 읽는다', async () => {
     assert.equal(page.rooms[0]?.id, 'room-20');
     // 방이 500개여도 목록 한 번은 20개만 읽어야 한다. 사람이 가장 자주 누르는 화면이다.
     assert.deepEqual(redis.rangeReads, [{ key: 'dev:rooms:waiting', start: 20, stop: 39 }]);
+});
+
+test('경기 제한 계정은 방으로 들어오는 모든 길에서 막힌다', async () => {
+    const redis = new FakeRedis();
+    const service = makeService(redis);
+    // 제재는 sanctions 행으로만 저장되고 아무 데서도 읽히지 않았다. 운영자는 걸었다고 믿고
+    // 대상은 그대로 놀았다.
+    (service as unknown as { sanctions: { isGameRestricted: () => Promise<boolean> } })
+        .sanctions.isGameRestricted = async () => true;
+
+    for (const attempt of [
+        () => service.create(1, { name: 'room' } as never),
+        () => service.quickJoin(1),
+        () => service.join(1, 'room-1'),
+        () => service.resume(1, 'room-1'),
+    ]) {
+        await assert.rejects(attempt(), (error: unknown) =>
+            error instanceof ForbiddenException
+            && (error.getResponse() as { code?: string }).code === 'GAME_RESTRICTED');
+    }
 });
