@@ -136,6 +136,17 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
             if (!sanction) {
                 throw new NotFoundException('Sanction not found');
             }
+            /*
+             * 사용자 행을 apply()와 **같은 순서로** 잠근다.
+             *
+             * 예전에는 제재 행만 잠갔다. 그래서 새 BAN 적용과 옛 BAN 취소가 겹치면, 취소 쪽의
+             * "다른 활성 BAN이 있나" 조회가 아직 커밋되지 않은 새 BAN을 못 보고 계정을 ACTIVE로
+             * 되돌렸다. 1분 뒤 조정 루프가 고치지만 그 사이에는 밴당한 사람이 로그인한다.
+             */
+            await tx.select({ id: schema.users.id })
+                .from(schema.users)
+                .where(eq(schema.users.id, sanction.userId))
+                .for('update');
 
             const [existingRevocation] = await tx.select({ sanctionId: schema.sanctionRevocations.sanctionId })
                 .from(schema.sanctionRevocations)

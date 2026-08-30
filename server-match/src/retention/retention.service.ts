@@ -84,10 +84,12 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
             const marked = await this.markExpiredReplays(now);
             const replayResult = await this.deleteReplayFiles();
             const matchesDeleted = await this.deleteExpiredMatches(now);
-            if (marked > 0 || replayResult.attempted > 0 || matchesDeleted > 0) {
+            const sessionsDeleted = await this.deleteExpiredSessions(now);
+            if (marked > 0 || replayResult.attempted > 0 || matchesDeleted > 0 || sessionsDeleted > 0) {
                 this.logger.log(
                     `Retention marked=${marked} replayDeleted=${replayResult.deleted} `
-                    + `replayFailed=${replayResult.attempted - replayResult.deleted} matchesDeleted=${matchesDeleted}`,
+                    + `replayFailed=${replayResult.attempted - replayResult.deleted} matchesDeleted=${matchesDeleted} `
+                    + `sessionsDeleted=${sessionsDeleted}`,
                 );
             }
         } finally {
@@ -212,6 +214,36 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
             deleted += removed.length;
         }
         return { attempted: rows.length, deleted };
+    }
+
+    /**
+     * 끝난 세션 행을 지운다.
+     *
+     * 세션은 밴과 탈퇴에서만 지워졌다. 그 밖에는 만료돼도, 폐기돼도 행이 남았고 refresh는
+     * 회전할 때마다 새 행을 만든다. 인증 경로가 매번 읽는 테이블이라 그대로 두면 로그인이
+     * 시간에 비례해 느려진다.
+     *
+     * 살아 있는 세션은 건드리지 않는다 - 조건이 "만료됐거나 폐기됐고, 그러고도 보관 기간이
+     * 지났다"이다.
+     */
+    private async deleteExpiredSessions(now: Date): Promise<number> {
+        const rows = await this.db.execute<IdRow>(sql`
+            WITH candidates AS (
+                SELECT session.id
+                FROM sessions session
+                WHERE (session.revoked_at IS NOT NULL OR session.expires_at < ${now}::timestamptz)
+                  AND COALESCE(session.revoked_at, session.expires_at)
+                      < ${daysAgo(now, this.settings.sessionDays)}::timestamptz
+                ORDER BY session.id
+                LIMIT 500
+                FOR UPDATE OF session SKIP LOCKED
+            )
+            DELETE FROM sessions session
+            USING candidates candidate
+            WHERE session.id = candidate.id
+            RETURNING session.id
+        `);
+        return rows.length;
     }
 
     private async deleteExpiredMatches(now: Date): Promise<number> {

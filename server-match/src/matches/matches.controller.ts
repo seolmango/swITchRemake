@@ -1,4 +1,4 @@
-import { Controller, Get, HttpStatus, Param, Req, Res } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Param, ParseUUIDPipe, Req, Res } from '@nestjs/common';
 import type { ActorId } from 'shared';
 import { NeedActor } from '../auth/need-actor.decorator';
 import { RateLimiter } from '../ratelimiter.decorator';
@@ -16,7 +16,8 @@ export class MatchesController {
     @RateLimiter({ anon: 0, guest: 30, account: 60, ttl: 60_000 })
     async getResult(
         @Req() req: AuthenticatedRequest,
-        @Param('matchId') matchId: string,
+        // uuid가 아니면 Postgres 파싱 오류로 500이 난다. 형식은 여기서 거른다.
+        @Param('matchId', new ParseUUIDPipe()) matchId: string,
         @Res({ passthrough: true }) response: StatusResponse,
     ) {
         const result = await this.matches.getResult(matchId, req.user.id);

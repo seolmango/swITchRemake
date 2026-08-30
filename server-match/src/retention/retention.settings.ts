@@ -14,6 +14,15 @@ export interface RetentionSettings {
     replayPerUserMatches: number;
     /** 정리 회차 사이의 간격(분). */
     intervalMinutes: number;
+    /**
+     * 끝난 세션 행을 남기는 기간.
+     *
+     * refresh는 회전할 때마다 새 행을 만든다 - 활성 사용자 한 명이 하루 100행쯤 쌓는다.
+     * 만료·폐기된 행은 인증에 쓰이지 않지만 지우는 사람이 없으면 테이블과 인덱스만 부푼다.
+     * 바로 지우지 않는 이유는 "어느 기기에서 언제 로그인했나"를 사용자가 잠시 되짚을 수 있어야
+     * 하기 때문이다.
+     */
+    sessionDays: number;
 }
 
 export const RETENTION_DEFAULTS: RetentionSettings = {
@@ -21,6 +30,7 @@ export const RETENTION_DEFAULTS: RetentionSettings = {
     replayDays: 7,
     replayPerUserMatches: 50,
     intervalMinutes: 10,
+    sessionDays: 30,
 };
 
 const positiveInteger = (raw: string | undefined, fallback: number): number => {
@@ -44,5 +54,6 @@ export function retentionSettings(env: NodeJS.ProcessEnv = process.env): Retenti
             env.RETENTION_INTERVAL_MINUTES,
             RETENTION_DEFAULTS.intervalMinutes,
         ),
+        sessionDays: positiveInteger(env.SESSION_RETENTION_DAYS, RETENTION_DEFAULTS.sessionDays),
     };
 }

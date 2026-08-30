@@ -145,3 +145,16 @@ test('삭제가 연달아 실패하면 그 회차를 접는다', async () => {
 
     assert.equal(state.replayRequests.length, 3, '세 번 연속 실패하면 나머지는 다음 회차로 미룬다');
 });
+
+test('끝난 세션 행을 보관 기간이 지난 뒤에 지운다', async () => {
+    const state = harness();
+    await state.service.runOnce(new Date('2026-08-29T00:00:00Z'));
+
+    // 회차의 마지막 쿼리가 세션 정리다. 순서가 바뀌면 여기서 잡힌다.
+    const sessions = queryText(state.queries[state.queries.length - 1]);
+    assert.match(sessions, /delete from sessions/);
+    // 살아 있는 세션은 건드리지 않는다 - 끝났고, 그러고도 보관 기간이 지난 것만이다.
+    assert.match(sessions, /session\.revoked_at is not null or session\.expires_at < \$\d+/);
+    assert.match(sessions, /coalesce\(session\.revoked_at, session\.expires_at\) < \$\d+::timestamptz/);
+    assert.match(sessions, /for update of session skip locked/);
+});

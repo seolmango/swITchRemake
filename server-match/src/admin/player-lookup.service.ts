@@ -140,11 +140,13 @@ export class PlayerLookupService {
     /** 감사 로그는 append-only다. 커서는 id 하나면 된다 — 시각이 같아도 순서가 흔들리지 않는다. */
     async auditLog(limit: number, before?: number) {
         const size = Math.min(MAX_AUDIT_PAGE, Math.max(1, limit));
+        // 커서는 화면이 준 값이라 숫자가 아닐 수 있다. NaN을 그대로 넘기면 쿼리가 터진다.
+        const cursor = Number.isSafeInteger(before) ? before : undefined;
         const rows = await this.db.execute<AuditRow>(sql`
             SELECT id, actor, action, target_type AS "targetType", target_id AS "targetId",
                    reason, created_at AS "createdAt"
             FROM admin_audit_log
-            ${before === undefined ? sql`` : sql`WHERE id < ${before}`}
+            ${cursor === undefined ? sql`` : sql`WHERE id < ${cursor}`}
             ORDER BY id DESC
             LIMIT ${size + 1}
         `);

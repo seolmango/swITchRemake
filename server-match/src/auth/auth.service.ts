@@ -154,7 +154,6 @@ export class AuthService {
             throw new UnauthorizedException('Account is not active');
         }
 
-        await this.sessionService.purgeExpiredEncryptedIps();
         return this.createSession(user.id, user.email, user.nickname, metadata);
     }
 
@@ -366,7 +365,6 @@ export class AuthService {
                 // 커밋 뒤 Redis 기록 실패로 새 토큰 전달까지 실패하면 정상 사용자가 복구할 수 없다.
             }
         }
-        await this.sessionService.purgeExpiredEncryptedIps(now);
         return {
             kind: result.kind,
             accessToken: result.accessToken,

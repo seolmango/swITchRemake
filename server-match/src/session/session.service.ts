@@ -43,8 +43,6 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
 
     async list(userId: number, currentSessionId: string) {
         const now = new Date();
-        await this.purgeExpiredEncryptedIps(now);
-
         const rows = await this.db.select({
             id: schema.sessions.id,
             deviceLabel: schema.sessions.deviceLabel,
@@ -130,6 +128,13 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
+    /**
+     * 보관 기간이 지난 원본 IP를 지운다. **주기 작업에서만 부른다.**
+     *
+     * 조건에 사용자 구분이 없어서 세션 테이블 전체를 훑는다. 예전에는 로그인·토큰 회전·세션
+     * 목록 조회가 매번 이걸 불렀는데, 그 테이블은 로그인마다 커지는 테이블이라 인증 경로가
+     * 시간에 비례해 느려지는 모양이었다. 정리는 이미 도는 타이머가 한다.
+     */
     async purgeExpiredEncryptedIps(now = new Date()): Promise<void> {
         const cutoff = new Date(now.getTime() - this.ipRetentionDays * 24 * 60 * 60 * 1000);
         await this.db.update(schema.sessions).set({ ipEncrypted: null }).where(and(
