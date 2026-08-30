@@ -23,6 +23,7 @@ type ErrorMessage = Extract<ServerMessage, { type: 'error' }>;
 type SkillRejectedMessage = Extract<ServerMessage, { type: 'skill.rejected' }>;
 type PlayerBlinkedMessage = Extract<ServerMessage, { type: 'player.blinked' }>;
 type PlayerSkillAreaMessage = Extract<ServerMessage, { type: 'player.skillArea' }>;
+type PlayerEliminatedMessage = Extract<ServerMessage, { type: 'player.eliminated' }>;
 type ClientMessageBody = ClientMessage extends infer Message
     ? Message extends ClientMessage ? Omit<Message, 'v' | 'requestId'> : never
     : never;
@@ -127,6 +128,7 @@ class GameSession {
     private readonly blinkListeners = new Set<(payload: PlayerBlinkedMessage['payload']) => void>();
     #trainingPads: readonly TrainingPad[] = [];
     private readonly skillAreaListeners = new Set<(payload: PlayerSkillAreaMessage['payload']) => void>();
+    private readonly eliminatedListeners = new Set<(payload: PlayerEliminatedMessage['payload']) => void>();
     private pageUnloading = false;
     private pingTimer: number | null = null;
     private reconnectTimer: number | null = null;
@@ -175,6 +177,15 @@ class GameSession {
     subscribeSkillAreas = (listener: (payload: PlayerSkillAreaMessage['payload']) => void): (() => void) => {
         this.skillAreaListeners.add(listener);
         return () => this.skillAreaListeners.delete(listener);
+    };
+
+    /**
+     * 탈락. 스냅샷만으로는 알 수 없다 — 시야에서 사라진 것과 탈락한 것이 똑같이
+     * "목록에 없음"으로 보이기 때문이다. 둘을 구분해 주는 유일한 신호가 이 메시지다.
+     */
+    subscribeEliminations = (listener: (payload: PlayerEliminatedMessage['payload']) => void): (() => void) => {
+        this.eliminatedListeners.add(listener);
+        return () => this.eliminatedListeners.delete(listener);
     };
 
     /**
@@ -401,6 +412,7 @@ class GameSession {
                 for (const listener of this.skillAreaListeners) listener(message.payload);
                 break;
             case 'player.eliminated':
+                for (const listener of this.eliminatedListeners) listener(message.payload);
                 this.setState({
                     trainingPlayers: this.state.trainingPlayers.map((player) =>
                         player.id === message.payload.playerId ? { ...player, alive: false } : player),

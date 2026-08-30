@@ -25,6 +25,7 @@ import { GameLoadingOverlay } from '../game/hud/GameLoadingOverlay.tsx';
 import { isValidMatchId } from '../utils/matchId.ts';
 import { Icon } from '../components/common/Icon.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
+import { matchSfx, useMatchSfx } from '../audio/matchSfx.ts';
 
 const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { iconUrl: string; labelKey: string }> = {
     [SkillId.Dash]: { iconUrl: dashIcon, labelKey: 'lobby.skills.dash' },
@@ -76,10 +77,14 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
     const mapId = session.starting?.mapId ?? session.lobby?.mapId ?? null;
     const mapBundleHash = session.mapBundleHash;
 
+    useMatchSfx();
+
     const applySnapshot = useCallback((engine: SwitchEngine, frame: ArrayBuffer) => {
         const simulationHz = gameSession.getSnapshot().starting?.gameplay.simulationHz;
         const snapshot = engine.applySnapshot(frame, simulationHz);
         gameSession.updateHudSnapshot(snapshot);
+        // 소리는 이미 디코드된 것에서 뽑는다. 오디오를 위해 프레임을 한 번 더 풀지 않는다.
+        matchSfx.onSnapshot(snapshot, gameSession.getSnapshot().selfId);
         const started = gameSession.getSnapshot().started;
         if (started && snapshot.tick >= started.startTick) setFirstSnapshotApplied(true);
     }, []);
