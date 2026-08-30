@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { NeedAccount } from '../auth/need-account.decorator';
 import { SessionService } from './session.service';
+import { refreshCookieOptions } from '../auth/refresh-cookie';
 
 type AuthenticatedRequest = FastifyRequest & {
     user: { id: number; sessionId: string };
@@ -49,13 +50,6 @@ export class SessionController {
     }
 
     private cookieOptions() {
-        return {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict' as const,
-            path: '/',
-            signed: true,
-            maxAge: Number(this.configService.get('JWT_REFRESH_EXPIRATION')),
-        };
+        return refreshCookieOptions(this.configService);
     }
 }

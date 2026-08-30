@@ -3,13 +3,14 @@ import { DRIZZLE } from "../database/database.module";
 import { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from '../database/schema';
 import * as bcrypt from 'bcrypt';
-import { randomInt } from 'node:crypto';
 import { CreateUserDto } from "./dto/create-user.dto";
 import { RedisService } from "../redis/redis.service";
 import { and, desc, eq, isNotNull, lt, or } from 'drizzle-orm';
 import { SanctionService } from '../sanction/sanction.service';
 import { SessionService } from '../session/session.service';
 import { EmailService } from '../email/email.service';
+import { EmailAuthType } from '../auth/dto/email-auth.dto';
+import { discardVerificationCode, issueVerificationCode, verifyVerificationCode } from '../auth/verification-code';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { levelFromXp } from 'shared';
 import { DEFAULT_STATS, nonNegativeInteger, percentage, readStoredStats, type StoredStats } from './stored-stats';
@@ -98,8 +99,7 @@ export class UserService {
             .where(eq(schema.users.id, userId));
         if (!user || user.status !== 'ACTIVE') throw new NotFoundException('User not found');
 
-        const code = String(randomInt(100_000, 1_000_000));
-        await this.redisService.set(`auth:code:delete:${user.email}`, code, 300);
+        const code = await issueVerificationCode(this.redisService, EmailAuthType.DELETE, user.email);
         if (!await this.emailService.sendDeleteAccountCodeEmail(user.email, code)) {
             throw new InternalServerErrorException('Verification email send failed');
         }
@@ -108,14 +108,8 @@ export class UserService {
 
     async createUser(dto: CreateUserDto) {
         const { email, password, nickname, code } = dto;
-        const redisKey = `auth:code:signup:${email}`;
-
-        const savedCode = await this.redisService.get(redisKey);
-        if (!savedCode) {
-            throw new BadRequestException('Verification code expired or not found');
-        }
-        if (savedCode !== code) {
-            throw new BadRequestException('Invalid verification code');
+        if (!await verifyVerificationCode(this.redisService, EmailAuthType.SIGNUP, email, code)) {
+            throw new BadRequestException('Invalid or expired verification code');
         }
 
         const saltRounds = 10;
@@ -130,7 +124,9 @@ export class UserService {
                 nickname: schema.users.nickname,
             });
 
-            await this.redisService.del(redisKey);
+            // 가입이 실제로 끝난 뒤에 지운다. 닉네임 중복으로 실패했을 때까지 코드를 태우면
+            // 사용자는 멀쩡한 코드를 들고도 메일을 다시 받아야 한다.
+            await discardVerificationCode(this.redisService, EmailAuthType.SIGNUP, email);
 
             return newUser;
         } catch (error: any) {
@@ -158,9 +154,7 @@ export class UserService {
             throw new NotFoundException('User not found');
         }
 
-        const redisKey = `auth:code:delete:${user.email}`;
-        const savedCode = await this.redisService.get(redisKey);
-        if (!savedCode || savedCode !== code) {
+        if (!await verifyVerificationCode(this.redisService, EmailAuthType.DELETE, user.email, code)) {
             throw new BadRequestException('Invalid or expired verification code');
         }
 
@@ -170,7 +164,7 @@ export class UserService {
             'User requested account deletion',
             requestMeta,
         );
-        await this.redisService.del(redisKey);
+        await discardVerificationCode(this.redisService, EmailAuthType.DELETE, user.email);
     }
 
     async changePassword(userId: number, currentSessionId: string, dto: ChangePasswordDto) {

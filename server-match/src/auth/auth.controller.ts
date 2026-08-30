@@ -7,6 +7,7 @@ import { RateLimiter } from "../ratelimiter.decorator";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { ConfigService } from "@nestjs/config";
 import { NeedActor } from './need-actor.decorator';
+import { refreshCookieOptions } from './refresh-cookie';
 
 @Controller('auth')
 export class AuthController {
@@ -107,14 +108,7 @@ export class AuthController {
     }
 
     private cookieOptions() {
-        return {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict' as const,
-            maxAge: Number(this.configService.get('JWT_REFRESH_EXPIRATION')),
-            path: '/',
-            signed: true,
-        };
+        return refreshCookieOptions(this.configService);
     }
 
     private userAgent(req: FastifyRequest): string | undefined {

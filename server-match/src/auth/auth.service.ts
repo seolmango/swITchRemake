@@ -24,6 +24,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SessionSecurityService } from '../session/session-security.service';
 import { SessionService } from '../session/session.service';
 import { SanctionService } from '../sanction/sanction.service';
+import { discardVerificationCode, issueVerificationCode, verifyVerificationCode } from './verification-code';
 
 interface RequestSessionMetadata {
     ip: string;
@@ -90,10 +91,7 @@ export class AuthService {
 
     async sendVerificationCodeEmail(dto: SendEmailDto) {
         const { email, vtype } = dto;
-
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        const redisKey = `auth:code:${vtype}:${email}`;
-        await this.redisService.set(redisKey, code, 300);
+        const code = await issueVerificationCode(this.redisService, vtype, email);
 
         let emailSent = false;
         switch (vtype) {
@@ -124,17 +122,15 @@ export class AuthService {
      * 있을지도 모르는 상황이고, 그때 남의 세션을 살려 두면 되찾은 것이 아니다.
      */
     async resetPassword(dto: ResetPasswordDto): Promise<{ reset: boolean }> {
-        const redisKey = `auth:code:${EmailAuthType.RESET_PASSWORD}:${dto.email}`;
-        const savedCode = await this.redisService.get(redisKey);
-        if (!savedCode || savedCode !== dto.code) {
+        if (!await verifyVerificationCode(this.redisService, EmailAuthType.RESET_PASSWORD, dto.email, dto.code)) {
             throw new HttpException('Invalid or expired verification code', HttpStatus.BAD_REQUEST);
         }
-        // 코드는 맞든 틀리든 한 번 쓰면 사라진다. 남겨 두면 같은 코드로 계속 시도할 수 있다.
-        await this.redisService.del(redisKey);
 
         const [user] = await this.db.select({ id: schema.users.id, accountStatus: schema.users.accountStatus })
             .from(schema.users)
             .where(eq(schema.users.email, dto.email));
+        // 없는 계정에도 코드는 소모한다. 남겨 두면 응답이 같아도 코드의 수명이 가입 여부를 말한다.
+        await discardVerificationCode(this.redisService, EmailAuthType.RESET_PASSWORD, dto.email);
         if (!user || user.accountStatus !== 'ACTIVE') return { reset: true };
 
         const passwordHash = await bcrypt.hash(dto.newPassword, 10);

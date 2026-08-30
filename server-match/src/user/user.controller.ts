@@ -8,6 +8,8 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { MatchHistoryQueryDto } from './dto/match-history-query.dto';
 import { ReplayDownloadService } from './replay-download.service';
+import { ConfigService } from '@nestjs/config';
+import { refreshCookieOptions } from '../auth/refresh-cookie';
 
 type AccountRequest = FastifyRequest & { user: { id: number; sessionId: string; guest: false } };
 
@@ -16,6 +18,7 @@ export class UserController {
     constructor(
         private readonly userService: UserService,
         private readonly replayDownload: ReplayDownloadService,
+        private readonly configService: ConfigService,
     ) {}
 
     @Post('register')
@@ -82,7 +85,7 @@ export class UserController {
             ip: req.ip,
             userAgent: req.headers['user-agent'] ?? null,
         });
-        res.clearCookie('refreshToken', { path: '/' });
+        res.clearCookie('refreshToken', refreshCookieOptions(this.configService));
         return { deleted: true };
     }
 }
