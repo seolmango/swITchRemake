@@ -5,6 +5,7 @@ import { ReportsService } from './reports.service';
 
 /** 제재를 부르지 않아야 하는 흐름들이 쓴다. 부르면 그 사실이 바로 드러난다. */
 const noSanctions = { apply: () => { throw new Error('이 흐름은 제재를 부르면 안 된다'); } };
+const noRooms = { evictActor: () => { throw new Error('이 흐름은 퇴장을 부르면 안 된다'); } };
 
 const MATCH_ID = '11111111-1111-4111-8111-111111111111';
 const CASE_ID = '22222222-2222-4222-8222-222222222222';
@@ -68,7 +69,7 @@ async function rejectsCode(
 
 test('경기 참가자가 아닌 신고자는 403으로 거절한다', async () => {
     const db = scriptedDb([[[{ ...validContext, reporterParticipates: false }]]]);
-    const service = new ReportsService(db as never, noSanctions as never);
+    const service = new ReportsService(db as never, noSanctions as never, noRooms as never);
     await rejectsCode(
         service.create(1, dto),
         ForbiddenException,
@@ -90,7 +91,7 @@ test('게스트 대상 신고가 사건을 만들고 경기 당시 닉네임을 
         [{ caseId: CASE_ID, status: 'OPEN' }],
         [],
     ]]);
-    const service = new ReportsService(db as never, noSanctions as never);
+    const service = new ReportsService(db as never, noSanctions as never, noRooms as never);
     const result = await service.create(1, { ...dto, targetPlayerId: 7 });
 
     assert.deepEqual(result, { caseId: CASE_ID, status: 'OPEN' });
@@ -99,21 +100,21 @@ test('게스트 대상 신고가 사건을 만들고 경기 당시 닉네임을 
 
 test('자기 신고는 400으로 거절한다', async () => {
     const db = scriptedDb([[[{ ...validContext, targetUserId: 1, targetPlayerId: 1 }]]]);
-    const service = new ReportsService(db as never, noSanctions as never);
+    const service = new ReportsService(db as never, noSanctions as never, noRooms as never);
     await rejectsCode(service.create(1, { ...dto, targetPlayerId: 1 }), BadRequestException, 'SELF_REPORT');
 });
 
 test('리플레이가 남아 있지 않은 경기의 신고는 400으로 거절한다', async () => {
     const endedAt = new Date(Date.now() - 60 * 60 * 1000);
     const db = scriptedDb([[[{ ...validContext, endedAt, replayStatus: 'deleted' }]]]);
-    const service = new ReportsService(db as never, noSanctions as never);
+    const service = new ReportsService(db as never, noSanctions as never, noRooms as never);
     await rejectsCode(service.create(1, dto), BadRequestException, 'REPLAY_UNAVAILABLE');
 });
 
 test('리플레이 기록이 없는 경기는 보관 기간 안에서만 신고할 수 있다', async () => {
     const stale = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
     const db = scriptedDb([[[{ ...validContext, endedAt: stale, replayStatus: null }]]]);
-    const service = new ReportsService(db as never, noSanctions as never);
+    const service = new ReportsService(db as never, noSanctions as never, noRooms as never);
     await rejectsCode(service.create(1, dto), BadRequestException, 'REPORT_WINDOW_EXPIRED');
 });
 
@@ -125,7 +126,7 @@ test('방금 끝난 경기는 리플레이 행이 없어도 신고할 수 있다
         [{ caseId: CASE_ID, status: 'OPEN' }],
         [],
     ]]);
-    const service = new ReportsService(db as never, noSanctions as never);
+    const service = new ReportsService(db as never, noSanctions as never, noRooms as never);
     assert.deepEqual(await service.create(1, dto), { caseId: CASE_ID, status: 'OPEN' });
 });
 
@@ -138,7 +139,7 @@ test('리플레이가 살아 있으면 끝난 경기도 신고할 수 있다', a
         [{ caseId: CASE_ID, status: 'OPEN' }],
         [],
     ]]);
-    const service = new ReportsService(db as never, noSanctions as never);
+    const service = new ReportsService(db as never, noSanctions as never, noRooms as never);
     assert.deepEqual(await service.create(1, dto), { caseId: CASE_ID, status: 'OPEN' });
 });
 
@@ -152,7 +153,7 @@ test('같은 신고자의 중복 신고는 409로 거절한다', async () => {
         [{ caseId: CASE_ID, status: 'OPEN' }],
         duplicate,
     ]]);
-    const service = new ReportsService(db as never, noSanctions as never);
+    const service = new ReportsService(db as never, noSanctions as never, noRooms as never);
     await rejectsCode(service.create(1, dto), ConflictException, 'DUPLICATE_REPORT');
 });
 
@@ -165,7 +166,7 @@ test('정상 신고는 사건을 만들고 두 번째 신고자는 같은 사건
         [],
     ];
     const db = scriptedDb([successfulTransaction, successfulTransaction]);
-    const service = new ReportsService(db as never, noSanctions as never);
+    const service = new ReportsService(db as never, noSanctions as never, noRooms as never);
 
     const first = await service.create(1, dto);
     const second = await service.create(3, { ...dto, category: 'ABUSE' });
@@ -180,10 +181,18 @@ function sanctionHarness(caseRow: Record<string, unknown>) {
     const updates: Record<string, unknown>[] = [];
     const audits: Record<string, unknown>[] = [];
     const applyInputs: Record<string, unknown>[] = [];
+    const evictions: { userId: number | string; reason: string }[] = [];
     return {
         updates,
         audits,
         applyInputs,
+        evictions,
+        rooms: {
+            evictActor: async (userId: number | string, reason: string) => {
+                evictions.push({ userId, reason });
+                return true;
+            },
+        },
         db: {
             transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({
                 execute: async () => [caseRow],
@@ -217,7 +226,7 @@ test('게스트 사건에 제재를 걸면 400으로 거절한다', async () => 
         targetUserId: null,
         status: 'OPEN',
     });
-    const service = new ReportsService(harness.db as never, harness.sanctions as never);
+    const service = new ReportsService(harness.db as never, harness.sanctions as never, harness.rooms as never);
 
     await rejectsCode(
         service.sanction(CASE_ID, 9, { type: 'BAN', reason: '게스트 사건 제재 사유입니다' }),
@@ -234,7 +243,7 @@ test('계정 사건에 BAN을 걸면 경기 근거로 제재하고 사건을 ACT
         targetUserId: 2,
         status: 'TRIAGED',
     });
-    const service = new ReportsService(harness.db as never, harness.sanctions as never);
+    const service = new ReportsService(harness.db as never, harness.sanctions as never, harness.rooms as never);
 
     const result = await service.sanction(CASE_ID, 9, {
         type: 'BAN',
@@ -243,6 +252,8 @@ test('계정 사건에 BAN을 걸면 경기 근거로 제재하고 사건을 ACT
     });
 
     assert.deepEqual(result, { caseId: CASE_ID, status: 'ACTIONED', sanctionId: SANCTION_ID });
+    // 세션만 지우면 이미 발급된 토큰으로 그 경기를 끝까지 뛴다. 방에서도 내보내야 한다.
+    assert.deepEqual(harness.evictions, [{ userId: 2, reason: 'sanction:BAN' }]);
     assert.equal(harness.applyInputs.length, 1);
     assert.deepEqual(
         {
@@ -266,6 +277,21 @@ test('계정 사건에 BAN을 걸면 경기 근거로 제재하고 사건을 ACT
     assert.equal(harness.audits[0].action, 'report.sanction');
 });
 
+test('경고는 방에서 내보내지 않는다', async () => {
+    const harness = sanctionHarness({
+        caseId: CASE_ID,
+        matchId: MATCH_ID,
+        targetUserId: 2,
+        status: 'TRIAGED',
+    });
+    const service = new ReportsService(harness.db as never, harness.sanctions as never, harness.rooms as never);
+
+    await service.sanction(CASE_ID, 9, { type: 'WARN', reason: '경고 사유를 충분히 적었습니다' });
+
+    // 경고는 계속 놀 수 있다는 뜻이다. 여기서 내보내면 사실상 밴이 된다.
+    assert.deepEqual(harness.evictions, []);
+});
+
 test('CLOSED 사건에 제재를 걸면 409로 거절한다', async () => {
     const harness = sanctionHarness({
         caseId: CASE_ID,
@@ -273,7 +299,7 @@ test('CLOSED 사건에 제재를 걸면 409로 거절한다', async () => {
         targetUserId: 2,
         status: 'CLOSED',
     });
-    const service = new ReportsService(harness.db as never, harness.sanctions as never);
+    const service = new ReportsService(harness.db as never, harness.sanctions as never, harness.rooms as never);
 
     await rejectsCode(
         service.sanction(CASE_ID, 9, { type: 'WARN', reason: '종결 사건에는 제재할 수 없습니다' }),
@@ -309,7 +335,7 @@ function statusDb(currentStatus: string) {
 
 test('허용되지 않은 신고 상태 전이는 409로 거절한다', async () => {
     const db = statusDb('OPEN');
-    const service = new ReportsService(db as never, noSanctions as never);
+    const service = new ReportsService(db as never, noSanctions as never, noRooms as never);
     await rejectsCode(
         service.updateStatus(CASE_ID, 9, { status: 'ACTIONED' }),
         ConflictException,
@@ -321,7 +347,7 @@ test('허용되지 않은 신고 상태 전이는 409로 거절한다', async ()
 
 test('신고 상태 변경은 관리자 감사 로그를 남긴다', async () => {
     const db = statusDb('OPEN');
-    const service = new ReportsService(db as never, noSanctions as never);
+    const service = new ReportsService(db as never, noSanctions as never, noRooms as never);
     const result = await service.updateStatus(CASE_ID, 9, { status: 'TRIAGED', note: '초기 분류 완료' });
 
     assert.deepEqual(result, { caseId: CASE_ID, status: 'TRIAGED' });

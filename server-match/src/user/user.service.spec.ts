@@ -20,7 +20,7 @@ function createService(passwordHash: string) {
             return { where: async () => [] };
         } }),
     };
-    const service = new UserService(db as never, {} as never, {} as never, sessions as never, {} as never);
+    const service = new UserService(db as never, {} as never, {} as never, sessions as never, {} as never, {} as never);
     return { service, writes, sessions };
 }
 

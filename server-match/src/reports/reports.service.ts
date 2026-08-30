@@ -12,6 +12,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '../database/database.module';
 import * as schema from '../database/schema';
 import { SanctionService } from '../sanction/sanction.service';
+import { RoomsService } from '../rooms/rooms.service';
 import { CreateReportDto, type ReportCategory } from './dto/create-report.dto';
 import { type ReportStatus } from './dto/report-queue-query.dto';
 import { SanctionReportDto } from './dto/sanction-report.dto';
@@ -67,6 +68,7 @@ export class ReportsService {
     constructor(
         @Inject(DRIZZLE) private readonly db: PostgresJsDatabase<typeof schema>,
         @Inject(SanctionService) private readonly sanctions: SanctionService,
+        private readonly rooms: RoomsService,
     ) {}
 
     async create(reporterUserId: number, dto: CreateReportDto): Promise<CaseStatusRow> {
@@ -406,7 +408,7 @@ export class ReportsService {
             });
         }
 
-        return this.db.transaction(async (tx) => {
+        const result = await this.db.transaction(async (tx) => {
             const [moderationCase] = await tx.execute<SanctionCaseRow>(sql`
                 SELECT id AS "caseId", match_id AS "matchId", target_user_id AS "targetUserId", status
                 FROM moderation_cases
@@ -463,8 +465,25 @@ export class ReportsService {
                 requestMeta: { caseId, sanctionId: sanction.id, type: dto.type },
             });
 
-            return { caseId, status: 'ACTIONED' as const, sanctionId: sanction.id };
+            return {
+                caseId,
+                status: 'ACTIONED' as const,
+                sanctionId: sanction.id,
+                targetUserId: moderationCase.targetUserId,
+            };
         });
+
+        /*
+         * 커밋 뒤에 방에서 내보낸다. 제재는 세션만 지우는데 이미 발급된 access token은 만료까지
+         * 살아 있고 인게임 서버는 계정 상태를 모른다 - 그래서 밴당한 사람이 그 경기가 끝날
+         * 때까지 그대로 놀았다. 트랜잭션 안에서 하지 않는 이유는 이게 다른 프로세스로 나가는
+         * 왕복이라서다. 실패해도 제재는 유효하다.
+         */
+        if (dto.type !== 'WARN') {
+            await this.rooms.evictActor(result.targetUserId, `sanction:${dto.type}`);
+        }
+        const { targetUserId: _targetUserId, ...response } = result;
+        return response;
     }
 
     async updateStatus(caseId: string, actorUserId: number, dto: UpdateReportStatusDto): Promise<CaseStatusRow> {

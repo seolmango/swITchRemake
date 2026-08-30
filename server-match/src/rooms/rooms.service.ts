@@ -421,6 +421,51 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         return { roomId, roomCode: room.roomCode ?? '', ...reply.payload };
     }
 
+    /**
+     * 이 사람을 지금 있는 방에서 내보낸다.
+     *
+     * 제재는 세션 행만 지웠다. 이미 발급된 access token은 만료까지 살아 있고 인게임 서버는
+     * 계정 상태를 아예 모르므로, 밴당한 사람이 그 경기가 끝날 때까지 그대로 놀았다. KICK_USER
+     * 명령은 인게임 서버에 처음부터 구현돼 있었는데 보내는 사람이 없었다.
+     *
+     * 실패해도 던지지 않는다. 제재는 이미 커밋됐고, 퇴장에 실패했다고 되돌릴 수 있는 것이 아니다.
+     * 못 내보낸 사람도 다음 방 배정에서는 `requireActor`가 막는다.
+     */
+    async evictActor(userId: ActorId, reason: string): Promise<boolean> {
+        let raw: string | null = null;
+        try {
+            raw = await this.redis.get(this.keys.userActiveRoom(userId));
+        } catch {
+            return false;
+        }
+        if (!raw) return false;
+
+        let claim: ActiveRoomClaim;
+        try {
+            claim = JSON.parse(raw) as ActiveRoomClaim;
+        } catch {
+            return false;
+        }
+        if (claim.state !== 'assigned' || !claim.roomId || !claim.serverId) return false;
+
+        const issuedAt = Date.now();
+        try {
+            const reply = await this.sendCommand<Record<string, never>>(claim.serverId, {
+                v: CONTROL_VERSION,
+                requestId: randomUUID(),
+                type: CommandType.KickUser,
+                issuedAt,
+                deadlineAt: issuedAt + COMMAND_DEADLINE_MS,
+                replyTo: this.replyStream,
+                payload: { roomId: claim.roomId, userId, reason: reason.slice(0, 256) },
+            });
+            return reply.ok;
+        } catch (error) {
+            this.logger.warn(`제재 대상을 방에서 내보내지 못했다 userId=${String(userId)} roomId=${claim.roomId}`);
+            return false;
+        }
+    }
+
     /** Called by the result/room-event bridge when a confirmed departure arrives. */
     async markRejoinCooldown(roomId: string, userId: ActorId): Promise<void> {
         await this.redis.set(this.keys.roomRejoin(roomId, userId), '1', REJOIN_COOLDOWN_SECONDS);

@@ -9,6 +9,7 @@ import { and, desc, eq, isNotNull, lt, or } from 'drizzle-orm';
 import { SanctionService } from '../sanction/sanction.service';
 import { SessionService } from '../session/session.service';
 import { EmailService } from '../email/email.service';
+import { RoomsService } from '../rooms/rooms.service';
 import { EmailAuthType } from '../auth/dto/email-auth.dto';
 import { discardVerificationCode, issueVerificationCode, verifyVerificationCode } from '../auth/verification-code';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -84,6 +85,7 @@ export class UserService {
         // this application service intentionally owns the SessionService dependency.
         private readonly sessionService: SessionService,
         private readonly emailService: EmailService,
+        private readonly rooms: RoomsService,
     ) {}
 
     /**
@@ -164,6 +166,8 @@ export class UserService {
             'User requested account deletion',
             requestMeta,
         );
+        // 지운 계정이 방에 남아 있으면 그 경기가 끝날 때까지 없는 사람이 논다.
+        await this.rooms.evictActor(userId, 'account-deleted');
         await discardVerificationCode(this.redisService, EmailAuthType.DELETE, user.email);
     }
 
