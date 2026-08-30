@@ -7,6 +7,7 @@
  */
 
 import {
+    canSeePlayer,
     RoomMode,
     MATCH_RESULT_VERSION,
     PROTOCOL_VERSION,
@@ -23,7 +24,7 @@ import type { Room } from '../rooms/room';
 import type { SchedulerTarget } from '../simulation/scheduler';
 import { isFinished, stepWorld, type EmojiRequest } from '../simulation/step';
 import type { SkillRequest } from '../simulation/skills';
-import type { AuthoritativeFrame, World, WorldEvent } from '../simulation/world';
+import { toVisibilityWorld, type AuthoritativeFrame, type World, type WorldEvent } from '../simulation/world';
 import type { TrainingGround } from '../training/training-ground';
 import { SessionReplayRecorder } from './session-recorder';
 import { encodeForViewer, type RosterEntry, type SnapshotTileChange } from './snapshot-view';
@@ -267,6 +268,13 @@ export class GameSession implements SchedulerTarget {
      * 메시지를 직접 보내기 시작하면 두 계층이 섞인다.
      */
     #applyEvents(events: readonly WorldEvent[]): void {
+        // 좌표를 싣는 연출이 있을 때만 만든다. 대부분의 tick에는 그런 사건이 없다.
+        let visibility: ReturnType<typeof toVisibilityWorld> | null = null;
+        const canSee = (playerId: number): ((viewerPlayerId: number) => boolean) => {
+            visibility ??= toVisibilityWorld(this.world);
+            return (viewerPlayerId) => canSeePlayer(visibility!, viewerPlayerId, playerId);
+        };
+
         for (const event of events) {
             switch (event.kind) {
                 case 'eliminated':
@@ -279,12 +287,13 @@ export class GameSession implements SchedulerTarget {
                     this.#room.broadcastTagged(event.playerId, event.by ?? null);
                     break;
                 case 'blinked':
-                    this.#room.broadcastBlinked(event.playerId, event.fromX ?? 0, event.fromY ?? 0);
+                    this.#room.broadcastBlinked(event.playerId, event.fromX ?? 0, event.fromY ?? 0, canSee(event.playerId));
                     break;
                 case 'skillArea':
                     this.#room.broadcastSkillArea(
                         event.skillId ?? '', event.playerId,
                         event.fromX ?? 0, event.fromY ?? 0, event.targetPlayerId ?? null,
+                        canSee(event.playerId),
                     );
                     break;
                 case 'skillUsed':

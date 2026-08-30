@@ -116,6 +116,9 @@ export interface RoomOptions {
 
 export type SnapshotAccess = 'none' | 'filtered' | 'unfiltered';
 
+/** 이 뷰어가 연출의 주인공을 보고 있는가. 시야 판정은 시뮬레이션을 아는 쪽이 한다. */
+export type ViewerFilter = (viewerPlayerId: number) => boolean;
+
 export interface Admission {
     readonly playerId: number;
     readonly roomState: RoomStateValue;
@@ -706,22 +709,30 @@ export class Room {
         this.#broadcast({ type: 'player.tagged', payload: { playerId, by: by ?? playerId } });
     }
 
-    /** 점멸 연출. 저빈도라 바이너리 섹션이 아니라 JSON으로 나간다. */
-    public broadcastBlinked(playerId: number, fromX: number, fromY: number): void {
-        this.#broadcast({ type: 'player.blinked', payload: { playerId, fromX, fromY } });
+    /**
+     * 점멸 연출. 저빈도라 바이너리 섹션이 아니라 JSON으로 나간다.
+     *
+     * **시야로 거른다.** 이 메시지는 좌표를 싣기 때문에, 방 전체로 뿌리면 스냅샷에서 지운
+     * 위치가 그대로 새어 나간다. 정직한 클라이언트가 안 그리는 것에 기대는 것은 방어가 아니다.
+     */
+    public broadcastBlinked(playerId: number, fromX: number, fromY: number, canSee: ViewerFilter): void {
+        this.#broadcastToViewers({ type: 'player.blinked', payload: { playerId, fromX, fromY } }, playerId, canSee);
     }
 
     /**
      * 사거리 스킬(스위치·탈진) 연출. 빗나간 것도 나간다.
      *
-     * 시야로 거르지 않고 방 전체에 보내는 것은 `player.blinked`와 같은 선택이다. 정직한 클라이언트는
-     * 시전자가 보일 때만 그린다(WorldScene). 연출 이벤트를 시야로 거르려면 방이 뷰어별 가시성을
-     * 알아야 하는데, 그건 지금 스냅샷 인코더만 안다.
+     * `player.blinked`와 같은 이유로 시야를 거친다. 시전자를 못 보는 사람에게 원의 중심을 주면
+     * 그것이 곧 좌표다.
      */
     public broadcastSkillArea(
-        skill: string, playerId: number, x: number, y: number, targetPlayerId: number | null,
+        skill: string, playerId: number, x: number, y: number, targetPlayerId: number | null, canSee: ViewerFilter,
     ): void {
-        this.#broadcast({ type: 'player.skillArea', payload: { skill, playerId, x, y, targetPlayerId } });
+        this.#broadcastToViewers(
+            { type: 'player.skillArea', payload: { skill, playerId, x, y, targetPlayerId } },
+            playerId,
+            canSee,
+        );
     }
 
     /** Skill failures contain private tactical information, so they never use the room broadcaster. */
@@ -944,5 +955,26 @@ export class Room {
 
     #broadcast(message: Parameters<Connection['sendJson']>[0]): void {
         for (const member of this.#roster.members()) member.connection?.sendJson(message);
+    }
+
+    /**
+     * 좌표를 싣는 연출을 볼 사람에게만 보낸다.
+     *
+     * 검열 등급은 스냅샷과 같은 판정(`snapshotAccess`)을 쓴다 - 관전자는 전부 보고, 경기 중인
+     * 사람은 자기 시야만 보며, 아무 등급도 없는 사람은 애초에 세계를 안 받는다. 시전자 본인은
+     * 언제나 받는다.
+     */
+    #broadcastToViewers(
+        message: Parameters<Connection['sendJson']>[0],
+        sourcePlayerId: number,
+        canSee: ViewerFilter,
+    ): void {
+        for (const member of this.#roster.members()) {
+            if (member.connection === null) continue;
+            const access = this.snapshotAccess(member.userId);
+            if (access === 'none') continue;
+            if (access === 'filtered' && member.playerId !== sourcePlayerId && !canSee(member.playerId)) continue;
+            member.connection.sendJson(message);
+        }
     }
 }

@@ -147,7 +147,7 @@ export {
 } from './control/results';
 
 export { VISIBILITY_CORE_VERSION } from './visibility/version';
-export { computeVisibility, isConcealed, VISIBILITY } from './visibility/core';
+export { canSeePlayer, computeVisibility, isConcealed, VISIBILITY } from './visibility/core';
 export {
     packVisibleMask,
     unpackVisibleMask,

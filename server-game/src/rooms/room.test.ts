@@ -164,6 +164,37 @@ test('ALLOCATING부터 POST_GAME 복귀까지 명단과 관전 자격을 서버�
     assert.equal(c1.closes.length, 0);
 });
 
+test('좌표를 싣는 연출은 시전자를 보는 사람에게만 간다', async () => {
+    const context = setup();
+    const c1 = context.connect(context.owner);
+    const r2 = seat(2, 0);
+    const r3 = seat(3, 0);
+    assert.equal(context.room.reserveJoin(r2, 'secret'), null);
+    assert.equal(context.room.reserveJoin(r3, 'secret'), null);
+    const c2 = context.connect(r2);
+    const c3 = context.connect(r3);
+    await Promise.resolve();
+    context.setNow(5_001);
+    assert.equal(context.room.requestStart(1), null);
+    context.setNow(8_001);
+    context.room.advance();
+    assert.equal(context.room.state, RoomState.Playing);
+
+    // 3번만 1번을 본다. 시야 판정 자체는 시뮬레이션이 하고 방은 그 결과를 받는다.
+    context.room.broadcastBlinked(1, 10, 20, (viewerPlayerId) => viewerPlayerId === 3);
+    const blinked = (connection: FakeConnection) => connection.messages.filter((m) => m.type === 'player.blinked');
+    assert.equal(blinked(c1).length, 1, '시전자 본인은 언제나 받는다');
+    assert.equal(blinked(c2).length, 0, '못 보는 사람에게 좌표가 가면 스냅샷 검열이 무의미해진다');
+    assert.equal(blinked(c3).length, 1);
+
+    // 관전자는 전부 본다. 스냅샷과 같은 등급 판정을 쓴다.
+    assert.equal(context.room.markEliminated(2, 1), true);
+    assert.equal(context.room.snapshotAccess(2), 'unfiltered');
+    context.room.broadcastSkillArea('SWITCH', 1, 10, 20, null, () => false);
+    assert.equal(c2.messages.filter((m) => m.type === 'player.skillArea').length, 1);
+    assert.equal(c3.messages.filter((m) => m.type === 'player.skillArea').length, 0);
+});
+
 test('skill.rejected is sent only to the requesting player', () => {
     const context = setup();
     const c1 = context.connect(context.owner);

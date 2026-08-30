@@ -101,6 +101,33 @@ function withinViewport(viewer: VisibilityActor, target: VisibilityActor): boole
 }
 
 /**
+ * 대상 하나에 대한 판정. 목록을 만드는 쪽과 한 명만 묻는 쪽이 같은 규칙을 봐야 한다.
+ *
+ * 규칙이 두 벌이 되면 한쪽만 고쳐지고, 그때 생기는 구멍은 "스냅샷에는 안 나오는데 다른
+ * 메시지로는 새는" 모양이라 눈에 잘 띄지 않는다.
+ */
+function sees(world: VisibilityWorld, viewer: VisibilityActor, target: VisibilityActor): boolean {
+    if (!target.alive) return false;
+    // 자기 자신은 수풀 안에 있어도 늘 보인다. 반투명으로 그려 숨어 있음을 알린다.
+    if (target.playerId === viewer.playerId) return true;
+    if (!withinViewport(viewer, target)) return false;
+    if (isConcealed(world, target)) return withinRevealWindow(world, viewer, target);
+    return true;
+}
+
+/**
+ * 뷰어가 이 플레이어를 보는가.
+ *
+ * 스냅샷 밖으로 나가는 연출 메시지(점멸 자취, 스킬 범위 원)가 좌표를 싣기 때문에 필요하다.
+ * 그것을 방 전체로 뿌리면 스냅샷에서 지운 위치가 그 경로로 그대로 새어 나간다.
+ */
+export function canSeePlayer(world: VisibilityWorld, viewerId: number, targetId: number): boolean {
+    const viewer = world.players.find((p) => p.playerId === viewerId);
+    const target = world.players.find((p) => p.playerId === targetId);
+    return viewer !== undefined && target !== undefined && sees(world, viewer, target);
+}
+
+/**
  * 한 뷰어가 무엇을 보는지 계산한다.
  *
  * 관전자와 리플레이 전지적 모드는 이 함수를 부르지 않고 전원을 그대로 쓴다. 즉 "검열하지 않는다"는
@@ -114,25 +141,10 @@ export function computeVisibility(world: VisibilityWorld, viewerId: number): Vis
     const obscuredPlayerIds: number[] = [];
 
     for (const target of world.players) {
-        if (!target.alive) continue;
-
-        if (target.playerId === viewer.playerId) {
-            // 자기 자신은 항상 보인다. 수풀 안이면 반투명으로 그려 "지금 숨어 있다"를 알려준다.
-            visiblePlayerIds.push(target.playerId);
-            if (isConcealed(world, target)) obscuredPlayerIds.push(target.playerId);
-            continue;
-        }
-
-        if (!withinViewport(viewer, target)) continue;
-
-        if (isConcealed(world, target)) {
-            if (!withinRevealWindow(world, viewer, target)) continue;
-            visiblePlayerIds.push(target.playerId);
-            obscuredPlayerIds.push(target.playerId);
-            continue;
-        }
-
+        if (!sees(world, viewer, target)) continue;
         visiblePlayerIds.push(target.playerId);
+        // 보이지만 수풀 안이다. 클라이언트는 이걸 반투명으로 그린다.
+        if (isConcealed(world, target)) obscuredPlayerIds.push(target.playerId);
     }
 
     return { visiblePlayerIds, obscuredPlayerIds, tileAlphas: nearbyConcealmentTiles(world, viewer) };
