@@ -26,7 +26,8 @@
     "e2e": "playwright test --config e2e/playwright.config.ts",
     "e2e:report": "playwright show-report e2e/artifacts/report",
     "e2e:cleanup": "node scripts/e2e-cleanup.cjs",
-    "replay:keygen": "node scripts/replay-keygen.cjs"
+    "replay:keygen": "node scripts/replay-keygen.cjs",
+    "audio:build": "node scripts/build-audio.cjs"
   },
   "keywords": [],
   "author": "",
