@@ -9,6 +9,7 @@ import {
 import { Color, themeColors } from '../theme/color.ts';
 import { formatKeyBinding } from '../utils/keyBinding.ts';
 import { TouchLayoutEditor } from '../game/hud/touch/TouchLayoutEditor.tsx';
+import { BgmCard } from '../components/settings/BgmCard.tsx';
 
 interface Choice<T extends string> {
     value: T;
@@ -208,15 +209,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
             <SettingRow title={t('settings.sound.sfx')} description={t('settings.sound.sfxDescription')}>
                 <VolumeSlider label={t('settings.sound.sfx')} value={settings.sfxVolume} onChange={(value) => settings.setVolume('sfx', value)} />
             </SettingRow>
-            <div className="settings-now-playing">
-                <div className="settings-album-art" aria-hidden="true"><span>♪</span></div>
-                <div>
-                    <span className="settings-card-kicker">{t('settings.sound.bgmInfo')}</span>
-                    <strong>{t('settings.sound.trackTitle')}</strong>
-                    <p>{t('settings.sound.trackArtist')}</p>
-                    <small>{t('settings.sound.trackDummy')}</small>
-                </div>
-            </div>
+            <BgmCard />
         </>
     );
 

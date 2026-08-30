@@ -336,9 +336,20 @@
       "sfx": "Sound effects",
       "sfxDescription": "Controls skills, alerts, and collision sounds.",
       "bgmInfo": "Now playing",
-      "trackTitle": "Crossing Colors",
+      "trackTitle": "swITchover",
       "trackArtist": "swITch Original Soundtrack",
-      "trackDummy": "Track metadata and playback status will appear here."
+      "bgmNotDownloaded": "Not downloaded yet. Turning it on fetches {{size}} once; after that it plays from the copy on your device.",
+      "bgmChanged": "The track changed. Download the new one ({{size}}) to play it.",
+      "bgmDownloading": "Downloading… {{percent}}%",
+      "bgmStored": "Stored on this device. It won't be downloaded again.",
+      "bgmStoredVolatile": "Playing for this session. It couldn't be stored, so it may be fetched again next time.",
+      "bgmError": "Download failed. Please try again in a moment.",
+      "bgmUnsupported": "This browser can't play any of the available formats. Sound effects still work.",
+      "bgmDownload": "Turn on (download {{size}})",
+      "bgmOn": "Turn on",
+      "bgmOff": "Turn off",
+      "bgmCancel": "Cancel",
+      "bgmDelete": "Delete stored file"
     },
     "game": {
       "frameRate": "Frame rate",

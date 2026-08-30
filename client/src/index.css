@@ -496,7 +496,11 @@ html[lang='ko'] .page-title { top: 42px; }
 .settings-album-art span { font-family: var(--font-display); font-size: 74px; transform: translateY(-4px); }
 .settings-now-playing strong { display: block; margin: 8px 0 3px; font-size: 31px; }
 .settings-now-playing p { margin: 0 0 17px; font-size: 20px; }
-.settings-now-playing small { color: var(--settings-muted); font-size: 19px; font-weight: 300; }
+.settings-now-playing small { display: block; color: var(--settings-muted); font-size: 19px; font-weight: 300; }
+.settings-bgm-progress { margin-top: 14px; height: 14px; border: 3px solid var(--settings-border); border-radius: 9px; overflow: hidden; background: var(--settings-panel); }
+.settings-bgm-progress span { display: block; height: 100%; background: var(--settings-accent); transition: width 120ms linear; }
+.settings-bgm-actions { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 14px; }
+.settings-bgm-actions .settings-reset:disabled { opacity: .45; cursor: not-allowed; }
 
 .keymap-help { margin: 24px 0 16px; padding: 22px 26px; display: grid; gap: 8px; }
 .keymap-help strong { font-size: 22px; }

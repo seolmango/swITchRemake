@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from "react";
 import { Color } from "../../theme/color.ts";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { playSfx } from "../../audio/sfxPlayer.ts";
 
 interface RoundButtonProps {
     x?: number;
@@ -108,11 +109,13 @@ export const RoundButton = React.memo<RoundButtonProps>(({
         ...style
     }), [x, y, width, height, currentBg, currentStroke, focusColor, disabled, isLoading, isActive, isFocused, transformValue, style]);
 
+    // 눌린 버튼만 소리를 낸다. 막힌 버튼은 조용한 것이 맞다 — 아무 일도 안 일어났기 때문이다.
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLButtonElement>) => {
         if (disabled || isLoading) return;
         if (e.key === 'Enter') {
             e.preventDefault();
             e.currentTarget.blur();
+            playSfx('ui-click');
             onClick?.();
         }
     }, [disabled, isLoading, onClick]);
@@ -121,6 +124,7 @@ export const RoundButton = React.memo<RoundButtonProps>(({
         if (disabled || isLoading) return;
         e.stopPropagation();
         e.currentTarget.blur();
+        playSfx('ui-click');
         onClick?.();
     }, [disabled, isLoading, onClick]);
 

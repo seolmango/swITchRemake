@@ -336,9 +336,20 @@
       "sfx": "효과음",
       "sfxDescription": "스킬, 알림, 충돌 효과음의 크기입니다.",
       "bgmInfo": "현재 BGM",
-      "trackTitle": "Crossing Colors",
+      "trackTitle": "swITchover",
       "trackArtist": "swITch Original Soundtrack",
-      "trackDummy": "곡 정보와 재생 상태가 연결될 자리입니다."
+      "bgmNotDownloaded": "아직 받지 않았어요. 켜면 {{size}}를 한 번 내려받고, 그다음부터는 저장해 둔 것으로 재생해요.",
+      "bgmChanged": "곡이 바뀌었어요. 새 곡 {{size}}를 받아야 재생돼요.",
+      "bgmDownloading": "내려받는 중… {{percent}}%",
+      "bgmStored": "기기에 저장돼 있어요. 다시 받지 않아요.",
+      "bgmStoredVolatile": "이번 접속에는 재생돼요. 저장은 못 했으니 다음에 다시 받을 수 있어요.",
+      "bgmError": "내려받지 못했어요. 잠시 뒤에 다시 시도해 주세요.",
+      "bgmUnsupported": "이 브라우저가 재생할 수 있는 형식이 없어요. 효과음은 그대로 나와요.",
+      "bgmDownload": "켜기 ({{size}} 내려받기)",
+      "bgmOn": "켜기",
+      "bgmOff": "끄기",
+      "bgmCancel": "취소",
+      "bgmDelete": "저장한 파일 지우기"
     },
     "game": {
       "frameRate": "프레임 설정",

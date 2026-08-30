@@ -62,11 +62,20 @@ interface SettingsState extends GameSettings {
     masterVolume: number;
     bgmVolume: number;
     sfxVolume: number;
+    /**
+     * BGM을 쓰겠다는 의사. **기본값은 꺼짐이다.**
+     *
+     * 효과음은 다 합쳐 100KB라 묻지 않고 받지만, BGM은 1MB다. 처음 들어온 사람에게
+     * 곡 하나를 받게 하는 대신, 설정에서 직접 켤 때 받는다. 켠 뒤로는 Cache Storage에
+     * 남아서 다시 받지 않는다 — 실제 재생 가능 여부는 `audio/bgmPlayer.ts`가 안다.
+     */
+    bgmEnabled: boolean;
     keyBindings: KeyBindings;
     toggleTheme: () => void;
     setTheme: (theme: 0 | 1) => void;
     setLanguage: (lang: 'ko' | 'en') => void;
     setVolume: (channel: VolumeChannel, value: number) => void;
+    setBgmEnabled: (enabled: boolean) => void;
     setGameSetting: <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => void;
     setKeyBinding: (action: KeyAction, slot: 0 | 1, binding: string | null) => void;
     resetSection: (section: SettingsSection) => void;
@@ -86,7 +95,7 @@ const createDefaultKeyBindings = (): KeyBindings => ({
 });
 
 const GENERAL_DEFAULTS = { theme: 0 as const, language: 'ko' as const };
-const SOUND_DEFAULTS = { masterVolume: 85, bgmVolume: 70, sfxVolume: 85 };
+const SOUND_DEFAULTS = { masterVolume: 85, bgmVolume: 70, sfxVolume: 85, bgmEnabled: false };
 const GAME_DEFAULTS: GameSettings = {
     frameRate: '60',
     motionLevel: 'standard',
@@ -124,6 +133,7 @@ export const useSettingsStore = create<SettingsState>()(
             setTheme: (theme) => set({ theme }),
             setLanguage: (language) => set({ language }),
             setVolume: (channel, value) => set({ [`${channel}Volume`]: Math.max(0, Math.min(100, value)) }),
+            setBgmEnabled: (bgmEnabled) => set({ bgmEnabled }),
             setGameSetting: (key, value) => set({ [key]: value }),
             setKeyBinding: (action, slot, binding) => set((state) => ({
                 keyBindings: {

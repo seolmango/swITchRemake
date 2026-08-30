@@ -24,11 +24,13 @@ import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { useAuthStore } from './stores/useAuthStore.ts';
 import { Outlet } from 'react-router-dom';
 import { GameContainer } from './components/layout/GameContainer.tsx';
+import { useAudioRuntime } from './audio/useAudio.ts';
 
 const UiLayout = () => <GameContainer><Outlet/></GameContainer>;
 
 function App() {
     const { i18n } = useTranslation();
+    useAudioRuntime();
     const savedLanguage = useSettingsStore((state) => state.language);
     const theme = useSettingsStore((state) => state.theme);
     const motionLevel = useSettingsStore((state) => state.motionLevel);
