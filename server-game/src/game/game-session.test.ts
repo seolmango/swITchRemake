@@ -259,6 +259,46 @@ test('훈련장은 혼자 있어도 첫 tick에 끝나지 않는다', () => {
     assert.deepEqual(finished, [], '훈련장이 스스로 끝났다');
 });
 
+test('방이 이미 끝났으면 늦게 끝난 세션이 결과를 다시 제출하지 않는다', async () => {
+    let results = 0;
+    let aborted = '';
+    const room = {
+        id: 'room',
+        participants: () => [1, 2].map((playerId) => ({
+            playerId, userId: playerId, nickname: `P${playerId}`, colorIndex: playerId - 1, guest: false,
+        })),
+        resolvedInputs: () => [],
+        sendSkillRejected: () => undefined,
+        markEliminated: () => true,
+        broadcastTagged: () => undefined,
+        broadcastBlinked: () => undefined,
+        broadcastSkillArea: () => undefined,
+        finishGame: () => false,
+        snapshotTargets: () => [],
+    } as unknown as Room;
+    const recorder = {
+        begin: () => undefined,
+        writeFrame: () => undefined,
+        writeVisibility: () => undefined,
+        writeEvent: () => undefined,
+        finish: async () => null,
+        abort: (reason: string) => { aborted = reason; },
+    } satisfies ReplayRecorder;
+    const world = makeWorld(mapFromRows(['#####', '#...#', '#####']), [makePlayer(1, 1, 1), makePlayer(2, 2, 1)]);
+    const session = new GameSession({
+        room, world, matchId: 'issued-match', mode: RoomMode.Match, roster: [], recorder,
+        violationSink: () => undefined,
+        meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' },
+        onFinished: () => { results += 1; },
+    });
+
+    session.step();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(results, 0);
+    assert.equal(aborted, 'room-already-finished');
+    assert.equal(session.step(), null);
+});
+
 test('훈련장 맵은 자기장이 닫히지 않는다', () => {
     // barrierSpeed 0이면 inset이 0으로 고정돼 자기장 사각형이 맵 전체가 된다.
     // 시뮬레이션을 고치지 않고 데이터만으로 끄는 것이 요점이다.

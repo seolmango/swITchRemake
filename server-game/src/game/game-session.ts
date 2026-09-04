@@ -316,7 +316,12 @@ export class GameSession implements SchedulerTarget {
         // 종료 조건은 "생존자 N명 이하"라서 동시 탈락으로 더 적게 남을 수 있다.
         // 자리를 억지로 채우지 않고 남은 만큼만 승자로 본다.
         const winners: [number, number] = [survivors[0] ?? 0, survivors[1] ?? survivors[0] ?? 0];
-        this.#room.finishGame(winners);
+        if (!this.#room.finishGame(winners)) {
+            // 방이 이미 POST_GAME/Closed라면 이 세션은 더 이상 그 방의 결과 권한을 갖지 않는다.
+            // 비동기 종료가 늦게 돌아온 경우에도 두 번째 결과를 만들지 않고 기록을 버린다.
+            this.#replay.abort('room-already-finished');
+            return;
+        }
         const replay = await this.#replay.finish({ endTick: this.world.tick });
         this.#options.onFinished(this, this.#buildResult(winners, replay));
     }

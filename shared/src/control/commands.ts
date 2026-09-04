@@ -48,6 +48,18 @@ export const CommandType = {
      * 없는 파일에 실패로 답하면 정리 작업이 영원히 같은 행을 다시 집어 든다.
      */
     DeleteReplay: 'DELETE_REPLAY',
+    /**
+     * 이 방의 **다음 경기** 식별자를 내려준다.
+     *
+     * 방 하나가 여러 경기를 치르는데, 인게임 서버가 두 번째 경기의 id를 스스로 만들면 발급 주체를
+     * 우회하게 된다. 실제로 그랬다 — 매칭 서버는 모르는 id가 와도 같은 방의 과거 경기를 근거로
+     * 행을 만들어 줬고, 침해된 인게임 서버가 새 UUID로 전적과 XP를 무한히 적립할 수 있었다.
+     *
+     * 그래서 id를 만드는 쪽을 뒤집었다. 매칭 서버가 결과를 저장한 **직후에** 다음 경기 행을 미리
+     * 만들고 그 id를 이 명령으로 보낸다. 인게임 서버는 받은 것만 쓴다. 발급되지 않은 경기는
+     * 시작 자체가 안 된다.
+     */
+    GrantMatch: 'GRANT_MATCH',
 } as const;
 export type CommandType = (typeof CommandType)[keyof typeof CommandType];
 
@@ -230,6 +242,13 @@ export interface DeleteReplayPayload {
     storageKey: string;
 }
 
+export interface GrantMatchPayload {
+    /** 어느 방의 다음 경기인가. */
+    roomId: string;
+    /** 매칭 서버가 행까지 미리 만들어 둔 경기 id. 인게임 서버는 이 값을 그대로 쓴다. */
+    matchId: string;
+}
+
 export interface ControlCommandMap {
     [CommandType.CreateRoom]: { payload: CreateRoomPayload; result: CreateRoomResult };
     [CommandType.ReserveJoin]: { payload: ReserveJoinPayload; result: SeatGrant };
@@ -239,6 +258,7 @@ export interface ControlCommandMap {
     [CommandType.DrainServer]: { payload: DrainServerPayload; result: DrainServerResult };
     [CommandType.AdoptRoom]: { payload: AdoptRoomPayload; result: Record<string, never> };
     [CommandType.DeleteReplay]: { payload: DeleteReplayPayload; result: Record<string, never> };
+    [CommandType.GrantMatch]: { payload: GrantMatchPayload; result: Record<string, never> };
 }
 
 /* ────────────────────────────── heartbeat ────────────────────────────── */

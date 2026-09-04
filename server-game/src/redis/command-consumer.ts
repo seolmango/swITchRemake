@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
     type DeleteReplayPayload,
+    type GrantMatchPayload,
     CONTROL_VERSION,
     CommandType,
     ConsumerGroup,
@@ -311,6 +312,8 @@ export class CommandConsumer {
                 return this.#adoptRoom(command, command.payload as AdoptRoomPayload);
             case CommandType.DeleteReplay:
                 return this.#deleteReplay(command, command.payload as DeleteReplayPayload);
+            case CommandType.GrantMatch:
+                return this.#grantMatch(command, command.payload as GrantMatchPayload);
             default:
                 return failure(this.#options.serverId, command, ControlErrorCode.Internal);
         }
@@ -498,6 +501,15 @@ export class CommandConsumer {
         const result = this.#options.rooms.releaseSeat(payload.roomId, payload.userId);
         if (!result.ok) return failure(this.#options.serverId, command, result.code);
         this.#options.registry.noteReleased(payload.roomId, payload.userId, joined);
+        return success(this.#options.serverId, command, {});
+    }
+
+    /**
+     * 다음 경기 id를 방에 넣어 둔다. 방이 이미 닫혔으면 버린다 — 지난 방의 발급은 쓸 데가 없다.
+     */
+    #grantMatch(command: ControlCommand, payload: GrantMatchPayload): ControlReply<Record<string, never>> {
+        const result = this.#options.rooms.grantMatch(payload.roomId, payload.matchId);
+        if (!result.ok) return failure(this.#options.serverId, command, result.code);
         return success(this.#options.serverId, command, {});
     }
 

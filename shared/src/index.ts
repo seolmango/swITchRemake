@@ -130,6 +130,7 @@ export {
     type DrainServerResult,
     type KickUserPayload,
     type DeleteReplayPayload,
+    type GrantMatchPayload,
     type SeatGrant,
     type GameServerHeartbeat,
     type MatchServerHeartbeat,

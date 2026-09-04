@@ -164,6 +164,33 @@ test('ALLOCATING부터 POST_GAME 복귀까지 명단과 관전 자격을 서버�
     assert.equal(c1.closes.length, 0);
 });
 
+test('재경기는 매칭 서버가 발급한 다음 경기 id로만 시작한다', async () => {
+    const { context } = await playingRoom();
+    assert.equal(context.room.finishGame([1, 3]), true);
+    context.setNow(context.getNow() + 30_001);
+    context.room.advance();
+    assert.equal(context.room.state, RoomState.Waiting);
+
+    // 결과가 아직 저장되지 않아 발급이 안 왔다. 영구 거절이 아니라 "잠시 뒤 다시"다.
+    assert.equal(context.room.requestStart(1), ErrorCode.ResultBacklog);
+    assert.equal(context.lifecycle.starts.length, 1);
+
+    context.room.grantMatchId('match-2');
+    assert.equal(context.room.requestStart(1), null);
+    context.setNow(context.getNow() + 8_001);
+    context.room.advance();
+    assert.equal(context.room.state, RoomState.Playing);
+    assert.equal(context.lifecycle.starts.length, 2);
+    assert.equal(context.lifecycle.starts[1]?.matchId, 'match-2', '발급받은 id를 그대로 쓴다');
+
+    // 한 번 쓴 발급은 소모된다. 같은 id로 두 경기를 치를 수 없다.
+    assert.equal(context.room.finishGame([1, 3]), true);
+    context.setNow(context.getNow() + 30_001);
+    context.room.advance();
+    assert.equal(context.room.state, RoomState.Waiting);
+    assert.equal(context.room.requestStart(1), ErrorCode.ResultBacklog);
+});
+
 test('좌표를 싣는 연출은 시전자를 보는 사람에게만 간다', async () => {
     const context = setup();
     const c1 = context.connect(context.owner);

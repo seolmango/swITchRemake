@@ -372,6 +372,10 @@ test('모든 CommandType이 코덱을 통과한다', () => {
             }],
         },
         [CommandType.DeleteReplay]: { replayId: 'replay-1', storageKey: 'match-1.swrp' },
+        [CommandType.GrantMatch]: {
+            roomId: 'room-1',
+            matchId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+        },
     };
 
     for (const type of Object.values(CommandType)) {

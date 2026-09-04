@@ -253,6 +253,14 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
         return { ok: true, value: {} };
     }
 
+    /** 매칭 서버가 내려준 다음 경기 id를 그 방에 넣어 둔다. */
+    public grantMatch(roomId: string, matchId: string): ManagerResult<Record<string, never>> {
+        const room = this.#rooms.get(roomId);
+        if (room === undefined) return { ok: false, code: ControlErrorCode.RoomNotFound };
+        room.grantMatchId(matchId);
+        return { ok: true, value: {} };
+    }
+
     public admitReservation(reservation: Readonly<SeatReservation>) {
         const room = this.#rooms.get(reservation.roomId);
         return room?.admitReservation(reservation) ?? null;

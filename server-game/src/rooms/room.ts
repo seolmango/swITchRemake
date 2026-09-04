@@ -1,4 +1,4 @@
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import {
     CloseCode,
     ControlErrorCode,
@@ -107,8 +107,6 @@ export interface RoomOptions {
      */
     readonly isKnownMap: (mapId: string, mode: RoomMode) => boolean;
     readonly getServerTick: () => number;
-    /** 두 번째 경기부터 쓸 새 matchId. 테스트가 고정값을 넣기 위한 통로다. */
-    readonly newMatchId?: () => string;
     /** Notifies the directory publisher after a room-list-visible change. */
     readonly onDirectoryChanged?: () => void;
     readonly now?: () => number;
@@ -160,11 +158,16 @@ export class Room {
     readonly #startLock: StartLock;
     readonly #kickedUsers = new Set<ActorId>();
     #mapId: string;
-    /**
-     * 경기마다 새로 발급한다. 방 하나가 여러 경기를 치르는데 matchId를 고정하면 두 번째 경기부터는
-     * 매칭 서버가 `duplicate`로 버려서 전적도 결과 화면도 안 나온다.
-     */
+    /** 매칭 서버가 방 배정 시 발급한 경기 id. 인게임 서버는 새 값을 만들 권한이 없다. */
     #matchId: string;
+    /**
+     * 매칭 서버가 `GRANT_MATCH`로 내려준 **다음** 경기 id. 아직 안 왔으면 null이다.
+     *
+     * 예전에는 두 번째 경기부터 인게임 서버가 `randomUUID()`로 만들었다. 그러면 발급 주체가
+     * 뒤집혀서, 침해된 인게임 서버가 새 id로 결과를 계속 만들어 낼 수 있었다. 이제는 결과를
+     * 저장한 매칭 서버가 다음 id를 미리 만들어 보내고, 여기에 그것이 들어와 있어야만 시작한다.
+     */
+    #grantedMatchId: string | null = null;
     #playedGames = 0;
     #locked = false;
     #countdownEndsAt: number | null = null;
@@ -569,8 +572,17 @@ export class Room {
         if (participants.length < this.#options.minPlayersToStart) return ErrorCode.BadState;
         if (this.#options.canStartGame?.() === false) return ErrorCode.ResultBacklog;
 
-        // 첫 경기는 매칭 서버가 발급해 둔 id를 그대로 쓴다. 재경기부터 새로 만든다.
-        if (this.#playedGames > 0) this.#matchId = (this.#options.newMatchId ?? randomUUID)();
+        // 재경기는 매칭 서버가 다음 id를 내려준 뒤에만 시작할 수 있다. 아직 안 왔으면 결과가
+        // 아직 저장되지 않았다는 뜻이라, outbox가 밀렸을 때와 같은 "잠시 뒤 다시" 응답을 준다.
+        //
+        // 훈련장은 결과를 내지 않으므로(`GameSession`이 Match 모드에서만 종료 판정을 한다)
+        // 발급도 오지 않는다. 여기서 막으면 훈련장을 두 번 시작할 수 없다.
+        if (this.#playedGames > 0 && this.mode === RoomMode.Match) {
+            if (this.#grantedMatchId === null) return ErrorCode.ResultBacklog;
+            this.#matchId = this.#grantedMatchId;
+            this.#grantedMatchId = null;
+        }
+
         this.#playedGames += 1;
 
         this.#roster.clearHolds();
@@ -625,6 +637,16 @@ export class Room {
      * 사람의 입력을 버리기 때문에, 화면에는 살아 있는데 움직이지 않는 상태가 된다.
      * 명단과 시뮬레이션 양쪽을 같이 되돌려야 한다.
      */
+    /**
+     * 매칭 서버가 내려준 다음 경기 id를 받아 둔다.
+     *
+     * 같은 발급이 두 번 와도 안전하다 — 명령은 재전달될 수 있고, 덮어써도 둘 다 매칭 서버가
+     * 만든 값이라 어느 쪽을 쓰든 발급된 경기다. 이미 시작한 경기의 id는 건드리지 않는다.
+     */
+    public grantMatchId(matchId: string): void {
+        this.#grantedMatchId = matchId;
+    }
+
     public reviveForTraining(playerId: number): boolean {
         if (this.mode !== RoomMode.Training || this.state !== RoomState.Playing) return false;
         const member = this.#roster.getByPlayerId(playerId);

@@ -7,6 +7,7 @@ import {
     type ControlReply,
     type CreateRoomPayload,
     type DeleteReplayPayload,
+    type GrantMatchPayload,
     type KickUserPayload,
     type ReleaseSeatPayload,
     type ReserveJoinPayload,
@@ -91,6 +92,10 @@ function deleteReplayPayload(value: unknown): value is DeleteReplayPayload {
     return object(value) && boundedText(value['replayId'], 128) && boundedText(value['storageKey'], 1024);
 }
 
+function grantMatchPayload(value: unknown): value is GrantMatchPayload {
+    return object(value) && boundedText(value['roomId'], 64) && isControlRequestId(value['matchId']);
+}
+
 /**
  * 여기 없는 명령은 malformed로 거절된다.
  *
@@ -108,6 +113,7 @@ function validPayload(type: string, payload: unknown): boolean {
         case CommandType.DrainServer: return object(payload) && text(payload['serverId']);
         case CommandType.AdoptRoom: return adoptRoomPayload(payload);
         case CommandType.DeleteReplay: return deleteReplayPayload(payload);
+        case CommandType.GrantMatch: return grantMatchPayload(payload);
         default: return false;
     }
 }

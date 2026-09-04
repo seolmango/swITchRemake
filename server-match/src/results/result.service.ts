@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import {
@@ -74,7 +75,8 @@ export class ResultService {
             const [existing] = await tx.select().from(schema.matches)
                 .where(eq(schema.matches.matchId, result.matchId))
                 .for('update');
-            const match = existing ?? await this.issueRematch(tx, result);
+            // matchId는 매칭 서버가 미리 만든 행 자체가 권한표다. 같은 방의 과거 결과는 새 권한이 아니다.
+            const match = existing;
             if (!match) return 'invalid';
             if (match.resultRecordedAt) return 'duplicate';
             if ((match.roomId !== null && match.roomId !== result.roomId)
@@ -162,48 +164,42 @@ export class ResultService {
     }
 
     /**
-     * 같은 방의 두 번째 경기 결과를 받아 준다. 경기마다 새 matchId가 발급되는데 매칭 서버는 방을 만들 때
-     * 한 번만 발급하므로, 재경기의 matchId는 여기 처음 도착한다.
+     * 방금 끝난 경기의 **다음** 경기를 미리 발급한다.
      *
-     * 권한은 방으로 판정한다. 방을 배정한 서버가 보낸 결과여야 하고, 참가자는 매칭 서버가 그 방에 들여보낸
-     * 사람의 부분집합이어야 한다. 그 두 가지가 맞으면 게임 서버가 자기 방에서 무슨 경기를 몇 번 하는지는
-     * 매칭 서버가 관여할 일이 아니다.
+     * 예전에는 인게임 서버가 두 번째 경기부터 id를 스스로 만들었고, 매칭 서버는 모르는 id가 와도
+     * 같은 방의 과거 경기를 근거로 행을 만들어 줬다. 그 경로가 있으면 침해된 인게임 서버가 새
+     * UUID로 전적과 XP를 무한히 적립할 수 있다. 그래서 만드는 쪽을 여기로 옮겼다.
+     *
+     * 배정은 방금 끝난 경기에서 그대로 옮겨 붙인다. 이 방에 매칭 서버가 들여보낸 사람이 누구인지는
+     * 그 목록이 답이고, 다음 경기의 참가자 검사도 같은 목록을 본다.
+     *
+     * 발급된 id가 안 쓰이고 남을 수 있다 — 사람들이 그냥 나가면 그렇다. 결과가 없는 행이라
+     * 전적에도 통계에도 잡히지 않고, 보관 정리가 걷어 간다.
      */
-    private async issueRematch(
-        tx: PostgresJsDatabase<typeof schema>,
-        result: MatchResultMessage,
-    ): Promise<typeof schema.matches.$inferSelect | null> {
-        const [origin] = await tx.select().from(schema.matches)
-            .where(and(
-                eq(schema.matches.roomId, result.roomId),
-                eq(schema.matches.serverId, result.serverId),
-            ))
-            .orderBy(desc(schema.matches.createdAt))
-            .limit(1)
-            .for('update');
-        if (!origin) return null;
+    async issueNextMatch(finished: MatchResultMessage): Promise<string | null> {
+        return this.db.transaction(async (tx) => {
+            const assignments = await tx.select().from(schema.matchAssignments)
+                .where(eq(schema.matchAssignments.matchId, finished.matchId));
+            if (!assignments.length) return null;
 
-        const assignments = await tx.select().from(schema.matchAssignments)
-            .where(eq(schema.matchAssignments.matchId, origin.matchId));
-        if (!assignments.length || !this.isAssignedParticipantSubset(result, assignments)) return null;
+            const matchId = randomUUID();
+            const [created] = await tx.insert(schema.matches).values({
+                matchId,
+                serverId: finished.serverId,
+                roomId: finished.roomId,
+                mapId: finished.mapId,
+            }).returning({ matchId: schema.matches.matchId });
+            if (!created) return null;
 
-        const [created] = await tx.insert(schema.matches).values({
-            matchId: result.matchId,
-            serverId: result.serverId,
-            roomId: result.roomId,
-            mapId: result.mapId,
-        }).returning();
-        if (!created) return null;
-
-        // 배정을 옮겨 붙인다. 다음 재경기가 이 행을 원본으로 삼아 같은 판정을 할 수 있어야 한다.
-        await tx.insert(schema.matchAssignments).values(assignments.map((assignment) => ({
-            matchId: created.matchId,
-            actorId: assignment.actorId,
-            userId: assignment.userId,
-            nickname: assignment.nickname,
-            isGuest: assignment.isGuest,
-        })));
-        return created;
+            await tx.insert(schema.matchAssignments).values(assignments.map((assignment) => ({
+                matchId,
+                actorId: assignment.actorId,
+                userId: assignment.userId,
+                nickname: assignment.nickname,
+                isGuest: assignment.isGuest,
+            })));
+            return matchId;
+        });
     }
 
     private assignment(matchId: string, actor: AssignedActor) {
