@@ -1,6 +1,14 @@
-import { Injectable, ExecutionContext } from "@nestjs/common";
-import { ThrottlerGuard, ThrottlerRequest } from "@nestjs/throttler";
-import { RATE_LIMIT_KEY, RateLimitOptions } from "./ratelimiter.decorator";
+import {
+    CanActivate,
+    ExecutionContext,
+    HttpException,
+    HttpStatus,
+    Injectable,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { RATE_LIMIT_KEY, RateLimitOptions } from './ratelimiter.decorator';
+import { RedisService } from './redis/redis.service';
+import { SessionSecurityService } from './session/session-security.service';
 
 /**
  * 자동 점검용 완화 배수.
@@ -13,6 +21,7 @@ import { RATE_LIMIT_KEY, RateLimitOptions } from "./ratelimiter.decorator";
  * 에서는 부팅이 거부된다(`assertRateLimitPolicy`). `EMAIL_TRANSPORT=sink`와 같은 취급이다.
  */
 export const RATE_LIMIT_RELAXED_FACTOR = 50;
+const NAT_IP_FACTOR = 4;
 
 export function rateLimitRelaxed(): boolean {
     return process.env.RATE_LIMIT_RELAXED === 'true';
@@ -25,45 +34,92 @@ export function assertRateLimitPolicy(appEnv: string | undefined): void {
     }
 }
 
-@Injectable()
-export class RateLimiterGuard extends ThrottlerGuard {
-    protected async getTracker(req: Record<string, any>): Promise<string> {
-        if (req.user?.guest === true) return `guest:${req.user.id}`;
-        if (req.user?.guest === false) return `account:${req.user.id}`;
-        return `ip:${req.ip}`;
+const DEFAULT_OPTIONS: RateLimitOptions = { anon: 20, guest: 30, account: 50, ttl: 60_000 };
+
+abstract class RedisRateGuard {
+    constructor(
+        protected readonly reflector: Reflector,
+        protected readonly redis: RedisService,
+    ) {}
+
+    protected options(context: ExecutionContext): RateLimitOptions {
+        return this.reflector.get<RateLimitOptions>(RATE_LIMIT_KEY, context.getHandler())
+            ?? this.reflector.get<RateLimitOptions>(RATE_LIMIT_KEY, context.getClass())
+            ?? DEFAULT_OPTIONS;
     }
 
-    protected async handleRequest(requestProps:ThrottlerRequest): Promise<boolean> {
-        const { context } = requestProps;
-        const req = context.switchToHttp().getRequest();
+    protected scaled(limit: number): number {
+        return limit > 0 && rateLimitRelaxed() ? limit * RATE_LIMIT_RELAXED_FACTOR : limit;
+    }
 
-        const routeOptions = this.reflector.get<RateLimitOptions>(
-            RATE_LIMIT_KEY,
-            context.getHandler(),
-        ) || this.reflector.get<RateLimitOptions>(
-            RATE_LIMIT_KEY,
-            context.getClass(),
+    protected async consume(key: string, limit: number, ttlMs: number): Promise<void> {
+        if (limit <= 0) {
+            throw new HttpException('Too many requests', HttpStatus.TOO_MANY_REQUESTS);
+        }
+        const count = await this.redis.incrementWithTtl(key, Math.max(1, Math.ceil(ttlMs / 1000)));
+        if (count > this.scaled(limit)) {
+            throw new HttpException({
+                statusCode: HttpStatus.TOO_MANY_REQUESTS,
+                message: 'Too many requests',
+                retryAfterMs: Math.max(0, await this.redis.ttlMilliseconds(key)),
+            }, HttpStatus.TOO_MANY_REQUESTS);
+        }
+    }
+}
+
+/**
+ * JWT 검증보다 먼저 IP 비용을 센다. 잘못된 서명도 이 버킷을 지나므로 검증 CPU를 공짜로 쓸 수 없다.
+ * NAT 사용자를 위해 actor 한도보다 넓게 잡지만, actor가 생겨도 이 버킷을 없애지는 않는다.
+ */
+@Injectable()
+export class PreAuthIpRateLimiterGuard extends RedisRateGuard {
+    constructor(
+        reflector: Reflector,
+        redis: RedisService,
+        private readonly security: SessionSecurityService,
+    ) {
+        super(reflector, redis);
+    }
+
+    async canActivate(context: ExecutionContext): Promise<boolean> {
+        const req = context.switchToHttp().getRequest<Record<string, any>>();
+        const options = this.options(context);
+        const widestActorLimit = Math.max(options.anon, options.guest, options.account);
+        await this.consume(
+            `auth-rate:ip:${this.security.hmacIp(String(req.ip))}`,
+            widestActorLimit * NAT_IP_FACTOR,
+            options.ttl,
         );
+        return true;
+    }
+}
 
-        const defaultOptions: RateLimitOptions = {
-            anon: 20,
-            guest: 30,
-            account: 50,
-            ttl: 60000,
-        };
-
-        const currentOptions = routeOptions || defaultOptions;
-
-        const limit = req.user?.guest === true
-            ? currentOptions.guest
+/** JWT 뒤에서 actor와 공격 대상 계정을 각각 센다. 카운터는 모든 인스턴스가 같은 Redis를 쓴다. */
+@Injectable()
+export class RateLimiterGuard extends RedisRateGuard {
+    async canActivate(context: ExecutionContext): Promise<boolean> {
+        const req = context.switchToHttp().getRequest<Record<string, any>>();
+        const options = this.options(context);
+        const actorLimit = req.user?.guest === true
+            ? options.guest
             : req.user?.guest === false
-                ? currentOptions.account
-                : currentOptions.anon;
+                ? options.account
+                : options.anon;
 
-        requestProps.ttl = currentOptions.ttl;
-        // 0은 "이 신원에게는 아예 막힌 길"이라는 뜻이다. 완화해도 열리면 안 된다.
-        requestProps.limit = limit > 0 && rateLimitRelaxed() ? limit * RATE_LIMIT_RELAXED_FACTOR : limit;
+        if (req.user) {
+            const kind = req.user.guest ? 'guest' : 'account';
+            await this.consume(`auth-rate:actor:${kind}:${req.user.id}`, actorLimit, options.ttl);
+        }
 
-        return super.handleRequest(requestProps)
+        const target = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+        if (target) {
+            const positive = [options.anon, options.guest, options.account].filter((value) => value > 0);
+            await this.consume(
+                `auth-rate:target:${target}`,
+                positive.length ? Math.min(...positive) : 0,
+                options.ttl,
+            );
+        }
+        return true;
     }
 }

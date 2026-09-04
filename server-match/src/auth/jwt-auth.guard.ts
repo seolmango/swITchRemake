@@ -1,8 +1,12 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, Inject, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from '@nestjs/config';
 import { makeKeys } from 'shared';
 import { RedisService } from '../redis/redis.service';
+import { and, eq, gt, isNull } from 'drizzle-orm';
+import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import { DRIZZLE } from '../database/database.module';
+import * as schema from '../database/schema';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -11,6 +15,7 @@ export class JwtAuthGuard implements CanActivate {
         private readonly jwtService: JwtService,
         private readonly configService: ConfigService,
         private readonly redisService: RedisService,
+        @Inject(DRIZZLE) private readonly db: PostgresJsDatabase<typeof schema>,
     ) {}
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const request = context.switchToHttp().getRequest();
@@ -51,7 +56,23 @@ export class JwtAuthGuard implements CanActivate {
                     !Number.isInteger(payload.sub)
                     || typeof payload.sid !== 'string'
                     || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.sid)
+                    || !Number.isInteger(payload.sev)
                 ) {
+                    throw new UnauthorizedException('Invalid token');
+                }
+                const [authority] = await this.db.select({
+                    sessionId: schema.sessions.id,
+                    status: schema.users.accountStatus,
+                    securityEpoch: schema.users.securityEpoch,
+                }).from(schema.sessions)
+                    .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
+                    .where(and(
+                        eq(schema.sessions.id, payload.sid),
+                        eq(schema.sessions.userId, payload.sub),
+                        isNull(schema.sessions.revokedAt),
+                        gt(schema.sessions.expiresAt, new Date()),
+                    ));
+                if (!authority || authority.status !== 'ACTIVE' || authority.securityEpoch !== payload.sev) {
                     throw new UnauthorizedException('Invalid token');
                 }
                 request.user = { id: payload.sub, sessionId: payload.sid, guest: false };

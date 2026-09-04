@@ -1,7 +1,9 @@
 import { IsEmail, IsString, Length, Matches } from "class-validator";
+import { Transform } from 'class-transformer';
 import { IsValidPassword } from './password.validator';
 
 export class CreateUserDto {
+    @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value)
     @IsEmail()
     email!: string;
 

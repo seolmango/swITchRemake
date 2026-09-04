@@ -64,6 +64,7 @@ test('JWT guard accepts a signed guest actor without requiring a session id', as
         { verify: () => payload } as never,
         { get: () => 'secret' } as never,
         { get: async () => '{"active":true}' } as never,
+        {} as never,
     );
     const context = { switchToHttp: () => ({ getRequest: () => request }) };
     assert.equal(await guard.canActivate(context as never), true);

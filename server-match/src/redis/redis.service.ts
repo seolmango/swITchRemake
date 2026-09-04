@@ -57,6 +57,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         await this.client.del(key);
     }
 
+    async ping(): Promise<boolean> {
+        return await this.client.ping() === 'PONG';
+    }
+
     async setIfAbsent(key: string, value: string, ttlSeconds: number): Promise<boolean> {
         const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');
         return result === 'OK';
@@ -87,6 +91,49 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
             String(ttlSeconds),
         );
         return result === 'OK';
+    }
+
+    /** 인증 코드를 한 요청만 빌리게 하고, 원래 남은 수명도 함께 돌려준다. */
+    async compareAndClaim(
+        key: string,
+        expectedValue: string,
+        claimKey: string,
+        claimValue: string,
+        claimTtlSeconds: number,
+    ): Promise<number> {
+        const result = await this.client.eval(
+            'if redis.call("EXISTS", KEYS[2]) == 1 then return -2 end; '
+            + 'if redis.call("GET", KEYS[1]) ~= ARGV[1] then return -1 end; '
+            + 'local ttl = redis.call("PTTL", KEYS[1]); redis.call("DEL", KEYS[1]); '
+            + 'redis.call("SET", KEYS[2], ARGV[2], "EX", ARGV[3]); return ttl',
+            2,
+            key,
+            claimKey,
+            expectedValue,
+            claimValue,
+            String(claimTtlSeconds),
+        );
+        return Number(result);
+    }
+
+    async releaseClaim(
+        claimKey: string,
+        claimValue: string,
+        key: string,
+        value: string,
+        ttlMilliseconds: number,
+    ): Promise<boolean> {
+        const result = await this.client.eval(
+            'if redis.call("GET", KEYS[1]) ~= ARGV[1] then return 0 end; '
+            + 'redis.call("DEL", KEYS[1]); redis.call("SET", KEYS[2], ARGV[2], "PX", ARGV[3]); return 1',
+            2,
+            claimKey,
+            key,
+            claimValue,
+            value,
+            String(Math.max(1, ttlMilliseconds)),
+        );
+        return result === 1;
     }
 
     async ttlMilliseconds(key: string): Promise<number> {

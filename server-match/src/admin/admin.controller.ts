@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Query, Req } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Inject, Query, Req } from '@nestjs/common';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { FastifyRequest } from 'fastify';
 import { NeedAccount } from '../auth/need-account.decorator';
@@ -49,8 +49,9 @@ export class AdminController {
     @Get('players')
     @NeedAdmin()
     @RateLimiter({ anon: 0, guest: 0, account: 60, ttl: 60_000 })
-    async lookupPlayer(@Req() req: AccountRequest, @Query('q') query: string) {
-        return this.playerLookup.lookup(req.user.id, (query ?? '').trim());
+    async lookupPlayer(@Req() req: AccountRequest, @Query('q') query: string | string[] | undefined) {
+        if (typeof query !== 'string') throw new BadRequestException('q must be a single string');
+        return this.playerLookup.lookup(req.user.id, query.trim());
     }
 
     /** 감사 로그. append-only라 커서는 id 하나면 된다. */
@@ -61,4 +62,3 @@ export class AdminController {
         return this.playerLookup.auditLog(Number(limit) || 20, before ? Number(before) : undefined);
     }
 }
-

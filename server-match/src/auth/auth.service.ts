@@ -5,9 +5,10 @@ import {
     Inject,
     Injectable,
     InternalServerErrorException,
+    Logger,
     UnauthorizedException,
 } from '@nestjs/common';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -24,7 +25,12 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SessionSecurityService } from '../session/session-security.service';
 import { SessionService } from '../session/session.service';
 import { SanctionService } from '../sanction/sanction.service';
-import { discardVerificationCode, issueVerificationCode, verifyVerificationCode } from './verification-code';
+import {
+    claimVerificationCode,
+    commitVerificationCodeClaim,
+    issueVerificationCode,
+    releaseVerificationCodeClaim,
+} from './verification-code';
 
 interface RequestSessionMetadata {
     ip: string;
@@ -36,6 +42,9 @@ interface RefreshPayload {
     email: string;
     sid: string;
     type: 'refresh';
+    fid: string;
+    gen: number;
+    sev: number;
     exp?: number;
 }
 
@@ -65,18 +74,31 @@ type RefreshResult =
         refreshToken: string;
         nickname: string;
         sessionId: string;
-        rotatedFromSessionId: string;
+        familyId: string;
+        generation: number;
     }
     | { kind: 'invalid' }
-    | { kind: 'reuse' };
+    | { kind: 'reuse'; familyId: string; generation: number };
+
+interface CachedRotationResult {
+    accessToken: string;
+    refreshToken: string;
+    nickname: string;
+}
 
 // One NAT may issue identities for ten players and retry failed startup requests in one minute.
 const GUEST_AUTH_RATE_LIMIT_PER_MINUTE = 30;
 const REFRESH_ROTATION_GRACE_MS = 10_000;
+const DUMMY_PASSWORD_HASH = '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+
+export function passwordHashForComparison(passwordHash: string | undefined): string {
+    return passwordHash ?? DUMMY_PASSWORD_HASH;
+}
 
 @Injectable()
 export class AuthService {
     private readonly keys = makeKeys(process.env.APP_ENV ?? 'dev');
+    private readonly logger = new Logger(AuthService.name);
 
     constructor(
         @Inject(DRIZZLE) private readonly db: PostgresJsDatabase<typeof schema>,
@@ -90,8 +112,12 @@ export class AuthService {
     ) {}
 
     async sendVerificationCodeEmail(dto: SendEmailDto) {
-        const { email, vtype } = dto;
+        const email = dto.email.trim().toLowerCase();
+        const { vtype } = dto;
         const code = await issueVerificationCode(this.redisService, vtype, email);
+        if (code === null) {
+            return { message: 'Verification code sent successfully' };
+        }
 
         let emailSent = false;
         switch (vtype) {
@@ -122,30 +148,49 @@ export class AuthService {
      * 있을지도 모르는 상황이고, 그때 남의 세션을 살려 두면 되찾은 것이 아니다.
      */
     async resetPassword(dto: ResetPasswordDto): Promise<{ reset: boolean }> {
-        if (!await verifyVerificationCode(this.redisService, EmailAuthType.RESET_PASSWORD, dto.email, dto.code)) {
+        const email = dto.email.trim().toLowerCase();
+        const claim = await claimVerificationCode(
+            this.redisService,
+            EmailAuthType.RESET_PASSWORD,
+            email,
+            dto.code,
+        );
+        if (!claim) {
             throw new HttpException('Invalid or expired verification code', HttpStatus.BAD_REQUEST);
         }
+        try {
+            const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+            await this.db.transaction(async (tx) => {
+                const [user] = await tx.select({
+                    id: schema.users.id,
+                    accountStatus: schema.users.accountStatus,
+                }).from(schema.users).where(sql`lower(${schema.users.email}) = ${email}`).for('update');
+                if (!user || user.accountStatus !== 'ACTIVE') return;
 
-        const [user] = await this.db.select({ id: schema.users.id, accountStatus: schema.users.accountStatus })
-            .from(schema.users)
-            .where(eq(schema.users.email, dto.email));
-        // 없는 계정에도 코드는 소모한다. 남겨 두면 응답이 같아도 코드의 수명이 가입 여부를 말한다.
-        await discardVerificationCode(this.redisService, EmailAuthType.RESET_PASSWORD, dto.email);
-        if (!user || user.accountStatus !== 'ACTIVE') return { reset: true };
-
-        const passwordHash = await bcrypt.hash(dto.newPassword, 10);
-        await this.db.update(schema.users)
-            .set({ passwordHash, updatedAt: new Date() })
-            .where(eq(schema.users.id, user.id));
-        await this.sessionService.revokeAll(user.id);
-        return { reset: true };
+                await tx.update(schema.users).set({
+                    passwordHash,
+                    securityEpoch: sql`${schema.users.securityEpoch} + 1`,
+                    updatedAt: new Date(),
+                }).where(eq(schema.users.id, user.id));
+                await this.sessionService.revokeAll(user.id, tx);
+            });
+            // 없는 계정에도 코드는 소모한다. 코드 수명이 가입 여부를 드러내면 안 된다.
+            await commitVerificationCodeClaim(this.redisService, claim);
+            return { reset: true };
+        } catch (error) {
+            await releaseVerificationCodeClaim(this.redisService, claim).catch(() => undefined);
+            throw error;
+        }
     }
 
     async login(dto: LoginDto, metadata: RequestSessionMetadata) {
-        const { email, password } = dto;
-        const [user] = await this.db.select().from(schema.users).where(eq(schema.users.email, email));
+        const email = dto.email.trim().toLowerCase();
+        const { password } = dto;
+        const [user] = await this.db.select().from(schema.users).where(sql`lower(${schema.users.email}) = ${email}`);
 
-        if (!user || !await bcrypt.compare(password, user.passwordHash)) {
+        const comparedHash = passwordHashForComparison(user?.passwordHash);
+        const passwordMatches = await bcrypt.compare(password, comparedHash);
+        if (!user || !passwordMatches) {
             throw new UnauthorizedException('Invalid email or password');
         }
 
@@ -154,7 +199,7 @@ export class AuthService {
             throw new UnauthorizedException('Account is not active');
         }
 
-        return this.createSession(user.id, user.email, user.nickname, metadata);
+        return this.createSession(user.id, user.email, user.nickname, user.passwordHash, metadata);
     }
 
     async assertIdentitySwitchAllowed(actorId: number | string | undefined): Promise<void> {
@@ -230,11 +275,15 @@ export class AuthService {
 
     async refresh(refreshToken: string, metadata: RequestSessionMetadata) {
         const payload = this.verifyRefreshToken(refreshToken);
+        if (payload.exp && payload.exp * 1000 <= Date.now()) {
+            throw new UnauthorizedException('Invalid refresh token');
+        }
         const [cachedUser] = await this.db.select({
             id: schema.users.id,
             accountStatus: schema.users.accountStatus,
+            securityEpoch: schema.users.securityEpoch,
         }).from(schema.users).where(eq(schema.users.id, payload.sub));
-        if (!cachedUser) {
+        if (!cachedUser || cachedUser.securityEpoch !== payload.sev) {
             throw new UnauthorizedException('Invalid refresh token');
         }
 
@@ -248,12 +297,38 @@ export class AuthService {
 
         const tokenHash = this.sessionSecurity.hashRefreshToken(refreshToken);
         const now = new Date();
-        let gracedSuccessorId: string | null = null;
+        let cachedRotation: string | null = null;
         try {
-            gracedSuccessorId = await this.redisService.get(this.rotationGraceKey(payload.sid));
+            cachedRotation = await this.redisService.get(this.rotationResultKey(tokenHash));
         } catch {
-            // Redis 장애가 인증 요청 자체를 막으면 이미 커밋된 회전 결과를 받을 수 없다.
-            gracedSuccessorId = null;
+            cachedRotation = null;
+        }
+        if (cachedRotation) {
+            try {
+                return JSON.parse(cachedRotation) as CachedRotationResult;
+            } catch {
+                // 손상된 캐시는 정상 회전으로 취급하지 않는다. DB가 재사용 여부를 판정한다.
+            }
+        }
+        const rotationLockId = randomUUID();
+        let ownsRotation = true;
+        try {
+            ownsRotation = await this.redisService.setIfAbsent(
+                this.rotationLockKey(tokenHash),
+                rotationLockId,
+                3,
+            );
+        } catch {
+            // Redis가 없을 때는 DB의 일회성 판정을 택한다. 중복 편의보다 재사용 차단이 우선이다.
+        }
+        if (!ownsRotation) {
+            // 먼저 들어온 회전이 DB를 커밋하고 결과 캐시를 쓰는 짧은 구간만 기다린다.
+            for (let attempt = 0; attempt < 40; attempt++) {
+                await new Promise((resolve) => setTimeout(resolve, 50));
+                const cached = await this.redisService.get(this.rotationResultKey(tokenHash));
+                if (cached) return JSON.parse(cached) as CachedRotationResult;
+            }
+            throw new UnauthorizedException('Invalid refresh token');
         }
         const result = await this.db.transaction<RefreshResult>(async (tx) => {
             // SanctionService locks users before deleting sessions. Keep the same
@@ -263,8 +338,9 @@ export class AuthService {
                 email: schema.users.email,
                 nickname: schema.users.nickname,
                 accountStatus: schema.users.accountStatus,
+                securityEpoch: schema.users.securityEpoch,
             }).from(schema.users).where(eq(schema.users.id, payload.sub)).for('update');
-            if (!user || user.accountStatus !== 'ACTIVE') {
+            if (!user || user.accountStatus !== 'ACTIVE' || user.securityEpoch !== payload.sev) {
                 return { kind: 'invalid' };
             }
 
@@ -290,38 +366,35 @@ export class AuthService {
             if (session.userId !== user.id) {
                 return { kind: 'invalid' };
             }
-
-            let sessionToRotate = session;
+            if (session.familyId !== payload.fid || session.generation !== payload.gen) {
+                return { kind: 'invalid' };
+            }
             if (session.revokedAt) {
-                if (!gracedSuccessorId) {
-                    await tx.update(schema.sessions).set({ revokedAt: now }).where(and(
-                        eq(schema.sessions.userId, session.userId),
-                        isNull(schema.sessions.revokedAt),
-                    ));
-                    return { kind: 'reuse' };
-                }
-
-                const [successor] = await tx.select()
-                    .from(schema.sessions)
-                    .where(and(
-                        eq(schema.sessions.id, gracedSuccessorId),
-                        eq(schema.sessions.userId, user.id),
-                    ))
-                    .for('update');
-                if (!successor || successor.revokedAt || successor.expiresAt <= now) {
-                    return { kind: 'invalid' };
-                }
-
-                // 직전 응답의 쿠키가 반영되기 전 요청은 계정 탈취가 아니라 같은 회전의 경합이다.
-                sessionToRotate = successor;
+                await tx.update(schema.sessions).set({ revokedAt: now }).where(and(
+                    eq(schema.sessions.familyId, session.familyId),
+                    isNull(schema.sessions.revokedAt),
+                ));
+                await tx.insert(schema.authSecurityEvents).values({
+                    userId: user.id,
+                    event: 'refresh-token-reuse',
+                    familyId: session.familyId,
+                    generation: session.generation,
+                });
+                return { kind: 'reuse', familyId: session.familyId, generation: session.generation };
             }
 
             await tx.update(schema.sessions).set({
                 revokedAt: now,
                 lastUsedAt: now,
-            }).where(eq(schema.sessions.id, sessionToRotate.id));
+            }).where(eq(schema.sessions.id, session.id));
 
-            const tokens = this.buildTokens(user.id, user.email);
+            const tokens = this.buildTokens(
+                user.id,
+                user.email,
+                session.familyId,
+                session.generation + 1,
+                user.securityEpoch,
+            );
             const ip = this.sessionSecurity.protectIp(metadata.ip);
             await tx.insert(schema.sessions).values({
                 id: tokens.sessionId,
@@ -333,6 +406,8 @@ export class AuthService {
                 createdAt: now,
                 lastUsedAt: now,
                 expiresAt: tokens.expiresAt,
+                familyId: session.familyId,
+                generation: session.generation + 1,
             });
 
             return {
@@ -341,62 +416,81 @@ export class AuthService {
                 refreshToken: tokens.refreshToken,
                 nickname: user.nickname,
                 sessionId: tokens.sessionId,
-                rotatedFromSessionId: sessionToRotate.id,
+                familyId: session.familyId,
+                generation: session.generation + 1,
             };
         });
 
         if (result.kind !== 'ok') {
+            await this.redisService.compareAndDelete(this.rotationLockKey(tokenHash), rotationLockId).catch(() => undefined);
+            if (result.kind === 'reuse') {
+                this.logger.warn(JSON.stringify({
+                    event: 'refresh-token-reuse',
+                    userId: payload.sub,
+                    familyId: result.familyId,
+                    generation: result.generation,
+                }));
+            }
             throw new UnauthorizedException('Invalid refresh token');
         }
 
-        /*
-         * 유예 표는 회전한 세션과 방금 들고 온 세션 양쪽에 남긴다. 보통은 같은 값이지만
-         * 경합이 셋 이상 겹치면 다르다 — 같은 옛 토큰이 한 번 더 왔을 때도 최신 세션으로
-         * 이어져야 한다. 표가 옛 세션을 가리킨 채로 멈추면 그 요청만 401을 맞는다.
-         */
-        for (const staleSessionId of new Set([result.rotatedFromSessionId, payload.sid])) {
-            try {
-                await this.redisService.set(
-                    this.rotationGraceKey(staleSessionId),
-                    result.sessionId,
-                    REFRESH_ROTATION_GRACE_MS / 1000,
-                );
-            } catch {
-                // 커밋 뒤 Redis 기록 실패로 새 토큰 전달까지 실패하면 정상 사용자가 복구할 수 없다.
-            }
-        }
-        return {
-            kind: result.kind,
+        const response: CachedRotationResult = {
             accessToken: result.accessToken,
             refreshToken: result.refreshToken,
             nickname: result.nickname,
         };
+        try {
+            // 옛 토큰의 짧은 중복 요청에는 이 결과 자체를 돌려준다. successor를 다시 돌리지는 않는다.
+            await this.redisService.set(
+                this.rotationResultKey(tokenHash),
+                JSON.stringify(response),
+                REFRESH_ROTATION_GRACE_MS / 1000,
+            );
+            await this.redisService.compareAndDelete(this.rotationLockKey(tokenHash), rotationLockId);
+        } catch {
+            // 커밋된 새 토큰은 전달한다. 캐시가 없으면 다음 재사용은 안전하게 family를 닫는다.
+        }
+        return response;
     }
 
-    private async createSession(userId: number, email: string, nickname: string, metadata: RequestSessionMetadata) {
-        const tokens = this.buildTokens(userId, email);
+    private async createSession(
+        userId: number,
+        email: string,
+        nickname: string,
+        expectedPasswordHash: string,
+        metadata: RequestSessionMetadata,
+    ) {
         const ip = this.sessionSecurity.protectIp(metadata.ip);
         const now = new Date();
-        await this.db.transaction(async (tx) => {
-            const [user] = await tx.select({ status: schema.users.accountStatus })
+        const tokens = await this.db.transaction(async (tx) => {
+            const [user] = await tx.select({
+                status: schema.users.accountStatus,
+                passwordHash: schema.users.passwordHash,
+                securityEpoch: schema.users.securityEpoch,
+            })
                 .from(schema.users)
                 .where(eq(schema.users.id, userId))
                 .for('update');
-            if (!user || user.status !== 'ACTIVE') {
+            if (!user || user.status !== 'ACTIVE' || user.passwordHash !== expectedPasswordHash) {
                 throw new UnauthorizedException('Account is not active');
             }
 
+            const familyId = randomUUID();
+            const createdTokens = this.buildTokens(userId, email, familyId, 0, user.securityEpoch);
             await tx.insert(schema.sessions).values({
-                id: tokens.sessionId,
+                id: createdTokens.sessionId,
                 userId,
-                refreshTokenHash: this.sessionSecurity.hashRefreshToken(tokens.refreshToken),
+                refreshTokenHash: this.sessionSecurity.hashRefreshToken(createdTokens.refreshToken),
                 deviceLabel: this.sessionSecurity.deviceLabel(metadata.userAgent),
                 ipHmac: ip.ipHmac,
                 ipEncrypted: ip.ipEncrypted,
                 createdAt: now,
                 lastUsedAt: now,
-                expiresAt: tokens.expiresAt,
+                expiresAt: createdTokens.expiresAt,
+                familyId,
+                generation: 0,
             });
+            return createdTokens;
         });
 
         return {
@@ -406,7 +500,7 @@ export class AuthService {
         };
     }
 
-    private buildTokens(userId: number, email: string) {
+    private buildTokens(userId: number, email: string, familyId: string, generation: number, securityEpoch: number) {
         const sessionId = randomUUID();
         const refreshTtlSeconds = Number(this.configService.get('JWT_REFRESH_EXPIRATION'));
         const accessToken = this.jwtService.sign({
@@ -414,6 +508,7 @@ export class AuthService {
             email,
             sid: sessionId,
             type: 'access',
+            sev: securityEpoch,
         }, {
             secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
             expiresIn: Number(this.configService.get('JWT_ACCESS_EXPIRATION')),
@@ -423,6 +518,9 @@ export class AuthService {
             email,
             sid: sessionId,
             type: 'refresh',
+            fid: familyId,
+            gen: generation,
+            sev: securityEpoch,
         }, {
             secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
             expiresIn: refreshTtlSeconds,
@@ -503,6 +601,11 @@ export class AuthService {
                 || !Number.isInteger(payload.sub)
                 || typeof payload.email !== 'string'
                 || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.sid)
+                || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.fid)
+                || !Number.isInteger(payload.gen)
+                || payload.gen < 0
+                || !Number.isInteger(payload.sev)
+                || payload.sev < 0
             ) {
                 throw new Error('Malformed refresh token');
             }
@@ -512,8 +615,12 @@ export class AuthService {
         }
     }
 
-    private rotationGraceKey(sessionId: string): string {
-        return `auth:rotate:${sessionId}`;
+    private rotationResultKey(tokenHash: string): string {
+        return `auth:rotate-result:${tokenHash}`;
+    }
+
+    private rotationLockKey(tokenHash: string): string {
+        return `auth:rotate-lock:${tokenHash}`;
     }
 
     private guestSuffix(): string {

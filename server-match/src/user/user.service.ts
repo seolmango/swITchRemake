@@ -5,13 +5,18 @@ import * as schema from '../database/schema';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from "./dto/create-user.dto";
 import { RedisService } from "../redis/redis.service";
-import { and, desc, eq, isNotNull, lt, or } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, lt, or, sql } from 'drizzle-orm';
 import { SanctionService } from '../sanction/sanction.service';
 import { SessionService } from '../session/session.service';
 import { EmailService } from '../email/email.service';
 import { RoomsService } from '../rooms/rooms.service';
 import { EmailAuthType } from '../auth/dto/email-auth.dto';
-import { discardVerificationCode, issueVerificationCode, verifyVerificationCode } from '../auth/verification-code';
+import {
+    claimVerificationCode,
+    commitVerificationCodeClaim,
+    issueVerificationCode,
+    releaseVerificationCodeClaim,
+} from '../auth/verification-code';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { levelFromXp } from 'shared';
 import { DEFAULT_STATS, nonNegativeInteger, percentage, readStoredStats, type StoredStats } from './stored-stats';
@@ -102,6 +107,7 @@ export class UserService {
         if (!user || user.status !== 'ACTIVE') throw new NotFoundException('User not found');
 
         const code = await issueVerificationCode(this.redisService, EmailAuthType.DELETE, user.email);
+        if (code === null) return { sent: true };
         if (!await this.emailService.sendDeleteAccountCodeEmail(user.email, code)) {
             throw new InternalServerErrorException('Verification email send failed');
         }
@@ -109,8 +115,10 @@ export class UserService {
     }
 
     async createUser(dto: CreateUserDto) {
-        const { email, password, nickname, code } = dto;
-        if (!await verifyVerificationCode(this.redisService, EmailAuthType.SIGNUP, email, code)) {
+        const email = dto.email.trim().toLowerCase();
+        const { password, nickname, code } = dto;
+        const claim = await claimVerificationCode(this.redisService, EmailAuthType.SIGNUP, email, code);
+        if (!claim) {
             throw new BadRequestException('Invalid or expired verification code');
         }
 
@@ -128,10 +136,11 @@ export class UserService {
 
             // 가입이 실제로 끝난 뒤에 지운다. 닉네임 중복으로 실패했을 때까지 코드를 태우면
             // 사용자는 멀쩡한 코드를 들고도 메일을 다시 받아야 한다.
-            await discardVerificationCode(this.redisService, EmailAuthType.SIGNUP, email);
+            await commitVerificationCodeClaim(this.redisService, claim);
 
             return newUser;
         } catch (error: any) {
+            await releaseVerificationCodeClaim(this.redisService, claim).catch(() => undefined);
             if (error.code === '23505') {
                 if (error.details.includes('email')) {
                     throw new ConflictException('Email already exists');
@@ -156,19 +165,25 @@ export class UserService {
             throw new NotFoundException('User not found');
         }
 
-        if (!await verifyVerificationCode(this.redisService, EmailAuthType.DELETE, user.email, code)) {
+        const claim = await claimVerificationCode(this.redisService, EmailAuthType.DELETE, user.email, code);
+        if (!claim) {
             throw new BadRequestException('Invalid or expired verification code');
         }
 
-        await this.sanctionService.deleteAccount(
-            userId,
-            `user:${userId}`,
-            'User requested account deletion',
-            requestMeta,
-        );
-        // 지운 계정이 방에 남아 있으면 그 경기가 끝날 때까지 없는 사람이 논다.
-        await this.rooms.evictActor(userId, 'account-deleted');
-        await discardVerificationCode(this.redisService, EmailAuthType.DELETE, user.email);
+        try {
+            await this.sanctionService.deleteAccount(
+                userId,
+                `user:${userId}`,
+                'User requested account deletion',
+                requestMeta,
+            );
+            await commitVerificationCodeClaim(this.redisService, claim);
+            // 지운 계정이 방에 남아 있으면 그 경기가 끝날 때까지 없는 사람이 논다.
+            await this.rooms.evictActor(userId, 'account-deleted');
+        } catch (error) {
+            await releaseVerificationCodeClaim(this.redisService, claim).catch(() => undefined);
+            throw error;
+        }
     }
 
     async changePassword(userId: number, currentSessionId: string, dto: ChangePasswordDto) {
@@ -193,7 +208,10 @@ export class UserService {
              * 커밋한 요청만 성공한다. 비밀번호 쓰기와 다른 세션 폐기는 같은 트랜잭션이므로
              * 둘 중 하나만 반영되는 계정 보안 상태가 남지 않는다.
              */
-            const [updated] = await tx.update(schema.users).set({ passwordHash }).where(and(
+            const [updated] = await tx.update(schema.users).set({
+                passwordHash,
+                securityEpoch: sql`${schema.users.securityEpoch} + 1`,
+            }).where(and(
                 eq(schema.users.id, userId),
                 eq(schema.users.passwordHash, user.passwordHash),
             )).returning({ id: schema.users.id });

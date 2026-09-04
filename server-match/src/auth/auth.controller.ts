@@ -8,6 +8,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { ConfigService } from "@nestjs/config";
 import { NeedActor } from './need-actor.decorator';
 import { refreshCookieOptions } from './refresh-cookie';
+import { GuestRefreshDto } from './dto/guest-refresh.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -89,10 +90,7 @@ export class AuthController {
 
     @Post('guest/refresh')
     @RateLimiter({ anon: 10, guest: 10, account: 0, ttl: 60_000 })
-    async refreshGuest(@Body() body: { refreshToken?: string }) {
-        if (typeof body?.refreshToken !== 'string' || body.refreshToken.length === 0) {
-            throw new UnauthorizedException('No guest refresh token provided');
-        }
+    async refreshGuest(@Body() body: GuestRefreshDto) {
         return this.authService.refreshGuest(body.refreshToken);
     }
 

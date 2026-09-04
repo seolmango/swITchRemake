@@ -37,11 +37,14 @@ export const users = pgTable('users', {
     passwordHash: text('password_hash').notNull(),
     nickname: varchar('nickname', { length: 20 }).notNull().unique(),
     accountStatus: accountStatusEnum('account_status').default('ACTIVE').notNull(),
+    securityEpoch: integer('security_epoch').default(0).notNull(),
     role: userRoleEnum('role').default('USER').notNull(),
     stats: jsonb('stats').default({ level: 0, xp: 0, games: 0, wins: 0, sw_try: 0, sw_su: 0, kill: 0, death_order: 0 }).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+    uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`),
+]);
 
 export const sessions = pgTable('sessions', {
     id: uuid('id').defaultRandom().primaryKey(),
@@ -54,11 +57,27 @@ export const sessions = pgTable('sessions', {
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }).defaultNow().notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    familyId: uuid('family_id').notNull(),
+    generation: integer('generation').default(0).notNull(),
 }, (table) => [
     index('sessions_user_id_idx').on(table.userId),
     uniqueIndex('sessions_refresh_token_hash_idx').on(table.refreshTokenHash),
     check('sessions_refresh_token_hash_format', sql`${table.refreshTokenHash} ~ '^[0-9a-f]{64}$'`),
     check('sessions_ip_hmac_format', sql`${table.ipHmac} ~ '^[0-9a-f]{64}$'`),
+    check('sessions_generation_nonnegative', sql`${table.generation} >= 0`),
+    index('sessions_family_id_idx').on(table.familyId),
+]);
+
+/** refresh 재사용은 계정 탈취 신호라 일반 애플리케이션 로그와 별도로 남긴다. */
+export const authSecurityEvents = pgTable('auth_security_events', {
+    id: bigint('id', { mode: 'number' }).generatedAlwaysAsIdentity().primaryKey(),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+    event: varchar('event', { length: 100 }).notNull(),
+    familyId: uuid('family_id').notNull(),
+    generation: integer('generation').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+    index('auth_security_events_user_created_idx').on(table.userId, table.createdAt),
 ]);
 
 /**

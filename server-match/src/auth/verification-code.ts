@@ -1,4 +1,4 @@
-import { randomInt, timingSafeEqual } from 'node:crypto';
+import { randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { RedisService } from '../redis/redis.service';
 import { EmailAuthType } from './dto/email-auth.dto';
 
@@ -19,12 +19,28 @@ export const VERIFICATION_CODE_TTL_SECONDS = 300;
  * 프록시 뒤에서 흔들리는 값이라 이 방어를 대신하지 못한다 — 세는 기준이 코드 자체여야 한다.
  */
 const MAX_ATTEMPTS = 5;
+const ISSUE_COOLDOWN_SECONDS = 60;
+const MAX_ISSUES_PER_MINUTE = 3;
+const MAX_ISSUES_PER_HOUR = 10;
+const CLAIM_TTL_SECONDS = 30;
 
 /** 코드의 용도는 곧 메일 종류다. 목록을 두 벌 두면 한쪽만 늘어난다. */
 export type VerificationPurpose = EmailAuthType;
 
 const codeKey = (purpose: VerificationPurpose, email: string): string => `auth:code:${purpose}:${email}`;
 const attemptsKey = (purpose: VerificationPurpose, email: string): string => `auth:code-attempts:${purpose}:${email}`;
+const cooldownKey = (purpose: VerificationPurpose, email: string): string => `auth:code-cooldown:${purpose}:${email}`;
+const issueMinuteKey = (purpose: VerificationPurpose, email: string): string => `auth:code-issue-minute:${purpose}:${email}`;
+const issueHourKey = (purpose: VerificationPurpose, email: string): string => `auth:code-issue-hour:${purpose}:${email}`;
+const claimKey = (purpose: VerificationPurpose, email: string): string => `auth:code-claim:${purpose}:${email}`;
+
+export interface VerificationCodeClaim {
+    purpose: VerificationPurpose;
+    email: string;
+    code: string;
+    claimId: string;
+    remainingTtlMs: number;
+}
 
 /**
  * 같은 길이일 때만 내용을 비교하고, 비교 자체는 상수 시간으로 한다.
@@ -46,7 +62,19 @@ export async function issueVerificationCode(
     redis: RedisService,
     purpose: VerificationPurpose,
     email: string,
-): Promise<string> {
+): Promise<string | null> {
+    // 살아 있는 코드를 덮지 않는다. 공격자가 1분마다 눌러도 정상 사용자의 코드는 그대로다.
+    if (await redis.get(codeKey(purpose, email)) !== null) return null;
+    if (!await redis.setIfAbsent(cooldownKey(purpose, email), '1', ISSUE_COOLDOWN_SECONDS)) {
+        return null;
+    }
+    const [minuteCount, hourCount] = await Promise.all([
+        redis.incrementWithTtl(issueMinuteKey(purpose, email), 60),
+        redis.incrementWithTtl(issueHourKey(purpose, email), 60 * 60),
+    ]);
+    if (minuteCount > MAX_ISSUES_PER_MINUTE || hourCount > MAX_ISSUES_PER_HOUR) {
+        return null;
+    }
     const code = String(randomInt(100_000, 1_000_000));
     await redis.set(codeKey(purpose, email), code, VERIFICATION_CODE_TTL_SECONDS);
     // 새 코드를 받았으면 시도 횟수도 처음부터 센다. 아니면 앞선 실패가 새 코드의 기회를 먹는다.
@@ -54,36 +82,39 @@ export async function issueVerificationCode(
     return code;
 }
 
-/**
- * 코드가 맞는지 본다. **틀린 시도도 값을 치른다** — 정해진 횟수를 넘기면 코드를 폐기한다.
- *
- * 맞아도 여기서 지우지 않는다. 뒤이은 작업(가입, 탈퇴)이 실패할 수 있고, 그때 코드까지
- * 사라지면 사용자는 멀쩡한 코드를 들고도 메일을 다시 받아야 한다. 지우는 것은
- * `discardVerificationCode`가 성공한 뒤에 한다.
- */
-export async function verifyVerificationCode(
+/** 맞는 코드를 원자적으로 짧게 빌린다. 같은 코드로 동시에 두 작업이 시작될 수 없다. */
+export async function claimVerificationCode(
     redis: RedisService,
     purpose: VerificationPurpose,
     email: string,
     supplied: string,
-): Promise<boolean> {
+): Promise<VerificationCodeClaim | null> {
     const key = codeKey(purpose, email);
     const saved = await redis.get(key);
-    if (saved === null) return false;
-    if (!matches(saved, supplied)) {
-        const attempts = await redis.incrementWithTtl(attemptsKey(purpose, email), VERIFICATION_CODE_TTL_SECONDS);
-        if (attempts >= MAX_ATTEMPTS) await redis.del(key);
-        return false;
+    if (saved === null || !matches(saved, supplied)) {
+        if (saved !== null) {
+            const attempts = await redis.incrementWithTtl(attemptsKey(purpose, email), VERIFICATION_CODE_TTL_SECONDS);
+            if (attempts >= MAX_ATTEMPTS) await redis.del(key);
+        }
+        return null;
     }
-    return true;
+    const claimId = randomUUID();
+    const remainingTtlMs = await redis.compareAndClaim(key, saved, claimKey(purpose, email), claimId, CLAIM_TTL_SECONDS);
+    if (remainingTtlMs <= 0) return null;
+    return { purpose, email, code: saved, claimId, remainingTtlMs };
 }
 
-/** 코드가 제 할 일을 마쳤다. 남겨 두면 같은 코드로 한 번 더 들어올 수 있다. */
-export async function discardVerificationCode(
-    redis: RedisService,
-    purpose: VerificationPurpose,
-    email: string,
-): Promise<void> {
-    await redis.del(codeKey(purpose, email));
-    await redis.del(attemptsKey(purpose, email));
+export async function commitVerificationCodeClaim(redis: RedisService, claim: VerificationCodeClaim): Promise<void> {
+    await redis.compareAndDelete(claimKey(claim.purpose, claim.email), claim.claimId);
+    await redis.del(attemptsKey(claim.purpose, claim.email));
+}
+
+export async function releaseVerificationCodeClaim(redis: RedisService, claim: VerificationCodeClaim): Promise<void> {
+    await redis.releaseClaim(
+        claimKey(claim.purpose, claim.email),
+        claim.claimId,
+        codeKey(claim.purpose, claim.email),
+        claim.code,
+        claim.remainingTtlMs,
+    );
 }

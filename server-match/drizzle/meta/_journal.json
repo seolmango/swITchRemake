@@ -43,6 +43,13 @@
       "when": 1787983247586,
       "tag": "0005_square_red_shift",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788512400000,
+      "tag": "0006_auth_security",
+      "breakpoints": true
     }
   ]
 }

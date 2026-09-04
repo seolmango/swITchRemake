@@ -1,4 +1,5 @@
 import { IsEmail, IsEnum, IsString, Length } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export enum EmailAuthType {
     SIGNUP = 'signup',
@@ -7,6 +8,7 @@ export enum EmailAuthType {
 }
 
 export class SendEmailDto {
+    @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value)
     @IsEmail()
     email!: string;
 

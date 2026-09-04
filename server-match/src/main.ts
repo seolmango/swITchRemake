@@ -7,6 +7,8 @@ import { sql } from 'drizzle-orm';
 import fastifyCookie from '@fastify/cookie';
 import { ConfigService } from '@nestjs/config';
 import { assertRateLimitPolicy } from './ratelimiter.guard';
+import { FASTIFY_RESOURCE_LIMITS } from './http-limits';
+import { GLOBAL_VALIDATION_OPTIONS } from './validation-options';
 
 /**
  * 프록시가 넣은 클라이언트 IP 헤더를 어디까지 믿을지 정한다.
@@ -55,11 +57,14 @@ function assertDistinctJwtSecrets(config: ConfigService): void {
 async function bootstrap() {
     const app = await NestFactory.create<NestFastifyApplication>(
         AppModule,
-        new FastifyAdapter({ trustProxy: resolveTrustedProxies() })
+        new FastifyAdapter({
+            trustProxy: resolveTrustedProxies(),
+            ...FASTIFY_RESOURCE_LIMITS,
+        })
     );
     const logger = new Logger('Bootstrap');
 
-    app.useGlobalPipes(new ValidationPipe({ transform: true }));
+    app.useGlobalPipes(new ValidationPipe(GLOBAL_VALIDATION_OPTIONS));
 
     const configService = app.get(ConfigService);
     assertDistinctJwtSecrets(configService);
