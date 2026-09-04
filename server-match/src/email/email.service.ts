@@ -1,6 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MailerService } from '@nestjs-modules/mailer';
+import type { Transporter } from 'nodemailer';
 import { RedisService } from '../redis/redis.service';
 
 type EmailKind = 'signup' | 'reset-password' | 'delete';
@@ -15,6 +15,9 @@ const EMAIL_TEMPLATES: Record<EmailKind, EmailTemplate> = {
     delete: { subject: '[swITch] 회원 탈퇴 인증 코드', heading: 'swITch 회원 탈퇴', message: '요청하신 회원 탈퇴 인증 코드입니다.' },
 };
 
+export const EMAIL_TRANSPORTER = Symbol('EMAIL_TRANSPORTER');
+type EmailTransporter = Pick<Transporter, 'sendMail' | 'verify'>;
+
 @Injectable()
 export class EmailService implements OnModuleInit {
     private readonly logger = new Logger(EmailService.name);
@@ -23,7 +26,7 @@ export class EmailService implements OnModuleInit {
     private healthStatus: EmailHealthStatus = 'unconfigured';
 
     constructor(
-        private readonly mailerService: MailerService,
+        @Inject(EMAIL_TRANSPORTER) private readonly transporter: EmailTransporter,
         private readonly redisService: RedisService,
         configService: ConfigService,
     ) {
@@ -41,15 +44,13 @@ export class EmailService implements OnModuleInit {
 
     onModuleInit(): void {
         // A sink must still reveal whether the configured SMTP server is reachable.
-        // getTransporter() is the mailer package's public API for its default transporter.
-        //
         // 의도적으로 await 하지 않는다. onModuleInit이 반환한 Promise는 Nest 부팅을 막고,
         // verify()는 SMTP가 닿지 않으면 nodemailer의 connectionTimeout(기본 2분)까지 매달린다.
         // 네트워크가 없는 CI나 방화벽 뒤에서 서버가 몇 분씩 안 뜨게 된다. 헬스 프로브는
         // 부팅 조건이 아니라 관측값이므로 결과가 나오는 대로 상태만 갈아끼운다.
         if (!this.smtpConfigured) return;
         this.healthStatus = 'checking';
-        void this.mailerService.getTransporter().verify().then(
+        void this.transporter.verify().then(
             () => { this.healthStatus = 'ok'; },
             (error: unknown) => {
                 this.healthStatus = 'unreachable';
@@ -72,7 +73,7 @@ export class EmailService implements OnModuleInit {
                 // so one TTL-bound key intentionally overwrites earlier messages for that address.
                 await this.redisService.set(`test:mail:${to}`, JSON.stringify({ kind, subject: template.subject, code, sentAt: new Date().toISOString() }), 600);
             } else {
-                await this.mailerService.sendMail({ to, subject: template.subject, html: this.renderHtml(template, code) });
+                await this.transporter.sendMail({ to, subject: template.subject, html: this.renderHtml(template, code) });
             }
             return true;
         } catch (error) {

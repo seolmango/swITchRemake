@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ConfigService } from '@nestjs/config';
-import { MailerService } from '@nestjs-modules/mailer';
+import type { Transporter } from 'nodemailer';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from './email.service';
 
@@ -10,8 +10,8 @@ function createService(values: Record<string, string | undefined>, sendMail?: ()
     let sendMailCalls = 0;
     const mailer = {
         sendMail: async () => { sendMailCalls += 1; return sendMail ? sendMail() : {}; },
-        getTransporter: () => ({ options: { auth: {} }, verify: async () => (verify ? verify() : undefined) }),
-    } as unknown as MailerService;
+        verify: async () => (verify ? verify() : undefined),
+    } as unknown as Pick<Transporter, 'sendMail' | 'verify'>;
     const redis = { set: async (key: string, value: string, ttl?: number) => { saved.push({ key, value, ttl }); } } as unknown as RedisService;
     const config = { get: <T>(key: string, defaultValue?: T): T => (values[key] ?? defaultValue) as T } as ConfigService;
     return { service: new EmailService(mailer, redis, config), saved, get sendMailCalls() { return sendMailCalls; } };

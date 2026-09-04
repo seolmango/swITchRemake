@@ -1,14 +1,18 @@
 import { Module, Global } from '@nestjs/common';
-import { MailerModule } from '@nestjs-modules/mailer';
 import { ConfigService } from '@nestjs/config';
-import { EmailService } from './email.service';
+import { createTransport } from 'nodemailer';
+import type SMTPPool from 'nodemailer/lib/smtp-pool';
+import { EMAIL_TRANSPORTER, EmailService } from './email.service';
 
 @Global()
 @Module({
-    imports: [
-        MailerModule.forRootAsync({
-            useFactory: (configService: ConfigService) => ({
-                transport: {
+    providers: [
+        {
+            provide: EMAIL_TRANSPORTER,
+            inject: [ConfigService],
+            useFactory: (configService: ConfigService) => {
+                const sender = configService.get<string>('SMTP_USER');
+                const options: SMTPPool.Options = {
                     host: 'smtp.gmail.com',
                     port: 465,
                     secure: true,
@@ -20,18 +24,18 @@ import { EmailService } from './email.service';
                     greetingTimeout: 10_000,
                     socketTimeout: 20_000,
                     auth: {
-                        user: configService.get<string>('SMTP_USER'),
+                        user: sender,
                         pass: configService.get<string>('SMTP_PASSWORD'),
                     },
-                },
-                defaults: {
-                    from: `"swITch 운영팀" <${configService.get<string>('SMTP_USER')}>`,
-                },
-            }),
-            inject: [ConfigService],
-        }),
+                };
+                return createTransport(
+                    options,
+                    { from: `"swITch 운영팀" <${sender}>` },
+                );
+            },
+        },
+        EmailService,
     ],
-    providers: [EmailService],
     exports: [EmailService],
 })
 export class EmailModule {}
