@@ -5,6 +5,9 @@ import type { GameServerHeartbeat } from 'shared';
 import {
     filterHttpRequestHeaders,
     filterWebSocketRequestHeaders,
+    isPublicDownloadMethod,
+    parseBackendAddress,
+    requestHasBody,
     resolveBundleRoute,
     resolveWebSocketRoute,
     type Backend,
@@ -53,10 +56,10 @@ test('WebSocket은 경로에 박힌 서버로만 간다', () => {
     });
 });
 
-test('경로가 더 이어져도 첫 조각만 본다', () => {
+test('WebSocket 경로는 정확히 /game-ws/{serverId} 한 조각만 받는다', () => {
     const servers = registry(server('game-1', { internalAddress: 'http://10.0.0.1:4000' }));
     for (const path of ['/game-ws/game-1/', '/game-ws/game-1?x=1', '/game-ws/game-1#f']) {
-        assert.equal(webSocketBackend(path, servers)?.serverId, 'game-1', path);
+        assert.equal(webSocketBackend(path, servers), null, path);
     }
 });
 
@@ -112,7 +115,19 @@ test('리플레이 파일도 한가한 서버로 넘긴다', () => {
         ['game-1', server('game-1', { waitingRooms: 5 })],
         ['game-2', server('game-2', { waitingRooms: 0 })],
     ]);
-    assert.equal(bundleBackend('/replays/match-1.swrp?ticket=abc', servers)?.serverId, 'game-2');
+    assert.equal(bundleBackend(`/replays/match-1.swrp?ticket=${'a'.repeat(32)}`, servers)?.serverId, 'game-2');
+});
+
+test('리플레이 표는 192-bit base64url 형식일 때만 upstream으로 보낸다', () => {
+    const servers = registry(server('game-1'));
+    const valid = 'Ab_-'.repeat(8);
+    assert.notEqual(bundleBackend(`/replays/match.swrp?ticket=${valid}`, servers), null);
+    for (const path of [
+        '/replays/match.swrp',
+        '/replays/match.swrp?ticket=short',
+        `/replays/match.swrp?ticket=${valid}!`,
+        `/replays/match.swrp?ticket=${valid}&ticket=${valid}`,
+    ]) assert.equal(bundleBackend(path, servers), null, path);
 });
 
 test('정규화 뒤 허용 접두사 밖으로 나간 경로는 거절한다', () => {
@@ -121,10 +136,23 @@ test('정규화 뒤 허용 접두사 밖으로 나간 경로는 거절한다', (
     assert.equal(bundleBackend('/map-bundles/%2E%2E/internal', servers), null);
     assert.equal(webSocketBackend('/game-ws/%2e%2e/internal', servers), null);
 
-    const resolution = resolveBundleRoute('/replays/season/%2e/match.swrp?ticket=abc', servers);
+    const resolution = resolveBundleRoute(`/replays/season/%2e/match.swrp?ticket=${'a'.repeat(32)}`, servers);
     assert.equal(resolution.kind, 'route');
     if (resolution.kind === 'route') {
-        assert.equal(resolution.route.path, '/replays/season/match.swrp?ticket=abc');
+        assert.equal(resolution.route.path, `/replays/season/match.swrp?ticket=${'a'.repeat(32)}`);
+    }
+});
+
+test('공개 다운로드는 GET/HEAD와 빈 body만 받고 backend 주소 파싱 실패를 값으로 돌려준다', () => {
+    assert.equal(isPublicDownloadMethod('GET'), true);
+    assert.equal(isPublicDownloadMethod('HEAD'), true);
+    assert.equal(isPublicDownloadMethod('POST'), false);
+    assert.equal(requestHasBody({ 'content-length': '1' }), true);
+    assert.equal(requestHasBody({ 'content-length': '0' }), false);
+    assert.equal(requestHasBody({ 'transfer-encoding': 'chunked' }), true);
+    assert.deepEqual(parseBackendAddress('http://127.0.0.1:4000'), { hostname: '127.0.0.1', port: 4000 });
+    for (const address of ['not a url', 'https://127.0.0.1:4000', 'http://127.0.0.1', 'http://user@127.0.0.1:4000']) {
+        assert.equal(parseBackendAddress(address), null, address);
     }
 });
 

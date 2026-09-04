@@ -24,7 +24,11 @@ export interface WsProtectionLimits {
     maxJsonFrameBytes: number;
     maxInputPacketsPerSec: number;
     maxJsonCommandsPerSec: number;
+    maxIpInputPacketsPerSec: number;
+    maxIpJsonCommandsPerSec: number;
     emojiCooldownMs: number;
+    maxReplayRequestsPerMinute: number;
+    maxConcurrentReplayDownloads: number;
     socketBufferSoftLimitBytes: number;
     socketBufferHardLimitBytes: number;
     socketBufferHardLimitGraceMs: number;
@@ -43,16 +47,47 @@ export interface WsServerMetadata {
  * 표가 맞지 않으면 404다 — 403이 아니다. 파일이 있는지 없는지를 표 없이 알아낼 수 있으면
  * 저장소 키를 훑어 무엇이 있는지 셀 수 있다.
  */
+const REPLAY_TICKET = /^[A-Za-z0-9_-]{32}$/u;
+
+function hasRequestBody(request: IncomingMessage): boolean {
+    const length = request.headers['content-length'];
+    return request.headers['transfer-encoding'] !== undefined
+        || (length !== undefined && length !== '0');
+}
+
 async function serveReplay(
     request: IncomingMessage,
     response: ServerResponse,
     readReplay: (storageKey: string, ticket: string) => Promise<Uint8Array | null>,
+    admit: () => { readonly status: 429 | 503; readonly release?: never } | { readonly status: 200; readonly release: () => void },
 ): Promise<void> {
+    let release: (() => void) | null = null;
     try {
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+            response.writeHead(405, { Allow: 'GET, HEAD' }).end();
+            return;
+        }
+        if (hasRequestBody(request)) {
+            response.writeHead(400).end();
+            return;
+        }
         const url = new URL(request.url ?? '/', 'http://localhost');
         const storageKey = decodeURIComponent(url.pathname.slice('/replays/'.length));
-        const ticket = url.searchParams.get('ticket') ?? '';
-        const body = ticket ? await readReplay(storageKey, ticket) : null;
+        const tickets = url.searchParams.getAll('ticket');
+        const ticket = tickets.length === 1 ? tickets[0] ?? '' : '';
+        // Redis 키를 만들기 전에 발급기가 만드는 192-bit base64url 표인지 확인한다. 임의 문자열은
+        // 파일 존재 여부와 똑같이 404로 감춰 중앙 저장소까지 가지 않는다.
+        if (!REPLAY_TICKET.test(ticket)) {
+            response.writeHead(404).end();
+            return;
+        }
+        const admission = admit();
+        if (admission.status !== 200) {
+            response.writeHead(admission.status).end();
+            return;
+        }
+        release = admission.release;
+        const body = await readReplay(storageKey, ticket);
         if (!body) {
             response.writeHead(404).end();
             return;
@@ -63,9 +98,13 @@ async function serveReplay(
             // 브라우저가 열지 않고 저장하게 한다. 이 파일은 재생기가 읽는 것이지 화면이 아니다.
             'Content-Disposition': `attachment; filename="${storageKey.replace(/[^A-Za-z0-9_.-]/g, '_')}"`,
             'Cache-Control': 'no-store',
-        }).end(Buffer.from(body));
+        });
+        response.end(request.method === 'HEAD' ? undefined : Buffer.from(body));
     } catch {
-        response.writeHead(404).end();
+        if (!response.headersSent) response.writeHead(404);
+        response.end();
+    } finally {
+        release?.();
     }
 }
 
@@ -262,6 +301,7 @@ export class WsTransport implements GameTransport {
     readonly #rateLimitViolations: RateLimitViolationAggregator;
     readonly #rateLimitLogTimer: NodeJS.Timeout;
     readonly #sockets = new Set<WebSocket>();
+    #activeReplayDownloads = 0;
     #handlers: TransportHandlers | null = null;
     #accepting = true;
 
@@ -269,7 +309,7 @@ export class WsTransport implements GameTransport {
         this.#options = options;
         this.#server = options.server ?? createServer((request, response) => {
             const bundlePath = `/map-bundles/${options.metadata.mapBundleHash}.json`;
-            if (request.method === 'GET' && request.url === bundlePath && options.mapBundleBody) {
+            if ((request.method === 'GET' || request.method === 'HEAD') && request.url === bundlePath && options.mapBundleBody && !hasRequestBody(request)) {
                 const requestOrigin = typeof request.headers.origin === 'string' ? canonicalOrigin(request.headers.origin) : null;
                 const corsOrigin = requestOrigin && options.allowedOrigins.some((origin) => canonicalOrigin(origin) === requestOrigin)
                     ? requestOrigin
@@ -280,11 +320,11 @@ export class WsTransport implements GameTransport {
                     'Content-Length': Buffer.byteLength(options.mapBundleBody),
                     ETag: `"${options.metadata.mapBundleHash}"`,
                     ...(corsOrigin ? { 'Access-Control-Allow-Origin': corsOrigin, Vary: 'Origin' } : {}),
-                }).end(options.mapBundleBody);
+                }).end(request.method === 'HEAD' ? undefined : options.mapBundleBody);
                 return;
             }
-            if (request.method === 'GET' && request.url?.startsWith('/replays/') && options.readReplay) {
-                void serveReplay(request, response, options.readReplay);
+            if (request.url?.startsWith('/replays/') && options.readReplay) {
+                void serveReplay(request, response, options.readReplay, () => this.#admitReplay(request));
                 return;
             }
             response.writeHead(404).end();
@@ -342,25 +382,44 @@ export class WsTransport implements GameTransport {
     }
 
     readonly #onUpgrade = (request: IncomingMessage, socket: import('node:stream').Duplex, head: Buffer): void => {
-        let pathname: string;
         try {
-            const url = new URL(request.url ?? '', 'http://game.invalid');
-            pathname = url.pathname;
-            if (url.search !== '') return this.#rejectUpgrade(socket, 400, 'Bad Request');
-        } catch {
-            return this.#rejectUpgrade(socket, 400, 'Bad Request');
+            let pathname: string;
+            try {
+                const url = new URL(request.url ?? '', 'http://game.invalid');
+                pathname = url.pathname;
+                if (url.search !== '') return this.#rejectUpgrade(socket, 400, 'Bad Request');
+            } catch {
+                return this.#rejectUpgrade(socket, 400, 'Bad Request');
+            }
+            const originHeader = request.headers.origin;
+            const origin = typeof originHeader === 'string' ? canonicalOrigin(originHeader) : null;
+            if (pathname !== this.#options.path || origin === null || !this.#allowedOrigins.has(origin)) {
+                return this.#rejectUpgrade(socket, 403, 'Forbidden');
+            }
+            if (!this.#accepting) {
+                return this.#rejectUpgrade(socket, 503, 'Service Unavailable');
+            }
+            const ip = resolveClientIp(request, this.#options.trustedProxies);
+            if (!this.#options.connections.canOpen(ip)) return this.#rejectUpgrade(socket, 429, 'Too Many Requests');
+            this.#webSockets.handleUpgrade(request, socket, head, (webSocket) => this.#acceptSocket(webSocket, ip));
+        } catch (error: unknown) {
+            // upgrade도 공개 입력 경로다. ws 라이브러리나 연결 장부가 던져도 이 TCP 연결만 버린다.
+            const ip = resolveClientIp(request, this.#options.trustedProxies);
+            try {
+                this.#options.violationSink({
+                    kind: ViolationKind.BadState,
+                    userId: `ip:${ip}`,
+                    roomId: null,
+                    tick: null,
+                    severity: 'high',
+                    ruleVersion: 1,
+                    detail: { kind: 'internal-exception', phase: 'upgrade', error: error instanceof Error ? error.name : typeof error },
+                });
+            } catch (signalError: unknown) {
+                console.error('[swITch] WebSocket violation sink failed', signalError);
+            }
+            socket.destroy();
         }
-        const originHeader = request.headers.origin;
-        const origin = typeof originHeader === 'string' ? canonicalOrigin(originHeader) : null;
-        if (pathname !== this.#options.path || origin === null || !this.#allowedOrigins.has(origin)) {
-            return this.#rejectUpgrade(socket, 403, 'Forbidden');
-        }
-        if (!this.#accepting) {
-            return this.#rejectUpgrade(socket, 503, 'Service Unavailable');
-        }
-        const ip = resolveClientIp(request, this.#options.trustedProxies);
-        if (!this.#options.connections.canOpen(ip)) return this.#rejectUpgrade(socket, 429, 'Too Many Requests');
-        this.#webSockets.handleUpgrade(request, socket, head, (webSocket) => this.#acceptSocket(webSocket, ip));
     };
 
     #acceptSocket(socket: WebSocket, ip: string): void {
@@ -399,35 +458,47 @@ export class WsTransport implements GameTransport {
                     }
                     clearTimeout(timeout);
                     authenticated = new WsConnection(open, principal, socket, this.#options.limits, this.#options.getServerTick);
-                    try {
-                        this.#handlers?.onConnect(authenticated);
-                        authenticated.sendJson({
-                            type: 'auth.ok',
-                            payload: {
-                                playerId: principal.playerId,
-                                roomId: principal.roomId,
-                                roomState: principal.roomState,
-                                role: principal.role,
-                                guest: principal.isGuest,
-                                ...this.#options.metadata,
-                            },
-                        });
-                    } catch {
-                        this.#sendErrorAndClose(socket, null, ErrorCode.Internal, CloseCode.PolicyViolation);
-                    }
+                    this.#handlers?.onConnect(authenticated);
+                    authenticated.sendJson({
+                        type: 'auth.ok',
+                        payload: {
+                            playerId: principal.playerId,
+                            roomId: principal.roomId,
+                            roomState: principal.roomState,
+                            role: principal.role,
+                            guest: principal.isGuest,
+                            ...this.#options.metadata,
+                        },
+                    });
                     return;
                 }
                 if (isBinary) this.#handleBinary(authenticated, open, buffer);
                 else this.#handleJson(authenticated, open, buffer);
-            })();
+            })().catch((error: unknown) => {
+                // EventEmitter는 반환된 Promise를 기다리지 않는다. 여기서 끝을 막지 않으면 인증이나
+                // 방 handler의 논리 오류 하나가 unhandled rejection이 되어 다른 모든 방까지 죽인다.
+                this.#handleConnectionException(socket, open, authenticated, 'message', error);
+            });
         });
         socket.on('close', (_code, reason) => {
-            clearTimeout(timeout);
-            authenticated?.clearTimers();
-            this.#sockets.delete(socket);
-            this.#options.connections.close(open.id);
-            this.#rateLimitViolations.flushConnection(open.id);
-            if (authenticated !== null) this.#handlers?.onDisconnect(authenticated, reason.toString('utf8'));
+            try {
+                clearTimeout(timeout);
+                authenticated?.clearTimers();
+                this.#sockets.delete(socket);
+                this.#options.connections.close(open.id);
+                this.#rateLimitViolations.flushConnection(open.id);
+            } catch (error: unknown) {
+                this.#handleConnectionException(socket, open, authenticated, 'disconnect', error, false);
+            }
+            if (authenticated !== null) {
+                try {
+                    this.#handlers?.onDisconnect(authenticated, reason.toString('utf8'));
+                } catch (error: unknown) {
+                    // close callback의 예외는 Promise도 아니어서 곧바로 프로세스까지 올라간다.
+                    // 연결 장부는 이미 정리한 뒤이며, 오류는 이 연결의 구조화된 신호로만 남긴다.
+                    this.#handleConnectionException(socket, open, authenticated, 'disconnect', error, false);
+                }
+            }
         });
         socket.on('error', () => { /* close performs the single cleanup path */ });
     }
@@ -447,12 +518,18 @@ export class WsTransport implements GameTransport {
             abusiveMultiplier: ABUSIVE_RATE_MULTIPLIER,
             abusiveWindows: ABUSIVE_RATE_WINDOWS,
         });
-        if (!decision.allowed) {
-            this.#signalRateLimit(open, connection, 'input', decision.abusive ? 'high' : 'medium');
+        const ipDecision = this.#rateLimiter.check('input-ip', this.#subject(open, connection), this.#options.limits.maxIpInputPacketsPerSec, 1_000, {
+            scopes: ['ip'],
+            abusiveMultiplier: ABUSIVE_RATE_MULTIPLIER,
+            abusiveWindows: ABUSIVE_RATE_WINDOWS,
+        });
+        if (!decision.allowed || !ipDecision.allowed) {
+            const combined = { abusive: decision.abusive || ipDecision.abusive };
+            this.#signalRateLimit(open, connection, 'input', combined.abusive ? 'high' : 'medium');
             // A browser can legitimately burst after timer throttling. Only close a connection that
             // sustains >5x the limit for five whole windows; ordinary excess input is safely dropped
             // because the room keeps that player's latest accepted input state.
-            if (decision.abusive) this.#sendErrorAndCloseSocket(connection, ErrorCode.RateLimited, CloseCode.PolicyViolation);
+            if (combined.abusive) this.#sendErrorAndCloseSocket(connection, ErrorCode.RateLimited, CloseCode.PolicyViolation);
             return;
         }
         const frame = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
@@ -472,12 +549,18 @@ export class WsTransport implements GameTransport {
             abusiveMultiplier: ABUSIVE_RATE_MULTIPLIER,
             abusiveWindows: ABUSIVE_RATE_WINDOWS,
         });
-        if (!decision.allowed) {
+        const ipDecision = this.#rateLimiter.check('json-ip', this.#subject(open, connection), this.#options.limits.maxIpJsonCommandsPerSec, 1_000, {
+            scopes: ['ip'],
+            abusiveMultiplier: ABUSIVE_RATE_MULTIPLIER,
+            abusiveWindows: ABUSIVE_RATE_WINDOWS,
+        });
+        if (!decision.allowed || !ipDecision.allowed) {
+            const abusive = decision.abusive || ipDecision.abusive;
             connection.sendJson({ type: 'error', payload: { requestId: parsed.requestId, code: ErrorCode.RateLimited, retryable: isRetryable(ErrorCode.RateLimited) } });
-            this.#signalRateLimit(open, connection, 'json', decision.abusive ? 'high' : 'medium');
+            this.#signalRateLimit(open, connection, 'json', abusive ? 'high' : 'medium');
             // JSON commands use the same deliberate-abuse threshold as input. This keeps command
             // floods bounded without disconnecting a client for a short UI/timer burst.
-            if (decision.abusive) connection.close(CloseCode.PolicyViolation, 'rate limit');
+            if (abusive) connection.close(CloseCode.PolicyViolation, 'rate limit');
             return;
         }
         if (parsed.message === null) {
@@ -496,6 +579,56 @@ export class WsTransport implements GameTransport {
 
     #subject(open: OpenConnection, connection: WsConnection): RateSubject {
         return { connectionId: open.id, ip: open.ip, userId: connection.userId };
+    }
+
+    #admitReplay(request: IncomingMessage): { readonly status: 429 | 503; readonly release?: never } | { readonly status: 200; readonly release: () => void } {
+        const ip = resolveClientIp(request, this.#options.trustedProxies);
+        const decision = this.#rateLimiter.check(
+            'replay-http',
+            { connectionId: 0, ip },
+            this.#options.limits.maxReplayRequestsPerMinute,
+            60_000,
+            { scopes: ['ip'] },
+        );
+        if (!decision.allowed) return { status: 429 };
+        if (this.#activeReplayDownloads >= this.#options.limits.maxConcurrentReplayDownloads) return { status: 503 };
+        this.#activeReplayDownloads += 1;
+        let released = false;
+        return {
+            status: 200,
+            release: () => {
+                if (released) return;
+                released = true;
+                this.#activeReplayDownloads -= 1;
+            },
+        };
+    }
+
+    #handleConnectionException(
+        socket: WebSocket,
+        open: OpenConnection,
+        connection: WsConnection | null,
+        phase: 'message' | 'disconnect',
+        error: unknown,
+        close = true,
+    ): void {
+        try {
+            this.#signal(open, connection, ViolationKind.BadState, 'high', {
+                kind: 'internal-exception',
+                phase,
+                error: error instanceof Error ? error.name : typeof error,
+            });
+        } catch (signalError: unknown) {
+            // 진단 소비자의 장애가 원래 예외 경계를 다시 뚫으면 안 된다.
+            console.error('[swITch] WebSocket violation sink failed', signalError);
+        }
+        if (!close) return;
+        try {
+            this.#sendErrorAndClose(socket, null, ErrorCode.Internal, CloseCode.PolicyViolation);
+        } catch {
+            // 정상 close조차 실패한 소켓은 이 연결만 강제로 버린다.
+            try { socket.terminate(); } catch { /* 이미 망가진 연결은 close 정리 경로가 회수한다. */ }
+        }
     }
 
     #signal(open: OpenConnection, connection: WsConnection | null, kind: typeof ViolationKind[keyof typeof ViolationKind], severity: 'low' | 'medium' | 'high', detail?: Record<string, number | string>): void {

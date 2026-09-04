@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { describe, it } from 'node:test';
-import { ErrorCode, INPUT_PACKET_BYTES, PlayerRole, PROTOCOL_VERSION, RoomState } from 'shared';
+import { ErrorCode, INPUT_PACKET_BYTES, PlayerRole, PROTOCOL_VERSION, RoomState, type ViolationSignal } from 'shared';
 import { WebSocket } from 'ws';
 import { ConnectionManager } from '../gateway/connection-manager';
 import { TicketAuthenticator } from '../gateway/ticket-auth';
@@ -38,17 +38,39 @@ describe('client ip', () => {
     });
 });
 
-async function fixture(authTimeoutMs = 200, rateLimiter?: AbuseRateLimiter) {
+interface FixtureOptions {
+    throwAuthenticationOnce?: boolean;
+    throwDisconnect?: boolean;
+    readReplay?: (storageKey: string, ticket: string) => Promise<Uint8Array | null>;
+    maxReplayRequestsPerMinute?: number;
+    maxConcurrentReplayDownloads?: number;
+    maxIpInputPacketsPerSec?: number;
+}
+
+async function fixture(authTimeoutMs = 200, rateLimiter?: AbuseRateLimiter, fixtureOptions: FixtureOptions = {}) {
     // Three tabs can open their handshakes at once behind one NAT before any has authenticated.
-    const connections = new ConnectionManager({ maxConnections: 10, maxUnauthenticatedPerIp: 3 });
+    const connections = new ConnectionManager({ maxConnections: 10, maxUnauthenticatedPerIp: 3, maxAuthenticatedPerIp: 6 });
     const tickets = new InMemoryTicketStore();
-    const authenticator = new TicketAuthenticator({
+    const baseAuthenticator = new TicketAuthenticator({
         serverId: 'game-test',
         ticketStore: tickets,
         connections,
         minimumResponseMs: 0,
         rooms: { admitReservation: () => ({ playerId: 2, roomState: RoomState.Waiting, role: PlayerRole.Player }) },
     });
+    let throwAuthentication = fixtureOptions.throwAuthenticationOnce ?? false;
+    const authenticator = fixtureOptions.throwAuthenticationOnce
+        ? ({
+            authenticate: async (connectionId: number, ticket: string) => {
+                if (throwAuthentication) {
+                    throwAuthentication = false;
+                    throw new Error('authentication exploded');
+                }
+                return baseAuthenticator.authenticate(connectionId, ticket);
+            },
+        } as unknown as TicketAuthenticator)
+        : baseAuthenticator;
+    const violations: ViolationSignal[] = [];
     const transport = new WsTransport({
         host: '127.0.0.1',
         port: 0,
@@ -60,7 +82,8 @@ async function fixture(authTimeoutMs = 200, rateLimiter?: AbuseRateLimiter) {
         metadata: { protocolVersion: PROTOCOL_VERSION, rulesVersion: 'test', mapBundleHash: 'a'.repeat(64) },
         mapBundleBody: '{"ok":true}',
         getServerTick: () => 11,
-        violationSink: () => undefined,
+        violationSink: (signal) => violations.push(signal),
+        ...(fixtureOptions.readReplay === undefined ? {} : { readReplay: fixtureOptions.readReplay }),
         ...(rateLimiter === undefined ? {} : { rateLimiter }),
         limits: {
             authTimeoutMs,
@@ -68,7 +91,11 @@ async function fixture(authTimeoutMs = 200, rateLimiter?: AbuseRateLimiter) {
             maxJsonFrameBytes: 2_048,
             maxInputPacketsPerSec: 90,
             maxJsonCommandsPerSec: 20,
+            maxIpInputPacketsPerSec: fixtureOptions.maxIpInputPacketsPerSec ?? 900,
+            maxIpJsonCommandsPerSec: 200,
             emojiCooldownMs: 2_000,
+            maxReplayRequestsPerMinute: fixtureOptions.maxReplayRequestsPerMinute ?? 30,
+            maxConcurrentReplayDownloads: fixtureOptions.maxConcurrentReplayDownloads ?? 4,
             socketBufferSoftLimitBytes: 64 * 1024,
             socketBufferHardLimitBytes: 512 * 1024,
             socketBufferHardLimitGraceMs: 100,
@@ -90,7 +117,9 @@ async function fixture(authTimeoutMs = 200, rateLimiter?: AbuseRateLimiter) {
             }
         },
         onJson: (_connection, message) => { jsonTypes.push(message.type); resolveJson(message.type); },
-        onDisconnect: () => undefined,
+        onDisconnect: () => {
+            if (fixtureOptions.throwDisconnect) throw new Error('disconnect exploded');
+        },
     });
     const issue = (userId = 9) => tickets.issue({
         userId,
@@ -103,12 +132,13 @@ async function fixture(authTimeoutMs = 200, rateLimiter?: AbuseRateLimiter) {
         resume: true,
     });
     return {
-        transport, connected, jsonTypes, jsonReceived, inputUsers, issue,
+        transport, connected, jsonTypes, jsonReceived, inputUsers, issue, violations,
         waitForInputCount: (target: number) => inputUsers.length >= target
             ? Promise.resolve()
             : new Promise<void>((resolve) => inputWaiters.push({ target, resolve })),
         url: `ws://127.0.0.1:${transport.boundPort()}/game/game-test`,
         bundleUrl: `http://127.0.0.1:${transport.boundPort()}/map-bundles/${'a'.repeat(64)}.json`,
+        replayUrl: `http://127.0.0.1:${transport.boundPort()}/replays/match-1.swrp`,
     };
 }
 
@@ -203,6 +233,91 @@ describe('ws transport', () => {
         await f.transport.close();
     });
 
+    it('인증 Promise가 throw해도 그 연결만 INTERNAL로 닫고 다음 연결은 받는다', async () => {
+        const f = await fixture(200, undefined, { throwAuthenticationOnce: true });
+        const failed = connect(f.url);
+        try {
+            await once(failed, 'open');
+            const failedMessages: string[] = [];
+            failed.on('message', (data) => failedMessages.push(String(data)));
+            failed.send(JSON.stringify({ v: 1, type: 'auth', payload: { ticket: f.issue(1).ticket } }));
+            const [code] = await once(failed, 'close');
+            assert.equal(code, 1008);
+            assert.match(failedMessages[0] ?? '', /INTERNAL/u);
+            assert.equal(f.violations.some((signal) => signal.detail?.['phase'] === 'message'), true);
+
+            const healthy = await authenticate(f.url, f.issue(2).ticket);
+            await closeSockets([healthy]);
+        } finally {
+            await closeSockets([failed]);
+            await f.transport.close();
+        }
+    });
+
+    it('onDisconnect가 throw해도 close 이벤트 경계를 벗어나지 않는다', async () => {
+        const f = await fixture(200, undefined, { throwDisconnect: true });
+        let second: WebSocket | null = null;
+        try {
+            const first = await authenticate(f.url, f.issue(1).ticket);
+            const firstClosed = once(first, 'close');
+            first.close();
+            await firstClosed;
+            for (let attempt = 0; attempt < 20 && !f.violations.some((signal) => signal.detail?.['phase'] === 'disconnect'); attempt += 1) {
+                await new Promise((resolve) => setTimeout(resolve, 5));
+            }
+            assert.equal(f.violations.some((signal) => signal.detail?.['phase'] === 'disconnect'), true);
+
+            second = await authenticate(f.url, f.issue(2).ticket);
+        } finally {
+            if (second !== null) await closeSockets([second]);
+            await f.transport.close();
+        }
+    });
+
+    it('형식이 틀린 리플레이 표는 저장소 조회 전에 404로 버린다', async () => {
+        let reads = 0;
+        const f = await fixture(200, undefined, {
+            readReplay: async () => { reads += 1; return new Uint8Array([1]); },
+        });
+        try {
+            const response = await fetch(`${f.replayUrl}?ticket=not-a-ticket`);
+            assert.equal(response.status, 404);
+            assert.equal(reads, 0);
+        } finally {
+            await f.transport.close();
+        }
+    });
+
+    it('리플레이 조회를 IP별로 제한하고 동시 readFile 수에도 상한을 둔다', async () => {
+        let releaseFirst!: () => void;
+        const firstRead = new Promise<void>((resolve) => { releaseFirst = resolve; });
+        let reads = 0;
+        const f = await fixture(200, undefined, {
+            maxReplayRequestsPerMinute: 2,
+            maxConcurrentReplayDownloads: 1,
+            readReplay: async () => {
+                reads += 1;
+                if (reads === 1) await firstRead;
+                return null;
+            },
+        });
+        const ticket = 'a'.repeat(32);
+        try {
+            const pending = fetch(`${f.replayUrl}?ticket=${ticket}`);
+            while (reads === 0) await new Promise((resolve) => setImmediate(resolve));
+            const busy = await fetch(`${f.replayUrl}?ticket=${ticket}`);
+            assert.equal(busy.status, 503);
+            const limited = await fetch(`${f.replayUrl}?ticket=${ticket}`);
+            assert.equal(limited.status, 429);
+            assert.equal(reads, 1);
+            releaseFirst();
+            assert.equal((await pending).status, 404);
+        } finally {
+            releaseFirst();
+            await f.transport.close();
+        }
+    });
+
     it('rate-limits consecutive emoji commands from the same player', async () => {
         const f = await fixture();
         const socket = connect(f.url);
@@ -247,6 +362,23 @@ describe('ws transport', () => {
                 counts[String(userId)] = (counts[String(userId)] ?? 0) + 1;
                 return counts;
             }, {}), { 1: 30, 2: 30, 3: 30 });
+            assert.ok(sockets.every((socket) => socket.readyState === WebSocket.OPEN));
+        } finally {
+            await closeSockets(sockets);
+            await f.transport.close();
+        }
+    });
+
+    it('연결별 여유가 남아도 같은 IP의 합산 입력 예산을 넘으면 버린다', async () => {
+        const f = await fixture(200, undefined, { maxIpInputPacketsPerSec: 4 });
+        const sockets = [await authenticate(f.url, f.issue(1).ticket), await authenticate(f.url, f.issue(2).ticket)];
+        try {
+            for (const socket of sockets) {
+                for (let packet = 0; packet < 3; packet += 1) socket.send(Buffer.alloc(INPUT_PACKET_BYTES));
+            }
+            await f.waitForInputCount(4);
+            await new Promise((resolve) => setImmediate(resolve));
+            assert.equal(f.inputUsers.length, 4);
             assert.ok(sockets.every((socket) => socket.readyState === WebSocket.OPEN));
         } finally {
             await closeSockets(sockets);

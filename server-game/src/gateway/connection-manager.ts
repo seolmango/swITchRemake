@@ -12,12 +12,14 @@ interface ConnectionRecord extends OpenConnection {
 export interface ConnectionLimits {
     maxConnections: number;
     maxUnauthenticatedPerIp: number;
+    maxAuthenticatedPerIp: number;
 }
 
 /** Owns process/IP connection accounting and the one-active-connection-per-user invariant. */
 export class ConnectionManager {
     readonly #connections = new Map<number, ConnectionRecord>();
     readonly #unauthenticatedByIp = new Map<string, number>();
+    readonly #authenticatedByIp = new Map<string, number>();
     readonly #activeUsers = new Map<ActorId, number>();
     readonly #limits: ConnectionLimits;
     #nextId = 1;
@@ -45,7 +47,10 @@ export class ConnectionManager {
 
     public canAuthenticate(id: number, userId: ActorId): boolean {
         const record = this.#connections.get(id);
-        return record !== undefined && record.userId === null && !this.#activeUsers.has(userId);
+        return record !== undefined
+            && record.userId === null
+            && !this.#activeUsers.has(userId)
+            && (this.#authenticatedByIp.get(record.ip) ?? 0) < this.#limits.maxAuthenticatedPerIp;
     }
 
     public authenticate(id: number, userId: ActorId): boolean {
@@ -53,6 +58,7 @@ export class ConnectionManager {
         if (record === undefined || !this.canAuthenticate(id, userId)) return false;
         record.userId = userId;
         this.#decrementUnauthenticated(record.ip);
+        this.#authenticatedByIp.set(record.ip, (this.#authenticatedByIp.get(record.ip) ?? 0) + 1);
         this.#activeUsers.set(userId, id);
         return true;
     }
@@ -62,7 +68,10 @@ export class ConnectionManager {
         if (record === undefined) return null;
         this.#connections.delete(id);
         if (record.userId === null) this.#decrementUnauthenticated(record.ip);
-        else if (this.#activeUsers.get(record.userId) === id) this.#activeUsers.delete(record.userId);
+        else {
+            this.#decrementAuthenticated(record.ip);
+            if (this.#activeUsers.get(record.userId) === id) this.#activeUsers.delete(record.userId);
+        }
         return record;
     }
 
@@ -74,9 +83,19 @@ export class ConnectionManager {
         return this.#unauthenticatedByIp.get(ip) ?? 0;
     }
 
+    public authenticatedCount(ip: string): number {
+        return this.#authenticatedByIp.get(ip) ?? 0;
+    }
+
     #decrementUnauthenticated(ip: string): void {
         const next = (this.#unauthenticatedByIp.get(ip) ?? 1) - 1;
         if (next <= 0) this.#unauthenticatedByIp.delete(ip);
         else this.#unauthenticatedByIp.set(ip, next);
+    }
+
+    #decrementAuthenticated(ip: string): void {
+        const next = (this.#authenticatedByIp.get(ip) ?? 1) - 1;
+        if (next <= 0) this.#authenticatedByIp.delete(ip);
+        else this.#authenticatedByIp.set(ip, next);
     }
 }

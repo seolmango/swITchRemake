@@ -9,7 +9,6 @@ import type { IncomingHttpHeaders } from 'node:http';
 import type { GameServerHeartbeat } from 'shared';
 
 /** 클라이언트가 좌석 승인으로 받는 경로. `/game-ws/{serverId}` 형태다. */
-const GAME_WS_PREFIX = '/game-ws/';
 const MAP_BUNDLE_PREFIX = '/map-bundles/';
 /*
  * 리플레이 파일도 아무 서버나 준다. 로컬 저장소 구현에서는 같은 기계의 서버들이 한 디렉터리를
@@ -17,6 +16,7 @@ const MAP_BUNDLE_PREFIX = '/map-bundles/';
  * 주소를 준다.
  */
 const REPLAY_PREFIX = '/replays/';
+const REPLAY_TICKET = /^[A-Za-z0-9_-]{32}$/u;
 
 export interface Backend {
     serverId: string;
@@ -38,6 +38,41 @@ export type RouteResolution =
 export type ProxyHeaders = Record<string, string | string[]>;
 
 const NORMALIZATION_BASE = 'http://gateway.invalid';
+
+export interface ParsedBackendAddress {
+    readonly hostname: string;
+    readonly port: number;
+}
+
+/** heartbeat 검증 뒤에도 요청 경계에서 한 번 더 파싱한다. 잘못된 한 항목은 502일 뿐 프로세스 오류가 아니다. */
+export function parseBackendAddress(address: string): ParsedBackendAddress | null {
+    try {
+        const target = new URL(address);
+        const port = Number(target.port);
+        if (target.protocol !== 'http:'
+            || target.username !== ''
+            || target.password !== ''
+            || target.pathname !== '/'
+            || target.search !== ''
+            || target.hash !== ''
+            || target.port === ''
+            || !Number.isInteger(port)
+            || port < 1
+            || port > 65_535) return null;
+        return { hostname: target.hostname.replace(/^\[|\]$/gu, ''), port };
+    } catch {
+        return null;
+    }
+}
+
+export function isPublicDownloadMethod(method: string | undefined): boolean {
+    return method === 'GET' || method === 'HEAD';
+}
+
+export function requestHasBody(headers: Readonly<IncomingHttpHeaders>): boolean {
+    const length = headers['content-length'];
+    return headers['transfer-encoding'] !== undefined || (length !== undefined && length !== '0');
+}
 
 const HTTP_REQUEST_HEADERS = new Set([
     'accept',
@@ -73,7 +108,7 @@ const WEBSOCKET_REQUEST_HEADERS = new Set([
 function normalizeRequestPath(path: string): string | null {
     try {
         const target = new URL(path, NORMALIZATION_BASE);
-        if (target.origin !== NORMALIZATION_BASE) return null;
+        if (target.origin !== NORMALIZATION_BASE || target.hash !== '') return null;
         return target.pathname + target.search;
     } catch {
         return null;
@@ -162,10 +197,10 @@ export function resolveWebSocketRoute(
     servers: ReadonlyMap<string, GameServerHeartbeat>,
 ): RouteResolution {
     const normalizedPath = normalizeRequestPath(path);
-    if (normalizedPath === null || !normalizedPath.startsWith(GAME_WS_PREFIX)) return { kind: 'not-found' };
-    // 경로가 더 이어질 수 있으므로 첫 조각만 본다.
-    const serverId = normalizedPath.slice(GAME_WS_PREFIX.length).split(/[/?#]/u)[0] ?? '';
-    if (serverId.length === 0) return { kind: 'not-found' };
+    if (normalizedPath === null) return { kind: 'not-found' };
+    const match = /^\/game-ws\/([A-Za-z0-9_-]{1,128})$/u.exec(normalizedPath);
+    if (match === null) return { kind: 'not-found' };
+    const serverId = match[1] as string;
     const server = servers.get(serverId);
     if (server === undefined || server.internalAddress.length === 0) return { kind: 'unavailable' };
     return {
@@ -191,11 +226,16 @@ export function resolveBundleRoute(
     servers: ReadonlyMap<string, GameServerHeartbeat>,
 ): RouteResolution {
     const normalizedPath = normalizeRequestPath(path);
-    if (
-        normalizedPath === null
-        || (!normalizedPath.startsWith(MAP_BUNDLE_PREFIX) && !normalizedPath.startsWith(REPLAY_PREFIX))
-    ) {
+    if (normalizedPath === null
+        || (!normalizedPath.startsWith(MAP_BUNDLE_PREFIX) && !normalizedPath.startsWith(REPLAY_PREFIX))) {
         return { kind: 'not-found' };
+    }
+    if (normalizedPath.startsWith(REPLAY_PREFIX)) {
+        const target = new URL(normalizedPath, NORMALIZATION_BASE);
+        const tickets = target.searchParams.getAll('ticket');
+        // 발급기는 randomBytes(24)의 base64url, 즉 정확히 32자를 만든다. 이 모양이 아니면
+        // 인게임 서버와 중앙 Redis로 넘길 이유가 없다.
+        if (tickets.length !== 1 || !REPLAY_TICKET.test(tickets[0] ?? '')) return { kind: 'not-found' };
     }
     const candidates = [...servers.values()]
         .filter((server) => !server.draining && server.internalAddress.length > 0)

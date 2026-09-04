@@ -20,6 +20,9 @@ export const NETWORK = Object.freeze({
     /** 인증 전 연결의 IP당 개수 상한. */
     // NAT 뒤 여러 탭이 인증을 병렬로 시작할 수 있어, 정상 최악 10명과 재시도를 수용한다.
     MAX_UNAUTHENTICATED_PER_IP: 15,
+    /** 인증 뒤에도 한 IP가 프로세스의 모든 자리를 차지하지 못하게 한다. */
+    // PC방ㆍ학교 NAT를 넉넉히 수용하되, 게스트 id를 갈아 끼우는 한 출처에는 유한한 끝을 둔다.
+    MAX_AUTHENTICATED_PER_IP: 100,
     /** 프로세스 전체 동시 연결 상한. 부하 측정 뒤 확정한다. */
     MAX_CONNECTIONS: 2_000,
 
@@ -31,7 +34,16 @@ export const NETWORK = Object.freeze({
     // ── 빈도 ──
     MAX_INPUT_PACKETS_PER_SEC: 90,
     MAX_JSON_COMMANDS_PER_SEC: 20,
+    /** NAT 전체가 나눠 쓰는 예산. 연결별 상한보다 넓어 정상 다중 사용자를 한 명처럼 막지 않는다. */
+    MAX_IP_INPUT_PACKETS_PER_SEC: 900,
+    MAX_IP_JSON_COMMANDS_PER_SEC: 200,
     EMOJI_COOLDOWN_MS: 2_000,
+
+    // ── 리플레이 다운로드 ──
+    /** 공개 HTTP flood가 일회용 표 조회를 Redis 부하로 증폭하지 못하게 하는 IP당 분당 상한. */
+    MAX_REPLAY_REQUESTS_PER_MINUTE: 30,
+    /** readFile 기반 저장소가 큰 파일을 동시에 너무 많이 메모리에 올리지 못하게 한다. */
+    MAX_CONCURRENT_REPLAY_DOWNLOADS: 4,
 
     // ── backpressure ──
     /** 이 이상 쌓이면 교체 가능한 위치 스냅샷을 생략한다. 누적되어야 하는 변경은 생략하지 않는다. */

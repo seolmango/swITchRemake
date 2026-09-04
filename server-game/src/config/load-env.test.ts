@@ -27,5 +27,15 @@ test('missing local env file is optional', () => {
 });
 
 test('startup rejects a configuration with no allowed WebSocket origin', () => {
-    assert.throws(() => assertGameStartupConfig({ ALLOWED_ORIGINS: [] }), /GAME_ALLOWED_ORIGINS/);
+    assert.throws(() => assertGameStartupConfig({
+        ALLOWED_ORIGINS: [], SERVER_ID: 'game-1', PUBLIC_WS_PATH: '/game-ws/game-1',
+    }), /GAME_ALLOWED_ORIGINS/);
+});
+
+test('제어 응답의 wsPath는 서버 id와 정확히 일치하는 공개 경로만 허용한다', () => {
+    const valid = { ALLOWED_ORIGINS: ['https://switch.example'], SERVER_ID: 'game-1', PUBLIC_WS_PATH: '/game-ws/game-1' };
+    assert.doesNotThrow(() => assertGameStartupConfig(valid));
+    for (const PUBLIC_WS_PATH of ['/game/game-1', 'game-ws/game-1', '/game-ws/game-2', '/game-ws/game-1?next=/internal']) {
+        assert.throws(() => assertGameStartupConfig({ ...valid, PUBLIC_WS_PATH }), /exactly match/);
+    }
 });

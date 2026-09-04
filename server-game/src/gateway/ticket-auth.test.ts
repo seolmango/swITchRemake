@@ -31,7 +31,7 @@ describe('ticket authentication', () => {
     it('atomically consumes once and rejects reuse, wrong server, and duplicate users', async () => {
         let now = 1_000;
         const store = new InMemoryTicketStore(() => now);
-        const connections = new ConnectionManager({ maxConnections: 10, maxUnauthenticatedPerIp: 5 });
+        const connections = new ConnectionManager({ maxConnections: 10, maxUnauthenticatedPerIp: 5, maxAuthenticatedPerIp: 5 });
         let admissions = 0;
         const rooms: RoomAdmissionPort = {
             admitReservation: () => {
@@ -68,7 +68,7 @@ describe('ticket authentication', () => {
     it('does not claim a room seat after the pending socket disappears', async () => {
         const now = Date.now();
         const store = new InMemoryTicketStore(() => now);
-        const connections = new ConnectionManager({ maxConnections: 10, maxUnauthenticatedPerIp: 5 });
+        const connections = new ConnectionManager({ maxConnections: 10, maxUnauthenticatedPerIp: 5, maxAuthenticatedPerIp: 5 });
         const open = connections.open('127.0.0.1')!;
         const issued = store.issue(reservation(now));
         let admitted = false;

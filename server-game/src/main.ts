@@ -150,6 +150,7 @@ async function main(): Promise<void> {
     const connections = new ConnectionManager({
         maxConnections: NETWORK.MAX_CONNECTIONS,
         maxUnauthenticatedPerIp: NETWORK.MAX_UNAUTHENTICATED_PER_IP,
+        maxAuthenticatedPerIp: NETWORK.MAX_AUTHENTICATED_PER_IP,
     });
     const authenticator = new TicketAuthenticator({
         serverId: INFRA.SERVER_ID,
@@ -170,7 +171,11 @@ async function main(): Promise<void> {
             maxJsonFrameBytes: NETWORK.MAX_JSON_FRAME_BYTES,
             maxInputPacketsPerSec: NETWORK.MAX_INPUT_PACKETS_PER_SEC,
             maxJsonCommandsPerSec: NETWORK.MAX_JSON_COMMANDS_PER_SEC,
+            maxIpInputPacketsPerSec: NETWORK.MAX_IP_INPUT_PACKETS_PER_SEC,
+            maxIpJsonCommandsPerSec: NETWORK.MAX_IP_JSON_COMMANDS_PER_SEC,
             emojiCooldownMs: NETWORK.EMOJI_COOLDOWN_MS,
+            maxReplayRequestsPerMinute: NETWORK.MAX_REPLAY_REQUESTS_PER_MINUTE,
+            maxConcurrentReplayDownloads: NETWORK.MAX_CONCURRENT_REPLAY_DOWNLOADS,
             socketBufferSoftLimitBytes: NETWORK.SOCKET_BUFFER_SOFT_LIMIT_BYTES,
             socketBufferHardLimitBytes: NETWORK.SOCKET_BUFFER_HARD_LIMIT_BYTES,
             socketBufferHardLimitGraceMs: NETWORK.SOCKET_BUFFER_HARD_LIMIT_GRACE_MS,

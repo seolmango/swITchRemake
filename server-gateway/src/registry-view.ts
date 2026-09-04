@@ -9,24 +9,101 @@
  */
 
 import type Redis from 'ioredis';
-import { HEARTBEAT_INTERVAL_MS, type GameServerHeartbeat, type RedisKeys } from 'shared';
+import { HEARTBEAT_INTERVAL_MS, HEARTBEAT_TTL_MS, type GameServerHeartbeat, type RedisKeys } from 'shared';
+
+export interface BackendAddressPolicy {
+    readonly allowedHosts: readonly string[];
+    readonly allowedPortRanges: readonly { readonly min: number; readonly max: number }[];
+}
 
 export interface RegistryViewOptions {
     readonly redis: Redis;
     readonly keys: RedisKeys;
     readonly refreshMs?: number;
     readonly logger?: (message: string, error?: unknown) => void;
+    readonly addressPolicy: BackendAddressPolicy;
+    readonly now?: () => number;
+}
+
+const SERVER_ID = /^[A-Za-z0-9_-]{1,128}$/u;
+
+function object(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function boundedText(value: unknown, maxLength: number): value is string {
+    return typeof value === 'string' && value.length > 0 && value.length <= maxLength;
+}
+
+function integerIn(value: unknown, min: number, max: number): value is number {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= min && value <= max;
+}
+
+function validInternalAddress(value: unknown, policy: BackendAddressPolicy): value is string {
+    if (typeof value !== 'string' || value.length > 512) return false;
+    try {
+        const url = new URL(value);
+        const host = url.hostname.replace(/^\[|\]$/gu, '').toLowerCase();
+        const port = Number(url.port);
+        return url.protocol === 'http:'
+            && url.username === ''
+            && url.password === ''
+            && url.pathname === '/'
+            && url.search === ''
+            && url.hash === ''
+            && url.port !== ''
+            && policy.allowedHosts.some((allowed) => allowed.toLowerCase() === host)
+            && policy.allowedPortRanges.some((range) => Number.isInteger(port) && port >= range.min && port <= range.max);
+    } catch {
+        return false;
+    }
+}
+
+/** Redis는 반신뢰 경계다. 이 검사를 통과한 값만 공개 요청의 네트워크 목적지가 된다. */
+export function decodeHeartbeat(
+    raw: string,
+    expectedServerId: string,
+    policy: BackendAddressPolicy,
+    now: number,
+): GameServerHeartbeat {
+    const parsed: unknown = JSON.parse(raw);
+    if (!object(parsed)
+        || parsed['serverId'] !== expectedServerId
+        || !SERVER_ID.test(expectedServerId)
+        || !boundedText(parsed['buildVersion'], 128)
+        || !integerIn(parsed['protocolVersion'], 1, 1_000_000)
+        || !boundedText(parsed['rulesVersion'], 128)
+        || !boundedText(parsed['mapBundleHash'], 128)
+        || !integerIn(parsed['maxRooms'], 1, 100_000)
+        || !integerIn(parsed['waitingRooms'], 0, parsed['maxRooms'] as number)
+        || !integerIn(parsed['playingRooms'], 0, parsed['maxRooms'] as number)
+        || (parsed['waitingRooms'] as number) + (parsed['playingRooms'] as number) > (parsed['maxRooms'] as number)
+        || !integerIn(parsed['connections'], 0, 1_000_000)
+        || typeof parsed['loopLagMs'] !== 'number'
+        || !Number.isFinite(parsed['loopLagMs'])
+        || parsed['loopLagMs'] < 0
+        || parsed['loopLagMs'] > 60_000
+        || typeof parsed['draining'] !== 'boolean'
+        || !integerIn(parsed['updatedAt'], 0, Number.MAX_SAFE_INTEGER)
+        || parsed['updatedAt'] < now - HEARTBEAT_TTL_MS
+        || parsed['updatedAt'] > now + HEARTBEAT_INTERVAL_MS
+        || !validInternalAddress(parsed['internalAddress'], policy)) {
+        throw new Error(`invalid heartbeat for ${expectedServerId}`);
+    }
+    return parsed as unknown as GameServerHeartbeat;
 }
 
 export class RegistryView {
     readonly #options: RegistryViewOptions;
     readonly #refreshMs: number;
+    readonly #now: () => number;
     #servers: ReadonlyMap<string, GameServerHeartbeat> = new Map();
     #timer: NodeJS.Timeout | null = null;
 
     public constructor(options: RegistryViewOptions) {
         this.#options = options;
         this.#refreshMs = options.refreshMs ?? HEARTBEAT_INTERVAL_MS;
+        this.#now = options.now ?? Date.now;
     }
 
     public get servers(): ReadonlyMap<string, GameServerHeartbeat> {
@@ -57,9 +134,10 @@ export class RegistryView {
                 const raw = await this.#options.redis.get(this.#options.keys.gameServer(id));
                 if (raw === null) return null;
                 try {
-                    const value = JSON.parse(raw) as GameServerHeartbeat;
-                    return value.serverId === id ? ([id, value] as const) : null;
-                } catch {
+                    const value = decodeHeartbeat(raw, id, this.#options.addressPolicy, this.#now());
+                    return [id, value] as const;
+                } catch (error: unknown) {
+                    this.#options.logger?.(`올바르지 않은 heartbeat를 라우팅에서 제외합니다. serverId=${id}`, error);
                     return null;
                 }
             }));

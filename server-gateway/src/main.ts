@@ -17,11 +17,15 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import { connect, type Socket } from 'node:net';
 import Redis from 'ioredis';
 import { makeKeys } from 'shared';
+import { IpRateLimiter } from './ip-rate-limit';
 import { RegistryView } from './registry-view';
 import {
     filterHttpRequestHeaders,
     filterHttpResponseHeaders,
     filterWebSocketRequestHeaders,
+    isPublicDownloadMethod,
+    parseBackendAddress,
+    requestHasBody,
     resolveBundleRoute,
     resolveWebSocketRoute,
     type Backend,
@@ -33,6 +37,35 @@ const env = (name: string, fallback: string): string => process.env[name]?.trim(
 const PORT = Number(env('GATEWAY_PORT', '4100'));
 const HOST = env('GATEWAY_HOST', '0.0.0.0');
 const APP_ENV = env('APP_ENV', 'dev');
+const UPSTREAM_CONNECT_TIMEOUT_MS = Number(env('GATEWAY_UPSTREAM_CONNECT_TIMEOUT_MS', '3000'));
+const UPSTREAM_RESPONSE_TIMEOUT_MS = Number(env('GATEWAY_UPSTREAM_RESPONSE_TIMEOUT_MS', '10000'));
+const REPLAY_REQUESTS_PER_MINUTE = Number(env('GATEWAY_REPLAY_REQUESTS_PER_MINUTE', '30'));
+
+export interface GatewayProxyLimits {
+    readonly connectTimeoutMs: number;
+    readonly responseTimeoutMs: number;
+    readonly replayRequestsPerMinute: number;
+}
+
+const DEFAULT_PROXY_LIMITS: GatewayProxyLimits = {
+    connectTimeoutMs: UPSTREAM_CONNECT_TIMEOUT_MS,
+    responseTimeoutMs: UPSTREAM_RESPONSE_TIMEOUT_MS,
+    replayRequestsPerMinute: REPLAY_REQUESTS_PER_MINUTE,
+};
+
+type RegistrySource = Pick<RegistryView, 'servers'>;
+
+function portRanges(value: string): Array<{ min: number; max: number }> {
+    return value.split(',').map((part) => {
+        const [first, second] = part.trim().split('-', 2);
+        const min = Number(first);
+        const max = Number(second ?? first);
+        if (!Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max > 65_535 || min > max) {
+            throw new Error(`올바르지 않은 backend port allowlist: ${part}`);
+        }
+        return { min, max };
+    });
+}
 
 async function main(): Promise<void> {
     const redis = new Redis({
@@ -48,11 +81,35 @@ async function main(): Promise<void> {
         redis,
         keys: makeKeys(APP_ENV),
         logger: (message, error) => { console.error(`[gateway] ${message}`, error); },
+        addressPolicy: {
+            // 목적지는 heartbeat가 고르지만 갈 수 있는 네트워크 범위는 운영자가 고정한다.
+            // 기본값은 한 호스트 배포이고, 컨테이너/DNS 배포는 명시적으로 이름을 더한다.
+            allowedHosts: env('GATEWAY_ALLOWED_GAME_HOSTS', '127.0.0.1,localhost,::1').split(',').map((host) => host.trim()).filter(Boolean),
+            // GAME_PORT=0 배포는 OS의 ephemeral port를 쓰므로 기본 범위는 비특권 포트 전체다.
+            // 더 좁힐 수 있는 배포에서는 환경값으로 실제 서비스 범위만 남긴다.
+            allowedPortRanges: portRanges(env('GATEWAY_ALLOWED_GAME_PORTS', '1024-65535')),
+        },
     });
     await view.start();
 
-    const server = createServer((req, res) => { handleRequest(view, req, res); });
-    server.on('upgrade', (req, socket, head) => { handleUpgrade(view, req, socket as Socket, head); });
+    const replayLimiter = new IpRateLimiter();
+    const server = createServer((req, res) => {
+        try {
+            handleRequest(view, replayLimiter, req, res);
+        } catch (error: unknown) {
+            log(`HTTP 요청 경계에서 오류를 막았습니다: ${String(error)}`);
+            if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
+            res.end('bad gateway');
+        }
+    });
+    server.on('upgrade', (req, socket, head) => {
+        try {
+            handleUpgrade(view, req, socket as Socket, head);
+        } catch (error: unknown) {
+            log(`WebSocket upgrade 경계에서 오류를 막았습니다: ${String(error)}`);
+            socket.destroy();
+        }
+    });
 
     // 프록시가 먼저 끊으면 백엔드는 멀쩡한데 사용자만 튕긴다. 인게임 서버 쪽 타임아웃보다 길게 둔다.
     server.keepAliveTimeout = 65_000;
@@ -75,7 +132,13 @@ async function main(): Promise<void> {
 }
 
 /** 맵 번들 등 평범한 HTTP 요청. */
-function handleRequest(view: RegistryView, req: IncomingMessage, res: ServerResponse): void {
+export function handleRequest(
+    view: RegistrySource,
+    replayLimiter: IpRateLimiter,
+    req: IncomingMessage,
+    res: ServerResponse,
+    limits: GatewayProxyLimits = DEFAULT_PROXY_LIMITS,
+): void {
     const path = req.url ?? '/';
     if (path === '/healthz') {
         res.writeHead(200, { 'content-type': 'application/json' });
@@ -96,7 +159,33 @@ function handleRequest(view: RegistryView, req: IncomingMessage, res: ServerResp
     }
 
     const { backend, path: targetPath } = resolution.route;
-    const target = new URL(backend.address);
+    if (!isPublicDownloadMethod(req.method)) {
+        res.writeHead(405, { Allow: 'GET, HEAD', 'content-type': 'text/plain; charset=utf-8' });
+        res.end('method not allowed');
+        return;
+    }
+    if (requestHasBody(req.headers)) {
+        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('request body not allowed');
+        return;
+    }
+    if (targetPath.startsWith('/replays/')) {
+        // forwarded 헤더는 여기서 신뢰하지 않는다. 신뢰 프록시 판정 없이 쓰면 공격자가 매 요청마다
+        // IP를 바꿔 limiter를 피한다. 직접 본 홉 단위 제한은 보수적이지만 위조할 수 없다.
+        const ip = req.socket.remoteAddress ?? 'unknown';
+        if (!replayLimiter.allow(ip, limits.replayRequestsPerMinute, 60_000)) {
+            res.writeHead(429, { 'content-type': 'text/plain; charset=utf-8' });
+            res.end('too many requests');
+            return;
+        }
+    }
+    const target = parseBackendAddress(backend.address);
+    if (target === null) {
+        log(`올바르지 않은 backend 주소를 제외했습니다: serverId=${backend.serverId}`);
+        res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('bad gateway');
+        return;
+    }
     const proxied = httpRequest(
         {
             hostname: target.hostname,
@@ -106,11 +195,24 @@ function handleRequest(view: RegistryView, req: IncomingMessage, res: ServerResp
             headers: filterHttpRequestHeaders(req.headers, req.socket.remoteAddress),
         },
         (upstream) => {
+            clearTimeout(responseTimer);
+            // 헤더 뒤에 본문이 멎는 경우도 소켓을 영원히 점유하지 못하게 한다.
+            upstream.setTimeout(limits.responseTimeoutMs, () => upstream.destroy(new Error('upstream response timeout')));
             res.writeHead(upstream.statusCode ?? 502, filterHttpResponseHeaders(upstream.headers));
             upstream.pipe(res);
         },
     );
+    const responseTimer = setTimeout(() => proxied.destroy(new Error('upstream response timeout')), limits.responseTimeoutMs);
+    responseTimer.unref();
+    proxied.on('socket', (upstreamSocket) => {
+        if (!upstreamSocket.connecting) return;
+        const connectTimer = setTimeout(() => proxied.destroy(new Error('upstream connect timeout')), limits.connectTimeoutMs);
+        connectTimer.unref();
+        upstreamSocket.once('connect', () => clearTimeout(connectTimer));
+        upstreamSocket.once('error', () => clearTimeout(connectTimer));
+    });
     proxied.on('error', (error: unknown) => {
+        clearTimeout(responseTimer);
         log(`${backend.serverId}로 넘기지 못했습니다: ${String(error)}`);
         if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
         res.end('bad gateway');
@@ -125,7 +227,7 @@ function handleRequest(view: RegistryView, req: IncomingMessage, res: ServerResp
  * 해석할 이유가 없는 바이트 흐름이고, 게이트웨이가 프레임을 뜯어보기 시작하면 프로토콜 버전이
  * 하나 더 생긴다 — 인게임 서버와 클라이언트 사이의 계약에 제3자가 끼는 셈이다.
  */
-function handleUpgrade(view: RegistryView, req: IncomingMessage, socket: Socket, head: Buffer): void {
+function handleUpgrade(view: RegistrySource, req: IncomingMessage, socket: Socket, head: Buffer): void {
     const path = req.url ?? '/';
     const resolution = resolveWebSocketRoute(path, view.servers);
     if (resolution.kind === 'not-found') {
@@ -140,8 +242,14 @@ function handleUpgrade(view: RegistryView, req: IncomingMessage, socket: Socket,
     }
 
     const { backend, path: targetPath } = resolution.route;
-    const target = new URL(backend.address);
-    const upstream = connect(Number(target.port), target.hostname, () => {
+    const target = parseBackendAddress(backend.address);
+    if (target === null) {
+        log(`올바르지 않은 WebSocket backend 주소를 제외했습니다: serverId=${backend.serverId}`);
+        socket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n');
+        return;
+    }
+    const upstream = connect(target.port, target.hostname, () => {
+        upstream.setTimeout(0);
         const headers = [`GET ${targetPath} HTTP/1.1`];
         for (const [name, value] of Object.entries(
             filterWebSocketRequestHeaders(req.headers, req.socket.remoteAddress),
@@ -153,6 +261,7 @@ function handleUpgrade(view: RegistryView, req: IncomingMessage, socket: Socket,
         upstream.pipe(socket);
         socket.pipe(upstream);
     });
+    upstream.setTimeout(UPSTREAM_CONNECT_TIMEOUT_MS, () => upstream.destroy(new Error('upstream connect timeout')));
 
     const drop = (error: unknown): void => {
         if (error !== undefined) log(`${backend.serverId} WebSocket 중계 실패: ${String(error)}`);
@@ -168,7 +277,9 @@ function handleUpgrade(view: RegistryView, req: IncomingMessage, socket: Socket,
 
 export type { Backend };
 
-main().catch((error: unknown) => {
-    console.error('[gateway] 기동 실패', error);
-    process.exit(1);
-});
+if (require.main === module) {
+    main().catch((error: unknown) => {
+        console.error('[gateway] 기동 실패', error);
+        process.exit(1);
+    });
+}
