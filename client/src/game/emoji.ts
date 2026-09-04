@@ -9,7 +9,7 @@ import sad from '../assets/images/07-sad.svg?raw';
 import neutral from '../assets/images/08-neutral.svg?raw';
 
 /**
- * Emoji ids are part of the wire contract (`emojiId` in the PLAYERS section — see docs/ENGINE.md), so
+ * Emoji ids are part of the wire contract (`emojiId` in the PLAYERS section — see shared/src/protocol/snapshot.ts), so
  * this ordering is fixed at `EMOJI_ID_MIN`..`EMOJI_ID_MAX` and must not be reshuffled. Index 0 is
  * unused so the id matches the asset's filename prefix.
  *

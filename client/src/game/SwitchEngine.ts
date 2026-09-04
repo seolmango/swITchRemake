@@ -9,7 +9,7 @@ import { phaserFpsLimit } from './internal/frameRateLimit.ts';
 
 export interface SwitchEngineOptions {
     theme?: Theme;
-    /** Defaults to `play`. Gates input/camera defaults, not rendering — see docs/ENGINE.md. */
+    /** Defaults to `play`. Gates input/camera defaults, not rendering — see BASE.md §12.2. */
     mode?: EngineMode;
     /** 유저 설정. 생성 시점부터 적용된다(첫 프레임이 기본값으로 그려졌다가 바뀌는 깜빡임 방지). */
     settings?: Partial<EngineSettings>;

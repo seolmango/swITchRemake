@@ -20,7 +20,7 @@ import { sql } from 'drizzle-orm';
 
 export const accountStatusEnum = pgEnum('account_status', ['ACTIVE', 'BANNED', 'DELETED']);
 /**
- * 운영 권한. 지금은 둘뿐이지만 enum으로 둔 이유는 `FUTURE.md` §3.1이 support/moderator/security를
+ * 운영 권한. 지금은 둘뿐이지만 enum으로 둔 이유는 BASE.md §8이 권한 분리를
  * 나누기로 하고 있어서다 — boolean이면 그때 컬럼을 갈아야 한다. Postgres는 enum에 값을 덧붙일 수 있다.
  *
  * **역할은 토큰에 싣지 않는다.** 강등된 사람의 액세스 토큰이 만료될 때까지 관리자로 남으면 안 된다.

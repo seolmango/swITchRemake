@@ -68,7 +68,7 @@ export type FloorVariant = 'default' | 'light';
 
 /**
  * How the engine is being used. Not a rendering switch — the world draws identically in all three;
- * this gates input, camera defaults, and which HUD the React shell puts on top. See docs/ENGINE.md.
+ * this gates input, camera defaults, and which HUD the React shell puts on top. See BASE.md §12.2.
  */
 export const EngineMode = {
     /** Playing: a self player exists, camera follows them, movement + skill input is live. */

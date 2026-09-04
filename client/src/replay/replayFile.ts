@@ -14,7 +14,7 @@ import { browserReplayCodec } from './browserCodec.ts';
 /**
  * 열어 본 리플레이 파일 하나.
  *
- * 검증 상태를 네 갈래로 나누는 것이 이 파일의 요점이다(`docs/FUTURE.md` §8).
+ * 검증 상태를 네 갈래로 나누는 것이 이 파일의 요점이다(BASE.md §7.2).
  *
  * - `verified`   — 서버가 서명했고 내용이 그대로다. **아직 아무 파일도 이 상태가 아니다.**
  *                  서명이 구현되기 전이다

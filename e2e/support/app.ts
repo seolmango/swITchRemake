@@ -86,7 +86,7 @@ export async function deleteAccount(page: Page, account: Account): Promise<void>
     if (await page.getByText(T.profile.guestStats).isVisible().catch(() => false)) {
         throw new Error(
             `계정 세션이 사라졌습니다(${account.email}). 프로필이 게스트 화면입니다.`
-            + ' refresh 토큰 회전 경합으로 보입니다 — docs/TASKS.md A2 참고.',
+            + ' refresh 토큰 회전 경합으로 보입니다.',
         );
     }
 

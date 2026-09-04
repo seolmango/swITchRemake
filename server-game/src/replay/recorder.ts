@@ -1,5 +1,5 @@
 /**
- * `ReplayRecorder` 계약과 메모리 구현. `docs/REPLAY.md` 4절.
+ * `ReplayRecorder` 계약과 메모리 구현. BASE.md §7.2.
  *
  * 게임 루프의 소비자 하나일 뿐이다 — 루프는 레코더의 존재를 몰라야 한다. 기록 실패는 경기를
  * 중단시키지 않는다: spool 한도를 넘거나 저장이 실패하면 `abort`하고 그 경기의 리플레이를
@@ -77,7 +77,7 @@ export interface MemoryReplayRecorderOptions {
 /**
  * 경기를 메모리에 통째로 쌓았다가 끝날 때 한 번에 저장소에 쓴다.
  *
- * 5분 경기 원본이 약 1MB라 스트리밍할 이유가 없다. `docs/REPLAY.md` 4절의 "압축과 파일 쓰기는
+ * 5분 경기 원본이 약 1MB라 스트리밍할 이유가 없다. BASE.md §7.2의 "압축과 파일 쓰기는
  * 비동기로 넘긴다"는 tick마다가 아니라 `finish()` 한 번에 한정된다 — 그게 게임 루프 밖이다.
  */
 export class MemoryReplayRecorder implements ReplayRecorder {

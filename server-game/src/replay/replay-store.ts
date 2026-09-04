@@ -1,5 +1,5 @@
 /**
- * 리플레이 blob 저장소. `docs/REPLAY.md` 6절.
+ * 리플레이 blob 저장소. BASE.md §7.2.
  *
  * 인게임 서버가 직접 쓴다 — Redis로 보내지 않는다. 수백 KB짜리 blob을 제어 평면에 흘리면 안 된다.
  */
@@ -27,7 +27,7 @@ function assertSafeKey(key: string): void {
     }
 }
 
-/** 로컬 파일 시스템 구현. 초기 개발과 테스트에 쓴다. `docs/REPLAY.md`는 `s3` 구현도 예정하지만 아직 없다. */
+/** 로컬 파일 시스템 구현. 초기 개발과 테스트에 쓴다. `s3` 구현도 예정하지만 아직 없다. */
 export class LocalReplayStore implements ReplayStore {
     readonly #rootDir: string;
 

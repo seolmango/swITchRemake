@@ -1,5 +1,5 @@
 /**
- * 한 tick 진행. `docs/SERVER_ARCHITECTURE.md`의 게임 루프 절이 순서의 원본이다.
+ * 한 tick 진행. BASE.md §6.1의 게임 루프가 순서의 원본이다.
  *
  * 이 파일에서 지켜야 하는 두 가지:
  *
