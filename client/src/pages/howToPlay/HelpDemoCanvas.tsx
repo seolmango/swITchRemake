@@ -7,6 +7,7 @@ import {
     type EncodedDemoFrame,
     type DemoId,
 } from './tutorialSnapshots.ts';
+import { startVisibilityPausedInterval } from '../../utils/visibilityTimer.ts';
 
 interface HelpDemoCanvasProps {
     demo: DemoId;
@@ -41,7 +42,7 @@ export const HelpDemoCanvas: React.FC<HelpDemoCanvasProps> = ({
     useEffect(() => {
         if (!engine) return;
         let cancelled = false;
-        let timer: number | null = null;
+        let stopTimer: () => void = () => undefined;
         const timeline = HELP_DEMO_TIMELINES[demo];
         // 맵 전체가 아니라 데모가 정해 둔 부분만 보여 준다. 전체를 맞추면 사방이 자기장
         // 테두리로 둘러싸여 실제 경기와 전혀 다르게 보인다.
@@ -51,8 +52,7 @@ export const HelpDemoCanvas: React.FC<HelpDemoCanvasProps> = ({
         };
 
         const stop = () => {
-            if (timer !== null) window.clearTimeout(timer);
-            timer = null;
+            stopTimer();
             onPlayingChange(false);
         };
 
@@ -71,29 +71,24 @@ export const HelpDemoCanvas: React.FC<HelpDemoCanvasProps> = ({
             applyFrame(engine, timeline.frames[0]!);
             showView();
             let frameIndex = 1;
-            let nextFrameAt = performance.now() + HELP_DEMO_FRAME_MS;
             onPlayingChange(true);
 
-            const advance = () => {
-                if (cancelled) return;
+            stopTimer = startVisibilityPausedInterval(() => {
+                if (cancelled) return false;
                 const frame = timeline.frames[frameIndex];
                 if (frame) applyFrame(engine, frame);
                 frameIndex += 1;
 
                 if (frameIndex >= timeline.frames.length) {
                     if (!autoplay) {
-                        stop();
                         engine.applySnapshot(timeline.poster);
-                        return;
+                        onPlayingChange(false);
+                        return false;
                     }
                     frameIndex = 0;
                 }
-
-                nextFrameAt += HELP_DEMO_FRAME_MS;
-                timer = window.setTimeout(advance, Math.max(0, nextFrameAt - performance.now()));
-            };
-
-            timer = window.setTimeout(advance, Math.max(0, nextFrameAt - performance.now()));
+                return true;
+            }, HELP_DEMO_FRAME_MS);
         });
 
         return () => {

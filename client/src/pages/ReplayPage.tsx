@@ -9,8 +9,9 @@ import { verifiedMapView } from '../game/mapBundle.ts';
 import { PROTOCOL_VERSION, type RecordedFrame } from 'shared';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
 import { themeColors } from '../theme/color.ts';
-import { frameBuffer, loadFrames, openReplay, ReplayOpenError, type OpenedReplay, type ReplayVerification } from '../replay/replayFile.ts';
+import { frameBuffer, loadFrames, openReplay, readReplayFile, ReplayOpenError, type OpenedReplay, type ReplayVerification } from '../replay/replayFile.ts';
 import { loadReplayVerifier } from '../replay/browserVerifier.ts';
+import { startVisibilityPausedInterval } from '../utils/visibilityTimer.ts';
 
 /** 인게임 서버가 맵 번들을 내주는 주소. 살아 있는 세션이 없으므로 GameSession과 같은 규칙으로 만든다. */
 function gameHttpOrigin(): string {
@@ -36,6 +37,7 @@ export const ReplayPage: React.FC = () => {
     const engineRef = useRef<SwitchEngine | null>(null);
     const verifierRef = useRef(loadReplayVerifier());
     const mapReady = useRef(false);
+    const positionRef = useRef(0);
 
     const replay = state.kind === 'ready' ? state.replay : null;
     const frames = state.kind === 'ready' ? state.frames : null;
@@ -44,9 +46,10 @@ export const ReplayPage: React.FC = () => {
         setState({ kind: 'reading' });
         setPlaying(false);
         setPosition(0);
+        positionRef.current = 0;
         mapReady.current = false;
         try {
-            const bytes = new Uint8Array(await file.arrayBuffer());
+            const bytes = await readReplayFile(file);
             // 공개키는 파일마다 다시 받지 않는다. 못 받아도 재생은 되고 '확인할 수 없음'이 된다.
             const opened = await openReplay(bytes, await verifierRef.current);
             // 프레임은 전부 미리 푼다. 경기가 10분을 넘지 않아서 메모리가 감당되고,
@@ -106,17 +109,17 @@ export const ReplayPage: React.FC = () => {
     useEffect(() => {
         if (!playing || !frames || !replay) return;
         const stepMs = 1000 / Math.max(1, replay.manifest.snapshotHz);
-        const timer = window.setInterval(() => {
-            setPosition((current) => {
-                const next = current + 1;
-                if (next >= frames.length) {
-                    setPlaying(false);
-                    return current;
-                }
-                return next;
-            });
+        // 숨겨진 동안의 벽시계는 재생 위치가 아니다. 복귀하면 멈춘 프레임 다음부터 이어 간다.
+        return startVisibilityPausedInterval(() => {
+            const next = positionRef.current + 1;
+            if (next >= frames.length) {
+                setPlaying(false);
+                return false;
+            }
+            positionRef.current = next;
+            setPosition(next);
+            return true;
         }, stepMs);
-        return () => window.clearInterval(timer);
     }, [playing, frames, replay]);
 
     useEffect(() => { applyUpTo(position); }, [position, applyUpTo]);
@@ -214,7 +217,12 @@ export const ReplayPage: React.FC = () => {
                                 max={Math.max(0, (frames?.length ?? 1) - 1)}
                                 value={position}
                                 aria-label={t('replay.seek')}
-                                onChange={(event) => { setPlaying(false); setPosition(Number(event.target.value)); }}
+                                onChange={(event) => {
+                                    const next = Number(event.target.value);
+                                    setPlaying(false);
+                                    positionRef.current = next;
+                                    setPosition(next);
+                                }}
                             />
                             <span className="replay-position">
                                 {frames ? `${position + 1} / ${frames.length}` : ''}

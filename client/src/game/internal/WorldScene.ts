@@ -18,6 +18,7 @@ import {
     type EntityPositionBuffers,
 } from './entityInterpolation.ts';
 import { cameraFollowLerp } from './cameraSmoothing.ts';
+import { boundFrameDelta } from './frameDelta.ts';
 
 export interface WorldSceneInit {
     theme: Theme;
@@ -146,10 +147,11 @@ export class WorldScene extends Phaser.Scene {
     }
 
     private updateFrame(delta: number): void {
-        const dt = Math.min(delta, 50) / 1000;
+        const boundedDelta = boundFrameDelta(delta);
+        const dt = boundedDelta / 1000;
         this.clock += dt;
         this.animClock += dt * this.renderOptions.motion.animSpeed;
-        this.updateInterpolatedPositions(delta);
+        this.updateInterpolatedPositions(boundedDelta);
 
         const view = this.cameras.main.worldView;
         const minX = view.x - CULL_MARGIN, maxX = view.right + CULL_MARGIN;
@@ -165,7 +167,7 @@ export class WorldScene extends Phaser.Scene {
             sprite.update(this.clock, this.animClock, this.theme, onScreen, this.renderOptions);
         }
 
-        this.updateCameraFx(dt, delta);
+        this.updateCameraFx(dt, boundedDelta);
     }
 
     private reportUpdateError(error: unknown): void {

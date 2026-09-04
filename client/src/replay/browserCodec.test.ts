@@ -1,8 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
-import { buildReplayContainer, signReplayContainer, type ChunkAccumulator, type ReplayCodec, type ReplayManifest } from 'shared';
-import { openReplay, loadFrames } from './replayFile.ts';
+import { buildReplayContainer, signReplayContainer, type ChunkAccumulator, type ChunkIndexEntry, type ReplayCodec, type ReplayManifest } from 'shared';
+import {
+    loadFrames,
+    MAX_REPLAY_FILE_BYTES,
+    MAX_REPLAY_TOTAL_RAW_BYTES,
+    openReplay,
+    readReplayFile,
+    validateReplayMetadata,
+} from './replayFile.ts';
+import { browserReplayCodec, collectReplayStream } from './browserCodec.ts';
 
 /**
  * 서버가 쓴 파일을 브라우저가 읽는다 — 그것이 이 재생기의 전부다. 그래서 **쓰는 쪽은 노드 코덱,
@@ -82,6 +90,80 @@ describe('브라우저 리플레이 코덱', () => {
         await expect(openReplay(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])))
             .rejects.toMatchObject({ verification: 'unsupported' });
     });
+
+    it('파일 크기 상한은 arrayBuffer로 읽기 전에 거절한다', async () => {
+        const arrayBuffer = vi.fn(async () => new ArrayBuffer(0));
+
+        await expect(readReplayFile({ size: MAX_REPLAY_FILE_BYTES + 1, arrayBuffer }))
+            .rejects.toThrow(/file exceeds/);
+        expect(arrayBuffer).not.toHaveBeenCalled();
+    });
+
+    it('압축 폭탄은 지정한 출력 상한을 넘는 즉시 거절한다', async () => {
+        const bomb = gzipSync(new Uint8Array(2 * 1024 * 1024));
+        const compressed = new Uint8Array(bomb.buffer, bomb.byteOffset, bomb.byteLength);
+
+        await expect(browserReplayCodec.gunzip(compressed, 64 * 1024))
+            .rejects.toThrow(/exceeds 65536 decompressed bytes/);
+    });
+
+    it('출력 상한을 넘으면 남은 스트림을 다 읽지 않고 취소한다', async () => {
+        let produced = 0;
+        let cancelled = false;
+        const stream = new ReadableStream<Uint8Array>({
+            pull(controller) {
+                produced += 1;
+                controller.enqueue(new Uint8Array(8));
+                if (produced === 100) controller.close();
+            },
+            cancel() {
+                cancelled = true;
+            },
+        });
+
+        await expect(collectReplayStream(stream, 15)).rejects.toThrow(/exceeds 15 decompressed bytes/);
+        expect(cancelled).toBe(true);
+        expect(produced).toBeLessThan(100);
+    });
+
+    it('chunk의 선언 rawLen을 압축 해제 코덱 상한으로 전달한다', async () => {
+        const container = await buildReplayContainer(MANIFEST, [chunk], nodeCodec);
+        const opened = await openReplay(container.bytes);
+        const entry = opened.chunkIndex[0]!;
+        const shortened: typeof opened = {
+            ...opened,
+            chunkIndex: [{ ...entry, rawLen: 8 }],
+        };
+
+        await expect(loadFrames(shortened, 0)).rejects.toThrow(/exceeds 8 decompressed bytes/);
+    });
+
+    it('manifest의 배열과 필드 타입을 런타임에서 검증한다', async () => {
+        const invalidManifest = { ...MANIFEST, participants: 'not-an-array' } as unknown as Omit<ReplayManifest, 'chunkCount' | 'rootHash'>;
+        const container = await buildReplayContainer(invalidManifest, [chunk], nodeCodec);
+
+        await expect(openReplay(container.bytes)).rejects.toThrow(/manifest field: participants/);
+    });
+
+    it('chunk rawLen 합계가 전체 메모리 상한을 넘으면 거절한다', () => {
+        const entryCount = 9;
+        const chunkIndex: ChunkIndexEntry[] = Array.from({ length: entryCount }, (_, index) => ({
+            startTick: index,
+            endTick: index,
+            offset: 0,
+            compressedLen: 1,
+            rawLen: 16 * 1024 * 1024,
+            sha256: 'a'.repeat(64),
+        }));
+        const manifest: ReplayManifest = {
+            ...MANIFEST,
+            chunkCount: entryCount,
+            rootHash: 'b'.repeat(64),
+        };
+
+        expect(() => validateReplayMetadata(manifest, chunkIndex))
+            .toThrow(`replay chunks exceed ${MAX_REPLAY_TOTAL_RAW_BYTES} raw bytes`);
+    });
 });
 
 describe('리플레이 서명', () => {
@@ -132,7 +214,8 @@ describe('리플레이 서명', () => {
         const { bytes, publicKeyBase64 } = await signedContainer();
         const tampered = bytes.slice();
         // manifest 안의 buildId 한 글자. 해시는 chunk만 덮으므로 여기는 서명만이 잡는다.
-        const marker = tampered.indexOf('test-build'.charCodeAt(0));
+        const marker = Buffer.from(tampered).indexOf(Buffer.from('test-build'));
+        expect(marker).toBeGreaterThanOrEqual(0);
         tampered[marker] = 'x'.charCodeAt(0);
         const opened = await openReplay(tampered, verifierFor({ 'test-key-1': publicKeyBase64 }));
         expect(opened.verification).toBe('modified');
