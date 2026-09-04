@@ -186,9 +186,26 @@ export class UserService {
         }
 
         const passwordHash = await bcrypt.hash(dto.newPassword, 10);
-        await this.db.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, userId));
-        const revokedCount = await this.sessionService.revokeOthers(userId, currentSessionId);
-        return { revokedCount };
+        return this.db.transaction(async (tx) => {
+            await this.sessionService.assertOwnedActiveSession(userId, currentSessionId, tx);
+            /*
+             * 읽었던 해시까지 조건에 넣는 낙관적 잠금이다. 두 비밀번호 변경이 겹치면 먼저
+             * 커밋한 요청만 성공한다. 비밀번호 쓰기와 다른 세션 폐기는 같은 트랜잭션이므로
+             * 둘 중 하나만 반영되는 계정 보안 상태가 남지 않는다.
+             */
+            const [updated] = await tx.update(schema.users).set({ passwordHash }).where(and(
+                eq(schema.users.id, userId),
+                eq(schema.users.passwordHash, user.passwordHash),
+            )).returning({ id: schema.users.id });
+            if (!updated) {
+                throw new ConflictException({
+                    code: 'PASSWORD_CHANGED_CONCURRENTLY',
+                    message: 'The password changed while this request was being processed',
+                });
+            }
+            const revokedCount = await this.sessionService.revokeOthers(userId, currentSessionId, tx);
+            return { revokedCount };
+        });
     }
 
     async getStats(userId: number): Promise<UserStatsResponse> {

@@ -13,6 +13,9 @@ import { ConfigService } from '@nestjs/config';
 import { DRIZZLE } from '../database/database.module';
 import * as schema from '../database/schema';
 
+/** 비밀번호 변경처럼 세션 쓰기를 다른 변경과 원자적으로 묶을 때 공유하는 트랜잭션 핸들. */
+export type SessionTransaction = Parameters<Parameters<PostgresJsDatabase<typeof schema>['transaction']>[0]>[0];
+
 @Injectable()
 export class SessionService implements OnModuleInit, OnModuleDestroy {
     private readonly ipRetentionDays: number;
@@ -85,16 +88,23 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
         ));
     }
 
-    async revokeOthers(userId: number, currentSessionId: string): Promise<number> {
-        const revoked = await this.db.update(schema.sessions).set({
-            revokedAt: new Date(),
-        }).where(and(
-            eq(schema.sessions.userId, userId),
-            ne(schema.sessions.id, currentSessionId),
-            isNull(schema.sessions.revokedAt),
-        )).returning({ id: schema.sessions.id });
+    async revokeOthers(
+        userId: number,
+        currentSessionId: string,
+        tx?: SessionTransaction,
+    ): Promise<number> {
+        const run = async (database: SessionTransaction): Promise<number> => {
+            const revoked = await database.update(schema.sessions).set({
+                revokedAt: new Date(),
+            }).where(and(
+                eq(schema.sessions.userId, userId),
+                ne(schema.sessions.id, currentSessionId),
+                isNull(schema.sessions.revokedAt),
+            )).returning({ id: schema.sessions.id });
 
-        return revoked.length;
+            return revoked.length;
+        };
+        return tx ? run(tx) : this.db.transaction(run);
     }
 
     /**
@@ -114,18 +124,25 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
         return revoked.length;
     }
 
-    async assertOwnedActiveSession(userId: number, sessionId: string): Promise<void> {
-        const [session] = await this.db.select({ id: schema.sessions.id })
-            .from(schema.sessions)
-            .where(and(
-                eq(schema.sessions.id, sessionId),
-                eq(schema.sessions.userId, userId),
-                isNull(schema.sessions.revokedAt),
-                gt(schema.sessions.expiresAt, new Date()),
-            ));
-        if (!session) {
-            throw new ForbiddenException('Current session is no longer active');
-        }
+    async assertOwnedActiveSession(
+        userId: number,
+        sessionId: string,
+        tx?: SessionTransaction,
+    ): Promise<void> {
+        const run = async (database: SessionTransaction): Promise<void> => {
+            const [session] = await database.select({ id: schema.sessions.id })
+                .from(schema.sessions)
+                .where(and(
+                    eq(schema.sessions.id, sessionId),
+                    eq(schema.sessions.userId, userId),
+                    isNull(schema.sessions.revokedAt),
+                    gt(schema.sessions.expiresAt, new Date()),
+                ));
+            if (!session) {
+                throw new ForbiddenException('Current session is no longer active');
+            }
+        };
+        return tx ? run(tx) : this.db.transaction(run);
     }
 
     /**

@@ -63,8 +63,8 @@ export class ResultOutbox {
     async #flushOnce(): Promise<number> {
         if (!this.#options.redis.isReady()) return 0;
         let sent = 0;
-        while (this.#queue[0] !== undefined) {
-            const result = this.#queue[0];
+        while (this.#queue[sent] !== undefined) {
+            const result = this.#queue[sent];
             try {
                 await this.#options.redis.xAdd(
                     this.#options.keys.gameResults(),
@@ -76,9 +76,11 @@ export class ResultOutbox {
                 this.#logger('Redis result flush failed; result remains in memory outbox', error);
                 break;
             }
-            this.#queue.shift();
             sent += 1;
         }
+        // Array.shift()는 뒤 원소를 매번 당겨 대량 복구가 O(n²)이 된다. 성공한 접두사를
+        // 한 번만 제거하면 순서와 실패 시 보존 성질은 같고, 큐 정리는 O(n) 한 번으로 끝난다.
+        if (sent > 0) this.#queue.splice(0, sent);
         return sent;
     }
 }

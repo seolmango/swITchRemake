@@ -15,6 +15,7 @@ import * as schema from '../database/schema';
 type SanctionType = typeof schema.sanctionTypeEnum.enumValues[number];
 type AccountStatus = typeof schema.accountStatusEnum.enumValues[number];
 type RequestMeta = Record<string, unknown>;
+const RECONCILIATION_CONCURRENCY = 8;
 
 /** 트랜잭션 핸들. drizzle의 콜백 인자와 같은 모양이면 된다. */
 type SanctionTransaction = Parameters<Parameters<PostgresJsDatabase<typeof schema>['transaction']>[0]>[0];
@@ -359,8 +360,17 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
                 ...cachedBans.map((row) => row.userId),
                 ...activeBanSubjects.map((row) => row.userId),
             ]);
-            for (const userId of userIds) {
-                await this.reconcileUserStatus(userId, 'scheduler');
+            const pending = [...userIds];
+            for (let offset = 0; offset < pending.length; offset += RECONCILIATION_CONCURRENCY) {
+                const batch = pending.slice(offset, offset + RECONCILIATION_CONCURRENCY);
+                await Promise.all(batch.map(async (userId) => {
+                    try {
+                        await this.reconcileUserStatus(userId, 'scheduler');
+                    } catch (error) {
+                        // 한 사용자의 잠금/DB 오류가 뒤 사용자의 만료 해제를 한 회차 전부 막지 않는다.
+                        this.logger.error(`Failed to reconcile scheduled sanction for userId=${userId}`, error);
+                    }
+                }));
             }
         } catch (error) {
             this.logger.error('Failed to reconcile scheduled account sanctions', error);

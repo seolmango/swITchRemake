@@ -69,6 +69,12 @@ class FakeRedis implements RedisPort {
         this.log.push(`compare-del:${key}`);
         return true;
     }
+    async compareAndSetPx(key: string, expectedValue: string, value: string, ttlMs: number): Promise<boolean> {
+        if (!this.ready) throw new Error('redis unavailable');
+        if (this.values.get(key) !== expectedValue) return false;
+        await this.setPx(key, value, ttlMs);
+        return true;
+    }
     readonly expired: string[] = [];
     async expire(key: string, _ttlMs: number): Promise<void> { this.expired.push(key); }
     async compareAndExpire(key: string, expectedValue: string, ttlMs: number): Promise<boolean> {

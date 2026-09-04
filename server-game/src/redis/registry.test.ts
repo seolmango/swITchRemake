@@ -36,6 +36,11 @@ class FakeRedis implements RedisPort {
         this.compareDeleted.push(key);
         return true;
     }
+    async compareAndSetPx(key: string, expectedValue: string, value: string, ttlMs: number): Promise<boolean> {
+        if (this.values.get(key) !== expectedValue) return false;
+        await this.setPx(key, value, ttlMs);
+        return true;
+    }
     readonly expired: string[] = [];
     async expire(key: string, _ttlMs: number): Promise<void> { this.expired.push(key); }
     async compareAndExpire(key: string, expectedValue: string, ttlMs: number): Promise<boolean> {
@@ -169,4 +174,17 @@ test('해제 큐 뒤 다시 추적된 자리는 active-room을 지키고 강퇴�
     assert.equal(h.redis.values.get(h.keys.roomRejoin('room-1', 4)), '1');
     assert.equal(h.redis.compareDeleted.includes(h.keys.userActiveRoom(3)), true);
     assert.equal(h.redis.compareDeleted.includes(h.keys.userActiveRoom(4)), true);
+});
+
+test('방 인계 중 새 방으로 옮긴 사용자의 claim을 덮지 않고 앞선 변경도 되돌린다', async () => {
+    const h = harness();
+    const firstOldClaim = JSON.stringify({ state: 'assigned', roomId: 'room-1', serverId: 'game-old' });
+    const secondNewClaim = JSON.stringify({ state: 'assigned', roomId: 'room-new', serverId: 'game-new' });
+    h.redis.values.set(h.keys.userActiveRoom(1), firstOldClaim);
+    h.redis.values.set(h.keys.userActiveRoom(2), secondNewClaim);
+
+    await assert.rejects(h.registry.claimAdoptedRoom('room-1', [1, 2]), /claim changed/);
+
+    assert.equal(h.redis.values.get(h.keys.userActiveRoom(1)), firstOldClaim, '부분 인계는 원래 claim으로 롤백한다');
+    assert.equal(h.redis.values.get(h.keys.userActiveRoom(2)), secondNewClaim, '새 방 배정은 보존한다');
 });

@@ -129,21 +129,41 @@ export class GameRegistry {
      * 맞는지 본다(`rooms.service.ts`). 방만 옮기고 이걸 안 고치면 전원이 `ROOM_UNAVAILABLE`로
      * 튕겨서, 방은 멀쩡히 여기 있는데 아무도 돌아오지 못한다.
      *
-     * `setPx`로 덮어쓴다. 앞 서버가 남긴 표가 아직 살아 있을 수 있고, 그 표는 이미 죽은 서버를
-     * 가리키므로 지켜 줄 이유가 없다.
+     * 읽은 값을 CAS로 바꾼다. 명단을 내보낸 뒤 실제 인계 전에 사용자가 나가 새 방을 잡을 수
+     * 있으므로, 단순 set은 그 새 배정을 과거 방으로 되돌린다. 한 명이라도 이미 다른 방으로
+     * 이동했으면 앞서 옮긴 표도 되돌리고 인계 전체를 재시도한다.
      */
     public async claimAdoptedRoom(roomId: string, userIds: readonly ActorId[]): Promise<void> {
-        for (const userId of userIds) {
-            await this.#options.redis.setPx(
-                this.#options.keys.userActiveRoom(userId),
-                JSON.stringify({
+        const moved: Array<{ key: string; previous: string; adopted: string }> = [];
+        try {
+            for (const userId of userIds) {
+                const key = this.#options.keys.userActiveRoom(userId);
+                const previous = await this.#options.redis.get(key);
+                if (previous === null || !this.#claimPointsToRoom(previous, roomId)) {
+                    throw new Error(`active-room claim changed during room adoption (roomId=${roomId})`);
+                }
+                const adopted = JSON.stringify({
                     state: 'assigned',
                     requestId: `adopt:${this.#options.heartbeat.serverId}:${roomId}`,
                     roomId,
                     serverId: this.#options.heartbeat.serverId,
-                }),
-                ACTIVE_ROOM_TTL_MS,
-            );
+                });
+                if (!await this.#options.redis.compareAndSetPx(key, previous, adopted, ACTIVE_ROOM_TTL_MS)) {
+                    throw new Error(`active-room claim raced during room adoption (roomId=${roomId})`);
+                }
+                moved.push({ key, previous, adopted });
+            }
+        } catch (error) {
+            // 다른 요청이 표를 다시 바꿨다면 그 최신 값은 건드리지 않는다.
+            for (const transfer of moved.reverse()) {
+                await this.#options.redis.compareAndSetPx(
+                    transfer.key,
+                    transfer.adopted,
+                    transfer.previous,
+                    ACTIVE_ROOM_TTL_MS,
+                ).catch(() => undefined);
+            }
+            throw error;
         }
     }
 
@@ -396,6 +416,17 @@ export class GameRegistry {
             return value['state'] === 'assigned'
                 && value['roomId'] === roomId
                 && value['serverId'] === this.#options.heartbeat.serverId;
+        } catch {
+            return false;
+        }
+    }
+
+    #claimPointsToRoom(raw: string, roomId: string): boolean {
+        try {
+            const claim = JSON.parse(raw) as unknown;
+            if (claim === null || typeof claim !== 'object') return false;
+            const value = claim as Record<string, unknown>;
+            return value['state'] === 'assigned' && value['roomId'] === roomId;
         } catch {
             return false;
         }

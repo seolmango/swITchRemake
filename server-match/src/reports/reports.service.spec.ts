@@ -309,6 +309,24 @@ test('CLOSED 사건에 제재를 걸면 409로 거절한다', async () => {
     assert.equal(harness.applyInputs.length, 0);
 });
 
+test('이미 ACTIONED인 사건에 제재를 다시 걸지 않는다', async () => {
+    const harness = sanctionHarness({
+        caseId: CASE_ID,
+        matchId: MATCH_ID,
+        targetUserId: 2,
+        status: 'ACTIONED',
+    });
+    const service = new ReportsService(harness.db as never, harness.sanctions as never, harness.rooms as never);
+
+    await rejectsCode(
+        service.sanction(CASE_ID, 9, { type: 'BAN', reason: '중복 요청으로 다시 들어온 제재입니다' }),
+        ConflictException,
+        'REPORT_CASE_ALREADY_ACTIONED',
+    );
+    assert.equal(harness.applyInputs.length, 0);
+    assert.deepEqual(harness.evictions, []);
+});
+
 function statusDb(currentStatus: string) {
     const updates: Record<string, unknown>[] = [];
     const audits: Record<string, unknown>[] = [];

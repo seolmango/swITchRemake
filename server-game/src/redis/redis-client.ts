@@ -15,6 +15,7 @@ export interface RedisPort {
     setPxIfAbsent(key: string, value: string, ttlMs: number): Promise<boolean>;
     delete(key: string): Promise<void>;
     compareAndDelete(key: string, expectedValue: string): Promise<boolean>;
+    compareAndSetPx(key: string, expectedValue: string, value: string, ttlMs: number): Promise<boolean>;
     compareAndExpire(key: string, expectedValue: string, ttlMs: number): Promise<boolean>;
     /** 값과 상관없이 수명만 늘린다. 살아 있는 동안만 남아야 하는 stream에 쓴다. */
     expire(key: string, ttlMs: number): Promise<void>;
@@ -132,6 +133,23 @@ export class RedisClient implements RedisPort {
             1,
             key,
             expectedValue,
+        );
+        return result === 1;
+    }
+
+    public async compareAndSetPx(
+        key: string,
+        expectedValue: string,
+        value: string,
+        ttlMs: number,
+    ): Promise<boolean> {
+        const result = await this.#client.eval(
+            'if redis.call("GET", KEYS[1]) == ARGV[1] then redis.call("SET", KEYS[1], ARGV[2], "PX", ARGV[3]); return 1 else return 0 end',
+            1,
+            key,
+            expectedValue,
+            value,
+            ttlMs,
         );
         return result === 1;
     }

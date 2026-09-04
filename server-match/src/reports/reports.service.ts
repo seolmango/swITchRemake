@@ -424,6 +424,17 @@ export class ReportsService {
                     message: 'Closed moderation cases cannot be sanctioned',
                 });
             }
+            if (moderationCase.status === 'ACTIONED') {
+                /*
+                 * 사건 행을 잠근 뒤 확인한다. 관리자가 두 번 누르거나 HTTP 재시도가 겹쳐도
+                 * 첫 트랜잭션이 ACTIONED를 기록한 다음 두 번째 요청이 여기서 멈춘다. 확인이
+                 * apply() 뒤에 있으면 같은 사건으로 BAN/WARN 행이 계속 생긴다.
+                 */
+                throw new ConflictException({
+                    code: 'REPORT_CASE_ALREADY_ACTIONED',
+                    message: 'This moderation case already has a sanction',
+                });
+            }
             if (moderationCase.targetUserId === null) {
                 throw new BadRequestException({
                     code: 'GUEST_TARGET_NOT_SANCTIONABLE',
