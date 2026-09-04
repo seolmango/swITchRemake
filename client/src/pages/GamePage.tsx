@@ -71,6 +71,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
     const inputSequence = useRef(0);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [spectatingId, setSpectatingId] = useState<number | null>(null);
+    const nextInputSequence = useCallback(() => inputSequence.current++ & 0xffff, []);
     const requestedRoomId = searchParams.get('room_id');
     const live = session.status === 'connected' && session.roomId !== null;
     const gameVisible = live || (session.status === 'reconnecting' && session.roomId !== null && session.started !== null);
@@ -149,7 +150,6 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
     useEffect(() => {
         if (!training || session.role !== 'spectator') return;
         engineRef.current?.camera.free();
-        setSpectatingId(null);
     }, [session.role, training]);
 
     useEffect(() => {
@@ -259,7 +259,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
             // 둘 다 쓰는 조합에서 조작이 죽는다. 조이스틱을 안 잡고 있으면 전부 false다.
             const touch = readTouchDirection();
             gameSession.sendInput({
-                sequence: inputSequence.current++ & 0xffff,
+                sequence: nextInputSequence(),
                 left: active('moveLeft') || touch.left,
                 right: active('moveRight') || touch.right,
                 up: active('moveUp') || touch.up,
@@ -273,14 +273,14 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
         return () => {
             window.clearInterval(timer);
             gameSession.sendInput({
-                sequence: inputSequence.current++ & 0xffff,
+                sequence: nextInputSequence(),
                 left: false, right: false, up: false, down: false, heldActions: 0,
             });
             window.removeEventListener('keydown', onKeyDown);
             window.removeEventListener('keyup', onKeyUp);
             window.removeEventListener('blur', onBlur);
         };
-    }, [handleEmoji, handleMovementSkill, handleSwitchTarget, live, session.role, session.roomState, settingsOpen]);
+    }, [handleEmoji, handleMovementSkill, handleSwitchTarget, live, nextInputSequence, session.role, session.roomState, settingsOpen]);
 
     const hudPlayers = training && session.trainingPlayers.length > 0
         ? session.trainingPlayers.map((player) => ({
@@ -324,13 +324,14 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
         })(),
         switchTargets: getSwitchTargets(hudPlayers, session.selfId),
         elapsedSec: null,
-        spectatingId,
+        // 훈련장은 탈락해도 자유 카메라를 쓴다. 이전 실경기의 관전 대상 상태는 표시하지 않는다.
+        spectatingId: training ? null : spectatingId,
         alerts: session.skillRejections.map((rejection) => ({
             id: rejection.id,
             text: t(skillRejectionMessageKey(rejection.reason)),
             tone: 'danger' as const,
         })),
-    }), [hudPlayers, keyBindings, session.cooldowns, session.lobby, session.role, session.selfId, session.skillRejections, session.starting, session.taggerId, session.trainingSkill, spectatingId, t]);
+    }), [hudPlayers, keyBindings, session.cooldowns, session.lobby, session.role, session.selfId, session.skillRejections, session.starting, session.trainingSkill, spectatingId, t, training]);
 
     const selfAlive = hudPlayers.find((player) => player.id === session.selfId)?.alive ?? false;
 

@@ -28,7 +28,7 @@ export const AdminInspect: React.FC<{ time: (value: string | number) => string }
     const [lookup, setLookup] = useState<LookupState>({ kind: 'idle' });
     const [audit, setAudit] = useState<AdminAuditEntry[]>([]);
     const [nextBefore, setNextBefore] = useState<number | null>(null);
-    const [auditBusy, setAuditBusy] = useState(false);
+    const [auditBusy, setAuditBusy] = useState(true);
 
     const loadAudit = useCallback(async (before?: number) => {
         setAuditBusy(true);
@@ -43,7 +43,17 @@ export const AdminInspect: React.FC<{ time: (value: string | number) => string }
         }
     }, []);
 
-    useEffect(() => { void loadAudit(); }, [loadAudit]);
+    useEffect(() => {
+        let active = true;
+        void getAuditLog().then((page) => {
+            if (!active) return;
+            setAudit(page.items);
+            setNextBefore(page.nextBefore);
+        }).catch(() => undefined).finally(() => {
+            if (active) setAuditBusy(false);
+        });
+        return () => { active = false; };
+    }, []);
 
     const search = async () => {
         const trimmed = query.trim();

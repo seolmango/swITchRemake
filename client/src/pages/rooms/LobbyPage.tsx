@@ -41,12 +41,19 @@ export const LobbyPage: React.FC = () => {
     const transitioningToGame = useRef(false);
     const pageUnloading = useRef(false);
     const [resumeFailed, setResumeFailed] = useState(false);
-    const [mapIds, setMapIds] = useState<readonly string[] | null>(null);
+    const [mapCatalog, setMapCatalog] = useState<{
+        hash: string;
+        origin: string;
+        ids: readonly string[];
+    } | null>(null);
     const [message, setMessage] = useState('');
     const [liveLockElapsedMs, setLiveLockElapsedMs] = useState(0);
     const [hostAction, setHostAction] = useState<HostAction | null>(null);
     const [skillPickerOpen, setSkillPickerOpen] = useState(false);
     const [pendingLoadout, setPendingLoadout] = useState<{ skill: PlayerSkill; errorEventId: number } | null>(null);
+    const mapIds = mapCatalog?.hash === session.mapBundleHash && mapCatalog.origin === session.gameHttpOrigin
+        ? mapCatalog.ids
+        : null;
     const liveRoom = useMemo<LobbySnapshot | null>(() => {
         const lobby = session.lobby;
         if (!live || !lobby) return null;
@@ -126,12 +133,11 @@ export const LobbyPage: React.FC = () => {
     }, [live, session.lobby, session.lobbyReceivedAt]);
 
     useEffect(() => {
-        if (!session.mapBundleHash || !session.gameHttpOrigin) {
-            setMapIds(null);
-            return;
-        }
+        if (!session.mapBundleHash || !session.gameHttpOrigin) return;
+        const hash = session.mapBundleHash;
+        const origin = session.gameHttpOrigin;
         let active = true;
-        void verifiedMapBundle(session.mapBundleHash, session.gameHttpOrigin)
+        void verifiedMapBundle(hash, origin)
             .then((bundle) => {
                 // `random`은 방 생성 명령에서만 실제 맵으로 풀린다(command-consumer의 resolveMapId).
                 // 로비의 lobby.setMap은 Room.setMap의 isKnownMap()을 거치므로 `random`을 넣으면
@@ -140,14 +146,16 @@ export const LobbyPage: React.FC = () => {
                 //
                 // 훈련장 맵은 목록에서 뺀다. 고를 수 있게 두면 서버가 INVALID_PAYLOAD로 거부하는
                 // 것을 사용자는 "버튼이 안 먹는다"로 읽는다.
-                if (active) {
-                    setMapIds(Object.entries(bundle.maps)
+                if (active) setMapCatalog({
+                    hash,
+                    origin,
+                    ids: Object.entries(bundle.maps)
                         .filter(([, map]) => map.training_only !== true)
-                        .map(([id]) => id));
-                }
+                        .map(([id]) => id),
+                });
             })
             .catch(() => {
-                if (active) setMapIds(null);
+                if (active) setMapCatalog(null);
             });
         return () => { active = false; };
     }, [session.gameHttpOrigin, session.mapBundleHash]);
@@ -170,21 +178,6 @@ export const LobbyPage: React.FC = () => {
         };
     }, [currentRoomId]);
 
-    useEffect(() => {
-        if (!pendingLoadout || !live) return;
-        const confirmed = session.lobby?.players.find((player) => player.playerId === session.selfId)?.skills.find(
-            (candidate): candidate is PlayerSkill => isLoadoutSkill(candidate) && candidate !== SkillId.Switch,
-        );
-        if (confirmed === pendingLoadout.skill) {
-            setPendingLoadout(null);
-            setMessage(t('lobby.skillChanged', { skill: t(`lobby.skills.${confirmed}`) }));
-        } else if (session.errorEventId > pendingLoadout.errorEventId && session.errorCode) {
-            // Live UI is never changed optimistically; the authoritative lobby.state remains visible.
-            setPendingLoadout(null);
-            setMessage(t('lobby.commandFailed', { code: session.errorCode }));
-        }
-    }, [live, pendingLoadout, session.errorCode, session.errorEventId, session.lobby, session.selfId, t]);
-
     const slots = useMemo(() => room === null ? [] : Array.from({ length: room.capacity }, (_, index) => ({
         slot: index + 1,
         player: room.players.find((player) => player.slot === index + 1),
@@ -202,19 +195,39 @@ export const LobbyPage: React.FC = () => {
     const errorText = live && session.errorCode
         ? t(`lobby.errorCodes.${session.errorCode}`, { defaultValue: t('lobby.commandFailed', { code: session.errorCode }) })
         : null;
-    const statusText = (errorText ?? message)
+    // 서버 스냅샷에서 응답을 파생한다. effect로 같은 내용을 다시 state에 복사하면 스냅샷마다
+    // 한 번 더 렌더되고, 잠깐 권위 상태와 로컬 메시지가 어긋날 수 있다.
+    const pendingLoadoutMessage = (() => {
+        if (!pendingLoadout || !live) return null;
+        const confirmed = session.lobby?.players.find((player) => player.playerId === session.selfId)?.skills.find(
+            (candidate): candidate is PlayerSkill => isLoadoutSkill(candidate) && candidate !== SkillId.Switch,
+        );
+        if (confirmed === pendingLoadout.skill) {
+            return t('lobby.skillChanged', { skill: t(`lobby.skills.${confirmed}`) });
+        }
+        if (session.errorEventId > pendingLoadout.errorEventId && session.errorCode) {
+            return t('lobby.commandFailed', { code: session.errorCode });
+        }
+        return null;
+    })();
+    const statusText = (errorText ?? pendingLoadoutMessage ?? message)
         || ((room?.startLockMs ?? 0) > 0
             ? t('lobby.startLocked', { seconds: startLockSeconds })
             : !hasEnoughPlayers
                 ? t('lobby.startRequirement', { count: MIN_PLAYERS_TO_START })
                 : isOwner ? t('lobby.canStart') : t('lobby.waitingForHost'));
 
+    const showMessage = (value: string) => {
+        setPendingLoadout(null);
+        setMessage(value);
+    };
+
     const copyCode = async () => {
         try {
             await navigator.clipboard.writeText(displayCode);
-            setMessage(t('lobby.codeCopied'));
+            showMessage(t('lobby.codeCopied'));
         } catch {
-            setMessage(t('lobby.copyFailed'));
+            showMessage(t('lobby.copyFailed'));
         }
     };
 
@@ -223,13 +236,13 @@ export const LobbyPage: React.FC = () => {
         const currentIndex = mapIds.indexOf(room.map);
         const nextMap = mapIds[(currentIndex + direction + mapIds.length) % mapIds.length]!;
         gameSession.send({ type: 'lobby.setMap', payload: { mapId: nextMap } });
-        setMessage('');
+        showMessage('');
     };
 
     const toggleRoomLock = () => {
         if (!isOwner || !room) return;
         gameSession.send({ type: 'lobby.setLocked', payload: { locked: !room.isLocked } });
-        setMessage('');
+        showMessage('');
     };
 
     const exitRoom = () => {
@@ -247,7 +260,7 @@ export const LobbyPage: React.FC = () => {
     const changeOwnSlot = (nextSlot: number) => {
         if (!self || !room || !lobbyEditable || self.slot === nextSlot || room.players.some((player) => player.slot === nextSlot)) return;
         gameSession.send({ type: 'lobby.setSlot', payload: { slot: nextSlot } });
-        setMessage('');
+        showMessage('');
     };
 
     const changeSkill = (skill: PlayerSkill) => {
@@ -257,7 +270,7 @@ export const LobbyPage: React.FC = () => {
         }
         const sent = gameSession.send({ type: 'lobby.setLoadout', payload: { skills: [skill] } });
         if (!sent) {
-            setMessage(t('lobby.commandFailed', { code: 'DISCONNECTED' }));
+            showMessage(t('lobby.commandFailed', { code: 'DISCONNECTED' }));
             return;
         }
         setPendingLoadout({ skill, errorEventId: session.errorEventId });

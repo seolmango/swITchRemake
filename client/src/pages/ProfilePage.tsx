@@ -62,16 +62,22 @@ export const ProfilePage: React.FC = () => {
         }
     }, [t]);
 
+    const fetchRecords = useCallback(async () => {
+        if (!authenticated) return;
+        const [stats, history] = await Promise.all([getMyStats(), getMyMatches({ limit: 5 })]);
+        return { kind: 'ready' as const, stats, matches: history.matches };
+    }, [authenticated]);
+
     const loadRecords = useCallback(async () => {
         if (!authenticated) return;
         setRecords({ kind: 'loading' });
         try {
-            const [stats, history] = await Promise.all([getMyStats(), getMyMatches({ limit: 5 })]);
-            setRecords({ kind: 'ready', stats, matches: history.matches });
+            const next = await fetchRecords();
+            if (next) setRecords(next);
         } catch {
             setRecords({ kind: 'failed' });
         }
-    }, [authenticated]);
+    }, [authenticated, fetchRecords]);
 
     const loadSessions = useCallback(async () => {
         if (!authenticated) return;
@@ -102,8 +108,17 @@ export const ProfilePage: React.FC = () => {
         return () => { active = false; };
     }, [authenticated, t]);
 
-    // 최초 로드와 재시도·새로고침 버튼이 같은 함수를 쓴다. 같은 fetch를 두 벌 두면 한쪽만 고쳐진다.
-    useEffect(() => { void loadRecords(); }, [loadRecords]);
+    // effect 안에서 loading 상태를 다시 쓰지 않는다. 초기값이 이미 loading이고, 결과가 온 뒤에만
+    // 한 번 갱신하면 불필요한 연쇄 렌더가 없다. 재시도 버튼도 같은 fetch 함수를 공유한다.
+    useEffect(() => {
+        let active = true;
+        void fetchRecords().then((next) => {
+            if (active && next) setRecords(next);
+        }).catch(() => {
+            if (active) setRecords({ kind: 'failed' });
+        });
+        return () => { active = false; };
+    }, [fetchRecords]);
 
     // 실패하면 조용히 넘어간다. 보관 기간을 못 읽었다고 전적 화면이 깨질 이유는 없다.
     useEffect(() => {

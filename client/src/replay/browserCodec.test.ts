@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { buildReplayContainer, signReplayContainer, type ChunkAccumulator, type ReplayCodec, type ReplayManifest } from 'shared';
-import { browserReplayCodec } from './browserCodec.ts';
 import { openReplay, loadFrames } from './replayFile.ts';
 
 /**
