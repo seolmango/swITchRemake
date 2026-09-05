@@ -97,6 +97,16 @@ export class PreAuthIpRateLimiterGuard extends RedisRateGuard {
 /** JWT 뒤에서 actor와 공격 대상 계정을 각각 센다. 카운터는 모든 인스턴스가 같은 Redis를 쓴다. */
 @Injectable()
 export class RateLimiterGuard extends RedisRateGuard {
+    /*
+     * 생성자를 물려받지 않고 다시 적는다. TypeScript는 **자기 생성자가 있는 클래스에만**
+     * `design:paramtypes`를 내보내므로, 생성자를 생략하면 Nest가 주입할 것이 없다고 보고
+     * 인자 없이 만든다. 그러면 `this.reflector`가 undefined인 채로 요청을 맞아 레이트리밋이
+     * 걸린 모든 경로가 500을 낸다 — 이 서버에서는 사실상 API 전체다.
+     */
+    constructor(reflector: Reflector, redis: RedisService) {
+        super(reflector, redis);
+    }
+
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const req = context.switchToHttp().getRequest<Record<string, any>>();
         const options = this.options(context);
