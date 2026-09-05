@@ -42,3 +42,10 @@ test('original IP encryption is randomized and never stores plaintext', () => {
     assert.match(first.ipEncrypted, /^v1:[^:]+:[^:]+:[^:]+$/);
     assert.equal(first.ipEncrypted.includes('203.0.113.7'), false);
 });
+
+test('제재 이메일 HMAC은 대소문자와 바깥 공백을 정규화하고 IP HMAC과 도메인이 겹치지 않는다', () => {
+    const service = createService();
+    assert.equal(service.hmacEmail(' User@Example.COM '), service.hmacEmail('user@example.com'));
+    assert.notEqual(service.hmacEmail('127.0.0.1'), service.hmacIp('127.0.0.1'));
+    assert.match(service.hmacEmail('user@example.com'), /^[0-9a-f]{64}$/);
+});

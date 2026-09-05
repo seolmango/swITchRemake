@@ -262,7 +262,7 @@ test('계정 사건에 BAN을 걸면 경기 근거로 제재하고 사건을 ACT
             scope: harness.applyInputs[0].scope,
             evidenceMatchId: harness.applyInputs[0].evidenceMatchId,
             actor: harness.applyInputs[0].actor,
-            requestMeta: harness.applyInputs[0].requestMeta,
+            requestMeta: (harness.applyInputs[0].audit as { requestMeta?: unknown } | undefined)?.requestMeta,
         },
         {
             userId: 2,

@@ -1,8 +1,9 @@
 import { IsEmail, IsString, Length, Matches } from "class-validator";
 import { Transform } from 'class-transformer';
 import { IsValidPassword } from './password.validator';
+import { LegalConsentDto } from './legal-consent.dto';
 
-export class CreateUserDto {
+export class CreateUserDto extends LegalConsentDto {
     @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value)
     @IsEmail()
     email!: string;
@@ -18,4 +19,5 @@ export class CreateUserDto {
     @IsString()
     @Length(6, 6, { message: 'Verification code is 6 digits' })
     code!: string;
+
 }

@@ -19,7 +19,10 @@ import {
 } from '../auth/verification-code';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { levelFromXp } from 'shared';
-import { DEFAULT_STATS, nonNegativeInteger, percentage, readStoredStats, type StoredStats } from './stored-stats';
+import { nonNegativeInteger, percentage, readStoredStats } from './stored-stats';
+import type { AuditContext } from '../admin/audit-log';
+import { LEGAL_DOCUMENT_VERSIONS } from '../config/legal.settings';
+import type { LegalConsentDto } from './dto/legal-consent.dto';
 
 export interface UserStatsResponse {
     /** 누적 XP에서 센 값. 저장된 값이 아니다 — `shared`의 `levelFromXp`가 유일한 정의다. */
@@ -36,6 +39,8 @@ export interface UserStatsResponse {
     deathOrder: number;
     winRate: number;
     switchSuccessRate: number;
+    averageSurvivalMs: number;
+    averageKills: number;
 }
 
 export interface UserMatchHistoryItem {
@@ -117,6 +122,7 @@ export class UserService {
     async createUser(dto: CreateUserDto) {
         const email = dto.email.trim().toLowerCase();
         const { password, nickname, code } = dto;
+        assertCurrentLegalConsent(dto);
         const claim = await claimVerificationCode(this.redisService, EmailAuthType.SIGNUP, email, code);
         if (!claim) {
             throw new BadRequestException('Invalid or expired verification code');
@@ -124,12 +130,20 @@ export class UserService {
 
         const saltRounds = 10;
         const passwordHash = await bcrypt.hash(password, saltRounds);
+        const agreedAt = new Date();
 
         try {
+            if (await this.sanctionService.isEmailRegistrationBlocked(email)) {
+                throw emailUnavailable();
+            }
             const [newUser] = await this.db.insert(schema.users).values({
                 email,
                 passwordHash,
                 nickname,
+                termsVersion: LEGAL_DOCUMENT_VERSIONS.termsVersion,
+                termsAgreedAt: agreedAt,
+                privacyVersion: LEGAL_DOCUMENT_VERSIONS.privacyVersion,
+                privacyAgreedAt: agreedAt,
             }).returning({
                 nickname: schema.users.nickname,
             });
@@ -141,11 +155,13 @@ export class UserService {
             return newUser;
         } catch (error: any) {
             await releaseVerificationCodeClaim(this.redisService, claim).catch(() => undefined);
-            if (error.code === '23505') {
-                if (error.details.includes('email')) {
-                    throw new ConflictException('Email already exists');
+            if (error instanceof ConflictException) throw error;
+            if (error?.code === '23505') {
+                const detail = String(error.detail ?? error.details ?? error.constraint ?? '');
+                if (detail.includes('email')) {
+                    throw emailUnavailable();
                 }
-                if (error.details.includes('nickname')) {
+                if (detail.includes('nickname')) {
                     throw new ConflictException('Nickname already exists');
                 }
             }
@@ -156,7 +172,7 @@ export class UserService {
     async deleteUser(
         userId: number,
         code: string,
-        requestMeta: Record<string, unknown>,
+        audit: AuditContext,
     ): Promise<void> {
         const [user] = await this.db.select({ email: schema.users.email })
             .from(schema.users)
@@ -175,7 +191,7 @@ export class UserService {
                 userId,
                 `user:${userId}`,
                 'User requested account deletion',
-                requestMeta,
+                audit,
             );
             await commitVerificationCodeClaim(this.redisService, claim);
             // 지운 계정이 방에 남아 있으면 그 경기가 끝날 때까지 없는 사람이 논다.
@@ -184,6 +200,44 @@ export class UserService {
             await releaseVerificationCodeClaim(this.redisService, claim).catch(() => undefined);
             throw error;
         }
+    }
+
+    async getLegalConsent(userId: number) {
+        const [user] = await this.db.select({
+            termsVersion: schema.users.termsVersion,
+            termsAgreedAt: schema.users.termsAgreedAt,
+            privacyVersion: schema.users.privacyVersion,
+            privacyAgreedAt: schema.users.privacyAgreedAt,
+        }).from(schema.users).where(eq(schema.users.id, userId));
+        if (!user) throw new NotFoundException('User not found');
+        return {
+            current: LEGAL_DOCUMENT_VERSIONS,
+            agreed: {
+                termsVersion: user.termsVersion,
+                termsAgreedAt: user.termsAgreedAt?.toISOString() ?? null,
+                privacyVersion: user.privacyVersion,
+                privacyAgreedAt: user.privacyAgreedAt?.toISOString() ?? null,
+            },
+            required: user.termsVersion !== LEGAL_DOCUMENT_VERSIONS.termsVersion
+                || user.privacyVersion !== LEGAL_DOCUMENT_VERSIONS.privacyVersion,
+        };
+    }
+
+    async updateLegalConsent(userId: number, dto: LegalConsentDto) {
+        assertCurrentLegalConsent(dto);
+        const agreedAt = new Date();
+        const [updated] = await this.db.update(schema.users).set({
+            termsVersion: LEGAL_DOCUMENT_VERSIONS.termsVersion,
+            termsAgreedAt: agreedAt,
+            privacyVersion: LEGAL_DOCUMENT_VERSIONS.privacyVersion,
+            privacyAgreedAt: agreedAt,
+            updatedAt: agreedAt,
+        }).where(and(
+            eq(schema.users.id, userId),
+            eq(schema.users.accountStatus, 'ACTIVE'),
+        )).returning({ id: schema.users.id });
+        if (!updated) throw new NotFoundException('User not found');
+        return this.getLegalConsent(userId);
     }
 
     async changePassword(userId: number, currentSessionId: string, dto: ChangePasswordDto) {
@@ -237,6 +291,9 @@ export class UserService {
         const wins = nonNegativeInteger(stored.wins);
         const switchTry = nonNegativeInteger(stored.sw_try);
         const switchSuccess = nonNegativeInteger(stored.sw_su);
+        const tagCount = nonNegativeInteger(stored.kill);
+        const survivedMs = nonNegativeInteger(stored.survived_ms);
+        const survivedGames = nonNegativeInteger(stored.survived_games);
         const xp = nonNegativeInteger(stored.xp);
         const progress = levelFromXp(xp);
         return {
@@ -248,10 +305,12 @@ export class UserService {
             wins,
             switchTry,
             switchSuccess,
-            tagCount: nonNegativeInteger(stored.kill),
+            tagCount,
             deathOrder: nonNegativeInteger(stored.death_order),
             winRate: percentage(wins, games),
             switchSuccessRate: percentage(switchSuccess, switchTry),
+            averageSurvivalMs: survivedGames === 0 ? 0 : Math.round(survivedMs / survivedGames),
+            averageKills: games === 0 ? 0 : Math.round(tagCount / games * 10) / 10,
         };
     }
 
@@ -302,5 +361,24 @@ export class UserService {
             matches,
             nextCursor: last ? encodeCursor({ endedAt: last.endedAt, matchId: last.matchId }) : null,
         };
+    }
+}
+
+/** 기존 가입 여부와 탈퇴 제재 여부가 같은 상태·본문으로 나가게 하는 단일 생성점이다. */
+function emailUnavailable(): ConflictException {
+    return new ConflictException({ code: 'EMAIL_UNAVAILABLE', message: 'Email is unavailable' });
+}
+
+function assertCurrentLegalConsent(dto: LegalConsentDto): void {
+    if (!dto.agreements?.termsOfService || !dto.agreements.privacyPolicy) {
+        throw new BadRequestException({ code: 'LEGAL_CONSENT_REQUIRED', message: 'Legal consent is required' });
+    }
+    if (dto.agreements.termsOfService.version !== LEGAL_DOCUMENT_VERSIONS.termsVersion
+        || dto.agreements.privacyPolicy.version !== LEGAL_DOCUMENT_VERSIONS.privacyVersion) {
+        throw new ConflictException({
+            code: 'LEGAL_VERSION_OUTDATED',
+            message: 'Legal document versions changed; review and consent again',
+            ...LEGAL_DOCUMENT_VERSIONS,
+        });
     }
 }

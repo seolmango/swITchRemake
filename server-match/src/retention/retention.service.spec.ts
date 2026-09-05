@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import test from 'node:test';
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
@@ -6,6 +8,11 @@ import { retentionSettings } from './retention.settings';
 import { RetentionService } from './retention.service';
 
 const dialect = new PgDialect();
+
+const auditTriggerMigration = readFileSync(
+    resolve(__dirname, '../../drizzle/0008_admin_audit_append_only.sql'),
+    'utf8',
+).replace(/\s+/g, ' ').toLowerCase();
 
 function queryText(query: SQL): string {
     return dialect.sqlToQuery(query).sql.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -45,19 +52,15 @@ function harness(options: {
     };
 }
 
-test('참가자 한 명이라도 보관 중이면 제외하고 아무도 들고 있지 않을 때만 표시한다', async () => {
+test('리플레이는 사람별 경기 수와 무관하게 종료 2시간 뒤 삭제 대상으로 표시한다', async () => {
     const state = harness();
     await state.service.runOnce(new Date('2026-08-29T00:00:00Z'));
 
     const mark = queryText(state.queries[0]);
-    assert.match(mark, /row_number\(\) over \( partition by participant\.user_id/);
-    assert.match(mark, /participant\.user_id is not null/);
-    assert.match(mark, /and not exists \( select 1 from ranked_user_matches retained/);
-    // 파라미터 자리 번호($1, $2…)는 쿼리를 고칠 때마다 밀린다. 번호가 아니라 모양을 본다.
-    assert.match(mark, /retained\.replay_rank <= \$\d+/);
-    // 자를 시각은 JS에서 정해 값 하나로 넘긴다. SQL 안에서 계산하면 드라이버가 Date를
-    // 실어 보내다 죽고(ERR_INVALID_ARG_TYPE), 정리 작업은 그 예외를 삼켜 조용히 멈춘다.
-    assert.ok(mark.includes("match.ended_at >= $1::timestamptz"), '자를 시각은 값 하나로 넘어가야 한다');
+    assert.doesNotMatch(mark, /row_number|replay_rank/);
+    assert.match(mark, /match\.ended_at < \$1::timestamptz/);
+    const compiled = dialect.sqlToQuery(state.queries[0]);
+    assert.equal(compiled.params[0], '2026-08-28T22:00:00.000Z');
     assert.match(mark, /set status = 'deleting'/);
     assert.match(mark, /limit 200/);
 });
@@ -115,9 +118,10 @@ test('DELETE_REPLAY가 실패하면 deleting 행을 지우지 않는다', async 
 test('보관 설정 파싱은 잘못된 env를 부팅 전에 거절한다', () => {
     for (const [name, value] of [
         ['MATCH_RETENTION_DAYS', '0'],
-        ['REPLAY_RETENTION_DAYS', '-1'],
-        ['REPLAY_RETENTION_MAX_MATCHES', '1.5'],
+        ['REPLAY_RETENTION_HOURS', '-1'],
         ['RETENTION_INTERVAL_MINUTES', 'ten'],
+        ['AUDIT_LOG_RETENTION_DAYS', '0'],
+        ['AUDIT_IP_RETENTION_DAYS', '1.5'],
     ]) {
         assert.throws(
             () => retentionSettings({ [name]: value }),
@@ -150,11 +154,43 @@ test('끝난 세션 행을 보관 기간이 지난 뒤에 지운다', async () =
     const state = harness();
     await state.service.runOnce(new Date('2026-08-29T00:00:00Z'));
 
-    // 회차의 마지막 쿼리가 세션 정리다. 순서가 바뀌면 여기서 잡힌다.
-    const sessions = queryText(state.queries[state.queries.length - 1]);
+    const sessions = state.queries.map(queryText).find((query) => query.includes('delete from sessions'))!;
     assert.match(sessions, /delete from sessions/);
     // 살아 있는 세션은 건드리지 않는다 - 끝났고, 그러고도 보관 기간이 지난 것만이다.
     assert.match(sessions, /session\.revoked_at is not null or session\.expires_at < \$\d+/);
     assert.match(sessions, /coalesce\(session\.revoked_at, session\.expires_at\) < \$\d+::timestamptz/);
     assert.match(sessions, /for update of session skip locked/);
+});
+
+test('감사 IP 원본은 7일 뒤 비우고 감사 로그는 365일 뒤 삭제한다', async () => {
+    const state = harness();
+    await state.service.runOnce(new Date('2026-08-29T00:00:00Z'));
+    const queries = state.queries.map(queryText);
+    const scrub = queries.find((query) => query.includes('update admin_audit_log audit'))!;
+    const remove = queries.find((query) => query.includes('delete from admin_audit_log audit'))!;
+    assert.match(scrub, /audit\.ip_encrypted is not null/);
+    assert.match(scrub, /set ip_encrypted = null/);
+    assert.match(scrub, /set_config\('switch\.audit_retention', 'on', true\)/);
+    assert.match(remove, /set_config\('switch\.audit_retention', 'on', true\)/);
+    assert.equal(dialect.sqlToQuery(state.queries[queries.indexOf(scrub)]).params.at(-1), '2026-08-22T00:00:00.000Z');
+    assert.equal(dialect.sqlToQuery(state.queries[queries.indexOf(remove)]).params.at(-1), '2025-08-29T00:00:00.000Z');
+});
+
+test('끝난 기간제·취소 제재의 이메일 HMAC만 지우고 영구 BAN은 남긴다', async () => {
+    const state = harness();
+    await state.service.runOnce();
+    const cleanup = state.queries.map(queryText)
+        .find((query) => query.includes('update sanctions sanction set email_hmac = null'))!;
+    assert.match(cleanup, /sanction\.expires_at <= \$\d+::timestamptz/);
+    assert.match(cleanup, /sanction\.expires_at is null and sanction\.type <> 'ban'/);
+    assert.match(cleanup, /from sanction_revocations revocation/);
+});
+
+test('audit migration attaches the append-only trigger with only retention exceptions', () => {
+    assert.match(auditTriggerMigration, /create or replace function "prevent_admin_audit_log_mutation"/);
+    assert.match(auditTriggerMigration, /drop trigger if exists "admin_audit_log_append_only" on "admin_audit_log"/);
+    assert.match(auditTriggerMigration, /create trigger "admin_audit_log_append_only" before update or delete on "admin_audit_log"/);
+    assert.match(auditTriggerMigration, /current_setting\('switch\.audit_retention', true\) = 'on'/);
+    assert.match(auditTriggerMigration, /if tg_op = 'delete' then return old/);
+    assert.match(auditTriggerMigration, /if tg_op = 'update'.*old\.ip_encrypted is not null.*new\.ip_encrypted is null.*raise exception 'admin_audit_log is append only'/);
 });

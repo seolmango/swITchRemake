@@ -52,6 +52,15 @@ export class SessionSecurityService {
         return this.hmacNormalizedIp(this.normalizeIp(ip));
     }
 
+    /** 탈퇴한 제재 대상의 재가입 대조용. IP와 키는 공유하되 도메인을 갈라 교차 대조를 막는다. */
+    hmacEmail(email: string): string {
+        const normalizedEmail = email.trim().toLowerCase();
+        return createHmac('sha256', this.ipHmacSecret)
+            .update('email\0', 'utf8')
+            .update(normalizedEmail, 'utf8')
+            .digest('hex');
+    }
+
     deviceLabel(userAgent: string | undefined): string {
         if (!userAgent) {
             return 'Unknown device';

@@ -35,6 +35,10 @@ function daysAgo(now: Date, days: number): string {
     return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
+function hoursAgo(now: Date, hours: number): string {
+    return new Date(now.getTime() - hours * 60 * 60 * 1000).toISOString();
+}
+
 @Injectable()
 export class RetentionService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(RetentionService.name);
@@ -85,11 +89,16 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
             const replayResult = await this.deleteReplayFiles();
             const matchesDeleted = await this.deleteExpiredMatches(now);
             const sessionsDeleted = await this.deleteExpiredSessions(now);
-            if (marked > 0 || replayResult.attempted > 0 || matchesDeleted > 0 || sessionsDeleted > 0) {
+            const auditIpsScrubbed = await this.scrubExpiredAuditIps(now);
+            const auditLogsDeleted = await this.deleteExpiredAuditLogs(now);
+            const sanctionHmacsDeleted = await this.deleteExpiredSanctionEmailHmacs(now);
+            if (marked > 0 || replayResult.attempted > 0 || matchesDeleted > 0 || sessionsDeleted > 0
+                || auditIpsScrubbed > 0 || auditLogsDeleted > 0 || sanctionHmacsDeleted > 0) {
                 this.logger.log(
                     `Retention marked=${marked} replayDeleted=${replayResult.deleted} `
                     + `replayFailed=${replayResult.attempted - replayResult.deleted} matchesDeleted=${matchesDeleted} `
-                    + `sessionsDeleted=${sessionsDeleted}`,
+                    + `sessionsDeleted=${sessionsDeleted} auditIpsScrubbed=${auditIpsScrubbed} `
+                    + `auditLogsDeleted=${auditLogsDeleted} sanctionHmacsDeleted=${sanctionHmacsDeleted}`,
                 );
             }
         } finally {
@@ -107,38 +116,17 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
 
     private async markExpiredReplays(now: Date): Promise<number> {
         const rows = await this.db.execute<IdRow>(sql`
-            WITH ranked_user_matches AS MATERIALIZED (
-                SELECT participant.user_id,
-                       participant.match_id,
-                       ROW_NUMBER() OVER (
-                           PARTITION BY participant.user_id
-                           ORDER BY match.ended_at DESC NULLS LAST, match.match_id DESC
-                       ) AS replay_rank
-                FROM match_participants participant
-                INNER JOIN matches match ON match.match_id = participant.match_id
-                WHERE participant.user_id IS NOT NULL
-                  AND match.ended_at IS NOT NULL
-                  /* 보관 기간 밖의 경기는 어차피 아무도 못 들고 있다. 순위를 매기기 전에 잘라
-                     두면 이 창(window)이 전체 경기가 아니라 최근 며칠로 묶인다 — 10분마다 도는
-                     작업이라 여기서 안 자르면 경기가 쌓일수록 비용이 같이 는다. 줄 주석(--)을
-                     안 쓰는 이유는 한 줄로 눌리는 순간 뒤가 통째로 주석이 되기 때문이다. */
-                  AND match.ended_at >= ${daysAgo(now, this.settings.replayDays)}::timestamptz
-            ), candidates AS (
+            WITH candidates AS (
                 SELECT replay.id
                 FROM replays replay
                 INNER JOIN matches match ON match.match_id = replay.match_id
                 WHERE replay.status = 'available'
+                  AND match.ended_at < ${hoursAgo(now, this.settings.replayHours)}::timestamptz
                   AND NOT EXISTS (
                       SELECT 1
                       FROM replay_holds hold
                       WHERE hold.replay_id = replay.id
                         AND hold.released_at IS NULL
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM ranked_user_matches retained
-                      WHERE retained.match_id = replay.match_id
-                        AND retained.replay_rank <= ${this.settings.replayPerUserMatches}
                   )
                 ORDER BY match.ended_at NULLS FIRST, replay.id
                 LIMIT 200
@@ -271,6 +259,77 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
             USING candidates candidate
             WHERE match.match_id = candidate.match_id
             RETURNING match.match_id AS id
+        `);
+        return rows.length;
+    }
+
+    /** 감사 본문은 남겨도 암호화 IP 원본은 단기 조사 기간이 끝나면 먼저 비운다. */
+    private async scrubExpiredAuditIps(now: Date): Promise<number> {
+        const rows = await this.db.execute<IdRow>(sql`
+            WITH retention_mode AS (
+                SELECT set_config('switch.audit_retention', 'on', true)
+            ), candidates AS (
+                SELECT audit.id
+                FROM admin_audit_log audit, retention_mode
+                WHERE audit.ip_encrypted IS NOT NULL
+                  AND audit.created_at < ${daysAgo(now, this.settings.auditIpDays)}::timestamptz
+                ORDER BY audit.created_at, audit.id
+                LIMIT 500
+                FOR UPDATE OF audit SKIP LOCKED
+            )
+            UPDATE admin_audit_log audit
+            SET ip_encrypted = NULL
+            FROM candidates candidate
+            WHERE audit.id = candidate.id
+            RETURNING audit.id
+        `);
+        return rows.length;
+    }
+
+    private async deleteExpiredAuditLogs(now: Date): Promise<number> {
+        const rows = await this.db.execute<IdRow>(sql`
+            WITH retention_mode AS (
+                SELECT set_config('switch.audit_retention', 'on', true)
+            ), candidates AS (
+                SELECT audit.id
+                FROM admin_audit_log audit, retention_mode
+                WHERE audit.created_at < ${daysAgo(now, this.settings.auditLogDays)}::timestamptz
+                ORDER BY audit.created_at, audit.id
+                LIMIT 500
+                FOR UPDATE OF audit SKIP LOCKED
+            )
+            DELETE FROM admin_audit_log audit
+            USING candidates candidate
+            WHERE audit.id = candidate.id
+            RETURNING audit.id
+        `);
+        return rows.length;
+    }
+
+    /** 기간제·취소 제재의 목적이 끝나면 재가입 대조값도 함께 없앤다. 영구 BAN만 남는다. */
+    private async deleteExpiredSanctionEmailHmacs(now: Date): Promise<number> {
+        const rows = await this.db.execute<IdRow>(sql`
+            WITH candidates AS (
+                SELECT sanction.id
+                FROM sanctions sanction
+                WHERE sanction.email_hmac IS NOT NULL
+                  AND (
+                      sanction.expires_at <= ${now}::timestamptz
+                      OR (sanction.expires_at IS NULL AND sanction.type <> 'BAN')
+                      OR EXISTS (
+                          SELECT 1 FROM sanction_revocations revocation
+                          WHERE revocation.sanction_id = sanction.id
+                      )
+                  )
+                ORDER BY sanction.created_at, sanction.id
+                LIMIT 500
+                FOR UPDATE OF sanction SKIP LOCKED
+            )
+            UPDATE sanctions sanction
+            SET email_hmac = NULL
+            FROM candidates candidate
+            WHERE sanction.id = candidate.id
+            RETURNING sanction.id
         `);
         return rows.length;
     }

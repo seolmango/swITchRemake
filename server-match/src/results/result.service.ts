@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import {
     matchXp,
@@ -19,6 +19,51 @@ export interface AssignedActor {
 }
 
 export type RecordResult = 'stored' | 'duplicate' | 'invalid';
+
+export interface AccountStatsDelta {
+    userId: number;
+    won: boolean;
+    games: 1;
+    wins: 0 | 1;
+    switchTry: number;
+    switchSuccess: number;
+    tagCount: number;
+    survivedMs: number;
+    xp: number;
+}
+
+/** 게스트를 걸러낸 뒤 한 경기에서 계정 누적치에 더할 값만 만든다. */
+export function accountStatsDeltas(result: MatchResultMessage): AccountStatsDelta[] {
+    const winningUsers = new Set(winnerUserIds(result));
+    return statsEligible(result.players).map((player) => {
+        const won = winningUsers.has(player.userId!);
+        return {
+            userId: player.userId!,
+            won,
+            games: 1,
+            wins: won ? 1 : 0,
+            switchTry: player.switchTry,
+            switchSuccess: player.switchSuccess,
+            tagCount: player.tagCount,
+            survivedMs: player.survivedMs,
+            xp: matchXp({
+                won,
+                tagCount: player.tagCount,
+                switchSuccess: player.switchSuccess,
+                survivedMs: player.survivedMs,
+            }),
+        };
+    });
+}
+
+export function linkedParticipantUserId(
+    player: MatchResultMessage['players'][number],
+    activeUserIds: ReadonlySet<number>,
+): number | null {
+    return !player.isGuest && player.userId !== null && activeUserIds.has(player.userId)
+        ? player.userId
+        : null;
+}
 
 @Injectable()
 export class ResultService {
@@ -108,9 +153,19 @@ export class ResultService {
             if (!updated.length) return 'duplicate';
 
             const winners = new Set(result.winnerPlayerIds);
+            const accountIds = result.players.flatMap((player) =>
+                !player.isGuest && player.userId !== null ? [player.userId] : []);
+            const activeAccounts = accountIds.length === 0
+                ? []
+                : await tx.select({ id: schema.users.id }).from(schema.users).where(and(
+                    inArray(schema.users.id, accountIds),
+                    eq(schema.users.accountStatus, 'ACTIVE'),
+                )).for('key share');
+            const activeUserIds = new Set(activeAccounts.map((account) => account.id));
             await tx.insert(schema.matchParticipants).values(result.players.map((player) => ({
                 matchId: result.matchId,
-                userId: player.userId,
+                // 탈퇴와 결과 도착이 맞물려도 지운 계정으로 전적 연결을 되살리지 않는다.
+                userId: linkedParticipantUserId(player, activeUserIds),
                 playerId: player.playerId,
                 nickname: player.nickname,
                 colorIndex: player.colorIndex,
@@ -135,28 +190,23 @@ export class ResultService {
                 });
             }
 
-            const winningUsers = new Set(winnerUserIds(result));
-            for (const player of statsEligible(result.players)) {
-                const won = winningUsers.has(player.userId!);
+            for (const delta of accountStatsDeltas(result)) {
                 // 레벨은 쌓지 않는다. 누적 XP의 함수라서 두 군데 적으면 곡선을 바꾸는 순간 어긋난다.
                 // 세는 것은 읽을 때 한다(shared의 levelFromXp).
-                const xpGain = matchXp({
-                    won,
-                    tagCount: player.tagCount,
-                    switchSuccess: player.switchSuccess,
-                    survivedMs: player.survivedMs,
-                });
                 await tx.execute(sql`
                     UPDATE ${schema.users}
                     SET stats = stats || jsonb_build_object(
-                        'games', COALESCE((stats ->> 'games')::integer, 0) + 1,
-                        'wins', COALESCE((stats ->> 'wins')::integer, 0) + ${won ? 1 : 0},
-                        'sw_try', COALESCE((stats ->> 'sw_try')::integer, 0) + ${player.switchTry},
-                        'sw_su', COALESCE((stats ->> 'sw_su')::integer, 0) + ${player.switchSuccess},
-                        'kill', COALESCE((stats ->> 'kill')::integer, 0) + ${player.tagCount},
-                        'xp', COALESCE((stats ->> 'xp')::integer, 0) + ${xpGain}
+                        'games', COALESCE((stats ->> 'games')::integer, 0) + ${delta.games},
+                        'wins', COALESCE((stats ->> 'wins')::integer, 0) + ${delta.wins},
+                        'sw_try', COALESCE((stats ->> 'sw_try')::integer, 0) + ${delta.switchTry},
+                        'sw_su', COALESCE((stats ->> 'sw_su')::integer, 0) + ${delta.switchSuccess},
+                        'kill', COALESCE((stats ->> 'kill')::integer, 0) + ${delta.tagCount},
+                        'survived_ms', COALESCE((stats ->> 'survived_ms')::bigint, 0) + ${delta.survivedMs},
+                        'survived_games', COALESCE((stats ->> 'survived_games')::integer, 0) + 1,
+                        'xp', COALESCE((stats ->> 'xp')::integer, 0) + ${delta.xp}
                     ), updated_at = now()
-                    WHERE id = ${player.userId!}
+                    WHERE id = ${delta.userId}
+                      AND account_status = 'ACTIVE'
                 `);
             }
             return 'stored';

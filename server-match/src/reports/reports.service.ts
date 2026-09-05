@@ -18,6 +18,7 @@ import { type ReportStatus } from './dto/report-queue-query.dto';
 import { SanctionReportDto } from './dto/sanction-report.dto';
 import { UpdateReportStatusDto } from './dto/update-report-status.dto';
 import { retentionSettings } from '../retention/retention.settings';
+import { auditContext } from '../admin/audit-log';
 
 /** 리플레이가 이 상태들 중 하나면 아직 증거가 남아 있다. `deleting`/`deleted`는 이미 늦었다. */
 const LIVE_REPLAY_STATUSES = new Set(['recording', 'finalizing', 'available']);
@@ -155,7 +156,7 @@ export class ReportsService {
                 }
                 if (context.endedAt !== null && replayStatus === null) {
                     const endedAt = new Date(context.endedAt).getTime();
-                    const windowMs = retentionSettings().replayDays * 24 * 60 * 60 * 1000;
+                    const windowMs = retentionSettings().replayHours * 60 * 60 * 1000;
                     if (!Number.isFinite(endedAt) || Date.now() - endedAt > windowMs) {
                         throw new BadRequestException({
                             code: 'REPORT_WINDOW_EXPIRED',
@@ -460,7 +461,7 @@ export class ReportsService {
                 reason: dto.reason,
                 evidenceMatchId: moderationCase.matchId,
                 actor,
-                requestMeta: { caseId },
+                audit: auditContext({ caseId }),
             }, tx);
 
             await tx.update(schema.moderationCases).set({
@@ -473,7 +474,7 @@ export class ReportsService {
                 targetType: 'moderation_case',
                 targetId: caseId,
                 reason: dto.reason,
-                requestMeta: { caseId, sanctionId: sanction.id, type: dto.type },
+                ...auditContext({ caseId, sanctionId: sanction.id, type: dto.type }),
             });
 
             return {
@@ -527,7 +528,7 @@ export class ReportsService {
                 targetType: 'moderation_case',
                 targetId: caseId,
                 reason: dto.note?.trim() || transition,
-                requestMeta: { previousStatus: current.status, nextStatus: dto.status },
+                ...auditContext({ previousStatus: current.status, nextStatus: dto.status }),
             });
             return { caseId, status: dto.status };
         });

@@ -17,7 +17,12 @@ import {
     varchar,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import type { AuditRequestMeta } from '../admin/audit-log';
 
+/**
+ * DELETED는 살아 있는 계정 상태가 아니다. 신고·제재·감사 FK를 보존하기 위한 가명 껍데기이며,
+ * 원 이메일·비밀번호 해시·닉네임·통계·동의 정보는 모두 제거된 행만 이 값을 쓴다.
+ */
 export const accountStatusEnum = pgEnum('account_status', ['ACTIVE', 'BANNED', 'DELETED']);
 /**
  * 운영 권한. 지금은 둘뿐이지만 enum으로 둔 이유는 BASE.md §8이 권한 분리를
@@ -39,7 +44,11 @@ export const users = pgTable('users', {
     accountStatus: accountStatusEnum('account_status').default('ACTIVE').notNull(),
     securityEpoch: integer('security_epoch').default(0).notNull(),
     role: userRoleEnum('role').default('USER').notNull(),
-    stats: jsonb('stats').default({ level: 0, xp: 0, games: 0, wins: 0, sw_try: 0, sw_su: 0, kill: 0, death_order: 0 }).notNull(),
+    stats: jsonb('stats').default({ xp: 0, games: 0, wins: 0, sw_try: 0, sw_su: 0, kill: 0, death_order: 0, survived_ms: 0, survived_games: 0 }).notNull(),
+    termsVersion: varchar('terms_version', { length: 32 }),
+    termsAgreedAt: timestamp('terms_agreed_at', { withTimezone: true }),
+    privacyVersion: varchar('privacy_version', { length: 32 }),
+    privacyAgreedAt: timestamp('privacy_agreed_at', { withTimezone: true }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
@@ -137,7 +146,8 @@ export const matchParticipants = pgTable('match_participants', {
 }, (table) => [
     primaryKey({ columns: [table.matchId, table.playerId] }),
     index('match_participants_user_id_idx').on(table.userId),
-    check('match_participants_guest_identity', sql`(${table.isGuest} AND ${table.userId} IS NULL) OR (NOT ${table.isGuest} AND ${table.userId} IS NOT NULL)`),
+    // 탈퇴한 계정은 연결만 끊고 당시 계정 참가자였다는 사실과 닉네임은 남긴다.
+    check('match_participants_guest_identity', sql`NOT ${table.isGuest} OR ${table.userId} IS NULL`),
     check('match_participants_nonnegative_stats', sql`${table.tagCount} >= 0 AND ${table.taggedCount} >= 0 AND ${table.switchTry} >= 0 AND ${table.switchSuccess} >= 0 AND ${table.survivedMs} >= 0`),
     check('match_participants_switch_success_lte_try', sql`${table.switchSuccess} <= ${table.switchTry}`),
 ]);
@@ -219,11 +229,15 @@ export const sanctions = pgTable('sanctions', {
     reason: text('reason').notNull(),
     evidenceMatchId: varchar('evidence_match_id', { length: 255 }),
     createdBy: varchar('created_by', { length: 255 }).notNull(),
+    /** 탈퇴한 제재 대상의 재가입 대조용. 이메일 원문이나 단순 해시는 두지 않는다. */
+    emailHmac: varchar('email_hmac', { length: 64 }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
     index('sanctions_user_id_idx').on(table.userId),
     index('sanctions_evidence_match_id_idx').on(table.evidenceMatchId),
     check('sanctions_valid_period', sql`${table.expiresAt} IS NULL OR ${table.expiresAt} > ${table.startsAt}`),
+    check('sanctions_email_hmac_format', sql`${table.emailHmac} IS NULL OR ${table.emailHmac} ~ '^[0-9a-f]{64}$'`),
+    index('sanctions_email_hmac_idx').on(table.emailHmac),
 ]);
 
 export const sanctionRevocations = pgTable('sanction_revocations', {
@@ -240,9 +254,14 @@ export const adminAuditLog = pgTable('admin_audit_log', {
     targetType: varchar('target_type', { length: 100 }).notNull(),
     targetId: varchar('target_id', { length: 255 }).notNull(),
     reason: text('reason').notNull(),
-    requestMeta: jsonb('request_meta').notNull(),
+    requestMeta: jsonb('request_meta').$type<AuditRequestMeta>().notNull(),
+    ipHmac: varchar('ip_hmac', { length: 64 }),
+    ipEncrypted: text('ip_encrypted'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
     index('admin_audit_log_target_idx').on(table.targetType, table.targetId),
     index('admin_audit_log_created_at_idx').on(table.createdAt),
+    check('admin_audit_log_ip_hmac_format', sql`${table.ipHmac} IS NULL OR ${table.ipHmac} ~ '^[0-9a-f]{64}$'`),
+    check('admin_audit_log_ip_encrypted_format', sql`${table.ipEncrypted} IS NULL OR ${table.ipEncrypted} LIKE 'v1:%'`),
+    check('admin_audit_log_request_meta_no_ip', sql`NOT (${table.requestMeta} ?| ARRAY['ip', 'ipAddress', 'clientIp', 'remoteIp', 'ipHmac', 'ipEncrypted'])`),
 ]);

@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { RateLimiter } from '../ratelimiter.decorator';
 import { retentionSettings, type RetentionSettings } from '../retention/retention.settings';
+import { LEGAL_DOCUMENT_VERSIONS, type LegalDocumentVersions } from './legal.settings';
 
 /** `keyId:base64` 를 쉼표로 이어 붙인 env. 키를 바꾸는 동안 옛 키도 같이 둘 수 있어야 한다. */
 function replayPublicKeys(raw: string | undefined): { keyId: string; publicKey: string }[] {
@@ -17,7 +18,7 @@ function replayPublicKeys(raw: string | undefined): { keyId: string; publicKey: 
 /**
  * 로그인 없이 읽는 설정.
  *
- * 보관 기간은 화면이 30일·7일을 스스로 적지 않게 하려는 것이다 — 두 군데 적으면 정책을 바꾸는
+ * 보관 기간은 화면이 30일·2시간을 스스로 적지 않게 하려는 것이다 — 두 군데 적으면 정책을 바꾸는
  * 순간 화면만 옛 숫자를 말하고, 그 거짓말은 아무도 눈치채지 못한다. "내 기록이 언제까지 남는지"는
  * 계정을 만들기 전에 알아야 하는 축에 들기도 한다.
  *
@@ -31,14 +32,20 @@ export class PublicConfigController {
     private readonly keys = replayPublicKeys(process.env.REPLAY_SIGNING_PUBLIC_KEYS);
 
     @Get('retention')
-    @RateLimiter({ anon: 60, guest: 60, account: 60, ttl: 60_000 })
+    @RateLimiter({ limit: 120, ttl: 60_000 })
     readRetention(): RetentionSettings {
         return this.settings;
     }
 
     @Get('replay-keys')
-    @RateLimiter({ anon: 60, guest: 60, account: 60, ttl: 60_000 })
+    @RateLimiter({ limit: 120, ttl: 60_000 })
     readReplayKeys(): { keys: { keyId: string; publicKey: string }[] } {
         return { keys: this.keys };
+    }
+
+    @Get('legal')
+    @RateLimiter({ limit: 120, ttl: 60_000 })
+    readLegalVersions(): LegalDocumentVersions {
+        return LEGAL_DOCUMENT_VERSIONS;
     }
 }

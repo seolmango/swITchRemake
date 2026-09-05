@@ -100,7 +100,8 @@ test('stats response includes server-derived rates with one decimal precision', 
             from: () => ({
                 // level은 일부러 거짓말을 넣었다. 응답은 저장된 값이 아니라 xp에서 세야 한다.
                 where: async () => [{ stats: {
-                    level: 99, xp: 260, games: 3, wins: 2, sw_try: 6, sw_su: 4, kill: 9, death_order: 5,
+                    level: 99, xp: 260, games: 3, wins: 2, sw_try: 6, sw_su: 4, kill: 9,
+                    death_order: 5, survived_ms: 180_001, survived_games: 3,
                 } }],
             }),
         }),
@@ -120,5 +121,7 @@ test('stats response includes server-derived rates with one decimal precision', 
         deathOrder: 5,
         winRate: 66.7,
         switchSuccessRate: 66.7,
+        averageSurvivalMs: 60_000,
+        averageKills: 3,
     });
 });

@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../database/database.module';
 import * as schema from '../database/schema';
+import { auditContext } from './audit-log';
 
 const MAX_AUDIT_PAGE = 50;
 
@@ -109,7 +110,7 @@ export class PlayerLookupService {
             targetType: 'user',
             targetId: String(player.userId),
             reason: '플레이어 조회',
-            requestMeta: { query },
+            ...auditContext({ query }),
         });
 
         return {
@@ -137,7 +138,7 @@ export class PlayerLookupService {
         };
     }
 
-    /** 감사 로그는 append-only다. 커서는 id 하나면 된다 — 시각이 같아도 순서가 흔들리지 않는다. */
+    /** 감사 로그는 보존 작업 전까지 append-only다. 커서는 id 하나면 된다 — 시각이 같아도 순서가 흔들리지 않는다. */
     async auditLog(limit: number, before?: number) {
         const size = Math.min(MAX_AUDIT_PAGE, Math.max(1, limit));
         // 커서는 화면이 준 값이라 숫자가 아닐 수 있다. NaN을 그대로 넘기면 쿼리가 터진다.

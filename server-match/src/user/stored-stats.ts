@@ -8,7 +8,6 @@
 import type { LobbyStats } from 'shared';
 
 export interface StoredStats {
-    level: number;
     xp: number;
     games: number;
     wins: number;
@@ -16,10 +15,11 @@ export interface StoredStats {
     sw_su: number;
     kill: number;
     death_order: number;
+    survived_ms: number;
+    survived_games: number;
 }
 
 export const DEFAULT_STATS: StoredStats = {
-    level: 0,
     xp: 0,
     games: 0,
     wins: 0,
@@ -27,6 +27,8 @@ export const DEFAULT_STATS: StoredStats = {
     sw_su: 0,
     kill: 0,
     death_order: 0,
+    survived_ms: 0,
+    survived_games: 0,
 };
 
 export const nonNegativeInteger = (value: unknown): number =>

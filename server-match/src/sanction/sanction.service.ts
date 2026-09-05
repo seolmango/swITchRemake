@@ -7,14 +7,16 @@ import {
     OnModuleDestroy,
     OnModuleInit,
 } from '@nestjs/common';
-import { and, eq, gt, isNull, lte, ne, or } from 'drizzle-orm';
+import { and, eq, gt, isNull, lte, ne, or, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../database/database.module';
 import * as schema from '../database/schema';
+import { auditContext, type AuditContext } from '../admin/audit-log';
+import { SessionSecurityService } from '../session/session-security.service';
 
 type SanctionType = typeof schema.sanctionTypeEnum.enumValues[number];
 type AccountStatus = typeof schema.accountStatusEnum.enumValues[number];
-type RequestMeta = Record<string, unknown>;
 const RECONCILIATION_CONCURRENCY = 8;
 
 /** 트랜잭션 핸들. drizzle의 콜백 인자와 같은 모양이면 된다. */
@@ -29,7 +31,7 @@ export interface ApplySanctionInput {
     reason: string;
     evidenceMatchId?: string | null;
     actor: string;
-    requestMeta?: RequestMeta;
+    audit?: AuditContext;
 }
 
 @Injectable()
@@ -39,7 +41,29 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
 
     constructor(
         @Inject(DRIZZLE) private readonly db: PostgresJsDatabase<typeof schema>,
+        private readonly security: SessionSecurityService,
     ) {}
+
+    /** 탈퇴한 제재 대상의 주소와 같은지 대조한다. 원문 주소는 DB로 보내지 않는다. */
+    async isEmailRegistrationBlocked(email: string, now = new Date()): Promise<boolean> {
+        const emailHmac = this.security.hmacEmail(email);
+        const [sanction] = await this.db.select({ id: schema.sanctions.id })
+            .from(schema.sanctions)
+            .leftJoin(
+                schema.sanctionRevocations,
+                eq(schema.sanctionRevocations.sanctionId, schema.sanctions.id),
+            )
+            .where(and(
+                eq(schema.sanctions.emailHmac, emailHmac),
+                isNull(schema.sanctionRevocations.sanctionId),
+                or(
+                    gt(schema.sanctions.expiresAt, now),
+                    and(eq(schema.sanctions.type, 'BAN'), isNull(schema.sanctions.expiresAt)),
+                ),
+            ))
+            .limit(1);
+        return sanction !== undefined;
+    }
 
     onModuleInit(): void {
         void this.runScheduledReconciliation();
@@ -135,13 +159,14 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
                 await tx.delete(schema.sessions).where(eq(schema.sessions.userId, input.userId));
             }
 
+            const audit = input.audit ?? auditContext();
             await tx.insert(schema.adminAuditLog).values({
                 actor: input.actor,
                 action: 'SANCTION_CREATED',
                 targetType: 'sanction',
                 targetId: sanction.id,
                 reason: input.reason,
-                requestMeta: input.requestMeta ?? {},
+                ...audit,
             });
 
             return sanction;
@@ -154,7 +179,7 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
         sanctionId: string,
         actor: string,
         reason: string,
-        requestMeta: RequestMeta = {},
+        audit: AuditContext = auditContext(),
     ): Promise<void> {
         await this.db.transaction(async (tx) => {
             const [sanction] = await tx.select()
@@ -224,7 +249,7 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
                 targetType: 'sanction',
                 targetId: sanctionId,
                 reason,
-                requestMeta,
+                ...audit,
             });
         });
     }
@@ -233,20 +258,58 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
         userId: number,
         actor: string,
         reason: string,
-        requestMeta: RequestMeta = {},
+        audit: AuditContext = auditContext(),
     ): Promise<void> {
         await this.db.transaction(async (tx) => {
-            const [user] = await tx.select({ status: schema.users.accountStatus })
+            const [user] = await tx.select({
+                status: schema.users.accountStatus,
+                email: schema.users.email,
+            })
                 .from(schema.users)
                 .where(eq(schema.users.id, userId))
                 .for('update');
             if (!user) {
                 throw new NotFoundException('User not found');
             }
+            if (user.status === 'DELETED') {
+                throw new NotFoundException('User not found');
+            }
 
             const now = new Date();
+            const emailHmac = this.security.hmacEmail(user.email);
+            /*
+             * HMAC은 제재가 실제로 재가입을 막는 동안에만 붙인다. 기간이 없는 영구 BAN과 아직
+             * 끝나지 않은 기간제 제재만 대상이고, 취소된 제재에는 남기지 않는다.
+             */
+            await tx.execute(sql`
+                UPDATE sanctions sanction
+                SET email_hmac = ${emailHmac}
+                WHERE sanction.user_id = ${userId}
+                  AND NOT EXISTS (
+                      SELECT 1 FROM sanction_revocations revocation
+                      WHERE revocation.sanction_id = sanction.id
+                  )
+                  AND (
+                      sanction.expires_at > ${now}::timestamptz
+                      OR (sanction.type = 'BAN' AND sanction.expires_at IS NULL)
+                  )
+            `);
+            // 전적의 당시 닉네임과 결과는 남기되 살아 있는 계정으로 향하는 연결만 끊는다.
+            await tx.update(schema.matchParticipants).set({ userId: null })
+                .where(eq(schema.matchParticipants.userId, userId));
+            const tombstone = randomUUID().replace(/-/g, '').slice(0, 16);
             await tx.update(schema.users).set({
                 accountStatus: 'DELETED',
+                email: `deleted-${tombstone}@invalid.local`,
+                passwordHash: '!deleted!',
+                nickname: `Deleted_${tombstone.slice(0, 8)}`,
+                role: 'USER',
+                stats: {},
+                termsVersion: null,
+                termsAgreedAt: null,
+                privacyVersion: null,
+                privacyAgreedAt: null,
+                securityEpoch: sql`${schema.users.securityEpoch} + 1`,
                 updatedAt: now,
             }).where(eq(schema.users.id, userId));
             await tx.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
@@ -256,7 +319,7 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
                 targetType: 'user',
                 targetId: String(userId),
                 reason,
-                requestMeta,
+                ...audit,
             });
         });
     }
@@ -310,7 +373,7 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
                         targetType: 'user',
                         targetId: String(userId),
                         reason: 'A scheduled ban became active',
-                        requestMeta: { source },
+                        ...auditContext({ source }),
                     });
                 }
                 return 'BANNED';
@@ -330,7 +393,7 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
                 targetType: 'user',
                 targetId: String(userId),
                 reason: 'All bans expired or were revoked',
-                requestMeta: { source },
+                ...auditContext({ source }),
             });
             return 'ACTIVE';
         });

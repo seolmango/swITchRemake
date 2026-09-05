@@ -10,6 +10,9 @@ import { MatchHistoryQueryDto } from './dto/match-history-query.dto';
 import { ReplayDownloadService } from './replay-download.service';
 import { ConfigService } from '@nestjs/config';
 import { refreshCookieOptions } from '../auth/refresh-cookie';
+import { SessionSecurityService } from '../session/session-security.service';
+import { auditContextWithIp } from '../admin/audit-log';
+import { LegalConsentDto } from './dto/legal-consent.dto';
 
 type AccountRequest = FastifyRequest & { user: { id: number; sessionId: string; guest: false } };
 
@@ -19,17 +22,18 @@ export class UserController {
         private readonly userService: UserService,
         private readonly replayDownload: ReplayDownloadService,
         private readonly configService: ConfigService,
+        private readonly sessionSecurity: SessionSecurityService,
     ) {}
 
     @Post('register')
-    @RateLimiter({ anon: 5, guest: 5, account: 7, ttl: 60000 })
+    @RateLimiter({ limit: 5, ttl: 60000 })
     async register(@Body() createUserDto: CreateUserDto) {
         return this.userService.createUser(createUserDto);
     }
 
     @Post('me/password')
     @NeedAccount()
-    @RateLimiter({ anon: 0, guest: 5, account: 5, ttl: 60000 })
+    @RateLimiter({ limit: 5, ttl: 60000 })
     async changePassword(
         @Body() dto: ChangePasswordDto,
         @Req() req: AccountRequest,
@@ -39,19 +43,33 @@ export class UserController {
 
     @Get('me/stats')
     @NeedAccount()
-    @RateLimiter({ anon: 0, guest: 60, account: 120, ttl: 60_000 })
+    @RateLimiter({ limit: 60, ttl: 60_000 })
     async getMyStats(@Req() req: AccountRequest) {
         return this.userService.getStats(req.user.id);
     }
 
     @Get('me/matches')
     @NeedAccount()
-    @RateLimiter({ anon: 0, guest: 60, account: 120, ttl: 60_000 })
+    @RateLimiter({ limit: 60, ttl: 60_000 })
     async getMyMatches(
         @Req() req: AccountRequest,
         @Query() query: MatchHistoryQueryDto,
     ) {
         return this.userService.getMatches(req.user.id, query.limit, query.cursor);
+    }
+
+    @Get('me/legal-consent')
+    @NeedAccount()
+    @RateLimiter({ limit: 60, ttl: 60_000 })
+    async getLegalConsent(@Req() req: AccountRequest) {
+        return this.userService.getLegalConsent(req.user.id);
+    }
+
+    @Post('me/legal-consent')
+    @NeedAccount()
+    @RateLimiter({ limit: 5, ttl: 60_000 })
+    async updateLegalConsent(@Req() req: AccountRequest, @Body() dto: LegalConsentDto) {
+        return this.userService.updateLegalConsent(req.user.id, dto);
     }
 
     /**
@@ -62,29 +80,31 @@ export class UserController {
      */
     @Post('me/matches/:matchId/replay-ticket')
     @NeedAccount()
-    @RateLimiter({ anon: 0, guest: 0, account: 20, ttl: 60_000 })
+    @RateLimiter({ limit: 20, ttl: 60_000 })
     async createReplayTicket(@Req() req: AccountRequest, @Param('matchId', new ParseUUIDPipe()) matchId: string) {
         return this.replayDownload.createTicket(req.user.id, matchId);
     }
 
     @Post('me/delete-code')
     @NeedAccount()
-    @RateLimiter({ anon: 0, guest: 0, account: 5, ttl: 60_000 })
+    @RateLimiter({ limit: 5, ttl: 60_000 })
     async sendDeleteCode(@Req() req: AccountRequest) {
         return this.userService.sendDeleteCode(req.user.id);
     }
 
     @Delete('me')
     @NeedAccount()
+    @RateLimiter({ limit: 5, ttl: 60_000 })
     async deleteMe(
         @Body() dto: DeleteUserDto,
         @Req() req: FastifyRequest & { user: { id: number } },
         @Res({ passthrough: true }) res: FastifyReply,
     ) {
-        await this.userService.deleteUser(req.user.id, dto.code, {
-            ip: req.ip,
-            userAgent: req.headers['user-agent'] ?? null,
-        });
+        await this.userService.deleteUser(
+            req.user.id,
+            dto.code,
+            auditContextWithIp(this.sessionSecurity, req.ip),
+        );
         res.clearCookie('refreshToken', refreshCookieOptions(this.configService));
         return { deleted: true };
     }

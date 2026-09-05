@@ -50,6 +50,20 @@
       "when": 1788512400000,
       "tag": "0006_auth_security",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788595200000,
+      "tag": "0007_privacy_retention_stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788681600000,
+      "tag": "0008_admin_audit_append_only",
+      "breakpoints": true
     }
   ]
 }
