@@ -32,12 +32,30 @@ describe('가입 동의 문서', () => {
 });
 
 describe('크레딧', () => {
-    it('운영 주체를 BASE의 확정값으로 표시하고 확인 전 자산을 꾸며내지 않는다', () => {
+    it('운영 주체를 BASE의 확정값으로 표시한다', () => {
         expect(OPERATOR_CREDIT).toEqual({
             name: '0-INF',
             contact: 'zero2inf.zip@gmail.com',
             repository: 'https://github.com/0-inf',
         });
-        expect(ASSET_CREDITS).toEqual([]);
+    });
+
+    /*
+     * 예전에는 목록이 비어 있는 것을 고정했다. 확인을 마친 자산이 하나도 없었기 때문이다.
+     * 이제 폰트 둘의 라이선스를 확인했으므로 "비어 있다"가 아니라 원래 지키려던 것을 고정한다 —
+     * **확인하지 않은 것을 지어내 올리지 않는다**(BASE.md §14.7).
+     */
+    it('올라온 자산은 이름·출처·라이선스가 모두 채워져 있다', () => {
+        expect(ASSET_CREDITS.length).toBeGreaterThan(0);
+        for (const asset of ASSET_CREDITS) {
+            expect(asset.name.trim()).not.toBe('');
+            expect(asset.license.trim()).not.toBe('');
+            expect(asset.source).toMatch(/^https:\/\//);
+        }
+    });
+
+    it('아직 확인하지 않은 배경음악·효과음은 올라와 있지 않다', () => {
+        const unverified = ASSET_CREDITS.filter((asset) => /bgm|배경음악|효과음|sfx/i.test(asset.name));
+        expect(unverified).toEqual([]);
     });
 });
