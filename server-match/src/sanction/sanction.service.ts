@@ -302,7 +302,7 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
                       WHERE revocation.sanction_id = sanction.id
                   )
                   AND (
-                      sanction.expires_at > ${now}::timestamptz
+                      sanction.expires_at > ${now.toISOString()}::timestamptz
                       OR (sanction.type = 'BAN' AND sanction.expires_at IS NULL)
                   )
             `);

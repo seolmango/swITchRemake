@@ -219,7 +219,7 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
             WITH candidates AS (
                 SELECT session.id
                 FROM sessions session
-                WHERE (session.revoked_at IS NOT NULL OR session.expires_at < ${now}::timestamptz)
+                WHERE (session.revoked_at IS NOT NULL OR session.expires_at < ${now.toISOString()}::timestamptz)
                   AND COALESCE(session.revoked_at, session.expires_at)
                       < ${daysAgo(now, this.settings.sessionDays)}::timestamptz
                 ORDER BY session.id
@@ -314,7 +314,7 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
                 FROM sanctions sanction
                 WHERE sanction.email_hmac IS NOT NULL
                   AND (
-                      sanction.expires_at <= ${now}::timestamptz
+                      sanction.expires_at <= ${now.toISOString()}::timestamptz
                       OR (sanction.expires_at IS NULL AND sanction.type <> 'BAN')
                       OR EXISTS (
                           SELECT 1 FROM sanction_revocations revocation
