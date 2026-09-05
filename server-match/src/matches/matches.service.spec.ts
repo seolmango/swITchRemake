@@ -102,6 +102,20 @@ test('계정에게는 이 경기의 XP 내역과 지금 레벨이 함께 온다'
     assert.equal(result.reward!.breakdown.survival, PROGRESSION.XP_PER_SURVIVED_MINUTE);
 });
 
+test('returns a single winner once without duplicating that player', async () => {
+    const rows = completedRows();
+    rows[1]!.isWinner = false;
+    const service = new MatchesService(database(
+        rows,
+        { nickname: 'Account', isGuest: false },
+        { stats: { xp: 0 } },
+    ) as never);
+    const result = await service.getResult(MATCH_ID, 7);
+
+    assert.ok(!('status' in result));
+    assert.deepEqual(result.winners, ['1']);
+});
+
 test('returns 404 for an unknown match', async () => {
     const service = new MatchesService(database([], null) as never);
     await assert.rejects(

@@ -73,3 +73,54 @@ test('같은 room/server의 과거 경기가 있어도 선발급되지 않은 ma
     assert.equal(await service.record(result), 'invalid');
     assert.equal(inserted, false);
 });
+
+test('records exactly one winner in participant rows', async () => {
+    const singleWinner = structuredClone(result);
+    singleWinner.winnerPlayerIds = [1];
+    singleWinner.players = singleWinner.players.map((player, index) => ({
+        ...player,
+        userId: null,
+        isGuest: true,
+        nickname: `Guest_${index + 1}`,
+    }));
+    const assignments = singleWinner.players.map((player, index) => ({
+        matchId: singleWinner.matchId,
+        actorId: `g:${index}`,
+        userId: null,
+        nickname: player.nickname,
+        isGuest: true,
+    }));
+    let selectCount = 0;
+    let participantRows: Array<Record<string, unknown>> = [];
+    const tx = {
+        select: () => {
+            const call = selectCount++;
+            if (call === 0) {
+                return { from: () => ({ where: () => ({ for: async () => [{
+                    matchId: singleWinner.matchId,
+                    roomId: singleWinner.roomId,
+                    serverId: singleWinner.serverId,
+                    mapId: singleWinner.mapId,
+                    resultRecordedAt: null,
+                }] }) }) };
+            }
+            return { from: () => ({ where: async () => assignments }) };
+        },
+        update: () => ({
+            set: () => ({
+                where: () => ({ returning: async () => [{ matchId: singleWinner.matchId }] }),
+            }),
+        }),
+        insert: () => ({
+            values: async (rows: Array<Record<string, unknown>>) => { participantRows = rows; },
+        }),
+    };
+    const db = { transaction: async (run: (value: typeof tx) => unknown) => run(tx) };
+    const service = new ResultService(db as never);
+
+    assert.equal(await service.record(singleWinner), 'stored');
+    assert.deepEqual(
+        participantRows.map((player) => ({ playerId: player['playerId'], isWinner: player['isWinner'] })),
+        [{ playerId: 1, isWinner: true }, { playerId: 2, isWinner: false }],
+    );
+});

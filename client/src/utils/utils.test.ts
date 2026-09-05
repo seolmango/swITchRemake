@@ -47,10 +47,18 @@ describe('key binding labels', () => {
 });
 
 describe('matchResultWinners', () => {
-    const players: MatchPlayerResult[] = [
-        { playerId: '1', slot: 1, nickname: 'one', tagCount: 0, taggedCount: 0, switchSuccess: 0, switchTry: 0, survivedMs: 1, isSelf: false },
-        { playerId: '2', slot: 2, nickname: 'two', tagCount: 0, taggedCount: 0, switchSuccess: 0, switchTry: 0, survivedMs: 1, isSelf: false },
-    ];
+    const players: MatchPlayerResult[] = Array.from({ length: 8 }, (_, index) => ({
+        playerId: String(index + 1),
+        isGuest: false,
+        slot: index + 1,
+        nickname: `player${index + 1}`,
+        tagCount: 0,
+        taggedCount: 0,
+        switchSuccess: 0,
+        switchTry: 0,
+        survivedMs: 1,
+        isSelf: false,
+    }));
     const winners = (value: MatchResultSnapshot['winners']) => matchResultWinners({ players, winners: value });
 
     it('removes empty winner placeholders', () => {
@@ -63,6 +71,11 @@ describe('matchResultWinners', () => {
 
     it('keeps two distinct co-winners', () => {
         expect(winners(['1', '2']).map((player) => player.playerId)).toEqual(['1', '2']);
+    });
+
+    it('keeps every winner when the maximum-time result has eight survivors', () => {
+        expect(winners(['1', '2', '3', '4', '5', '6', '7', '8']).map((player) => player.playerId))
+            .toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
     });
 });
 

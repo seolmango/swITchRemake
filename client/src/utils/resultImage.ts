@@ -22,6 +22,33 @@ const drawText = (context: CanvasRenderingContext2D, text: string, x: number, y:
     context.fillText(text, x, y);
 };
 
+export interface ResultImageWinnerCardLayout {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    compact: boolean;
+}
+
+export const resultImageWinnerCardLayout = (winnerCount: number, index: number): ResultImageWinnerCardLayout => {
+    if (winnerCount <= 2) {
+        return {
+            x: winnerCount === 1 ? 325 : 100 + index * 450,
+            y: 215,
+            width: 430,
+            height: 235,
+            compact: false,
+        };
+    }
+    return {
+        x: 100 + index % 2 * 450,
+        y: 215 + Math.floor(index / 2) * 60,
+        width: 430,
+        height: 54,
+        compact: true,
+    };
+};
+
 export async function createResultImage(result: MatchResultSnapshot, labels: {
     title: string;
     winner: string;
@@ -59,20 +86,34 @@ export async function createResultImage(result: MatchResultSnapshot, labels: {
     }
     winners.forEach((winner, index) => {
         const winnerColor = Color.user[(winner.slot - 1) % Color.user.length]!;
-        const x = winners.length === 1 ? 325 : 100 + index * 450;
-        roundRect(context, x, 215, 430, 235, 32, winnerColor[0], winnerColor[1]);
+        const card = resultImageWinnerCardLayout(winners.length, index);
+        roundRect(context, card.x, card.y, card.width, card.height, card.compact ? 14 : 32, winnerColor[0], winnerColor[1]);
+        if (card.compact) {
+            context.beginPath();
+            context.arc(card.x + 32, card.y + 27, 18, 0, Math.PI * 2);
+            context.fillStyle = Color.white;
+            context.fill();
+            context.lineWidth = 3;
+            context.strokeStyle = winnerColor[1];
+            context.stroke();
+            drawText(context, String(winner.slot), card.x + 32, card.y + 28, 15, 700, 'center');
+            drawText(context, '★', card.x + 53, card.y + 14, 15, 700, 'center');
+            drawText(context, winner.nickname, card.x + 64, card.y + 18, 20, 700);
+            drawText(context, `${labels.tags} ${winner.tagCount} · ${labels.switchRate} ${winner.switchSuccess}/${winner.switchTry}`, card.x + 64, card.y + 40, 12, 500);
+            return;
+        }
         context.beginPath();
-        context.arc(x + 100, 330, 62, 0, Math.PI * 2);
+        context.arc(card.x + 100, 330, 62, 0, Math.PI * 2);
         context.fillStyle = Color.white;
         context.fill();
         context.lineWidth = 6;
         context.strokeStyle = winnerColor[1];
         context.stroke();
-        drawText(context, String(winner.slot), x + 100, 334, 58, 700, 'center');
-        drawText(context, '★', x + 158, 273, 38, 700, 'center');
-        drawText(context, winner.nickname, x + 185, 305, 31, 700);
-        drawText(context, `${labels.tags} ${winner.tagCount}`, x + 185, 352, 20, 500);
-        drawText(context, `${labels.switchRate} ${winner.switchSuccess}/${winner.switchTry}`, x + 185, 389, 20, 500);
+        drawText(context, String(winner.slot), card.x + 100, 334, 58, 700, 'center');
+        drawText(context, '★', card.x + 158, 273, 38, 700, 'center');
+        drawText(context, winner.nickname, card.x + 185, 305, 31, 700);
+        drawText(context, `${labels.tags} ${winner.tagCount}`, card.x + 185, 352, 20, 500);
+        drawText(context, `${labels.switchRate} ${winner.switchSuccess}/${winner.switchTry}`, card.x + 185, 389, 20, 500);
     });
 
     roundRect(context, 100, 485, 880, 105, 25, Color.white, Color.smoke[1]);

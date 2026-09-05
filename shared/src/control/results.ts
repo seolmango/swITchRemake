@@ -54,10 +54,17 @@ export interface MatchResultMessage {
     visibilityCoreVersion: number;
 
     /**
-     * 최후까지 남은 두 명. 둘 모두 공동 승리자이며 등수는 없다.
+     * 경기가 끝난 순간 살아 있던 전원. 모두 공동 승리자이며 등수는 없다.
      * 계정이 아니라 방 범위 slot으로 지목한다. 게스트도 이길 수 있기 때문이다.
+     *
+     * **길이를 둘로 고정하지 않는다.** 생존자가 2명 이하가 되면 끝나므로 보통 두 명이지만,
+     * 한 틱에 두 명이 동시에 잡히면 한 명이고, 경기 최대 시간에 닿으면 그 시점의 생존자
+     * 전원이라 최대 8명이다(BASE.md §2.1). 두 명으로 고정하면 그 두 경우가 표현되지 않아
+     * 같은 사람을 두 번 적거나 승리자를 잘라내게 된다.
+     *
+     * 비어 있지 않고, 중복이 없으며, `players`에 있는 slot만 담는다.
      */
-    winnerPlayerIds: [number, number];
+    winnerPlayerIds: readonly number[];
 
     replay: ReplayHandleInfo | null;
     players: MatchParticipantResult[];

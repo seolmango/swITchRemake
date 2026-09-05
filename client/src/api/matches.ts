@@ -40,7 +40,7 @@ export interface LobbySnapshot {
 /** Direct payload of game.ended; returnsAt controls the POST_GAME deadline. */
 export interface GameEndedEventPayload {
     matchId: string;
-    winnerIds: [number, number];
+    winnerIds: readonly number[];
     returnsAt: number;
 }
 
@@ -74,8 +74,8 @@ export interface MatchResultSnapshot {
     playedAt: string;
     /** game.ended returnsAt; omitted for persisted match-history responses. */
     returnsAt?: number;
-    /** The final two players. Both are co-winners and are stored without ordering. */
-    winners: [string, string];
+    /** Every surviving co-winner, without ordering (one to eight players). */
+    winners: readonly string[];
     players: MatchPlayerResult[];
     /** 게스트와 예전 응답에는 없다. 없으면 보상 칸을 통째로 그리지 않는다. */
     reward?: MatchRewardSummary | null;

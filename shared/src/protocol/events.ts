@@ -335,8 +335,11 @@ export type GameEndedMessage = ServerEnvelope<'game.ended', {
      * 방 id로는 안 된다 — 한 방에서 여러 경기가 이어지므로 어느 경기의 결과인지 가려지지 않는다.
      */
     matchId: string;
-    /** 최후까지 남은 두 명. 공동 승리자이며 등수는 없다. */
-    winnerIds: [number, number];
+    /**
+     * 경기가 끝난 순간 살아 있던 전원. 공동 승리자이며 등수는 없다.
+     * 한 명일 수도, 최대 시간에 닿아 여덟 명일 수도 있다(BASE.md §2.1).
+     */
+    winnerIds: readonly number[];
     /** 대기실로 돌아가는 시각(epoch ms). */
     returnsAt: number;
 }>;

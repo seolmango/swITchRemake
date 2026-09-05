@@ -40,7 +40,7 @@ export interface MatchResultSnapshot {
     map: string;
     durationMs: number;
     playedAt: string;
-    winners: [string, string];
+    winners: string[];
     players: MatchPlayerResult[];
     reward: MatchRewardSummary | null;
 }
@@ -132,7 +132,7 @@ export class MatchesService {
             map: match.mapId,
             durationMs: Math.max(0, match.endedAt.getTime() - match.startedAt.getTime()),
             playedAt: match.endedAt.toISOString(),
-            winners: [winnerIds[0]!, winnerIds[1] ?? winnerIds[0]!],
+            winners: winnerIds,
             players: players.map(({ isWinner: _isWinner, ...player }) => player),
             reward: await this.rewardFor(actorId, rows),
         };

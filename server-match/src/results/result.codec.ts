@@ -52,7 +52,8 @@ export function isMatchResult(value: unknown): value is MatchResultMessage {
         || value.players.length === 0
         || value.players.length > RESULT_SANITY.MAX_PLAYERS
         || !Array.isArray(value.winnerPlayerIds)
-        || value.winnerPlayerIds.length !== 2
+        || value.winnerPlayerIds.length === 0
+        || value.winnerPlayerIds.length > RESULT_SANITY.MAX_PLAYERS
         || !value.winnerPlayerIds.every(nonNegativeInteger)
         || !isReplay(value.replay)) {
         return false;
@@ -63,8 +64,10 @@ export function isMatchResult(value: unknown): value is MatchResultMessage {
     const durationMs = value.endedAt - value.startedAt;
     if (players.some((player) => (player as MatchParticipantResult).survivedMs > durationMs + SURVIVED_MS_CLOCK_SKEW_TOLERANCE_MS)) return false;
     const playerIds = new Set(players.map((player) => (player as MatchParticipantResult).playerId));
+    const winnerPlayerIds = value.winnerPlayerIds as number[];
     if (playerIds.size !== players.length
-        || !value.winnerPlayerIds.every((id) => playerIds.has(id))) {
+        || new Set(winnerPlayerIds).size !== winnerPlayerIds.length
+        || !winnerPlayerIds.every((id) => playerIds.has(id))) {
         return false;
     }
     const accountIds = players

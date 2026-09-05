@@ -1,9 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { decodeSnapshot, MAX_PLAYERS_PER_ROOM, SkillId, TilePhysics, RoomMode , MapMarkerKind, MapZoneKind } from 'shared';
+import {
+    decodeSnapshot,
+    MAX_PLAYERS_PER_ROOM,
+    SkillId,
+    TilePhysics,
+    RoomMode,
+    MapMarkerKind,
+    MapZoneKind,
+    type MatchResultMessage,
+    type ReplayHandleInfo,
+} from 'shared';
 import { EMOJI_DISPLAY_MS } from '../config/gameplay';
 import type { ServerMapBundle } from '../maps/map-loader';
+import type { ReplayRecorder } from '../replay/recorder';
 import type { Room, RoomStartSnapshot } from '../rooms/room';
 import { msToTicks } from '../simulation/effects';
 import { Scheduler } from '../simulation/scheduler';
@@ -191,4 +202,101 @@ test('훈련장에만 이름이 붙은 더미가 생기며 로비 참가자로 �
         players: [{ playerId: 1 }, { playerId: 2 }, { playerId: 3 }], rules: {},
     });
     assert.equal(lifecycle.session('room')!.world.players.length, 3, '경기 방에는 더미가 들어가지 않는다');
+});
+
+test('3인 경기의 연결 종료는 즉시 승자를 정하고 결과 저장과 리플레이 마감을 완료한다', async () => {
+    let announcedWinners: readonly number[] | null = null;
+    const room = {
+        ...fakeRoom(),
+        finishGame: (winnerIds: readonly number[]) => {
+            announcedWinners = winnerIds;
+            return true;
+        },
+    } as unknown as Room;
+    const replayHandle: ReplayHandleInfo = {
+        storageKey: 'disconnect.swrp',
+        formatVersion: 1,
+        chunkCount: 1,
+        sizeBytes: 123,
+        rootHash: 'a'.repeat(64),
+    };
+    const recorded: { finalFrames: number[]; events: string[]; finishedAt: number[] } = {
+        finalFrames: [], events: [], finishedAt: [],
+    };
+    const recorder: ReplayRecorder = {
+        begin: () => undefined,
+        writeFrame: (tick, _frame, full) => { if (full) recorded.finalFrames.push(tick); },
+        writeVisibility: () => undefined,
+        writeEvent: (_tick, event) => { recorded.events.push(event.kind); },
+        finish: async (outcome) => { recorded.finishedAt.push(outcome.endTick); return replayHandle; },
+        abort: () => undefined,
+    };
+    let resolveResult!: (result: MatchResultMessage) => void;
+    const resultPromise = new Promise<MatchResultMessage>((resolve) => { resolveResult = resolve; });
+    const lifecycle = new GameLifecycle({
+        bundle,
+        serverId: 'game',
+        buildId: 'test',
+        scheduler: new Scheduler(),
+        lookupRoom: () => room,
+        violationSink: () => undefined,
+        makeSeed: () => 1,
+        replayRecorderFactory: () => recorder,
+        onMatchFinished: (_session, result) => resolveResult(result),
+    });
+    lifecycle.startGame({
+        roomId: 'room', matchId: 'disconnect-match', mapId: 'map', mode: RoomMode.Match,
+        players: [{ playerId: 1 }, { playerId: 2 }, { playerId: 3 }], rules: {},
+    });
+
+    lifecycle.participantDisconnected('room', 3);
+    assert.deepEqual(announcedWinners, [1, 2], '다음 tick까지 종료 판정을 미루면 안 된다');
+
+    const result = await resultPromise;
+    assert.deepEqual(result.winnerPlayerIds, [1, 2]);
+    assert.deepEqual(recorded.events, ['eliminated']);
+    assert.deepEqual(recorded.finalFrames, [0]);
+    assert.deepEqual(recorded.finishedAt, [0]);
+    assert.deepEqual(result.replay, replayHandle);
+});
+
+test('경기 시작 rules snapshot의 최대 tick을 세션이 끝까지 사용한다', async () => {
+    let announcedWinners: readonly number[] | null = null;
+    const room = {
+        ...fakeRoom(),
+        finishGame: (winnerIds: readonly number[]) => {
+            announcedWinners = winnerIds;
+            return true;
+        },
+    } as unknown as Room;
+    let resolveResult!: (result: MatchResultMessage) => void;
+    const resultPromise = new Promise<MatchResultMessage>((resolve) => { resolveResult = resolve; });
+    const lifecycle = new GameLifecycle({
+        bundle,
+        serverId: 'game',
+        buildId: 'test',
+        scheduler: new Scheduler(),
+        lookupRoom: () => room,
+        violationSink: () => undefined,
+        makeSeed: () => 1,
+        onMatchFinished: (_session, result) => resolveResult(result),
+    });
+    lifecycle.startGame({
+        roomId: 'room',
+        matchId: 'short-snapshot-match',
+        mapId: 'map',
+        mode: RoomMode.Match,
+        players: [{ playerId: 1 }, { playerId: 2 }, { playerId: 3 }],
+        rules: { MAX_MATCH_DURATION_TICKS: 2 },
+    });
+    const session = lifecycle.session('room')!;
+
+    assert.equal(session.step()?.tick, 1);
+    assert.equal(announcedWinners, null);
+    assert.equal(session.step()?.tick, 2);
+
+    const result = await resultPromise;
+    assert.deepEqual(announcedWinners, [1, 2, 3]);
+    assert.deepEqual(result.winnerPlayerIds, [1, 2, 3]);
+    assert.equal(result.durationTicks, 2);
 });

@@ -12,12 +12,13 @@ import {
     MATCH_RESULT_VERSION,
     PROTOCOL_VERSION,
     VISIBILITY_CORE_VERSION,
+    ViolationKind,
     type MatchParticipantResult,
     type MatchResultMessage,
     type ReplayHandleInfo,
     type ViolationSignal,
 } from 'shared';
-import { RULES_VERSION } from '../config/gameplay';
+import { GAMEPLAY, RULES_VERSION } from '../config/gameplay';
 import { NETWORK } from '../config/network';
 import { NullReplayRecorder, type ReplayMeta, type ReplayRecorder } from '../replay/recorder';
 import type { Room } from '../rooms/room';
@@ -42,6 +43,8 @@ export interface GameSessionOptions {
     readonly trainingGround?: TrainingGround;
     readonly violationSink: (signal: ViolationSignal) => void;
     readonly onFinished: (session: GameSession, result: MatchResultMessage) => void;
+    /** 경기 시작 시 고정하는 최대 tick. 테스트와 복구 snapshot은 명시할 수 있고, 기본은 밸런스 값이다. */
+    readonly maxDurationTicks?: number;
     /** 기록을 켜지 않은 호출자(테스트 등)는 생략할 수 있다. 기본은 아무것도 안 하는 레코더다. */
     readonly recorder?: ReplayRecorder;
     /** 경기 결과에 박히는 값들. 나중에 채울 수 없으므로 시작할 때 받아 둔다. */
@@ -73,6 +76,7 @@ export class GameSession implements SchedulerTarget {
     /** simulation의 이번-tick 신호를 네트워크 publish 경계까지 보존한다. */
     #pendingTileChanges: SnapshotTileChange[] = [];
     readonly #replay: SessionReplayRecorder;
+    readonly #maxDurationTicks: number;
     /**
      * 경기 시작 시점의 신원. 경기 중 나간 사람은 room의 roster에서 사라지므로, 결과를 만들 때 roster를
      * 다시 읽으면 그 사람만 `P3` 같은 자리표시자 이름에 userId=null이 된다. 매칭 서버는 결과의 참가자가
@@ -90,6 +94,12 @@ export class GameSession implements SchedulerTarget {
         this.matchId = options.matchId;
         this.#roster = options.roster;
         this.id = options.room.id;
+
+        const maxDurationTicks = options.maxDurationTicks ?? GAMEPLAY.MAX_MATCH_DURATION_TICKS;
+        if (!Number.isSafeInteger(maxDurationTicks) || maxDurationTicks < 1) {
+            throw new RangeError(`maxDurationTicks must be a positive safe integer: ${maxDurationTicks}`);
+        }
+        this.#maxDurationTicks = maxDurationTicks;
 
         this.#identities = new Map(options.room.participants().map((p) => [p.playerId, p]));
 
@@ -190,6 +200,38 @@ export class GameSession implements SchedulerTarget {
         this.#needsFullSnapshot.add(playerId);
     }
 
+    /**
+     * 연결 종료처럼 tick 사이에서 확정된 탈락을 즉시 반영한다.
+     *
+     * 생존자가 종료 인원에 닿았다면 다음 tick의 이동ㆍ충돌까지 진행하지 않고 현재 tick에서 정상
+     * 종료 경로를 탄다. 그래야 연결 종료 직후의 승자ㆍ결과ㆍ리플레이가 서로 같은 끝 상태를 본다.
+     */
+    public eliminateDisconnected(playerId: number): boolean {
+        if (this.#finished) return false;
+        const player = this.world.players.find((candidate) => candidate.playerId === playerId);
+        if (player === undefined || !player.alive) return false;
+
+        player.connected = false;
+        player.alive = false;
+        player.stats.eliminatedAtTick = this.world.tick;
+        const events: WorldEvent[] = [{ kind: 'eliminated', playerId }];
+        this.#replay.recordEvents(this.world.tick, events);
+
+        if (this.#options.mode === RoomMode.Match && this.#matchHasEnded()) {
+            this.#finished = true;
+            const frame: AuthoritativeFrame = {
+                tick: this.world.tick,
+                world: this.world,
+                events,
+                skillRejections: [],
+            };
+            this.#replay.recordFinalFrame(frame, this.#pendingTileChanges);
+            this.#pendingTileChanges = [];
+            this.#startFinish();
+        }
+        return true;
+    }
+
     public step(): AuthoritativeFrame | null {
         if (this.#finished) return null;
 
@@ -214,11 +256,11 @@ export class GameSession implements SchedulerTarget {
         this.#options.trainingGround?.afterStep(this.world);
         this.#replay.recordEvents(frame.tick, frame.events);
 
-        if (this.#options.mode === RoomMode.Match && isFinished(this.world)) {
+        if (this.#options.mode === RoomMode.Match && this.#matchHasEnded()) {
             this.#finished = true;
             // 스냅샷 주기와 안 맞아도 마지막 tick은 항상 keyframe으로 남긴다.
             this.#replay.recordFinalFrame(frame);
-            void this.#finish();
+            this.#startFinish();
             // 마지막 프레임은 보낸다. 탈락 순간이 화면에 안 나오면 갑자기 결과창이 뜬다.
             return frame;
         }
@@ -259,6 +301,14 @@ export class GameSession implements SchedulerTarget {
         if (this.#finished) return;
         this.#finished = true;
         this.#replay.abort('session-stopped');
+    }
+
+    /**
+     * 종료 시간은 step이 확정한 권위 tick으로만 잰다. 최대 tick에 도달한 프레임의 탈락 판정까지
+     * 모두 반영된 뒤 생존자를 고르므로, 그 시점에 살아 있는 술래를 포함한 전원이 승자다.
+     */
+    #matchHasEnded(): boolean {
+        return isFinished(this.world) || this.world.tick >= this.#maxDurationTicks;
     }
 
     /**
@@ -307,15 +357,49 @@ export class GameSession implements SchedulerTarget {
      * 걸리지 않고, 이 경기는 이미 끝났으므로 다른 방의 tick도 막지 않는다. Redis로 나가는
      * 결과 전송(outbox)은 여기서 기다리지 않는다 — 그건 네트워크 왕복이라 다른 문제다.
      */
-    async #finish(): Promise<void> {
-        const survivors = this.world.players
-            .filter((player) => player.alive && this.#identities.has(player.playerId))
-            .sort((a, b) => a.playerId - b.playerId)
-            .map((player) => player.playerId);
+    #startFinish(): void {
+        void this.#finish().catch((error: unknown) => this.#handleFinishException(error));
+    }
 
-        // 종료 조건은 "생존자 N명 이하"라서 동시 탈락으로 더 적게 남을 수 있다.
-        // 자리를 억지로 채우지 않고 남은 만큼만 승자로 본다.
-        const winners: [number, number] = [survivors[0] ?? 0, survivors[1] ?? survivors[0] ?? 0];
+    /** 종료 불변식 하나가 무너져도 이 방만 정리하고 다른 방의 게임 루프에는 전파하지 않는다. */
+    #handleFinishException(error: unknown): void {
+        try {
+            this.#options.violationSink({
+                kind: ViolationKind.BadState,
+                userId: `room:${this.id}`,
+                roomId: this.id,
+                tick: this.world.tick,
+                severity: 'high',
+                ruleVersion: 1,
+                detail: {
+                    kind: 'internal-exception',
+                    phase: 'finish',
+                    matchId: this.matchId,
+                    error: error instanceof Error ? error.name : typeof error,
+                },
+            });
+        } catch (signalError: unknown) {
+            // 진단 소비자의 장애가 원래 예외 경계를 다시 뚫으면 안 된다.
+            console.error('[swITch] game-session violation sink failed', signalError);
+        }
+
+        try {
+            this.#replay.abort('session-finish-failed');
+        } catch (abortError: unknown) {
+            console.error('[swITch] failed to abort replay after game-session failure', abortError);
+        }
+
+        try {
+            // 결과를 확정할 수 없는 방을 Playing에 남기지 않는다. close가 lifecycle의 세션과
+            // scheduler 등록을 함께 회수하고, 이 방의 연결만 정상 종료한다.
+            this.#room.close();
+        } catch (closeError: unknown) {
+            console.error('[swITch] failed to close room after game-session failure', closeError);
+        }
+    }
+
+    async #finish(): Promise<void> {
+        const winners = this.#confirmedWinnerIds();
         if (!this.#room.finishGame(winners)) {
             // 방이 이미 POST_GAME/Closed라면 이 세션은 더 이상 그 방의 결과 권한을 갖지 않는다.
             // 비동기 종료가 늦게 돌아온 경우에도 두 번째 결과를 만들지 않고 기록을 버린다.
@@ -327,10 +411,26 @@ export class GameSession implements SchedulerTarget {
     }
 
     /**
+     * shared 결과 계약을 서버가 확정하는 지점이다. 권위 world의 실제 경기 참가자 중 생존자만
+     * 고르고, 중복을 제거한 뒤 playerId 오름차순으로 고정한다. 따라서 반환값은 비어 있지 않고,
+     * 중복이 없으며, 결과 `players`에도 들어가는 slot만 담는다.
+     */
+    #confirmedWinnerIds(): readonly number[] {
+        const winners = [...new Set(this.world.players
+            .filter((player) => player.alive && this.#identities.has(player.playerId))
+            .map((player) => player.playerId))]
+            .sort((a, b) => a - b);
+        if (winners.length === 0) {
+            throw new Error(`match ${this.matchId} finished without a surviving participant`);
+        }
+        return Object.freeze(winners);
+    }
+
+    /**
      * 경기 결과 메시지. 버전 스탬프와 당시 닉네임은 **나중에 채울 수 없는 값**이라 여기서 전부 넣는다.
      * 컬럼을 나중에 추가할 수는 있어도 추가 이전 경기의 값은 영원히 빈다.
      */
-    #buildResult(winners: [number, number], replay: ReplayHandleInfo | null): MatchResultMessage {
+    #buildResult(winners: readonly number[], replay: ReplayHandleInfo | null): MatchResultMessage {
         const endedAt = Date.now();
         const msPerTick = 1000 / this.world.simulationHz;
         const identities = this.#identities;

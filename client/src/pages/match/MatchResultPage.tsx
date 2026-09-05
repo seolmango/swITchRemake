@@ -172,8 +172,8 @@ export const MatchResultPage: React.FC = () => {
                     '--result-table-header': colors.canvas,
                 } as React.CSSProperties}
             >
-                <div className="result-main">
-                    <aside className={`result-winner-panel has-${winners.length}-winners`}>
+                <div className={`result-main${winners.length > 2 ? ' has-many-winners' : ''}`}>
+                    <aside className={`result-winner-panel has-${winners.length}-winners${winners.length > 2 ? ' has-many-winners' : ''}`}>
                         <span className="result-kicker">{t(winners.length === 0 ? 'result.noWinner' : winners.length === 1 ? 'result.winnerSingle' : 'result.winner')}</span>
                         <div className="result-winners" data-winner-count={winners.length}>
                             {winners.length === 0 ? (

@@ -64,6 +64,46 @@ test('rejects playerId 0 and accepts playerId 8', () => {
     assert.equal(isMatchResult(eight), true);
 });
 
+test('accepts non-empty unique winner lists from one through eight players', () => {
+    const singleWinner = validResult();
+    singleWinner.winnerPlayerIds = [1];
+    assert.equal(isMatchResult(singleWinner), true);
+
+    const eightWinners = validResult();
+    eightWinners.players = Array.from({ length: 8 }, (_value, index) => ({
+        userId: null,
+        playerId: index + 1,
+        nickname: `Guest_${index + 1}`,
+        colorIndex: index,
+        isGuest: true,
+        tagCount: 0,
+        taggedCount: 0,
+        switchTry: 0,
+        switchSuccess: 0,
+        survivedMs: 60_000,
+    }));
+    eightWinners.winnerPlayerIds = eightWinners.players.map((player) => player.playerId);
+    assert.equal(isMatchResult(eightWinners), true);
+});
+
+test('rejects empty, duplicate, out-of-roster, and over-limit winner lists', () => {
+    const empty = validResult();
+    empty.winnerPlayerIds = [];
+    assert.equal(isMatchResult(empty), false);
+
+    const duplicate = validResult();
+    duplicate.winnerPlayerIds = [1, 1];
+    assert.equal(isMatchResult(duplicate), false);
+
+    const outsideRoster = validResult();
+    outsideRoster.winnerPlayerIds = [1, 3];
+    assert.equal(isMatchResult(outsideRoster), false);
+
+    const overLimit = validResult();
+    overLimit.winnerPlayerIds = [1, 2, 1, 2, 1, 2, 1, 2, 1];
+    assert.equal(isMatchResult(overLimit), false);
+});
+
 test('rejects results above documented sanity limits', () => {
     const result = validResult();
     result.endedAt = result.startedAt + 60 * 60 * 1_000 + 1;

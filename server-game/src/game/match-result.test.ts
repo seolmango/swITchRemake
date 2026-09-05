@@ -128,6 +128,126 @@ test('승자는 계정이 아니라 slot으로 지목된다', async () => {
     assert.deepEqual(winnerUserIds(result), [11]);
 });
 
+test('3인 경기에서 한 tick에 두 명이 동시에 잡히면 남은 한 명만 승자다', async () => {
+    let announcedWinners: readonly number[] | null = null;
+    const room = {
+        ...fakeRoom(),
+        finishGame: (winnerIds: readonly number[]) => {
+            announcedWinners = winnerIds;
+            return true;
+        },
+    } as unknown as Room;
+    const world = makeWorld(mapFromRows(MAP), [
+        makePlayer(3, 3, 2),
+        makePlayer(1, 3, 2, { isTagger: true }),
+        makePlayer(2, 3, 2),
+    ]);
+
+    const result = await new Promise<MatchResultMessage>((resolve) => {
+        const session = new GameSession({
+            room,
+            world,
+            matchId: 'simultaneous-elimination',
+            mode: RoomMode.Match,
+            roster: [],
+            violationSink: () => undefined,
+            meta: { serverId: 'game', buildId: 'test', mapId: 'testmap', mapBundleHash: 'hash' },
+            onFinished: (_session, finished) => resolve(finished),
+        });
+        session.step();
+    });
+
+    assert.deepEqual(world.players.filter((player) => player.alive).map((player) => player.playerId), [1]);
+    assert.deepEqual(announcedWinners, [1]);
+    assert.deepEqual(result.winnerPlayerIds, [1], '한 자리를 복제해 두 명짜리 결과를 만들면 안 된다');
+});
+
+test('최대 tick에 도달하면 생존자 전원이 승리하고 정상 결과ㆍ리플레이 종료 경로를 탄다', async () => {
+    const participantIds = [4, 2, 1, 3];
+    let announcedWinners: readonly number[] | null = null;
+    const room = {
+        id: 'time-limit-room',
+        participants: () => participantIds.map((playerId) => ({
+            playerId,
+            userId: playerId,
+            nickname: `P${playerId}`,
+            colorIndex: playerId - 1,
+            guest: false,
+        })),
+        resolvedInputs: () => [],
+        sendSkillRejected: () => undefined,
+        markEliminated: () => true,
+        broadcastTagged: () => undefined,
+        broadcastBlinked: () => undefined,
+        broadcastSkillArea: () => undefined,
+        finishGame: (winnerIds: readonly number[]) => {
+            announcedWinners = winnerIds;
+            return true;
+        },
+        snapshotTargets: () => [],
+    } as unknown as Room;
+    const world = makeWorld(mapFromRows([
+        '##########',
+        '#........#',
+        '#........#',
+        '##########',
+    ]), [
+        makePlayer(4, 7, 1, { isTagger: true }),
+        makePlayer(2, 5, 1),
+        makePlayer(1, 1, 1),
+        makePlayer(3, 3, 1),
+    ]);
+    const replayHandle: ReplayHandleInfo = {
+        storageKey: 'time-limit.swrp',
+        formatVersion: 1,
+        chunkCount: 1,
+        sizeBytes: 123,
+        rootHash: 'b'.repeat(64),
+    };
+    const finalFrames: number[] = [];
+    const replayFinishes: number[] = [];
+    const recorder: ReplayRecorder = {
+        begin: () => undefined,
+        writeFrame: (tick, _frame, full) => { if (full) finalFrames.push(tick); },
+        writeVisibility: () => undefined,
+        writeEvent: () => undefined,
+        finish: async (outcome) => { replayFinishes.push(outcome.endTick); return replayHandle; },
+        abort: () => undefined,
+    };
+    let resolveResult!: (result: MatchResultMessage) => void;
+    const resultPromise = new Promise<MatchResultMessage>((resolve) => { resolveResult = resolve; });
+    const submittedResults: MatchResultMessage[] = [];
+    const session = new GameSession({
+        room,
+        world,
+        matchId: 'time-limit-match',
+        mode: RoomMode.Match,
+        roster: [],
+        recorder,
+        maxDurationTicks: 2,
+        violationSink: () => undefined,
+        meta: { serverId: 'game', buildId: 'test', mapId: 'testmap', mapBundleHash: 'hash' },
+        onFinished: (_session, result) => {
+            submittedResults.push(result);
+            resolveResult(result);
+        },
+    });
+
+    assert.equal(session.step()?.tick, 1);
+    assert.equal(announcedWinners, null, '상한 직전 tick에는 끝나면 안 된다');
+    assert.equal(session.step()?.tick, 2);
+    assert.deepEqual(announcedWinners, [1, 2, 3, 4], '술래를 포함한 생존자 전원을 번호순으로 알린다');
+
+    const result = await resultPromise;
+    assert.equal(result.durationTicks, 2);
+    assert.deepEqual(result.winnerPlayerIds, [1, 2, 3, 4]);
+    assert.deepEqual(finalFrames, [2], '상한 도달 tick이 마지막 keyframe이어야 한다');
+    assert.deepEqual(replayFinishes, [2], '정상 종료와 같은 endTick으로 리플레이를 마감해야 한다');
+    assert.deepEqual(result.replay, replayHandle);
+    assert.equal(submittedResults.length, 1, '결과 저장 경계에는 한 번만 제출해야 한다');
+    assert.equal(session.step(), null, '종료 뒤에는 tick이 더 진행되면 안 된다');
+});
+
 test('레코더를 안 주면 리플레이는 null로 표현한다', async () => {
     assert.equal((await runToFinish()).replay, null);
 });

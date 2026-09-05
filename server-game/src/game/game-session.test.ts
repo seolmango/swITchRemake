@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { decodeSnapshot, SkillId, SkillRejection, SkillSlot, TilePhysics , RoomMode } from 'shared';
+import { decodeSnapshot, RoomMode, SkillId, SkillRejection, SkillSlot, TilePhysics, ViolationKind, type ViolationSignal } from 'shared';
 import { EMOJI_DISPLAY_MS } from '../config/gameplay';
 import { NETWORK } from '../config/network';
 import type { ReplayRecorder } from '../replay/recorder';
@@ -297,6 +297,97 @@ test('방이 이미 끝났으면 늦게 끝난 세션이 결과를 다시 제출
     assert.equal(results, 0);
     assert.equal(aborted, 'room-already-finished');
     assert.equal(session.step(), null);
+});
+
+test('승자를 확정할 수 없는 경기만 정리하고 같은 프로세스의 다른 세션은 계속 진행한다', async () => {
+    const signals: ViolationSignal[] = [];
+    let closed = 0;
+    let replayAbortReason = '';
+    const failedRoom = {
+        id: 'failed-room',
+        participants: () => [{ playerId: 1, userId: 1, nickname: 'P1', colorIndex: 0, guest: false }],
+        resolvedInputs: () => [],
+        sendSkillRejected: () => undefined,
+        markEliminated: () => true,
+        broadcastTagged: () => undefined,
+        broadcastBlinked: () => undefined,
+        broadcastSkillArea: () => undefined,
+        finishGame: () => true,
+        snapshotTargets: () => [],
+        close: () => { closed += 1; },
+    } as unknown as Room;
+    const recorder = {
+        begin: () => undefined,
+        writeFrame: () => undefined,
+        writeVisibility: () => undefined,
+        writeEvent: () => undefined,
+        finish: async () => null,
+        abort: (reason: string) => { replayAbortReason = reason; },
+    } satisfies ReplayRecorder;
+    const failedWorld = makeWorld(
+        mapFromRows(['####', '#..#', '####']),
+        [makePlayer(1, 1, 1, { alive: false })],
+    );
+    const failedSession = new GameSession({
+        room: failedRoom,
+        world: failedWorld,
+        matchId: 'failed-match',
+        mode: RoomMode.Match,
+        roster: [],
+        recorder,
+        violationSink: (signal) => { signals.push(signal); },
+        meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' },
+        onFinished: () => assert.fail('invalid match must not publish a result'),
+    });
+
+    const healthyRoom = {
+        id: 'healthy-room',
+        participants: () => [],
+        resolvedInputs: () => [],
+        sendSkillRejected: () => undefined,
+        markEliminated: () => true,
+        broadcastTagged: () => undefined,
+        broadcastBlinked: () => undefined,
+        broadcastSkillArea: () => undefined,
+        finishGame: () => true,
+        snapshotTargets: () => [],
+    } as unknown as Room;
+    const healthyWorld = makeWorld(
+        mapFromRows(['#####', '#...#', '#####']),
+        [makePlayer(1, 1, 1), makePlayer(2, 2, 1), makePlayer(3, 3, 1)],
+    );
+    const healthySession = new GameSession({
+        room: healthyRoom,
+        world: healthyWorld,
+        matchId: 'healthy-match',
+        mode: RoomMode.Match,
+        roster: [],
+        violationSink: () => undefined,
+        meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' },
+        onFinished: () => undefined,
+    });
+
+    assert.doesNotThrow(() => failedSession.step());
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(closed, 1);
+    assert.equal(replayAbortReason, 'session-finish-failed');
+    assert.deepEqual(signals, [{
+        kind: ViolationKind.BadState,
+        userId: 'room:failed-room',
+        roomId: 'failed-room',
+        tick: 1,
+        severity: 'high',
+        ruleVersion: 1,
+        detail: {
+            kind: 'internal-exception',
+            phase: 'finish',
+            matchId: 'failed-match',
+            error: 'Error',
+        },
+    }]);
+    assert.notEqual(healthySession.step(), null);
+    assert.equal(healthyWorld.tick, 1);
 });
 
 test('훈련장 맵은 자기장이 닫히지 않는다', () => {

@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as path from 'node:path';
 import { config as loadEnv } from 'dotenv';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { MATCH_RESULT_VERSION, matchXp, type MatchResultMessage } from 'shared';
+import { auditContext } from '../admin/audit-log';
 import * as schema from '../database/schema';
+import { MatchesService } from '../matches/matches.service';
 import { ResultService } from './result.service';
 
 // The regular unit-test command does not load ../.env, so this remains opt-in.
@@ -23,7 +25,62 @@ test('stores one idempotent result transaction and excludes guest stats', { skip
     const suffix = Date.now().toString(36);
     const matchId = '22222222-2222-4222-8222-222222222222';
     let userId: number | null = null;
+    let scrubAuditId: number | null = null;
+    let deleteAuditId: number | null = null;
     try {
+        const [scrubEntry] = await db.insert(schema.adminAuditLog).values({
+            actor: `integration-${suffix}`,
+            action: 'RETENTION_TRIGGER_TEST',
+            targetType: 'integration',
+            targetId: `scrub-${suffix}`,
+            reason: 'verify append-only trigger',
+            requestMeta: auditContext().requestMeta,
+            ipEncrypted: 'v1:integration',
+        }).returning({ id: schema.adminAuditLog.id });
+        scrubAuditId = scrubEntry.id;
+
+        await assert.rejects(
+            db.update(schema.adminAuditLog).set({ ipEncrypted: null })
+                .where(eq(schema.adminAuditLog.id, scrubAuditId)),
+            /admin_audit_log is append only/,
+        );
+        await db.transaction(async (tx) => {
+            await tx.execute(sql`SELECT set_config('switch.audit_retention', 'on', true)`);
+            await tx.update(schema.adminAuditLog).set({ ipEncrypted: null })
+                .where(eq(schema.adminAuditLog.id, scrubAuditId!));
+        });
+        const [scrubbed] = await db.select({ ipEncrypted: schema.adminAuditLog.ipEncrypted })
+            .from(schema.adminAuditLog).where(eq(schema.adminAuditLog.id, scrubAuditId));
+        assert.equal(scrubbed.ipEncrypted, null);
+
+        const [deleteEntry] = await db.insert(schema.adminAuditLog).values({
+            actor: `integration-${suffix}`,
+            action: 'RETENTION_TRIGGER_TEST',
+            targetType: 'integration',
+            targetId: `delete-${suffix}`,
+            reason: 'verify append-only trigger',
+            requestMeta: auditContext().requestMeta,
+        }).returning({ id: schema.adminAuditLog.id });
+        deleteAuditId = deleteEntry.id;
+
+        await assert.rejects(
+            db.delete(schema.adminAuditLog).where(eq(schema.adminAuditLog.id, deleteAuditId)),
+            /admin_audit_log is append only/,
+        );
+        await assert.rejects(
+            db.transaction(async (tx) => {
+                await tx.execute(sql`SELECT set_config('switch.audit_retention', 'on', true)`);
+                await tx.update(schema.adminAuditLog).set({ reason: 'not a retention mutation' })
+                    .where(eq(schema.adminAuditLog.id, deleteAuditId!));
+            }),
+            /admin_audit_log is append only/,
+        );
+        await db.transaction(async (tx) => {
+            await tx.execute(sql`SELECT set_config('switch.audit_retention', 'on', true)`);
+            await tx.delete(schema.adminAuditLog).where(eq(schema.adminAuditLog.id, deleteAuditId!));
+        });
+        deleteAuditId = null;
+
         await db.delete(schema.matches).where(eq(schema.matches.matchId, matchId));
         const [user] = await db.insert(schema.users).values({
             email: `a2-${suffix}@example.invalid`,
@@ -46,7 +103,7 @@ test('stores one idempotent result transaction and excludes guest stats', { skip
             startedAt: 1_000, endedAt: 61_000, durationTicks: 1_800,
             buildId: 'integration', protocolVersion: 1, rulesVersion: 'rules-a2',
             mapBundleHash: 'bundle-a2', visibilityCoreVersion: 1,
-            winnerPlayerIds: [1, 2],
+            winnerPlayerIds: [1],
             replay: {
                 storageKey: 'integration/a2.swrp', formatVersion: 1, chunkCount: 1,
                 sizeBytes: 100, rootHash: 'a'.repeat(64),
@@ -66,6 +123,14 @@ test('stores one idempotent result transaction and excludes guest stats', { skip
             .where(eq(schema.matchParticipants.matchId, matchId));
         assert.equal(participants.length, 2);
         assert.equal(participants.find((participant) => participant.isGuest)?.userId, null);
+        assert.deepEqual(
+            participants.sort((left, right) => left.playerId - right.playerId)
+                .map((participant) => ({ playerId: participant.playerId, isWinner: participant.isWinner })),
+            [{ playerId: 1, isWinner: true }, { playerId: 2, isWinner: false }],
+        );
+        const snapshot = await new MatchesService(db).getResult(matchId, user.id);
+        assert.ok(!('status' in snapshot));
+        assert.deepEqual(snapshot.winners, ['1']);
         const [storedUser] = await db.select({ stats: schema.users.stats }).from(schema.users)
             .where(eq(schema.users.id, user.id));
         const stats = storedUser.stats as Record<string, number>;
@@ -76,6 +141,15 @@ test('stores one idempotent result transaction and excludes guest stats', { skip
         // XP는 결과에서 오른다. 레벨은 저장하지 않는다 — 읽을 때 XP에서 센다.
         assert.equal(stats.xp, matchXp({ won: true, tagCount: 2, switchSuccess: 3 }));
     } finally {
+        const auditIds = [scrubAuditId, deleteAuditId].filter((id): id is number => id !== null);
+        if (auditIds.length > 0) {
+            await db.transaction(async (tx) => {
+                await tx.execute(sql`SELECT set_config('switch.audit_retention', 'on', true)`);
+                for (const id of auditIds) {
+                    await tx.delete(schema.adminAuditLog).where(eq(schema.adminAuditLog.id, id));
+                }
+            });
+        }
         await db.delete(schema.matches).where(eq(schema.matches.matchId, matchId));
         if (userId !== null) await db.delete(schema.users).where(eq(schema.users.id, userId));
         await connection.end();

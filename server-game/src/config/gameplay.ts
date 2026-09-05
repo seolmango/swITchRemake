@@ -17,7 +17,7 @@ import { NETWORK } from './network';
  */
 
 /** 밸런스가 바뀌면 올린다. 경기 결과와 리플레이에 함께 기록되어 "그 경기가 어떤 규칙이었는지"를 남긴다. */
-export const RULES_VERSION = '0.4.0-speed-rework';
+export const RULES_VERSION = '0.5.0-match-time-limit';
 
 const TILE_PX = SHARED_TILE_PX;
 
@@ -55,6 +55,12 @@ export const GAMEPLAY = Object.freeze({
     MAX_PLAYERS: 8,
     /** 최후 이 인원이 남으면 경기가 끝나고, 남은 전원이 공동 승리자다. 등수는 없다. */
     SURVIVORS_TO_WIN: 2,
+    /**
+     * 정상 경기는 약 5분 안팎이므로 20분은 밸런스에 간섭하지 않으면서도, 닫힌 자기장이나 잘못된
+     * 맵 때문에 방이 영구히 남는 것을 막기에 충분히 넉넉한 안전망이다. 벽시계가 아니라 권위
+     * simulation tick으로 비교해 서버 부하와 무관하게 같은 입력이 같은 tick에 끝나게 한다.
+     */
+    MAX_MATCH_DURATION_TICKS: 20 * 60 * NETWORK.SIMULATION_HZ,
 });
 
 /**

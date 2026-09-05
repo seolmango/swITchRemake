@@ -11,7 +11,7 @@ const formatSurvival = (survivedMs: number) => {
 
 interface Props {
     players: MatchPlayerResult[];
-    winnerIds: string[];
+    winnerIds: readonly string[];
     /** 없으면 신고 버튼을 그리지 않는다. 게스트로 본 결과 화면이 그렇다 — 신고는 계정만 할 수 있다. */
     onReport?: (player: MatchPlayerResult) => void;
 }
