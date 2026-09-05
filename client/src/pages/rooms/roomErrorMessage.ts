@@ -3,6 +3,8 @@ import { ApiError } from '../../api/http.ts';
 type Translate = (key: string, options?: Record<string, number>) => string;
 
 const ERROR_KEYS: Readonly<Record<string, string>> = {
+    // 점검 중에는 서버가 새 방을 423으로 거절한다(§14.3). 이걸 모르면 정체불명의 실패로 보인다.
+    MAINTENANCE: 'serviceStatus.maintenanceTitle',
     ROOM_UNAVAILABLE: 'rooms.errors.roomUnavailable',
     NO_JOINABLE_ROOM: 'rooms.errors.noJoinableRoom',
     ROOM_FULL: 'rooms.errors.roomFull',

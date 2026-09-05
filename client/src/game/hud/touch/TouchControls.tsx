@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types.ts';
 import type { HudSkill, HudState } from '../hudTypes.ts';
 import { Color, statusInkColors } from '../../../theme/color.ts';
@@ -31,6 +32,7 @@ interface Props {
 export const TouchControls: React.FC<Props> = ({
     theme, colorVision, hud, onUseMovementSkill, onSwitchTarget, onEmoji,
 }) => {
+    const { t } = useTranslation();
     const scale = useSettingsStore((state) => state.touchScale);
     const moveAnchor = useSettingsStore((state) => state.touchMoveAnchor);
     const actionAnchor = useSettingsStore((state) => state.touchActionAnchor);
@@ -60,7 +62,7 @@ export const TouchControls: React.FC<Props> = ({
                 position: 'absolute', left: move.x, top: move.y,
                 transform: 'translate(-50%, -50%)', pointerEvents: 'auto',
             }}>
-                <MoveJoystick theme={theme} size={size} />
+                <MoveJoystick theme={theme} size={size} label={t('game.hud.touch.moveJoystick')} />
             </div>
 
             {/* 선택기가 다른 컨트롤 위에 그려지도록 z를 올린다. 아래 깔리면 무엇을 고르는지 안 보인다. */}
@@ -74,6 +76,9 @@ export const TouchControls: React.FC<Props> = ({
                     size={size}
                     mode={mode}
                     players={hud.players}
+                    joystickLabel={t(mode === 'switch' ? 'game.hud.touch.switchJoystick' : 'game.hud.touch.emojiJoystick')}
+                    wheelLabel={t(mode === 'switch' ? 'game.hud.touch.switch' : 'game.hud.touch.emoji')}
+                    wheelHint={t('game.hud.touch.pick')}
                     onPick={handlePick}
                 />
             </div>
@@ -83,7 +88,13 @@ export const TouchControls: React.FC<Props> = ({
                 position: 'absolute', left: action.x, top: action.y - size * 0.78,
                 transform: 'translate(-50%, -50%)', pointerEvents: 'auto',
             }}>
-                <ModeToggle theme={theme} mode={mode} scale={scale} onChange={setMode} />
+                <ModeToggle
+                    theme={theme}
+                    mode={mode}
+                    scale={scale}
+                    labels={{ switch: t('game.hud.touch.switch'), emoji: t('game.hud.touch.emoji') }}
+                    onChange={setMode}
+                />
             </div>
 
             {/* 이동기는 방향이 필요 없다. 누르면 나가는 버튼이 조이스틱보다 빠르고 오조작도 없다. */}
@@ -106,11 +117,11 @@ const ModeToggle: React.FC<{
     theme: Theme;
     mode: ActionMode;
     scale: number;
+    labels: Record<ActionMode, string>;
     onChange: (mode: ActionMode) => void;
-}> = ({ theme, mode, scale, onChange }) => {
+}> = ({ theme, mode, scale, labels, onChange }) => {
     const pad = 8 * scale;
     const font = 15 * scale;
-    const labels: Record<ActionMode, string> = { switch: '스위치', emoji: '이모지' };
     const infoInk = statusInkColors(theme).info;
 
     return (

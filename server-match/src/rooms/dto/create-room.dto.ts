@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { MAX_PLAYERS_PER_ROOM, RoomMode } from 'shared';
 
 export class CreateRoomDto {
@@ -9,7 +9,7 @@ export class CreateRoomDto {
 
     @IsOptional()
     @IsString()
-    @MaxLength(32)
+    @Matches(/^\d{4,8}$/, { message: 'password must be 4 to 8 digits' })
     password?: string;
 
     /**

@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Inject, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Inject, Post, Query, Req } from '@nestjs/common';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { FastifyRequest } from 'fastify';
 import { NeedAccount } from '../auth/need-account.decorator';
@@ -9,6 +9,8 @@ import { PlayerLookupService } from './player-lookup.service';
 import { AdminService } from './admin.service';
 import { isAdmin } from './admin.guard';
 import { NeedAdmin } from './need-admin.decorator';
+import { MaintenanceService } from '../maintenance/maintenance.service';
+import { UpdateMaintenanceDto } from '../maintenance/dto/update-maintenance.dto';
 
 type AccountRequest = FastifyRequest & { user: { id: number; guest: false } };
 
@@ -18,6 +20,7 @@ export class AdminController {
         private readonly adminService: AdminService,
         private readonly playerLookup: PlayerLookupService,
         @Inject(DRIZZLE) private readonly db: PostgresJsDatabase<typeof schema>,
+        private readonly maintenance: MaintenanceService,
     ) {}
 
     /**
@@ -38,6 +41,20 @@ export class AdminController {
     @RateLimiter({ limit: 120, ttl: 60_000 })
     async overview() {
         return this.adminService.overview();
+    }
+
+    @Get('maintenance')
+    @NeedAdmin()
+    @RateLimiter({ limit: 60, ttl: 60_000 })
+    async maintenanceState() {
+        return this.maintenance.getPublicState();
+    }
+
+    @Post('maintenance')
+    @NeedAdmin()
+    @RateLimiter({ limit: 20, ttl: 60_000 })
+    async updateMaintenance(@Req() req: AccountRequest, @Body() dto: UpdateMaintenanceDto) {
+        return this.maintenance.update(req.user.id, dto);
     }
 
     /**

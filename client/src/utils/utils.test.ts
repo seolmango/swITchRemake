@@ -12,6 +12,17 @@ import { isValidMatchId } from './matchId.ts';
 import { matchResultWinners } from './matchResultWinners.ts';
 import { getSwitchTargets, skillRejectionMessageKey, toCooldownDisplay } from './skillHud.ts';
 import { switchTargetPlayerId } from './switchTarget.ts';
+import { isRoomPassword } from './validation.ts';
+
+describe('room password validation', () => {
+    it('accepts only 4–8 digits at the boundaries', () => {
+        expect(isRoomPassword('123')).toBe(false);
+        expect(isRoomPassword('1234')).toBe(true);
+        expect(isRoomPassword('12345678')).toBe(true);
+        expect(isRoomPassword('123456789')).toBe(false);
+        expect(isRoomPassword('12a4')).toBe(false);
+    });
+});
 
 describe('switch target key mapping', () => {
     it.each([1, 2, 3, 4, 5, 6, 7, 8])('switch%d targets playerId %d', (number) => {

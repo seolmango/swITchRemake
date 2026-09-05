@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types.ts';
 import type { HudPlayer } from './hudTypes.ts';
 import { statusInkColors } from '../../theme/color.ts';
@@ -28,14 +29,15 @@ const clock = (sec: number): string => {
  * Legacy showed none of these. Being the tagger was only discoverable by noticing your own ring colour on
  * the field, which is easy to miss in the exact moment it changes and matters most.
  */
-export const StatusBar: React.FC<Props> = ({ theme, spectating, compact, elapsedSec, selfIsTagger, watching, deadInMatch }) => (
-    <div style={{
+export const StatusBar: React.FC<Props> = ({ theme, spectating, compact, elapsedSec, selfIsTagger, watching, deadInMatch }) => {
+    const { t } = useTranslation();
+    return <div style={{
         position: 'absolute', top: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner, left: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner,
         display: 'flex', flexDirection: 'column', gap: 9, alignItems: 'flex-start', fontFamily: HUD_FONT,
     }}>
         {elapsedSec !== null && (
             <div style={{ ...panel(theme), padding: compact ? '7px 12px' : '9px 16px', display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                <span style={{ color: mutedText(theme), fontSize: HUD_METRICS.captionFont, fontWeight: 700, letterSpacing: 0.5 }}>경과</span>
+                <span style={{ color: mutedText(theme), fontSize: HUD_METRICS.captionFont, fontWeight: 700, letterSpacing: 0.5 }}>{t('game.hud.elapsed')}</span>
                 <span style={{ color: bodyText(theme), fontFamily: HUD_DISPLAY_FONT, fontSize: compact ? 19 : 24, fontWeight: 400, fontVariantNumeric: 'tabular-nums' }}>
                     {clock(elapsedSec)}
                 </span>
@@ -45,7 +47,7 @@ export const StatusBar: React.FC<Props> = ({ theme, spectating, compact, elapsed
         {spectating && (
             <div style={{ ...panel(theme), padding: compact ? '7px 11px' : '9px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ color: mutedText(theme), fontSize: HUD_METRICS.bodyFontCompact, fontWeight: 700 }}>
-                    {deadInMatch ? '탈락 · 관전' : '관전 중'}
+                    {t(deadInMatch ? 'game.hud.eliminatedSpectating' : 'game.hud.spectating')}
                 </span>
                 {watching && (
                     <span style={{ color: bodyText(theme), fontSize: compact ? HUD_METRICS.bodyFontCompact : HUD_METRICS.bodyFont, fontWeight: 800 }}>
@@ -61,7 +63,7 @@ export const StatusBar: React.FC<Props> = ({ theme, spectating, compact, elapsed
                 padding: compact ? '8px 13px' : '10px 16px', borderRadius: HUD_METRICS.controlRadius, whiteSpace: 'nowrap',
                 fontSize: compact ? HUD_METRICS.bodyFontCompact : HUD_METRICS.bodyFont, fontWeight: 800, letterSpacing: 0.5,
                 boxShadow: `0 3px 12px color-mix(in srgb, ${statusInkColors(theme).bad} 48%, transparent)`,
-            }}>당신이 술래입니다</div>
+            }}>{t('game.hud.youAreTagger')}</div>
         )}
     </div>
-);
+};

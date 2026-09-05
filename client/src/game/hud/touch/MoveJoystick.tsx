@@ -7,6 +7,7 @@ interface Props {
     theme: Theme;
     /** 바깥 원의 지름(px). 손잡이와 중립 구역이 여기서 파생된다. */
     size: number;
+    label: string;
 }
 
 /** 손가락을 얹어 두기만 한 상태가 이동이 되면 안 된다. 반지름의 이 비율 안쪽은 중립이다. */
@@ -22,7 +23,7 @@ const DEAD_ZONE_RATIO = 0.22;
  * 손가락이 움직일 때마다 리렌더를 내면 정작 필요 없는 곳이 초당 수십 번 다시 그려진다.
  * 손잡이 위치만 렌더에 쓴다.
  */
-export const MoveJoystick: React.FC<Props> = ({ theme, size }) => {
+export const MoveJoystick: React.FC<Props> = ({ theme, size, label }) => {
     const radius = size / 2;
     const knobSize = size * 0.44;
     const deadZone = radius * DEAD_ZONE_RATIO;
@@ -79,7 +80,7 @@ export const MoveJoystick: React.FC<Props> = ({ theme, size }) => {
                 backdropFilter: 'blur(2px)',
                 transition: 'background-color 120ms ease-out, border-color 120ms ease-out',
             }}
-            aria-label="이동 조이스틱"
+            aria-label={label}
         >
             <div style={{
                 position: 'absolute', left: '50%', top: '50%',

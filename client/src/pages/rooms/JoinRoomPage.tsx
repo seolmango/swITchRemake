@@ -42,7 +42,7 @@ export const JoinRoomPage: React.FC = () => {
             <RoundBox x={960} y={550} width={1180} height={820} type={2}/>
             <div className="form-stack" style={{ top: 295 }}>
                 <TextField label={t('rooms.roomId')} placeholder={t('rooms.roomIdPlaceholder')} value={roomId} maxLength={6} autoCapitalize="characters" onChange={(value) => setRoomId(value.toUpperCase())}/>
-                <TextField label={t('rooms.password')} placeholder={passwordNeeded ? t('rooms.passwordPlaceholder') : '—'} value={password} maxLength={12} type="password" disabled={!passwordNeeded} onChange={setPassword}/>
+                <TextField label={t('rooms.password')} placeholder={passwordNeeded ? t('rooms.passwordPlaceholder') : '—'} value={password} minLength={4} maxLength={8} inputMode="numeric" type="password" disabled={!passwordNeeded} onChange={setPassword}/>
                 <div className="status-message" role="status" aria-live="polite" style={{ color: themeColors(theme).muted }}>{message}</div>
                 <RoundButton width={540} height={106} type={1} content={t('rooms.join')} disabled={!valid} isLoading={loading} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
             </div>

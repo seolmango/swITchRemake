@@ -19,6 +19,8 @@ interface Props {
     players: readonly HudPlayer[];
     /** 지금 가리키는 칸(1..8). 손가락이 중립이면 null이고, 그대로 떼면 아무것도 안 나간다. */
     hover: number | null;
+    label: string;
+    hint: string;
 }
 
 /**
@@ -32,7 +34,7 @@ interface Props {
  * 방향은 여전히 **조이스틱 중심 기준**으로 잰다. 손가락이 있는 곳이 거기이기 때문이다.
  * 그림의 위치와 판정의 기준이 달라도 되는 이유는, 사람이 읽는 것이 각도이지 좌표가 아니라서다.
  */
-export const ActionWheel: React.FC<Props> = ({ theme, colorVision, mode, players, hover }) => {
+export const ActionWheel: React.FC<Props> = ({ theme, colorVision, mode, players, hover, label, hint }) => {
     const viewport = useViewportSize();
     // 가로로 누운 폰은 높이가 모자란다. 짧은 변을 기준으로 잡아야 위아래 칸이 잘리지 않는다.
     const shortSide = Math.min(viewport.width, viewport.height);
@@ -97,8 +99,8 @@ export const ActionWheel: React.FC<Props> = ({ theme, colorVision, mode, players
                     textAlign: 'center', color: mutedText(theme),
                     fontSize: HUD_METRICS.captionFont, fontWeight: 700, lineHeight: 1.6,
                 }}>
-                    {mode === 'switch' ? '스위치' : '이모지'}<br />
-                    <span style={{ opacity: 0.8 }}>밀어서 고르고 떼기</span>
+                    {label}<br />
+                    <span style={{ opacity: 0.8 }}>{hint}</span>
                 </div>
             </div>
         </div>,

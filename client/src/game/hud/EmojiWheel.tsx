@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types.ts';
 import { EMOJI_COUNT, emojiDataUri } from '../emoji.ts';
 import { Color } from '../../theme/color.ts';
@@ -23,6 +24,7 @@ const RADIUS_COMPACT = 104;
  * Clicking still works for mouse users, which legacy didn't offer.
  */
 export const EmojiWheel: React.FC<Props> = ({ theme, compact, onPick }) => {
+    const { t } = useTranslation();
     const radius = compact ? RADIUS_COMPACT : RADIUS;
     const slot = compact ? 60 : 78;
     const iconColor = theme === 1 ? Color.white : Color.black;
@@ -53,7 +55,7 @@ export const EmojiWheel: React.FC<Props> = ({ theme, compact, onPick }) => {
                                 border: `3px solid ${theme === 1 ? Color.smoke[2] : Color.gray[1]}`,
                             }}
                         >
-                            {uri && <img src={uri} alt={`emoji ${id}`} style={{ width: slot * 0.56, height: slot * 0.56 }} />}
+                            {uri && <img src={uri} alt={t('game.hud.emojiAlt', { emoji: id })} style={{ width: slot * 0.56, height: slot * 0.56 }} />}
                             <span style={{
                                 position: 'absolute', bottom: -4, right: -4,
                                 width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center',
@@ -70,7 +72,7 @@ export const EmojiWheel: React.FC<Props> = ({ theme, compact, onPick }) => {
                     textAlign: 'center', color: mutedText(theme), fontSize: HUD_METRICS.bodyFont, fontWeight: 700, lineHeight: 1.7,
                 }}>
                     Shift + 1~8<br />
-                    <span style={{ fontSize: HUD_METRICS.captionFont, fontWeight: 600 }}>Shift 놓으면 닫힘</span>
+                    <span style={{ fontSize: HUD_METRICS.captionFont, fontWeight: 600 }}>{t('game.hud.controls.releaseShift')}</span>
                 </div>
             </div>
         </div>

@@ -29,7 +29,7 @@ export interface SwitchGameProps {
     matchReady?: boolean;
     latencyMs?: number | null;
     estimatedTps?: number | null;
-    /** Only the live /game route recommends landscape; replay/help embeds must stay quiet. */
+    /** Live matches and training recommend landscape; replay/help embeds stay quiet. */
     suggestLandscape?: boolean;
 }
 

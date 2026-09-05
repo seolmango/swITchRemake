@@ -11,6 +11,7 @@ import { refreshCookieOptions } from './refresh-cookie';
 import { GuestRefreshDto } from './dto/guest-refresh.dto';
 import { LoginMfaDto, LoginMfaEmailDto } from '../mfa/dto/login-mfa.dto';
 import { TRUSTED_DEVICE_COOKIE, trustedDeviceCookieOptions } from '../mfa/trusted-device-cookie';
+import { BlockDuringMaintenance } from '../maintenance/maintenance.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -33,6 +34,7 @@ export class AuthController {
     }
 
     @Post('login')
+    @BlockDuringMaintenance()
     @RateLimiter({ limit: 5, ttl: 60000 })
     async login(
         @Body() loginDto: LoginDto,
@@ -55,6 +57,7 @@ export class AuthController {
     }
 
     @Post('login/mfa')
+    @BlockDuringMaintenance()
     @RateLimiter({ limit: 5, ttl: 60_000 })
     async completeMfaLogin(
         @Body() dto: LoginMfaDto,
@@ -87,6 +90,7 @@ export class AuthController {
     }
 
     @Post('login/mfa/email')
+    @BlockDuringMaintenance()
     @RateLimiter({ limit: 5, ttl: 60_000 })
     resendMfaLoginEmail(@Body() dto: LoginMfaEmailDto) {
         return this.authService.resendLoginMfaEmail(dto.challengeToken);
@@ -125,6 +129,7 @@ export class AuthController {
     }
 
     @Post('guest')
+    @BlockDuringMaintenance()
     @RateLimiter({ limit: 5, ttl: 60_000 })
     async guest(@Req() req: FastifyRequest) {
         return this.authService.createGuest(req.ip);

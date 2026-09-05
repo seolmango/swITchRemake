@@ -18,6 +18,8 @@ import { MatchesModule } from './matches/matches.module';
 import { AdminModule } from './admin/admin.module';
 import { ReportsModule } from './reports/reports.module';
 import { RetentionModule } from './retention/retention.module';
+import { MaintenanceModule } from './maintenance/maintenance.module';
+import { MaintenanceGuard } from './maintenance/maintenance.guard';
 
 @Module({
     imports: [
@@ -30,6 +32,7 @@ import { RetentionModule } from './retention/retention.module';
         }),
         DatabaseModule,
         RedisModule,
+        MaintenanceModule,
         EmailModule,
         AuthModule,
         UserModule,
@@ -56,7 +59,11 @@ import { RetentionModule } from './retention/retention.module';
         {
             provide: APP_GUARD,
             useClass: RateLimiterGuard,
-        }
+        },
+        {
+            provide: APP_GUARD,
+            useClass: MaintenanceGuard,
+        },
     ],
 })
 export class AppModule {}

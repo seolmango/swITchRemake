@@ -4,4 +4,4 @@ export const isNickname = (value: string) => value.length >= 2 && value.length <
 export const isVerificationCode = (value: string) => /^\d{6}$/.test(value);
 export const isRoomName = (value: string) => value.trim().length >= 1 && value.trim().length <= 20;
 export const isRoomId = (value: string) => /^[A-HJ-NP-Z2-9]{6}$/.test(value);
-export const isRoomPassword = (value: string) => value.length >= 1 && value.length <= 12;
+export const isRoomPassword = (value: string) => /^\d{4,8}$/.test(value);

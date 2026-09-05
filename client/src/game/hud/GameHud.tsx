@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { EngineMode, type Theme } from '../types.ts';
 import type { HudState } from './hudTypes.ts';
 import { PlayerList } from './PlayerList.tsx';
@@ -40,6 +41,7 @@ interface Props {
 export const GameHud: React.FC<Props> = ({
     theme, mode, hud, colorVision, showControlHints, matchReady, onUseMovementSkill, onSwitchTarget, onSpectate, onEmoji,
 }) => {
+    const { t } = useTranslation();
     const [shiftHeld, setShiftHeld] = useState(false);
     const rootRef = useRef<HTMLDivElement | null>(null);
     const [compact, setCompact] = useState(false);
@@ -161,7 +163,7 @@ export const GameHud: React.FC<Props> = ({
                         movementSkill={hud.movementSkill}
                         switchSkill={hud.switchSkill}
                         onUseMovement={onUseMovementSkill}
-                        switchBlockedReason={self?.isTagger ? '술래는 사용 불가' : null}
+                        switchBlockedReason={self?.isTagger ? t('game.hud.taggerCannotSwitch') : null}
                     />
                 </div>
             )}

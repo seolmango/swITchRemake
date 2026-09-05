@@ -43,7 +43,7 @@ export const CreateRoomPage: React.FC = () => {
             <div className="form-stack" style={{ top: 265 }}>
                 <TextField label={t('rooms.roomName')} placeholder={t('rooms.roomNamePlaceholder')} value={name} maxLength={20} onChange={setName}/>
                 <Checkbox checked={privateRoom} onChange={(checked) => { setPrivateRoom(checked); if (!checked) setPassword(''); }} label={t('rooms.usePassword')}/>
-                <TextField label={t('rooms.password')} placeholder={t('rooms.passwordPlaceholder')} value={password} maxLength={12} type="password" disabled={!privateRoom} onChange={setPassword}/>
+                <TextField label={t('rooms.password')} placeholder={t('rooms.passwordPlaceholder')} value={password} minLength={4} maxLength={8} inputMode="numeric" type="password" disabled={!privateRoom} onChange={setPassword}/>
                 <div className="status-message" role="status" aria-live="polite" style={{ color: themeColors(theme).muted }}>{message}</div>
                 <RoundButton width={600} height={106} type={1} content={t('rooms.create')} disabled={!valid} isLoading={loading} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
             </div>

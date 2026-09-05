@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { SwitchEngine } from '../SwitchEngine.ts';
 import type { Theme } from '../types.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function PerformanceStats({ theme, engine, latencyMs, estimatedTps }: Props) {
+    const { t } = useTranslation();
     const showLatency = useSettingsStore((state) => state.showLatency);
     const showFps = useSettingsStore((state) => state.showFps);
     const showTps = useSettingsStore((state) => state.showTps);
@@ -37,7 +39,7 @@ export function PerformanceStats({ theme, engine, latencyMs, estimatedTps }: Pro
 
     return (
         <div
-            aria-label="Network and rendering diagnostics"
+            aria-label={t('game.hud.performance.label')}
             style={{
                 ...panel(theme),
                 position: 'absolute',
@@ -56,11 +58,11 @@ export function PerformanceStats({ theme, engine, latencyMs, estimatedTps }: Pro
                 pointerEvents: 'none',
             }}
         >
-            {showLatency && <span title="Round-trip time">RTT {latencyMs === null ? '--' : `${latencyMs} ms`}</span>}
+            {showLatency && <span title={t('game.hud.performance.rtt')}>RTT {latencyMs === null ? '--' : `${latencyMs} ms`}</span>}
             {showFps && <span>FPS {fps ?? '--'}</span>}
             {/* 시뮬레이션 tick/초다. 스냅샷은 초당 30번 오지만 그 안의 tick 번호가 2씩 오르므로
                 정상값은 60이다. 라벨만 보면 "스냅샷 초당 횟수"로 읽혀서 실제로 오해가 있었다. */}
-            {showTps && <span title="Server simulation ticks per second (60). Snapshots arrive at 30/s, two ticks apart.">TPS≈ {estimatedTps?.toFixed(1) ?? '--'}</span>}
+            {showTps && <span title={t('game.hud.performance.tps')}>TPS≈ {estimatedTps?.toFixed(1) ?? '--'}</span>}
         </div>
     );
 }

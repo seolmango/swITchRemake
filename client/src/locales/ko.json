@@ -67,7 +67,7 @@
     "roomNamePlaceholder": "함께 찾기 쉬운 이름",
     "usePassword": "비공개 방으로 만들기",
     "password": "방 비밀번호",
-    "passwordPlaceholder": "12자 이내 비밀번호",
+    "passwordPlaceholder": "4~8자리 숫자",
     "roomId": "방 코드",
     "roomIdPlaceholder": "6자리 영문·숫자 코드",
     "private": "비공개 방",
@@ -579,6 +579,45 @@
     },
     "playerListExpand": "플레이어 목록 펼치기",
     "playerListCollapse": "플레이어 목록 접기",
+    "hud": {
+      "alive": "생존",
+      "player": "플레이어 {{player}}",
+      "switchTarget": "스위치 대상 ({{player}})",
+      "watchPlayer": "이 플레이어 관전",
+      "tagger": "술래",
+      "watching": "보는 중",
+      "elapsed": "경과",
+      "eliminatedSpectating": "탈락 · 관전",
+      "spectating": "관전 중",
+      "youAreTagger": "당신이 술래입니다",
+      "taggerCannotSwitch": "술래는 사용 불가",
+      "emojiAlt": "이모지 {{emoji}}",
+      "controls": {
+        "title": "조작",
+        "move": "이동 (방향키도 가능)",
+        "useSkill": "{{skill}} 사용",
+        "movementSkill": "이동 스킬",
+        "switch": "해당 번호 플레이어와 스위치",
+        "emoji": "이모지 (Shift를 누르고 있으면 목록)",
+        "wheel": "휠",
+        "drag": "드래그",
+        "camera": "줌 / 시점 이동 (자유시점)",
+        "releaseShift": "Shift 놓으면 닫힘"
+      },
+      "touch": {
+        "moveJoystick": "이동 조이스틱",
+        "switchJoystick": "스위치 조이스틱",
+        "emojiJoystick": "이모지 조이스틱",
+        "switch": "스위치",
+        "emoji": "이모지",
+        "pick": "밀어서 고르고 떼기"
+      },
+      "performance": {
+        "label": "네트워크·렌더링 진단",
+        "rtt": "왕복 지연 시간",
+        "tps": "서버 틱/초(60), 스냅샷 30회/초"
+      }
+    },
     "skillRejected": {
       "notAlive": "탈락한 뒤에는 스킬을 사용할 수 없어요.",
       "noSkill": "이 스킬 슬롯은 사용할 수 없어요.",

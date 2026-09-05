@@ -42,7 +42,12 @@ test('HTTP 본문과 연결 시간, 전역 DTO의 미등록 필드에 상한을 
 
 test('운영자 q가 배열이면 서비스에 넘기지 않고 400으로 거절한다', async () => {
     let called = false;
-    const controller = new AdminController({} as never, { lookup: async () => { called = true; } } as never, {} as never);
+    const controller = new AdminController(
+        {} as never,
+        { lookup: async () => { called = true; } } as never,
+        {} as never,
+        {} as never,
+    );
     await assert.rejects(controller.lookupPlayer({ user: { id: 1 } } as never, ['a', 'b']), BadRequestException);
     assert.equal(called, false);
 });

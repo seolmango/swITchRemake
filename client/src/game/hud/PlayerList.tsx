@@ -53,7 +53,7 @@ export const PlayerList: React.FC<Props> = ({
 
     const summary = (
         <>
-            <span>생존</span>
+            <span>{t('game.hud.alive')}</span>
             <span style={{ color: bodyText(theme), fontFamily: HUD_DISPLAY_FONT, fontSize: 22, fontWeight: 400 }}>
                 {aliveCount}<span style={{ color: mutedText(theme), fontFamily: HUD_FONT, fontSize: HUD_METRICS.captionFont, fontWeight: 700 }}> / {players.length}</span>
             </span>
@@ -114,7 +114,9 @@ export const PlayerList: React.FC<Props> = ({
                                 else if (canWatch) onSpectate(p.id);
                             }}
                             role={clickable ? 'button' : undefined}
-                            title={canTarget ? `스위치 대상 (${playerLabel(p.id)})` : canWatch ? '이 플레이어 관전' : undefined}
+                            title={canTarget
+                                ? t('game.hud.switchTarget', { player: playerLabel(p.id) })
+                                : canWatch ? t('game.hud.watchPlayer') : undefined}
                             style={{
                                 display: 'flex', alignItems: 'center', gap: 9,
                                 minHeight: 56, boxSizing: 'border-box',
@@ -142,13 +144,13 @@ export const PlayerList: React.FC<Props> = ({
                                 flex: '0 0 12em', minWidth: 0, fontSize: HUD_METRICS.bodyFont, fontWeight: isSelf ? 800 : 600,
                                 color: Color.black, whiteSpace: 'nowrap',
                                 textDecoration: p.alive ? 'none' : 'line-through',
-                            }}>{p.nickname || `Player ${playerLabel(p.id)}`}</span>
+                            }}>{p.nickname || t('game.hud.player', { player: playerLabel(p.id) })}</span>
 
                             {compact ? null : p.isTagger ? (
                                 <span style={{
                                     ...surface(theme, 'red', true),
                                     flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
-                                }}>술래</span>
+                                }}>{t('game.hud.tagger')}</span>
                             ) : canTarget ? (
                                 <span style={{
                                     ...surface(theme, 'blue', true),
@@ -158,7 +160,7 @@ export const PlayerList: React.FC<Props> = ({
                                 <span style={{
                                     flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
                                     background: Color.black, color: Color.white,
-                                }}>보는 중</span>
+                                }}>{t('game.hud.watching')}</span>
                             ) : null}
                         </div>
                     );

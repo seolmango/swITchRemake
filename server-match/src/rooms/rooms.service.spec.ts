@@ -132,6 +132,36 @@ test('room-not-found and bad-password replies are externally masked alike', asyn
     });
 });
 
+test('형식이 맞는 비밀번호는 없는 방과 틀린 비밀번호의 응답을 구분시키지 않는다', async () => {
+    const missingService = makeService(new FakeRedis());
+    let missingResponse: unknown;
+    await assert.rejects(missingService.join(1, 'missing-room', '1234', '203.0.113.1'), (error: unknown) => {
+        assert.ok(error instanceof ConflictException);
+        missingResponse = error.getResponse();
+        return true;
+    });
+
+    const privateRedis = new FakeRedis();
+    addLiveRoom(privateRedis, 'private-room', 'game-a', true);
+    const privateService = makeService(privateRedis);
+    (privateService as any).sendCommand = async (): Promise<ControlReply> => ({
+        v: CONTROL_VERSION,
+        requestId: 'request',
+        serverId: 'game-a',
+        ok: false,
+        code: ControlErrorCode.BadPassword,
+        payload: null,
+    });
+    let badPasswordResponse: unknown;
+    await assert.rejects(privateService.join(1, 'private-room', '1234', '203.0.113.1'), (error: unknown) => {
+        assert.ok(error instanceof ConflictException);
+        badPasswordResponse = error.getResponse();
+        return true;
+    });
+
+    assert.deepEqual(missingResponse, badPasswordResponse);
+});
+
 test('quick join skips cooldown and kick-marked rooms before issuing a command', async () => {
     const redis = new FakeRedis();
     redis.sorted.set('dev:rooms:waiting', ['cooldown', 'kicked', 'open']);

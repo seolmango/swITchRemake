@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types.ts';
 import { Color } from '../../theme/color.ts';
 import { HUD_DISPLAY_FONT, HUD_FONT, HUD_METRICS, bodyText, mutedText, panel } from './hudTheme.ts';
@@ -23,12 +24,13 @@ const Key: React.FC<{ theme: Theme; children: React.ReactNode }> = ({ theme, chi
  * them — legacy had exactly this problem (its only hint was a code comment in the keymap).
  */
 export const ControlsGuide: React.FC<Props> = ({ theme, movementSkillLabel }) => {
+    const { t } = useTranslation();
     const rows: [React.ReactNode, string][] = [
-        [<><Key theme={theme}>W</Key> <Key theme={theme}>A</Key> <Key theme={theme}>S</Key> <Key theme={theme}>D</Key></>, '이동 (방향키도 가능)'],
-        [<Key theme={theme}>Space</Key>, movementSkillLabel ? `${movementSkillLabel} 사용` : '이동 스킬'],
-        [<><Key theme={theme}>1</Key> ~ <Key theme={theme}>8</Key></>, '해당 번호 플레이어와 스위치'],
-        [<><Key theme={theme}>Shift</Key> + <Key theme={theme}>1</Key>~<Key theme={theme}>8</Key></>, '이모지 (Shift를 누르고 있으면 목록)'],
-        [<><Key theme={theme}>휠</Key> / <Key theme={theme}>드래그</Key></>, '줌 / 시점 이동 (자유시점)'],
+        [<><Key theme={theme}>W</Key> <Key theme={theme}>A</Key> <Key theme={theme}>S</Key> <Key theme={theme}>D</Key></>, t('game.hud.controls.move')],
+        [<Key theme={theme}>Space</Key>, movementSkillLabel ? t('game.hud.controls.useSkill', { skill: movementSkillLabel }) : t('game.hud.controls.movementSkill')],
+        [<><Key theme={theme}>1</Key> ~ <Key theme={theme}>8</Key></>, t('game.hud.controls.switch')],
+        [<><Key theme={theme}>Shift</Key> + <Key theme={theme}>1</Key>~<Key theme={theme}>8</Key></>, t('game.hud.controls.emoji')],
+        [<><Key theme={theme}>{t('game.hud.controls.wheel')}</Key> / <Key theme={theme}>{t('game.hud.controls.drag')}</Key></>, t('game.hud.controls.camera')],
     ];
 
     return (
@@ -37,7 +39,7 @@ export const ControlsGuide: React.FC<Props> = ({ theme, movementSkillLabel }) =>
             padding: 18, minWidth: 360,
             fontFamily: HUD_FONT,
         }}>
-            <div style={{ color: mutedText(theme), fontFamily: HUD_DISPLAY_FONT, fontSize: 18, fontWeight: 400, letterSpacing: 0.5, paddingBottom: 13 }}>조작</div>
+            <div style={{ color: mutedText(theme), fontFamily: HUD_DISPLAY_FONT, fontSize: 18, fontWeight: 400, letterSpacing: 0.5, paddingBottom: 13 }}>{t('game.hud.controls.title')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
                 {rows.map(([keys, desc], i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>

@@ -67,7 +67,7 @@
     "roomNamePlaceholder": "A name your friends can find",
     "usePassword": "Make this room private",
     "password": "Room password",
-    "passwordPlaceholder": "Up to 12 characters",
+    "passwordPlaceholder": "4–8 digits",
     "roomId": "Room code",
     "roomIdPlaceholder": "6 letters or numbers",
     "private": "Private room",
@@ -579,6 +579,45 @@
     },
     "playerListExpand": "Expand player list",
     "playerListCollapse": "Collapse player list",
+    "hud": {
+      "alive": "Left",
+      "player": "Player {{player}}",
+      "switchTarget": "Switch ({{player}})",
+      "watchPlayer": "Watch",
+      "tagger": "It",
+      "watching": "Viewing",
+      "elapsed": "Time",
+      "eliminatedSpectating": "Out · View",
+      "spectating": "Watching",
+      "youAreTagger": "You're it",
+      "taggerCannotSwitch": "No switch",
+      "emojiAlt": "Emoji {{emoji}}",
+      "controls": {
+        "title": "Controls",
+        "move": "Move (↑↓←→)",
+        "useSkill": "Use {{skill}}",
+        "movementSkill": "Move skill",
+        "switch": "Switch to #",
+        "emoji": "Emoji (hold Shift)",
+        "wheel": "Wheel",
+        "drag": "Drag",
+        "camera": "Zoom / pan",
+        "releaseShift": "Release Shift"
+      },
+      "touch": {
+        "moveJoystick": "Move joystick",
+        "switchJoystick": "Switch joystick",
+        "emojiJoystick": "Emoji joystick",
+        "switch": "Switch",
+        "emoji": "Emoji",
+        "pick": "Slide, lift"
+      },
+      "performance": {
+        "label": "Network and render stats",
+        "rtt": "Round-trip time",
+        "tps": "Server ticks/s (60); snapshots 30/s"
+      }
+    },
     "skillRejected": {
       "notAlive": "You cannot use skills after elimination.",
       "noSkill": "That skill slot is unavailable.",

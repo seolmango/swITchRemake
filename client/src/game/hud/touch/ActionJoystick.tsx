@@ -14,6 +14,9 @@ interface Props {
     size: number;
     mode: ActionMode;
     players: readonly HudPlayer[];
+    joystickLabel: string;
+    wheelLabel: string;
+    wheelHint: string;
     onPick: (mode: ActionMode, slot: number) => void;
 }
 
@@ -30,7 +33,9 @@ const DEAD_ZONE_RATIO = 0.3;
  * 재배치돼서 손이 기억한 방향이 매번 달라진다. 유효하지 않은 번호를 고를 수 있는 것은 키보드도
  * 마찬가지다 — 아무 때나 잘못된 숫자를 누를 수 있다.
  */
-export const ActionJoystick: React.FC<Props> = ({ theme, colorVision, size, mode, players, onPick }) => {
+export const ActionJoystick: React.FC<Props> = ({
+    theme, colorVision, size, mode, players, joystickLabel, wheelLabel, wheelHint, onPick,
+}) => {
     const baseRef = useRef<HTMLDivElement | null>(null);
     const pointerId = useRef<number | null>(null);
     const [open, setOpen] = useState(false);
@@ -58,7 +63,15 @@ export const ActionJoystick: React.FC<Props> = ({ theme, colorVision, size, mode
     return (
         <>
             {open && (
-                <ActionWheel theme={theme} colorVision={colorVision} mode={mode} players={players} hover={hover} />
+                <ActionWheel
+                    theme={theme}
+                    colorVision={colorVision}
+                    mode={mode}
+                    players={players}
+                    hover={hover}
+                    label={wheelLabel}
+                    hint={wheelHint}
+                />
             )}
             <div
                 ref={baseRef}
@@ -87,7 +100,7 @@ export const ActionJoystick: React.FC<Props> = ({ theme, colorVision, size, mode
                     fontFamily: HUD_FONT, fontWeight: 800, fontSize: size * 0.2,
                     color: theme === 1 ? Color.white : Color.black,
                 }}
-                aria-label={mode === 'switch' ? '스위치 조이스틱' : '이모지 조이스틱'}
+                aria-label={joystickLabel}
             >
                 {mode === 'switch' ? 'SW' : '☺'}
             </div>

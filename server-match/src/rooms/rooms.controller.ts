@@ -5,6 +5,7 @@ import { CreateRoomDto } from './dto/create-room.dto';
 import { JoinRoomDto } from './dto/join-room.dto';
 import { RoomsService } from './rooms.service';
 import type { ActorId } from 'shared';
+import { BlockDuringMaintenance } from '../maintenance/maintenance.decorator';
 
 type AuthenticatedRequest = {
     user: { id: ActorId; nickname?: string; guest?: boolean };
@@ -24,6 +25,7 @@ export class RoomsController {
     }
 
     @Post()
+    @BlockDuringMaintenance()
     // 방 생성·참가·빠른 참가는 모두 §9의 "좁게" 등급 한도 하나를 공유한다.
     @RateLimiter({ limit: 15, ttl: 60_000 })
     async create(@Req() req: AuthenticatedRequest, @Body() dto: CreateRoomDto) {
@@ -31,6 +33,7 @@ export class RoomsController {
     }
 
     @Post('quick-join')
+    @BlockDuringMaintenance()
     // 신원 종류와 무관하게 같은 참가 한도를 쓴다. IP 버킷은 가드에서 NAT 배수로 더 넓다.
     @RateLimiter({ limit: 15, ttl: 60_000 })
     async quickJoin(@Req() req: AuthenticatedRequest) {
@@ -38,6 +41,7 @@ export class RoomsController {
     }
 
     @Post('code/:roomCode/join')
+    @BlockDuringMaintenance()
     // 신원 종류와 무관하게 같은 참가 한도를 쓴다. IP 버킷은 가드에서 NAT 배수로 더 넓다.
     @RateLimiter({ limit: 15, ttl: 60_000 })
     async joinByCode(
@@ -55,6 +59,7 @@ export class RoomsController {
     }
 
     @Post(':roomId/join')
+    @BlockDuringMaintenance()
     // 신원 종류와 무관하게 같은 참가 한도를 쓴다. IP 버킷은 가드에서 NAT 배수로 더 넓다.
     @RateLimiter({ limit: 15, ttl: 60_000 })
     async join(
