@@ -16,7 +16,7 @@ export class HealthController {
     ) {}
 
     @Get(['', 'ready'])
-    @RateLimiter({ anon: 120, guest: 120, account: 120, ttl: 60000 })
+    @RateLimiter({ limit: 120, ttl: 60000 })
     async readiness() {
         try {
             const [, redisReady] = await Promise.all([this.db.execute(sql`SELECT 1`), this.redis.ping()]);
@@ -32,7 +32,7 @@ export class HealthController {
     }
 
     @Get('live')
-    @RateLimiter({ anon: 120, guest: 120, account: 120, ttl: 60000 })
+    @RateLimiter({ limit: 120, ttl: 60000 })
     liveness() {
         return { status: 'alive' as const, timestamp: Date.now() };
     }

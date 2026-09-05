@@ -28,14 +28,14 @@ export class AdminController {
      */
     @Get('me')
     @NeedAccount()
-    @RateLimiter({ anon: 0, guest: 0, account: 60, ttl: 60_000 })
+    @RateLimiter({ limit: 60, ttl: 60_000 })
     async me(@Req() req: AccountRequest) {
         return { admin: await isAdmin(this.db, req.user.id) };
     }
 
     @Get('overview')
     @NeedAdmin()
-    @RateLimiter({ anon: 0, guest: 0, account: 120, ttl: 60_000 })
+    @RateLimiter({ limit: 120, ttl: 60_000 })
     async overview() {
         return this.adminService.overview();
     }
@@ -48,16 +48,16 @@ export class AdminController {
      */
     @Get('players')
     @NeedAdmin()
-    @RateLimiter({ anon: 0, guest: 0, account: 60, ttl: 60_000 })
+    @RateLimiter({ limit: 60, ttl: 60_000 })
     async lookupPlayer(@Req() req: AccountRequest, @Query('q') query: string | string[] | undefined) {
         if (typeof query !== 'string') throw new BadRequestException('q must be a single string');
         return this.playerLookup.lookup(req.user.id, query.trim());
     }
 
-    /** 감사 로그. append-only라 커서는 id 하나면 된다. */
+    /** 감사 로그. 보존 기간 안에서는 append-only라 커서는 id 하나면 된다. */
     @Get('audit')
     @NeedAdmin()
-    @RateLimiter({ anon: 0, guest: 0, account: 60, ttl: 60_000 })
+    @RateLimiter({ limit: 60, ttl: 60_000 })
     async auditLog(@Query('limit') limit?: string, @Query('before') before?: string) {
         return this.playerLookup.auditLog(Number(limit) || 20, before ? Number(before) : undefined);
     }

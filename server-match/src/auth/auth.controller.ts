@@ -18,20 +18,20 @@ export class AuthController {
     ) {}
 
     @Post('verify')
-    @RateLimiter({ anon: 5, guest: 5, account: 7, ttl: 60000 })
+    @RateLimiter({ limit: 5, ttl: 60000 })
     async sendVerificationEmail(@Body() sendEmailDto: SendEmailDto) {
         return this.authService.sendVerificationCodeEmail(sendEmailDto);
     }
 
     @Post('password/reset')
     // 코드를 맞힐 때까지 두드리는 것을 막는다. 정상 사용자는 한 번이면 된다.
-    @RateLimiter({ anon: 5, guest: 5, account: 5, ttl: 60_000 })
+    @RateLimiter({ limit: 5, ttl: 60_000 })
     async resetPassword(@Body() dto: ResetPasswordDto) {
         return this.authService.resetPassword(dto);
     }
 
     @Post('login')
-    @RateLimiter({ anon: 5, guest: 5, account: 7, ttl: 60000 })
+    @RateLimiter({ limit: 5, ttl: 60000 })
     async login(
         @Body() loginDto: LoginDto,
         @Req() req: FastifyRequest,
@@ -51,7 +51,7 @@ export class AuthController {
     }
 
     @Post('refresh')
-    @RateLimiter({ anon: 5, guest: 5, account: 7, ttl: 60000 })
+    @RateLimiter({ limit: 5, ttl: 60000 })
     async refresh(
         @Req() req: FastifyRequest,
         @Res({ passthrough: true }) res: FastifyReply,
@@ -83,13 +83,13 @@ export class AuthController {
     }
 
     @Post('guest')
-    @RateLimiter({ anon: 5, guest: 0, account: 0, ttl: 60_000 })
+    @RateLimiter({ limit: 5, ttl: 60_000 })
     async guest(@Req() req: FastifyRequest) {
         return this.authService.createGuest(req.ip);
     }
 
     @Post('guest/refresh')
-    @RateLimiter({ anon: 10, guest: 10, account: 0, ttl: 60_000 })
+    @RateLimiter({ limit: 5, ttl: 60_000 })
     async refreshGuest(@Body() body: GuestRefreshDto) {
         return this.authService.refreshGuest(body.refreshToken);
     }

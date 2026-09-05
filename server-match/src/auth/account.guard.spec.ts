@@ -25,8 +25,13 @@ test('account-only guard accepts a numeric account with a v4 session id', () => 
     }) as never), true);
 });
 
-test('personal stats and match history routes both require the account guard', () => {
-    for (const handler of [UserController.prototype.getMyStats, UserController.prototype.getMyMatches]) {
+test('개인 전적과 약관 동의 경로는 모두 계정 가드를 요구한다', () => {
+    for (const handler of [
+        UserController.prototype.getMyStats,
+        UserController.prototype.getMyMatches,
+        UserController.prototype.getLegalConsent,
+        UserController.prototype.updateLegalConsent,
+    ]) {
         const guards = Reflect.getMetadata(GUARDS_METADATA, handler) as unknown[] | undefined;
         assert.ok(guards?.includes(AccountGuard));
     }

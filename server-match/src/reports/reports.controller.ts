@@ -13,7 +13,7 @@ export class ReportsController {
 
     @Post()
     @NeedAccount()
-    @RateLimiter({ anon: 0, guest: 0, account: 5, ttl: 60_000 })
+    @RateLimiter({ limit: 5, ttl: 60_000 })
     async create(@Req() req: AccountRequest, @Body() dto: CreateReportDto) {
         return this.reports.create(req.user.id, dto);
     }

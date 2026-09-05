@@ -13,7 +13,7 @@ export class MatchesController {
     constructor(private readonly matches: MatchesService) {}
 
     @Get(':matchId/result')
-    @RateLimiter({ anon: 0, guest: 30, account: 60, ttl: 60_000 })
+    @RateLimiter({ limit: 60, ttl: 60_000 })
     async getResult(
         @Req() req: AuthenticatedRequest,
         // uuid가 아니면 Postgres 파싱 오류로 500이 난다. 형식은 여기서 거른다.

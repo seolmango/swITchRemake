@@ -34,7 +34,7 @@ export function assertRateLimitPolicy(appEnv: string | undefined): void {
     }
 }
 
-const DEFAULT_OPTIONS: RateLimitOptions = { anon: 20, guest: 30, account: 50, ttl: 60_000 };
+const DEFAULT_OPTIONS: RateLimitOptions = { limit: 60, ttl: 60_000 };
 
 abstract class RedisRateGuard {
     constructor(
@@ -84,10 +84,9 @@ export class PreAuthIpRateLimiterGuard extends RedisRateGuard {
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const req = context.switchToHttp().getRequest<Record<string, any>>();
         const options = this.options(context);
-        const widestActorLimit = Math.max(options.anon, options.guest, options.account);
         await this.consume(
             `auth-rate:ip:${this.security.hmacIp(String(req.ip))}`,
-            widestActorLimit * NAT_IP_FACTOR,
+            options.limit * NAT_IP_FACTOR,
             options.ttl,
         );
         return true;
@@ -100,23 +99,16 @@ export class RateLimiterGuard extends RedisRateGuard {
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const req = context.switchToHttp().getRequest<Record<string, any>>();
         const options = this.options(context);
-        const actorLimit = req.user?.guest === true
-            ? options.guest
-            : req.user?.guest === false
-                ? options.account
-                : options.anon;
-
         if (req.user) {
             const kind = req.user.guest ? 'guest' : 'account';
-            await this.consume(`auth-rate:actor:${kind}:${req.user.id}`, actorLimit, options.ttl);
+            await this.consume(`auth-rate:actor:${kind}:${req.user.id}`, options.limit, options.ttl);
         }
 
         const target = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
         if (target) {
-            const positive = [options.anon, options.guest, options.account].filter((value) => value > 0);
             await this.consume(
                 `auth-rate:target:${target}`,
-                positive.length ? Math.min(...positive) : 0,
+                options.limit,
                 options.ttl,
             );
         }

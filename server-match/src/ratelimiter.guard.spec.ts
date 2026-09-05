@@ -49,7 +49,7 @@ function guardHarness(request: Record<string, any>, limit = 2) {
         },
         ttlMilliseconds: async () => 60_000,
     };
-    const reflector = { get: () => ({ anon: limit, guest: limit, account: limit, ttl: 60_000 }) };
+    const reflector = { get: () => ({ limit, ttl: 60_000 }) };
     const security = { hmacIp: (ip: string) => `hmac:${ip}` };
     const context = {
         getHandler: () => null,
@@ -91,4 +91,16 @@ test('잘못된 Bearer도 JWT 검증 전에 IP 버킷 비용을 낸다', async (
     const harness = guardHarness({ ip: '203.0.113.8', headers: { authorization: 'Bearer invalid' } });
     await harness.pre.canActivate(harness.context as never);
     assert.equal(harness.counts.get('auth-rate:ip:hmac:203.0.113.8'), 1);
+});
+
+test('게스트와 계정 actor는 같은 기능 한도를 쓰고 IP 버킷은 NAT 배수로 더 넓다', async () => {
+    for (const user of [{ id: 'g:one', guest: true }, { id: 7, guest: false }]) {
+        const harness = guardHarness({ ip: '203.0.113.9', user }, 1);
+        await harness.actor.canActivate(harness.context as never);
+        await assert.rejects(harness.actor.canActivate(harness.context as never), HttpException);
+    }
+
+    const ip = guardHarness({ ip: '203.0.113.10' }, 1);
+    for (let count = 0; count < 4; count++) await ip.pre.canActivate(ip.context as never);
+    await assert.rejects(ip.pre.canActivate(ip.context as never), HttpException);
 });
