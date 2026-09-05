@@ -19,6 +19,25 @@ export interface RegistrationAgreements {
     privacyPolicy: LegalAcceptance;
 }
 
+/**
+ * 문서 끝의 작성자 메모를 잘라낸다.
+ *
+ * `legal/`의 두 파일에는 "공개 전에 지운다"고 적힌 내부 메모가 붙어 있다. 그런데 화면은 이
+ * 파일을 그대로 옮겨 담으므로(§14.2), 지우는 것을 잊으면 **이용자가 내부 메모를 읽게 된다.**
+ * 실제로 그러고 있었다 — 브라우저 점검이 잡았다.
+ *
+ * 출시 직전에 사람이 지우기를 기대하지 않고 읽는 지점에서 자른다. 잊어버릴 수 없는 쪽이 낫다.
+ * 메모는 문서 맨 끝에만 오고, 바로 앞의 구분선도 함께 걷어낸다.
+ */
+export const stripInternalNotes = (source: string): string => {
+    const lines = source.replace(/\r\n?/gu, '\n').split('\n');
+    const memoAt = lines.findIndex((line) => /^#{1,6}\s+.*작성자 메모/u.test(line));
+    if (memoAt === -1) return source;
+    let end = memoAt;
+    while (end > 0 && (lines[end - 1]!.trim() === '' || /^-{3,}$/u.test(lines[end - 1]!.trim()))) end -= 1;
+    return `${lines.slice(0, end).join('\n')}\n`;
+};
+
 export const extractLegalVersion = (source: string): string => {
     const version = source.match(/^\s*-\s*버전:\s*(.+?)\s*$/mu)?.[1];
     if (!version) throw new Error('법률 문서에서 버전을 찾을 수 없습니다.');
@@ -27,13 +46,13 @@ export const extractLegalVersion = (source: string): string => {
 
 export const PRIVACY_POLICY: LegalDocument = {
     kind: 'privacyPolicy',
-    source: privacyPolicySource,
+    source: stripInternalNotes(privacyPolicySource),
     version: extractLegalVersion(privacyPolicySource),
 };
 
 export const TERMS_OF_SERVICE: LegalDocument = {
     kind: 'termsOfService',
-    source: termsOfServiceSource,
+    source: stripInternalNotes(termsOfServiceSource),
     version: extractLegalVersion(termsOfServiceSource),
 };
 

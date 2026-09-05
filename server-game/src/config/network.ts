@@ -1,3 +1,4 @@
+import { ROOM_TIMING } from 'shared';
 /**
  * 네트워크와 루프 수치. 밸런스가 아니라 전송·부하에 관한 값이다.
  *
@@ -62,7 +63,8 @@ export const NETWORK = Object.freeze({
 
     // ── 방 수명 ──
     COUNTDOWN_MS: 3_000,
-    POST_GAME_MS: 10_000,
+    /** 원본은 shared다 — 결과창 길이는 클라이언트도 알아야 막대를 그린다(§0). */
+    POST_GAME_MS: ROOM_TIMING.POST_GAME_MS,
 
     // ── 시작 잠금 ──
     /** 참가가 걸어주는 잠금. 들어온 사람이 로드아웃을 고를 시간이다. */

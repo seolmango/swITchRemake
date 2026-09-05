@@ -25,7 +25,7 @@ const redis = (): Redis => {
 };
 
 export interface SinkMail {
-    kind: 'signup' | 'reset-password' | 'delete';
+    kind: 'signup' | 'reset-password' | 'delete' | 'mfa';
     subject: string;
     code: string;
     sentAt: string;

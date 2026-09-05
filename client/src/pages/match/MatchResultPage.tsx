@@ -1,3 +1,4 @@
+import { ROOM_TIMING } from 'shared';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +18,9 @@ import { createResultImage, shareOrSaveResultImage } from '../../utils/resultIma
 import { isValidMatchId } from '../../utils/matchId.ts';
 import { matchResultWinners } from '../../utils/matchResultWinners.ts';
 import { colorVisionPalette, userColorsFor } from '../../theme/cvd.ts';
+
+/** 결과창 길이(초). 서버와 같은 값을 shared에서 가져온다 — 화면이 따로 들고 있다 갈라진 적이 있다. */
+const POST_GAME_SECONDS = Math.round(ROOM_TIMING.POST_GAME_MS / 1000);
 
 const IN_APP_BROWSER = typeof navigator !== 'undefined' && isInAppBrowser();
 
@@ -38,7 +42,7 @@ export const MatchResultPage: React.FC = () => {
     const [message, setMessage] = useState('');
     const [loadFailed, setLoadFailed] = useState(false);
     const [retryToken, setRetryToken] = useState(0);
-    const [remainingSeconds, setRemainingSeconds] = useState(30);
+    const [remainingSeconds, setRemainingSeconds] = useState(POST_GAME_SECONDS);
     const [sharing, setSharing] = useState(false);
     // 신고는 계정만 할 수 있다. 게스트에게 버튼을 보여 주면 눌러 보고 나서야 거절당한다.
     const canReport = useAuthStore((state) => state.status) === 'account';
@@ -72,7 +76,7 @@ export const MatchResultPage: React.FC = () => {
                     retryTimer = window.setTimeout(() => { void load(); }, response.retryAfterMs);
                     return;
                 }
-                setResult({ ...response, returnsAt: eventReturnsAt ?? response.returnsAt ?? Date.now() + 30_000 });
+                setResult({ ...response, returnsAt: eventReturnsAt ?? response.returnsAt ?? Date.now() + ROOM_TIMING.POST_GAME_MS });
                 setMessage('');
             } catch {
                 if (!active) return;
@@ -247,8 +251,8 @@ export const MatchResultPage: React.FC = () => {
                                 </span>
                             )}
                         </div>
-                        <div className="result-timer-track" role="progressbar" aria-label={t('result.returnTimerLabel')} aria-valuemin={0} aria-valuemax={30} aria-valuenow={remainingSeconds}>
-                            <i style={{ width: `${Math.min(100, remainingSeconds / 30 * 100)}%` }}/>
+                        <div className="result-timer-track" role="progressbar" aria-label={t('result.returnTimerLabel')} aria-valuemin={0} aria-valuemax={POST_GAME_SECONDS} aria-valuenow={remainingSeconds}>
+                            <i style={{ width: `${Math.min(100, remainingSeconds / POST_GAME_SECONDS * 100)}%` }}/>
                         </div>
                     </div>
                         <div>

@@ -80,6 +80,7 @@ export {
     MOVEMENT,
     SKILL_TUNING,
     SPEED_DECREASE_FLOOR,
+    ROOM_TIMING,
 } from './protocol/tuning';
 
 export {

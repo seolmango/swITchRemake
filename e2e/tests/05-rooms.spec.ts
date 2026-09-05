@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { T, button, createRoom, deleteAccount, gotoHome, joinRoom, seatedPlayers, signUpAndLogIn } from '../support/app';
 
 test.describe('방 만들기 · 목록 · 코드 참가', () => {
@@ -77,6 +77,44 @@ test.describe('방 만들기 · 목록 · 코드 참가', () => {
         if (new URL(page.url()).pathname.endsWith('/lobby')) {
             await button(page, T.lobby.leave).click();
             await page.waitForURL('**/rooms');
+        }
+    });
+
+    test('공개 방 목록은 한 페이지에 정확히 6개씩 보여 준다', async ({ page, browser }) => {
+        test.setTimeout(180_000);
+        await gotoHome(page);
+        const roomsContext = await browser.newContext({
+            baseURL: new URL(page.url()).origin,
+            viewport: { width: 640, height: 480 },
+            reducedMotion: 'reduce',
+        });
+        const rooms: Page[] = [];
+        try {
+            for (let index = 0; index < 7; index += 1) {
+                // sessionStorage가 탭별 게스트 신원을 분리하므로 로비 일곱 개를 동시에 유지할 수 있다.
+                const host = await roomsContext.newPage();
+                rooms.push(host);
+                await gotoHome(host);
+                await createRoom(host, `E2E-PAGE-${index}-${Date.now().toString(36)}`);
+            }
+
+            await page.goto('/rooms');
+            await expect(page.locator('.room-grid .room-card')).toHaveCount(6, { timeout: 20_000 });
+            await expect(page.getByRole('navigation', { name: T.rooms.pagination }))
+                .toContainText('1 / 2');
+
+            await button(page, T.nav.nextPage).click();
+            await expect(page.locator('.room-grid .room-card')).toHaveCount(1, { timeout: 20_000 });
+            await expect(page.getByRole('navigation', { name: T.rooms.pagination }))
+                .toContainText('2 / 2');
+        } finally {
+            // 로비 소켓을 먼저 끊은 뒤 컨텍스트를 닫아 게스트 방과 브라우저 자원을 함께 정리한다.
+            await Promise.all(rooms.map((room) =>
+                room.goto('about:blank', { waitUntil: 'commit', timeout: 3_000 }).catch(() => undefined)));
+            await Promise.race([
+                roomsContext.close().catch(() => undefined),
+                new Promise<void>((resolve) => setTimeout(resolve, 3_000)),
+            ]);
         }
     });
 });

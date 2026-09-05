@@ -34,6 +34,7 @@ const GROUP_NAMES: Record<string, string> = {
     match: '경기 · 도중 이탈 · 결과',
     training: '훈련장',
     settings: '설정 · 도움말',
+    mfa: '2차 인증',
     admin: '운영자 화면',
     'account-delete': '탈퇴',
 };

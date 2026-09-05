@@ -3,7 +3,7 @@ import { T, button, gotoHome, logIn, newAccount, signUp } from '../support/app';
 import { clearMail, waitForMail } from '../support/mail';
 
 test.describe('탈퇴', () => {
-    test('탈퇴하면 계정과 로그인 기기가 함께 사라진다', async ({ page, browser }) => {
+    test('탈퇴하면 계정과 로그인 기기가 사라지고 같은 이메일로 다시 가입할 수 있다', async ({ page, browser }) => {
         const account = newAccount('bye');
         await signUp(page, account);
         await logIn(page, account);
@@ -45,5 +45,19 @@ test.describe('탈퇴', () => {
         await gotoHome(page);
         await page.goto('/rooms');
         await expect(button(page, T.rooms.create)).toBeVisible();
+
+        // 탈퇴는 상태 표시가 아니라 실제 삭제다. 이메일과 닉네임의 유일성도 함께 풀려야 한다.
+        await signUp(page, account);
+        await expect(page.getByText(T.auth.signupSuccess)).toBeVisible();
+        await logIn(page, account);
+
+        await clearMail(account.email);
+        await page.goto('/profile');
+        await button(page, T.profile.deleteTitle).click();
+        await page.getByRole('button', { name: T.profile.deleteSendCode }).click();
+        const cleanupMail = await waitForMail(account.email, 'delete');
+        await page.locator('.delete-code-field input').fill(cleanupMail.code);
+        await page.getByRole('button', { name: T.profile.deleteConfirm }).click();
+        await page.waitForURL((url) => new URL(url).pathname === '/', { timeout: 30_000 });
     });
 });

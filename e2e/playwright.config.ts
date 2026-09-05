@@ -84,7 +84,13 @@ export default defineConfig({
             stderr: 'pipe',
         },
         {
-            command: `npm run dev -w client -- --port ${CLIENT_PORT} --strictPort`,
+            /*
+             * `--host 127.0.0.1`이 필요하다. Vite는 기본으로 `localhost`에 묶는데 이 환경에서는
+             * 그것이 IPv6(`[::1]`)만 잡는다. Playwright 본체(Node)는 그 주소로 붙어 서버가 떴다고
+             * 판단하지만, **Chromium은 `localhost`를 IPv4로 풀어 ERR_CONNECTION_REFUSED**를 낸다.
+             * 그러면 모든 점검이 화면을 못 열고 무더기로 깨지는데, 원인이 제품처럼 보인다.
+             */
+            command: `npm run dev -w client -- --port ${CLIENT_PORT} --strictPort --host 127.0.0.1`,
             url: BASE_URL,
             cwd: resolve(__dirname, '..'),
             reuseExistingServer: true,

@@ -48,6 +48,8 @@ export async function signUp(page: Page, account: Account): Promise<void> {
     await page.getByLabel(T.auth.nickname, { exact: true }).fill(account.nickname);
     await page.getByLabel(T.auth.code, { exact: true }).fill(mail.code);
     await page.getByLabel(T.auth.password, { exact: true }).fill(account.password);
+    await page.getByRole('checkbox', { name: T.auth.agreeTerms, exact: true }).click();
+    await page.getByRole('checkbox', { name: T.auth.agreePrivacy, exact: true }).click();
     await button(page, T.auth.signup).click();
 
     await page.waitForURL('**/login');
@@ -98,7 +100,13 @@ export async function deleteAccount(page: Page, account: Account): Promise<void>
     await page.locator('.delete-code-field input').fill(mail.code);
     await page.getByRole('button', { name: T.profile.deleteConfirm }).click();
 
-    await page.waitForURL((url) => new URL(url).pathname === '/', { timeout: 30_000 });
+    const outcome = await Promise.race([
+        page.waitForURL((url) => new URL(url).pathname === '/', { timeout: 30_000 }).then(() => 'deleted' as const),
+        page.getByText(T.profile.deleteFailed).waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'failed' as const),
+    ]);
+    if (outcome === 'failed') {
+        throw new Error(`회원 탈퇴가 서버에서 거절됐습니다(${account.email}). 화면: ${T.profile.deleteFailed}`);
+    }
 }
 
 /** 방을 만들고 로비까지 간다. 반환값은 다른 사람이 들어올 때 쓰는 방 코드다. */
@@ -110,7 +118,7 @@ export async function createRoom(page: Page, name: string, password?: string): P
         await page.getByLabel(T.rooms.password, { exact: true }).fill(password);
     }
     await button(page, T.rooms.create).click();
-    await page.waitForURL('**/lobby');
+    await page.waitForURL('**/lobby', { timeout: 30_000 });
     return roomCode(page);
 }
 

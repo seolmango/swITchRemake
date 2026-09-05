@@ -115,3 +115,16 @@ export const SKILL_TUNING = Object.freeze({
 
 /** 감소군 바닥. 이게 없으면 효과가 겹칠 때 속도가 0이나 음수가 된다. */
 export const SPEED_DECREASE_FLOOR = 0.3;
+
+/**
+ * 방 수명 중 **클라이언트도 알아야 하는** 값. 서버가 `returnsAt` 같은 절대 시각을 보내 주지만,
+ * 남은 시간을 막대로 그리려면 전체 길이를 알아야 한다(§0 "클라이언트도 알아야 하는 값").
+ *
+ * 여기 없이 화면이 따로 숫자를 들고 있다가 실제로 갈라졌다 — 결과창을 30초에서 10초로 줄였는데
+ * 진행 막대만 30초 트랙으로 남아 3분의 1까지만 찼고, 접근성 도구에는 "30초 중 8초"로 읽혔다.
+ * 서버(`server-game/src/config/network.ts`)가 이 값을 가져다 쓰므로 원본은 하나다.
+ */
+export const ROOM_TIMING = Object.freeze({
+    /** 결과창에 머무는 시간. 지나면 대기실로 돌아간다(BASE.md §5.3). */
+    POST_GAME_MS: 10_000,
+});

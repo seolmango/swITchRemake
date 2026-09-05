@@ -2,8 +2,8 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { T, createRoom, deleteAccount, gotoHome, joinRoom, seatedPlayers, signUpAndLogIn, startMatch } from '../support/app';
 
 /**
- * 경기는 자기장이 줄면서 두 명이 남을 때 끝난다. 언제 끝날지는 맵 타임라인이 정하므로
- * 넉넉히 기다린다 — 여기서 시간을 아끼려다 "가끔 실패하는 점검"을 만드는 것이 더 나쁘다.
+ * 경기는 자기장 틱과 최대 경기 시간 등 서버 판정으로 끝난다. 살아남은 수는 하나일 수도
+ * 여럿일 수도 있으므로 종료 시점은 맵 타임라인에 맡기고 넉넉히 기다린다.
  */
 const MATCH_TIMEOUT_MS = 5 * 60_000;
 
@@ -66,13 +66,20 @@ test.describe('경기 · 도중 이탈 · 결과', () => {
         await page.waitForURL('**/game**', { timeout: 60_000 });
         for (const player of guests) await player.waitForURL('**/game**', { timeout: 60_000 });
 
-        // 한 명이 도중에 창을 닫는다. 남은 사람의 경기가 여기서 멈추면 안 된다.
+        // 한 명이 도중에 창을 닫으면 즉시 아웃된다. 3인 경기라 남은 둘의 공동 승리로 바로 끝난다.
         await page.waitForTimeout(3_000);
         await guests[0].close();
 
-        // 자기장이 줄면서 결국 두 명이 남고 결과 화면으로 간다.
-        await page.waitForURL('**/result**', { timeout: MATCH_TIMEOUT_MS });
+        await page.waitForURL('**/result**', { timeout: 30_000 });
         await expect(page.locator('.result-table')).toBeVisible({ timeout: 30_000 });
+
+        // 이 시나리오는 정확히 두 생존자지만 결과 UI 자체는 winnerIds 길이를 계약으로 삼는다.
+        await expect(page.locator('.result-winners')).toHaveAttribute('data-winner-count', '2');
+        const returnTimer = page.getByRole('progressbar', { name: T.result.returnTimerLabel });
+        await expect(returnTimer).toHaveAttribute('aria-valuemax', '10');
+        const remaining = Number(await returnTimer.getAttribute('aria-valuenow'));
+        expect(remaining).toBeGreaterThanOrEqual(0);
+        expect(remaining).toBeLessThanOrEqual(10);
 
         // 계정 사용자에게는 이번 경기의 XP 내역이 보여야 한다.
         await expect(page.locator('.result-reward')).toBeVisible({ timeout: 30_000 });
@@ -98,7 +105,7 @@ test.describe('경기 · 도중 이탈 · 결과', () => {
      * 경합이라 매번 재현되지 않았다. 그래서 이 점검이 통과한다고 해서 다 끝났다는 뜻은
      * 아니고, 다시 빨간불이 되면 그때는 같은 자리를 의심하면 된다.
      */
-    test('경기 중 새로고침하면 그 경기로 돌아간다', async ({ page, browser }) => {
+    test('경기 중 새로고침하면 즉시 아웃되고 보존된 자리로 돌아간다', async ({ page, browser }) => {
         const host = await signUpAndLogIn(page, 'resume');
         const context = await browser.newContext();
         const { guests } = await threePlayerRoom(page, context, 'F');
@@ -110,16 +117,15 @@ test.describe('경기 · 도중 이탈 · 결과', () => {
         await page.waitForTimeout(3_000);
         await page.reload();
         /*
-         * 돌아오는 곳이 둘이다. 새로고침이 재접속 유예(10초) 안에 끝나면 그 경기로 돌아간다.
-         * 넘기면 탈락하는데, 3인 경기에서 한 명이 빠지면 남은 둘이 공동 우승이라 경기가 그
-         * 자리에서 끝나고 돌아온 사람은 방에 있다. 둘 다 정상이고, 어느 쪽이 될지는 그 순간의
-         * 새로고침 속도가 정한다 — 한쪽만 적으면 이 점검은 기계 성능에 따라 흔들린다.
+         * 연결이 끊긴 순간 경기에서는 아웃이다. 다만 자리는 5초 보존되므로 그 안에 돌아오면
+         * 진행 중인 경기에는 관전으로, 이미 3인 경기가 끝났다면 결과 또는 같은 방 로비로 붙는다.
+         * 어느 화면이 먼저 보일지는 종료 결과 저장과 새 티켓 발급 순서에 달려 있다.
          *
-         * 이 점검이 지키는 것은 **돌아올 방이 있다**는 것이다. 예전에는 유예를 넘기면 명단에서
-         * 통째로 빠져서 resume이 거절당했고, 화면은 복구 실패에 갇혔다.
+         * 이 점검이 지키는 것은 즉시 아웃 규칙과 별개로 **보존된 자리와 방에 복귀한다**는 것이다.
          */
         await expect(
             page.locator('.game-hud[data-hud-ready="true"]')
+                .or(page.locator('.result-table'))
                 .or(page.getByRole('button', { name: T.lobby.leave })),
         ).toBeVisible({ timeout: 60_000 });
         await expect(page.getByText(T.lobby.resumeFailed)).toHaveCount(0);
@@ -127,6 +133,50 @@ test.describe('경기 · 도중 이탈 · 결과', () => {
         await expect(page.getByText(T.game.waitingStart)).toHaveCount(0);
 
         for (const player of guests) await player.close();
+        await context.close();
+        await page.goto('/rooms');
+        await deleteAccount(page, host);
+    });
+
+    test('경기 중 들어온 사람은 로비에서 기다리고 다음 경기부터 참가한다', async ({ page, browser }) => {
+        const host = await signUpAndLogIn(page, 'latejoin');
+        const context = await browser.newContext();
+        const { code, guests } = await threePlayerRoom(page, context, 'J');
+
+        await startMatch(page);
+        await Promise.all([page, ...guests].map(async (player) => {
+            await player.waitForURL('**/game**', { timeout: 90_000 });
+            await expect(player.locator('.game-hud[data-hud-ready="true"]')).toBeVisible({ timeout: 90_000 });
+        }));
+
+        const late = await guestInRoom(context, code);
+        await expect(late).toHaveURL(/\/lobby$/u);
+        const lateCard = late.locator('.lobby-player-card.is-self');
+        await expect(lateCard).toBeVisible();
+        expect(await lateCard.getAttribute('aria-label')).toContain(T.lobby.roles.waiting);
+        await expect(late.locator('.game-hud')).toHaveCount(0);
+        await expect(late.getByRole('button', { name: T.lobby.roles.spectator, exact: true })).toHaveCount(0);
+
+        // 진행 중 명단에 끼어들거나 시작 신호를 뒤늦게 받지 않는지 잠깐 더 지켜본다.
+        await late.waitForTimeout(2_000);
+        await expect(late).toHaveURL(/\/lobby$/u);
+
+        await page.waitForURL('**/result**', { timeout: MATCH_TIMEOUT_MS });
+        await expect(page.locator('.result-table')).toBeVisible({ timeout: 30_000 });
+        const winnerCount = Number(await page.locator('.result-winners').getAttribute('data-winner-count'));
+        expect(winnerCount).toBeGreaterThanOrEqual(1);
+        expect(winnerCount).toBeLessThanOrEqual(3);
+
+        // 서버가 정한 10초가 지나면 원래 참가자도 로비로 돌아오고, 대기자는 일반 참가자가 된다.
+        await page.waitForURL('**/lobby', { timeout: 15_000 });
+        await expect(seatedPlayers(page)).toHaveCount(4, { timeout: 20_000 });
+        expect(await lateCard.getAttribute('aria-label')).toContain(T.lobby.roles.player);
+
+        await startMatch(page);
+        await late.waitForURL('**/game**', { timeout: 90_000 });
+        await expect(late.locator('.game-hud[data-hud-ready="true"]')).toBeVisible({ timeout: 90_000 });
+
+        for (const player of [...guests, late]) await player.close();
         await context.close();
         await page.goto('/rooms');
         await deleteAccount(page, host);
