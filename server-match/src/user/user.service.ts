@@ -23,6 +23,7 @@ import { nonNegativeInteger, percentage, readStoredStats } from './stored-stats'
 import type { AuditContext } from '../admin/audit-log';
 import { LEGAL_DOCUMENT_VERSIONS } from '../config/legal.settings';
 import type { LegalConsentDto } from './dto/legal-consent.dto';
+import { MfaService } from '../mfa/mfa.service';
 
 export interface UserStatsResponse {
     /** 누적 XP에서 센 값. 저장된 값이 아니다 — `shared`의 `levelFromXp`가 유일한 정의다. */
@@ -96,6 +97,7 @@ export class UserService {
         private readonly sessionService: SessionService,
         private readonly emailService: EmailService,
         private readonly rooms: RoomsService,
+        private readonly mfaService: MfaService,
     ) {}
 
     /**
@@ -172,6 +174,7 @@ export class UserService {
     async deleteUser(
         userId: number,
         code: string,
+        secondFactorCode: string | undefined,
         audit: AuditContext,
     ): Promise<void> {
         const [user] = await this.db.select({ email: schema.users.email })
@@ -187,13 +190,16 @@ export class UserService {
         }
 
         try {
+            const mfaAuthorization = await this.mfaService.authorizeAccountDeletion(userId, secondFactorCode);
             await this.sanctionService.deleteAccount(
                 userId,
                 `user:${userId}`,
                 'User requested account deletion',
                 audit,
+                mfaAuthorization,
             );
             await commitVerificationCodeClaim(this.redisService, claim);
+            await this.mfaService.clearEphemeralState(userId).catch(() => undefined);
             // 지운 계정이 방에 남아 있으면 그 경기가 끝날 때까지 없는 사람이 논다.
             await this.rooms.evictActor(userId, 'account-deleted');
         } catch (error) {

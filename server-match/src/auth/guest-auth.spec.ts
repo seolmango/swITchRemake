@@ -19,7 +19,7 @@ test('guest issuance creates a tab-scoped refresh session and never creates an a
     const security = { hmacIp: () => 'ip-hmac' };
     const service = new AuthService(
         {} as never, redis as never, {} as never, jwt as never, config as never,
-        security as never, sessions as never, {} as never,
+        security as never, sessions as never, {} as never, {} as never,
     );
 
     const issued = await service.createGuest('203.0.113.4');
@@ -42,7 +42,7 @@ test('guest issuance rate is enforced by request IP', async () => {
     const redis = { incrementWithTtl: async () => 31, ttlMilliseconds: async () => 12_000 };
     const service = new AuthService(
         {} as never, redis as never, {} as never, {} as never,
-        { get: () => 'secret' } as never, { hmacIp: () => 'ip-hmac' } as never, {} as never, {} as never,
+        { get: () => 'secret' } as never, { hmacIp: () => 'ip-hmac' } as never, {} as never, {} as never, {} as never,
     );
     await assert.rejects(service.createGuest('203.0.113.4'), (error: unknown) => {
         assert.ok(error instanceof HttpException);
@@ -91,7 +91,7 @@ test('guest refresh rotates once and rejects replay of the previous token', asyn
     const config = { get: (key: string) => key.includes('EXPIRATION') ? 900 : key === 'JWT_GUEST_REFRESH_SECRET' ? 'guest-secret' : 'access-secret' };
     const service = new AuthService(
         {} as never, redis as never, {} as never, jwt as never, config as never,
-        {} as never, {} as never, {} as never,
+        {} as never, {} as never, {} as never, {} as never,
     );
 
     const next = await service.refreshGuest('old-refresh');

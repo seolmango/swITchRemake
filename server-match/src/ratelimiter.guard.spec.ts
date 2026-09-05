@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { HttpException } from '@nestjs/common';
 import { PreAuthIpRateLimiterGuard, RateLimiterGuard, assertRateLimitPolicy, rateLimitRelaxed } from './ratelimiter.guard';
+import { createHash } from 'node:crypto';
 
 /** 이 플래그는 환경변수 하나로 한도를 50배로 벌린다. 실수로 운영에 딸려 가면 안 된다. */
 function withFlag<T>(value: string | undefined, run: () => T): T {
@@ -103,4 +104,29 @@ test('게스트와 계정 actor는 같은 기능 한도를 쓰고 IP 버킷은 N
     const ip = guardHarness({ ip: '203.0.113.10' }, 1);
     for (let count = 0; count < 4; count++) await ip.pre.canActivate(ip.context as never);
     await assert.rejects(ip.pre.canActivate(ip.context as never), HttpException);
+});
+
+test('2차 로그인 실패는 도전값 신원과 계정별 대상 표지를 함께 세고 새 표지로 변조할 수 없다', async () => {
+    const target = 'a'.repeat(64);
+    const challenge = `${target}.${'B'.repeat(43)}`;
+    const harness = guardHarness({ ip: '203.0.113.11', body: { challengeToken: challenge } });
+    await harness.actor.canActivate(harness.context as never);
+    assert.deepEqual([...harness.counts.keys()].sort(), [
+        `auth-rate:actor:mfa-challenge:${createHash('sha256').update(challenge).digest('hex')}`,
+        `auth-rate:target:mfa:${target}`,
+    ]);
+});
+
+test('로그인 뒤 2차 설정 변경은 actor와 대상 계정 버킷을 별도로 센다', async () => {
+    const harness = guardHarness({
+        ip: '203.0.113.12',
+        user: { id: 7, guest: false },
+        routeOptions: { url: '/users/me/mfa' },
+        body: { code: '123456' },
+    });
+    await harness.actor.canActivate(harness.context as never);
+    assert.deepEqual([...harness.counts.keys()].sort(), [
+        'auth-rate:actor:account:7',
+        'auth-rate:target:account:7',
+    ]);
 });

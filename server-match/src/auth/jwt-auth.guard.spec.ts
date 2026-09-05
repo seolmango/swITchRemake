@@ -38,3 +38,15 @@ test('계정 access token은 살아 있는 세션과 같은 security epoch가 �
     const oldEpoch = harness({ status: 'ACTIVE', securityEpoch: 4 });
     await assert.rejects(oldEpoch.guard.canActivate(oldEpoch.context as never), UnauthorizedException);
 });
+
+test('2차 대기 도전값은 Bearer로 보내도 access token 권한을 얻지 못한다', async () => {
+    const request = { headers: { authorization: `Bearer ${'a'.repeat(64)}.opaque-challenge` } };
+    const guard = new JwtAuthGuard(
+        { verify: () => { throw new Error('not a JWT'); } } as never,
+        { get: () => 'access-secret' } as never,
+        {} as never,
+        { select: () => { throw new Error('must not query account authority'); } } as never,
+    );
+    const context = { switchToHttp: () => ({ getRequest: () => request }) };
+    await assert.rejects(guard.canActivate(context as never), UnauthorizedException);
+});

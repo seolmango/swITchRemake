@@ -35,6 +35,7 @@ export const sanctionTypeEnum = pgEnum('sanction_type', ['WARN', 'GAME_RESTRICT'
 export const replayStatusEnum = pgEnum('replay_status', ['recording', 'finalizing', 'available', 'deleting', 'deleted']);
 export const reportCategoryEnum = pgEnum('report_category', ['CHEAT', 'ABUSE', 'GRIEFING', 'NICKNAME']);
 export const reportStatusEnum = pgEnum('report_status', ['OPEN', 'TRIAGED', 'REVIEWING', 'ACTIONED', 'DISMISSED', 'CLOSED']);
+export const mfaMethodEnum = pgEnum('mfa_method', ['email', 'totp']);
 
 export const users = pgTable('users', {
     id: serial('id').primaryKey(),
@@ -75,6 +76,53 @@ export const sessions = pgTable('sessions', {
     check('sessions_ip_hmac_format', sql`${table.ipHmac} ~ '^[0-9a-f]{64}$'`),
     check('sessions_generation_nonnegative', sql`${table.generation} >= 0`),
     index('sessions_family_id_idx').on(table.familyId),
+]);
+
+/** 한 계정에는 선택한 2차 인증 수단 하나만 있다. TOTP 비밀값은 AES-GCM 암호문만 저장한다. */
+export const mfaSettings = pgTable('mfa_settings', {
+    userId: integer('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+    method: mfaMethodEnum('method').notNull(),
+    totpSecretEncrypted: text('totp_secret_encrypted'),
+    /** 같은 시간 칸의 TOTP가 두 번 통하지 않게 마지막으로 소비한 counter를 기록한다. */
+    lastTotpStep: bigint('last_totp_step', { mode: 'number' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+    check('mfa_settings_method_secret', sql`
+        (${table.method} = 'email' AND ${table.totpSecretEncrypted} IS NULL AND ${table.lastTotpStep} IS NULL)
+        OR
+        (${table.method} = 'totp' AND ${table.totpSecretEncrypted} LIKE 'v1:%' AND ${table.lastTotpStep} IS NOT NULL)
+    `),
+]);
+
+/** 원문은 등록/재발급 응답에 한 번만 내보내고, 이 테이블에는 bcrypt 해시만 남긴다. */
+export const mfaBackupCodes = pgTable('mfa_backup_codes', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    codeId: varchar('code_id', { length: 8 }).notNull(),
+    codeHash: text('code_hash').notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+    unique('mfa_backup_codes_user_code_id_unique').on(table.userId, table.codeId),
+    index('mfa_backup_codes_user_unused_idx').on(table.userId, table.usedAt),
+    check('mfa_backup_codes_code_id_format', sql`${table.codeId} ~ '^[0-9A-F]{8}$'`),
+]);
+
+/** 브라우저 지문 대신 서버가 발급한 고엔트로피 토큰의 해시만 계정에 묶어 저장한다. */
+export const trustedDevices = pgTable('trusted_devices', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: varchar('token_hash', { length: 64 }).notNull(),
+    deviceLabel: varchar('device_label', { length: 255 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, (table) => [
+    uniqueIndex('trusted_devices_token_hash_unique').on(table.tokenHash),
+    index('trusted_devices_user_expires_idx').on(table.userId, table.expiresAt),
+    check('trusted_devices_token_hash_format', sql`${table.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    check('trusted_devices_positive_lifetime', sql`${table.expiresAt} > ${table.createdAt}`),
 ]);
 
 /** refresh 재사용은 계정 탈취 신호라 일반 애플리케이션 로그와 별도로 남긴다. */

@@ -31,6 +31,8 @@ import {
     issueVerificationCode,
     releaseVerificationCodeClaim,
 } from './verification-code';
+import { MfaService } from '../mfa/mfa.service';
+import type { LoginMfaAuthorization, MfaAuthorization } from '../mfa/mfa.types';
 
 interface RequestSessionMetadata {
     ip: string;
@@ -109,6 +111,7 @@ export class AuthService {
         private readonly sessionSecurity: SessionSecurityService,
         private readonly sessionService: SessionService,
         private readonly sanctionService: SanctionService,
+        private readonly mfaService: MfaService,
     ) {}
 
     async sendVerificationCodeEmail(dto: SendEmailDto) {
@@ -160,12 +163,25 @@ export class AuthService {
         }
         try {
             const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+            const [candidate] = await this.db.select({
+                id: schema.users.id,
+                accountStatus: schema.users.accountStatus,
+            }).from(schema.users).where(sql`lower(${schema.users.email}) = ${email}`);
+            let mfaAuthorization: MfaAuthorization = { kind: 'not-enabled' };
+            if (candidate?.accountStatus === 'ACTIVE') {
+                mfaAuthorization = await this.mfaService.authorizePasswordReset(
+                    candidate.id,
+                    dto.secondFactorCode,
+                );
+            }
             await this.db.transaction(async (tx) => {
                 const [user] = await tx.select({
                     id: schema.users.id,
                     accountStatus: schema.users.accountStatus,
                 }).from(schema.users).where(sql`lower(${schema.users.email}) = ${email}`).for('update');
                 if (!user || user.accountStatus !== 'ACTIVE') return;
+
+                await this.mfaService.assertAccountAuthorizationCurrent(tx, user.id, mfaAuthorization);
 
                 await tx.update(schema.users).set({
                     passwordHash,
@@ -183,7 +199,7 @@ export class AuthService {
         }
     }
 
-    async login(dto: LoginDto, metadata: RequestSessionMetadata) {
+    async login(dto: LoginDto, metadata: RequestSessionMetadata, trustedDeviceToken?: string) {
         const email = dto.email.trim().toLowerCase();
         const { password } = dto;
         const [user] = await this.db.select().from(schema.users).where(sql`lower(${schema.users.email}) = ${email}`);
@@ -199,7 +215,41 @@ export class AuthService {
             throw new UnauthorizedException('Account is not active');
         }
 
-        return this.createSession(user.id, user.email, user.nickname, user.passwordHash, metadata);
+        const method = await this.mfaService.getMethod(user.id);
+        if (method) {
+            if (!await this.mfaService.isTrustedDevice(user.id, trustedDeviceToken)) {
+                return this.mfaService.beginLoginChallenge(user.id, user.securityEpoch, method);
+            }
+            return this.createSession(
+                user.id,
+                user.securityEpoch,
+                metadata,
+                { kind: 'trusted-device', token: trustedDeviceToken! },
+                false,
+            );
+        }
+
+        return this.createSession(user.id, user.securityEpoch, metadata, { kind: 'not-enabled' }, false);
+    }
+
+    async resendLoginMfaEmail(challengeToken: string) {
+        return this.mfaService.resendLoginEmail(challengeToken);
+    }
+
+    async completeMfaLogin(
+        challengeToken: string,
+        code: string,
+        trustDevice: boolean,
+        metadata: RequestSessionMetadata,
+    ) {
+        const challenge = await this.mfaService.completeLoginChallenge(challengeToken, code);
+        return this.createSession(
+            challenge.userId,
+            challenge.securityEpoch,
+            metadata,
+            { kind: 'verified', method: challenge.method },
+            trustDevice,
+        );
     }
 
     async assertIdentitySwitchAllowed(actorId: number | string | undefined): Promise<void> {
@@ -455,28 +505,31 @@ export class AuthService {
 
     private async createSession(
         userId: number,
-        email: string,
-        nickname: string,
-        expectedPasswordHash: string,
+        expectedSecurityEpoch: number,
         metadata: RequestSessionMetadata,
+        mfaAuthorization: LoginMfaAuthorization,
+        trustDevice: boolean,
     ) {
         const ip = this.sessionSecurity.protectIp(metadata.ip);
         const now = new Date();
         const tokens = await this.db.transaction(async (tx) => {
             const [user] = await tx.select({
                 status: schema.users.accountStatus,
-                passwordHash: schema.users.passwordHash,
+                email: schema.users.email,
+                nickname: schema.users.nickname,
                 securityEpoch: schema.users.securityEpoch,
             })
                 .from(schema.users)
                 .where(eq(schema.users.id, userId))
                 .for('update');
-            if (!user || user.status !== 'ACTIVE' || user.passwordHash !== expectedPasswordHash) {
+            if (!user || user.status !== 'ACTIVE' || user.securityEpoch !== expectedSecurityEpoch) {
                 throw new UnauthorizedException('Account is not active');
             }
 
+            await this.mfaService.assertLoginAuthorized(userId, mfaAuthorization, tx);
+
             const familyId = randomUUID();
-            const createdTokens = this.buildTokens(userId, email, familyId, 0, user.securityEpoch);
+            const createdTokens = this.buildTokens(userId, user.email, familyId, 0, user.securityEpoch);
             await tx.insert(schema.sessions).values({
                 id: createdTokens.sessionId,
                 userId,
@@ -490,13 +543,19 @@ export class AuthService {
                 familyId,
                 generation: 0,
             });
-            return createdTokens;
+            const trustedDevice = trustDevice && mfaAuthorization.kind === 'verified'
+                ? await this.mfaService.registerTrustedDevice(userId, metadata.userAgent, tx)
+                : undefined;
+            return { ...createdTokens, nickname: user.nickname, trustedDevice };
         });
 
         return {
+            mfaRequired: false as const,
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken,
-            nickname,
+            nickname: tokens.nickname,
+            trustedDeviceToken: tokens.trustedDevice?.token,
+            trustedDeviceExpiresAt: tokens.trustedDevice?.expiresAt,
         };
     }
 

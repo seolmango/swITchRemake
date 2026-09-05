@@ -1,5 +1,6 @@
 import {
     ConflictException,
+    ForbiddenException,
     Inject,
     Injectable,
     Logger,
@@ -13,6 +14,7 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../database/database.module';
 import * as schema from '../database/schema';
 import { auditContext, type AuditContext } from '../admin/audit-log';
+import type { MfaAuthorization } from '../mfa/mfa.types';
 import { SessionSecurityService } from '../session/session-security.service';
 
 type SanctionType = typeof schema.sanctionTypeEnum.enumValues[number];
@@ -259,6 +261,7 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
         actor: string,
         reason: string,
         audit: AuditContext = auditContext(),
+        mfaAuthorization: MfaAuthorization = { kind: 'not-enabled' },
     ): Promise<void> {
         await this.db.transaction(async (tx) => {
             const [user] = await tx.select({
@@ -273,6 +276,15 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
             }
             if (user.status === 'DELETED') {
                 throw new NotFoundException('User not found');
+            }
+
+            const [mfaSetting] = await tx.select({ method: schema.mfaSettings.method })
+                .from(schema.mfaSettings)
+                .where(eq(schema.mfaSettings.userId, userId));
+            if (mfaSetting) {
+                if (mfaAuthorization.kind !== 'verified' || mfaAuthorization.method !== mfaSetting.method) {
+                    throw new ForbiddenException({ code: 'MFA_REQUIRED', message: 'A second factor is required' });
+                }
             }
 
             const now = new Date();
@@ -312,6 +324,10 @@ export class SanctionService implements OnModuleInit, OnModuleDestroy {
                 securityEpoch: sql`${schema.users.securityEpoch} + 1`,
                 updatedAt: now,
             }).where(eq(schema.users.id, userId));
+            // users 행은 감사/제재 FK 때문에 가명 껍데기로 남으므로 ON DELETE CASCADE에 기대지 않는다.
+            await tx.delete(schema.trustedDevices).where(eq(schema.trustedDevices.userId, userId));
+            await tx.delete(schema.mfaBackupCodes).where(eq(schema.mfaBackupCodes.userId, userId));
+            await tx.delete(schema.mfaSettings).where(eq(schema.mfaSettings.userId, userId));
             await tx.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
             await tx.insert(schema.adminAuditLog).values({
                 actor,

@@ -22,6 +22,7 @@ test('AppModule DI graph assembles without external services', async () => {
         EMAIL_TRANSPORT: 'sink',
         SESSION_IP_HMAC_SECRET: '01234567890123456789012345678901',
         SESSION_IP_ENCRYPTION_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+        MFA_TOTP_ENCRYPTION_KEY: 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=',
     });
     // require stays inside the test callback, after the guard above is set.
     const { AppModule } = require('./app.module');

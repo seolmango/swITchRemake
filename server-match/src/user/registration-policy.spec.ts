@@ -95,6 +95,7 @@ function registrationService(options: { blocked?: boolean; duplicateEmail?: bool
             {} as never,
             {} as never,
             {} as never,
+            {} as never,
         ),
         inserted,
     };
@@ -155,7 +156,7 @@ test('저장된 개별 버전과 현재 버전을 비교해 재동의 필요 여
             }),
         }),
     };
-    const service = new UserService(db as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+    const service = new UserService(db as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
     assert.deepEqual(await service.getLegalConsent(7), {
         current: LEGAL_DOCUMENT_VERSIONS,
         agreed: {

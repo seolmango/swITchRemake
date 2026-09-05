@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Transporter } from 'nodemailer';
 import { RedisService } from '../redis/redis.service';
 
-type EmailKind = 'signup' | 'reset-password' | 'delete';
+type EmailKind = 'signup' | 'reset-password' | 'delete' | 'mfa';
 type EmailTransport = 'smtp' | 'sink';
 export type EmailHealthStatus = 'ok' | 'checking' | 'unconfigured' | 'unreachable';
 
@@ -13,6 +13,7 @@ const EMAIL_TEMPLATES: Record<EmailKind, EmailTemplate> = {
     signup: { subject: '[swITch] 회원가입 계정 인증 코드', heading: 'swITch 회원가입을 환영합니다!', message: '아래의 인증 코드를 회원가입 화면에 입력하여 가입을 완료해 주세요.' },
     'reset-password': { subject: '[swITch] 비밀번호 재설정 인증 코드', heading: 'swITch 비밀번호 재설정', message: '요청하신 비밀번호 재설정 인증 코드입니다.' },
     delete: { subject: '[swITch] 회원 탈퇴 인증 코드', heading: 'swITch 회원 탈퇴', message: '요청하신 회원 탈퇴 인증 코드입니다.' },
+    mfa: { subject: '[swITch] 2차 인증 코드', heading: 'swITch 2차 인증', message: '요청하신 2차 인증 코드입니다. 본인이 요청하지 않았다면 누구에게도 알려 주지 마세요.' },
 };
 
 export const EMAIL_TRANSPORTER = Symbol('EMAIL_TRANSPORTER');
@@ -64,6 +65,7 @@ export class EmailService implements OnModuleInit {
     async sendRegistrationCodeEmail(to: string, code: string): Promise<boolean> { return this.sendCodeEmail('signup', to, code); }
     async sendPasswordResetCodeEmail(to: string, code: string): Promise<boolean> { return this.sendCodeEmail('reset-password', to, code); }
     async sendDeleteAccountCodeEmail(to: string, code: string): Promise<boolean> { return this.sendCodeEmail('delete', to, code); }
+    async sendMfaCodeEmail(to: string, code: string): Promise<boolean> { return this.sendCodeEmail('mfa', to, code); }
 
     private async sendCodeEmail(kind: EmailKind, to: string, code: string): Promise<boolean> {
         const template = EMAIL_TEMPLATES[kind];

@@ -64,6 +64,13 @@
       "when": 1788681600000,
       "tag": "0008_admin_audit_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788685200000,
+      "tag": "0009_two_factor_authentication",
+      "breakpoints": true
     }
   ]
 }

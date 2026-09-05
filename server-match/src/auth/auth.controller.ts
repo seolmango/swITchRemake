@@ -9,6 +9,8 @@ import { ConfigService } from "@nestjs/config";
 import { NeedActor } from './need-actor.decorator';
 import { refreshCookieOptions } from './refresh-cookie';
 import { GuestRefreshDto } from './dto/guest-refresh.dto';
+import { LoginMfaDto, LoginMfaEmailDto } from '../mfa/dto/login-mfa.dto';
+import { TRUSTED_DEVICE_COOKIE, trustedDeviceCookieOptions } from '../mfa/trusted-device-cookie';
 
 @Controller('auth')
 export class AuthController {
@@ -40,14 +42,54 @@ export class AuthController {
         await this.authService.assertIdentitySwitchAllowed(
             (req as FastifyRequest & { user?: { id: number | string } }).user?.id,
         );
-        const { accessToken, refreshToken, nickname } = await this.authService.login(loginDto, {
+        const result = await this.authService.login(loginDto, {
             ip: req.ip,
             userAgent: this.userAgent(req),
-        });
+        }, this.readSignedCookie(req, TRUSTED_DEVICE_COOKIE));
 
-        res.setCookie('refreshToken', refreshToken, this.cookieOptions());
+        if (result.mfaRequired) return result;
 
-        return { accessToken, nickname };
+        res.setCookie('refreshToken', result.refreshToken, this.cookieOptions());
+
+        return { mfaRequired: false, accessToken: result.accessToken, nickname: result.nickname };
+    }
+
+    @Post('login/mfa')
+    @RateLimiter({ limit: 5, ttl: 60_000 })
+    async completeMfaLogin(
+        @Body() dto: LoginMfaDto,
+        @Req() req: FastifyRequest,
+        @Res({ passthrough: true }) res: FastifyReply,
+    ) {
+        await this.authService.assertIdentitySwitchAllowed(
+            (req as FastifyRequest & { user?: { id: number | string } }).user?.id,
+        );
+        const result = await this.authService.completeMfaLogin(
+            dto.challengeToken,
+            dto.code,
+            dto.trustDevice === true,
+            { ip: req.ip, userAgent: this.userAgent(req) },
+        );
+        res.setCookie('refreshToken', result.refreshToken, this.cookieOptions());
+        if (result.trustedDeviceToken) {
+            res.setCookie(
+                TRUSTED_DEVICE_COOKIE,
+                result.trustedDeviceToken,
+                trustedDeviceCookieOptions(this.configService),
+            );
+        }
+        return {
+            mfaRequired: false,
+            accessToken: result.accessToken,
+            nickname: result.nickname,
+            trustedDeviceExpiresAt: result.trustedDeviceExpiresAt,
+        };
+    }
+
+    @Post('login/mfa/email')
+    @RateLimiter({ limit: 5, ttl: 60_000 })
+    resendMfaLoginEmail(@Body() dto: LoginMfaEmailDto) {
+        return this.authService.resendLoginMfaEmail(dto.challengeToken);
     }
 
     @Post('refresh')
@@ -112,5 +154,12 @@ export class AuthController {
     private userAgent(req: FastifyRequest): string | undefined {
         const value = req.headers['user-agent'];
         return Array.isArray(value) ? value[0] : value;
+    }
+
+    private readSignedCookie(req: FastifyRequest, name: string): string | undefined {
+        const raw = req.cookies[name];
+        if (!raw) return undefined;
+        const unsigned = req.unsignCookie(raw);
+        return unsigned.valid && unsigned.value ? unsigned.value : undefined;
     }
 }

@@ -24,8 +24,14 @@ const MAX_ISSUES_PER_MINUTE = 3;
 const MAX_ISSUES_PER_HOUR = 10;
 const CLAIM_TTL_SECONDS = 30;
 
-/** 코드의 용도는 곧 메일 종류다. 목록을 두 벌 두면 한쪽만 늘어난다. */
-export type VerificationPurpose = EmailAuthType;
+/** 공개 메일 요청 종류와 2차 인증의 사용 맥락을 분리해 코드를 다른 경로에 재사용하지 못하게 한다. */
+export const MFA_EMAIL_PURPOSE = {
+    LOGIN: 'mfa-login',
+    STEP_UP: 'mfa-step-up',
+    RESET_PASSWORD: 'mfa-reset-password',
+} as const;
+
+export type VerificationPurpose = EmailAuthType | typeof MFA_EMAIL_PURPOSE[keyof typeof MFA_EMAIL_PURPOSE];
 
 const codeKey = (purpose: VerificationPurpose, email: string): string => `auth:code:${purpose}:${email}`;
 const attemptsKey = (purpose: VerificationPurpose, email: string): string => `auth:code-attempts:${purpose}:${email}`;

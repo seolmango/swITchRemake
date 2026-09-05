@@ -107,7 +107,7 @@ function makeHarness(options: { revoked?: boolean; cached?: Record<string, strin
     const sanctions = { reconcileLoginStatus: async () => 'ACTIVE' };
     const service = new AuthService(
         db as never, redis as never, {} as never, jwt as never, config as never,
-        security as never, {} as never, sanctions as never,
+        security as never, {} as never, sanctions as never, {} as never,
     );
     return { service, sessions, inserted, auditEvents, redisWrites, transactionCount: () => transactionCount };
 }

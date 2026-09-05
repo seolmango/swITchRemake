@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { UnauthorizedException } from '@nestjs/common';
+import { HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService, passwordHashForComparison } from './auth.service';
 
@@ -32,6 +32,7 @@ test('비밀번호 비교 뒤 행 잠금에서 해시가 달라졌으면 세션�
         { protectIp: () => ({ ipHmac: 'h', ipEncrypted: 'e' }) } as never,
         {} as never,
         { reconcileLoginStatus: async () => 'ACTIVE' } as never,
+        { getMethod: async () => null, assertLoginAuthorized: async () => undefined } as never,
     );
     await assert.rejects(
         service.login({ email: initialUser.email, password: 'Password1!' }, { ip: '203.0.113.1' }),
@@ -55,12 +56,15 @@ test('비밀번호 복구는 사용자 잠금, 해시·epoch 갱신, 전체 세�
             events.push('update-user');
         } }) }),
     };
-    const db = { transaction: async (run: (value: typeof tx) => unknown) => {
-        events.push('begin');
-        const result = await run(tx);
-        events.push('commit');
-        return result;
-    } };
+    const db = {
+        select: () => ({ from: () => ({ where: async () => [{ id: 7, accountStatus: 'ACTIVE' }] }) }),
+        transaction: async (run: (value: typeof tx) => unknown) => {
+            events.push('begin');
+            const result = await run(tx);
+            events.push('commit');
+            return result;
+        },
+    };
     const redis = {
         get: async () => '123456',
         compareAndClaim: async () => 300_000,
@@ -76,10 +80,46 @@ test('비밀번호 복구는 사용자 잠금, 해시·epoch 갱신, 전체 세�
     const service = new AuthService(
         db as never, redis as never, {} as never, {} as never, {} as never,
         {} as never, sessions as never, {} as never,
+        {
+            authorizePasswordReset: async () => {
+                events.push('authorize-mfa');
+                return { kind: 'not-enabled' };
+            },
+            assertAccountAuthorizationCurrent: async () => { events.push('assert-mfa-under-lock'); },
+        } as never,
     );
     assert.deepEqual(
         await service.resetPassword({ email: 'user@example.com', code: '123456', newPassword: 'Newpass1!' }),
         { reset: true },
     );
-    assert.deepEqual(events, ['begin', 'lock-user', 'update-user', 'revoke-all', 'commit']);
+    assert.deepEqual(events, ['authorize-mfa', 'begin', 'lock-user', 'assert-mfa-under-lock', 'update-user', 'revoke-all', 'commit']);
+});
+
+test('2차 인증 계정의 비밀번호 복구는 2차 확인 전에는 갱신 트랜잭션에 들어가지 않고 메일 코드를 돌려놓는다', async () => {
+    let released = false;
+    let transactions = 0;
+    const db = {
+        select: () => ({ from: () => ({ where: async () => [{ id: 7, accountStatus: 'ACTIVE' }] }) }),
+        transaction: async () => { transactions += 1; },
+    };
+    const redis = {
+        get: async () => '123456',
+        compareAndClaim: async () => 300_000,
+        releaseClaim: async () => { released = true; return true; },
+    };
+    const service = new AuthService(
+        db as never, redis as never, {} as never, {} as never, {} as never,
+        {} as never, {} as never, {} as never,
+        {
+            authorizePasswordReset: async () => {
+                throw new HttpException({ code: 'MFA_REQUIRED' }, HttpStatus.UNAUTHORIZED);
+            },
+        } as never,
+    );
+    await assert.rejects(
+        service.resetPassword({ email: 'user@example.com', code: '123456', newPassword: 'Newpass1!' }),
+        (error: any) => error?.response?.code === 'MFA_REQUIRED',
+    );
+    assert.equal(transactions, 0);
+    assert.equal(released, true);
 });

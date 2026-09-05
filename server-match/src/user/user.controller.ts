@@ -13,6 +13,7 @@ import { refreshCookieOptions } from '../auth/refresh-cookie';
 import { SessionSecurityService } from '../session/session-security.service';
 import { auditContextWithIp } from '../admin/audit-log';
 import { LegalConsentDto } from './dto/legal-consent.dto';
+import { TRUSTED_DEVICE_COOKIE, trustedDeviceCookieOptions } from '../mfa/trusted-device-cookie';
 
 type AccountRequest = FastifyRequest & { user: { id: number; sessionId: string; guest: false } };
 
@@ -103,9 +104,11 @@ export class UserController {
         await this.userService.deleteUser(
             req.user.id,
             dto.code,
+            dto.secondFactorCode,
             auditContextWithIp(this.sessionSecurity, req.ip),
         );
         res.clearCookie('refreshToken', refreshCookieOptions(this.configService));
+        res.clearCookie(TRUSTED_DEVICE_COOKIE, trustedDeviceCookieOptions(this.configService));
         return { deleted: true };
     }
 }

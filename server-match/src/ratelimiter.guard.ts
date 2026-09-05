@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { RATE_LIMIT_KEY, RateLimitOptions } from './ratelimiter.decorator';
 import { RedisService } from './redis/redis.service';
 import { SessionSecurityService } from './session/session-security.service';
+import { createHash } from 'node:crypto';
 
 /**
  * 자동 점검용 완화 배수.
@@ -111,6 +112,33 @@ export class RateLimiterGuard extends RedisRateGuard {
                 options.limit,
                 options.ttl,
             );
+        }
+
+        /*
+         * 로그인 2차 도전값의 첫 조각은 서버가 계정별 HMAC으로 발급한 불투명 대상 표지다.
+         * 새 도전값을 받아도 이 조각은 같으므로 도전값을 갈아치워 대상 버킷을 초기화할 수 없다.
+         * 변조한 표지는 서비스의 Redis 키와 일치하지 않아 검증까지 가지 못하고 IP 비용만 낸다.
+         */
+        const challenge = typeof req.body?.challengeToken === 'string' ? req.body.challengeToken : '';
+        const challengeTarget = /^([0-9a-f]{64})\.[A-Za-z0-9_-]{32,}$/.exec(challenge)?.[1];
+        if (challengeTarget) {
+            await this.consume(
+                `auth-rate:actor:mfa-challenge:${createHash('sha256').update(challenge, 'utf8').digest('hex')}`,
+                options.limit,
+                options.ttl,
+            );
+            await this.consume(`auth-rate:target:mfa:${challengeTarget}`, options.limit, options.ttl);
+        }
+
+        // 로그인 뒤의 2차 코드 시도도 actor 버킷과 별개의 대상 계정 버킷을 함께 센다.
+        const route = String(req.routeOptions?.url ?? req.routerPath ?? req.url ?? '');
+        const accountMfaTarget = req.user && !req.user.guest && (
+            route.startsWith('/users/me/mfa')
+            || typeof req.body?.secondFactorCode === 'string'
+            || (req.method === 'DELETE' && route === '/users/me')
+        );
+        if (accountMfaTarget) {
+            await this.consume(`auth-rate:target:account:${req.user.id}`, options.limit, options.ttl);
         }
         return true;
     }

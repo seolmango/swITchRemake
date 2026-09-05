@@ -5,11 +5,12 @@ import { UserController } from "./user.controller";
 import { SanctionModule } from '../sanction/sanction.module';
 import { SessionModule } from '../session/session.module';
 import { RoomsModule } from '../rooms/rooms.module';
+import { MfaModule } from '../mfa/mfa.module';
 
 @Module({
     controllers: [UserController],
     providers: [UserService, ReplayDownloadService],
     exports: [UserService],
-    imports: [SanctionModule, SessionModule, RoomsModule],
+    imports: [SanctionModule, SessionModule, RoomsModule, MfaModule],
 })
 export class UserModule {}

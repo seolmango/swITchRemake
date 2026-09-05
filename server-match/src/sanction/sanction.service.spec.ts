@@ -39,11 +39,13 @@ test('탈퇴는 한 트랜잭션에서 개인정보·누적치·동의를 지우
     const statements: SQL[] = [];
     const tx = {
         select: () => ({
-            from: () => ({
-                where: () => ({
-                    for: async () => [{ status: 'ACTIVE', email: 'User@Example.com' }],
-                }),
-            }),
+            from: (table: unknown) => table === schema.mfaSettings
+                ? { where: async () => [] }
+                : {
+                    where: () => ({
+                        for: async () => [{ status: 'ACTIVE', email: 'User@Example.com' }],
+                    }),
+                },
         }),
         execute: async (query: SQL) => { statements.push(query); return []; },
         update: (table: unknown) => ({
@@ -88,6 +90,9 @@ test('탈퇴는 한 트랜잭션에서 개인정보·누적치·동의를 지우
     assert.equal(user.termsVersion, null);
     assert.equal(user.privacyAgreedAt, null);
     assert.ok(deletes.includes(schema.sessions));
+    assert.ok(deletes.includes(schema.mfaSettings));
+    assert.ok(deletes.includes(schema.mfaBackupCodes));
+    assert.ok(deletes.includes(schema.trustedDevices));
     assert.equal([
         String(user.email),
         String(user.passwordHash),
@@ -101,4 +106,27 @@ test('탈퇴는 한 트랜잭션에서 개인정보·누적치·동의를 지우
     assert.match(hmacUpdate, /sanction\.expires_at > \$\d+::timestamptz/);
     assert.match(hmacUpdate, /sanction\.type = 'ban' and sanction\.expires_at is null/);
     assert.match(hmacUpdate, /not exists \( select 1 from sanction_revocations/);
+});
+
+test('2차 인증 설정이 있는 계정은 메일 탈퇴 코드만으로 삭제할 수 없다', async () => {
+    let writes = 0;
+    const tx = {
+        select: () => ({
+            from: (table: unknown) => table === schema.mfaSettings
+                ? { where: async () => [{ method: 'totp' }] }
+                : { where: () => ({ for: async () => [{ status: 'ACTIVE', email: 'user@example.com' }] }) },
+        }),
+        update: () => { writes += 1; return {} as never; },
+        delete: () => { writes += 1; return {} as never; },
+        execute: () => { writes += 1; return Promise.resolve([]); },
+    };
+    const service = new SanctionService(
+        { transaction: async (run: (value: typeof tx) => unknown) => run(tx) } as never,
+        { hmacEmail: () => 'hmac' } as never,
+    );
+    await assert.rejects(
+        service.deleteAccount(7, 'user:7', 'delete', auditContext()),
+        (error: any) => error?.response?.code === 'MFA_REQUIRED',
+    );
+    assert.equal(writes, 0);
 });

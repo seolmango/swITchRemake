@@ -31,7 +31,7 @@ function createService(passwordHash: string, updateSucceeds = true) {
         select: () => ({ from: () => ({ where: async () => [{ passwordHash }] }) }),
         transaction: async (callback: (value: unknown) => Promise<unknown>) => callback(tx),
     };
-    const service = new UserService(db as never, {} as never, {} as never, sessions as never, {} as never, {} as never);
+    const service = new UserService(db as never, {} as never, {} as never, sessions as never, {} as never, {} as never, {} as never);
     return { service, writes, sessions, tx };
 }
 
