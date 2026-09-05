@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../theme/color.ts';
+import { statusInkColors, themeColors } from '../theme/color.ts';
 import { applyAppearanceToDocument } from '../theme/cssVariables.ts';
 
 export const UnsupportedBrowserPage: React.FC = () => {
@@ -25,7 +25,7 @@ export const UnsupportedBrowserPage: React.FC = () => {
             style={{
                 '--entry-panel': colors.panel,
                 '--entry-canvas': colors.canvas,
-                '--entry-border': theme === 0 ? Color.red[1] : Color.red[2],
+                '--entry-border': statusInkColors(theme).bad,
                 '--entry-text': colors.text,
                 '--entry-muted': colors.muted,
                 '--entry-field': colors.field,

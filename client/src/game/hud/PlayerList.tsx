@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types.ts';
 import type { HudPlayer } from './hudTypes.ts';
-import { Color } from '../../theme/color.ts';
-import { HUD_DISPLAY_FONT, HUD_FONT, HUD_METRICS, bodyText, mutedText, panel, userColors } from './hudTheme.ts';
+import { Color, statusInkColors } from '../../theme/color.ts';
+import { HUD_DISPLAY_FONT, HUD_FONT, HUD_METRICS, bodyText, mutedText, panel, surface, userColors } from './hudTheme.ts';
 import type { ColorVisionMode } from '../../theme/cvd.ts';
 import { playerLabel } from './playerLabel.ts';
 
@@ -37,36 +38,65 @@ interface Props {
  * being a scoreboard and becomes the control.
  *
  * Changed from legacy: the tagger gets a written label instead of only a hue shift, and the dead stay in
- * place greyed out instead of being removed — a roster that reflows mid-match is hard to track.
+ * place greyed out instead of being removed — a roster that reflows mid-match is hard to track. Compact
+ * phone layouts start with the detailed roster folded behind the survivor count; one tap restores it.
  */
 export const PlayerList: React.FC<Props> = ({
     theme, colorVision, compact, players, selfId, switchTargets, onSwitchTarget, spectating, spectatingId, onSpectate,
 }) => {
+    const { t } = useTranslation();
+    const [expanded, setExpanded] = useState(false);
     const aliveCount = players.filter((p) => p.alive).length;
     const targetable = new Set(switchTargets);
+    const collapsed = compact && !expanded;
+    const statusInk = statusInkColors(theme);
+
+    const summary = (
+        <>
+            <span>생존</span>
+            <span style={{ color: bodyText(theme), fontFamily: HUD_DISPLAY_FONT, fontSize: 22, fontWeight: 400 }}>
+                {aliveCount}<span style={{ color: mutedText(theme), fontFamily: HUD_FONT, fontSize: HUD_METRICS.captionFont, fontWeight: 700 }}> / {players.length}</span>
+            </span>
+        </>
+    );
 
     return (
         <div style={{
             ...panel(theme),
             position: 'absolute', top: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner, right: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner,
             padding: compact ? HUD_METRICS.panelPaddingCompact : HUD_METRICS.panelPadding,
-            // 한글 12자를 처음부터 담는다. 작은 화면에서도 번호만 남겨 이름을 버리지 않는다.
-            minWidth: compact ? 250 : 330,
+            // 펼친 명단은 한글 12자를 담는다. compact에서는 생존자 수만 먼저 보이고 이름은 한 번 눌러 펼친다.
+            minWidth: collapsed ? 170 : compact ? 250 : 330,
             maxHeight: compact ? `calc(100% - ${HUD_METRICS.cornerCompact * 2}px)` : `calc(100% - ${HUD_METRICS.corner * 2}px)`,
             display: 'flex', flexDirection: 'column',
             fontFamily: HUD_FONT,
         }}>
-            <div style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flex: 'none',
-                padding: '0 3px 11px', color: mutedText(theme), fontSize: HUD_METRICS.captionFont, fontWeight: 700, letterSpacing: 0.5,
-            }}>
-                <span>생존</span>
-                <span style={{ color: bodyText(theme), fontFamily: HUD_DISPLAY_FONT, fontSize: 22, fontWeight: 400 }}>
-                    {aliveCount}<span style={{ color: mutedText(theme), fontFamily: HUD_FONT, fontSize: HUD_METRICS.captionFont, fontWeight: 700 }}> / {players.length}</span>
-                </span>
-            </div>
+            {compact ? (
+                <button
+                    type="button"
+                    aria-expanded={!collapsed}
+                    aria-label={t(collapsed ? 'game.playerListExpand' : 'game.playerListCollapse')}
+                    onClick={() => setExpanded((value) => !value)}
+                    style={{
+                        minHeight: 56, padding: '0 3px', border: 0, background: 'transparent',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16,
+                        color: mutedText(theme), fontFamily: HUD_FONT, fontSize: HUD_METRICS.captionFont,
+                        fontWeight: 700, letterSpacing: 0.5, cursor: 'pointer',
+                    }}
+                >
+                    {summary}
+                    <span aria-hidden="true" style={{ color: bodyText(theme), fontSize: 20 }}>{collapsed ? '＋' : '−'}</span>
+                </button>
+            ) : (
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flex: 'none',
+                    padding: '0 3px 11px', color: mutedText(theme), fontSize: HUD_METRICS.captionFont, fontWeight: 700, letterSpacing: 0.5,
+                }}>
+                    {summary}
+                </div>
+            )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, overflowY: 'auto', minHeight: 0 }}>
+            {!collapsed && <div style={{ display: 'flex', flexDirection: 'column', gap: 7, overflowY: 'auto', minHeight: 0 }}>
                 {players.map((p) => {
                     const [fill, stroke] = userColors(p.colorIndex, colorVision);
                     const isSelf = p.id === selfId;
@@ -87,15 +117,16 @@ export const PlayerList: React.FC<Props> = ({
                             title={canTarget ? `스위치 대상 (${playerLabel(p.id)})` : canWatch ? '이 플레이어 관전' : undefined}
                             style={{
                                 display: 'flex', alignItems: 'center', gap: 9,
+                                minHeight: 56, boxSizing: 'border-box',
                                 padding: compact ? 4 : '4px 11px 4px 4px', borderRadius: 999,
                                 background: fill,
-                                border: `2px solid ${p.isTagger ? Color.red[2] : (isSelf || watching ? Color.black : stroke)}`,
+                                border: `2px solid ${p.isTagger ? statusInk.bad : (isSelf || watching ? Color.black : stroke)}`,
                                 filter: p.alive ? 'none' : 'grayscale(1)',
                                 opacity: p.alive ? 1 : 0.45,
                                 cursor: clickable ? 'pointer' : 'default',
                                 // Eligible switch targets get a halo, so "who can I swap with right now"
                                 // is answerable at a glance instead of by trial and error.
-                                boxShadow: canTarget ? `0 0 0 2px ${Color.blue[2]}` : 'none',
+                                boxShadow: canTarget ? `0 0 0 2px ${statusInk.info}` : 'none',
                                 transition: 'box-shadow 120ms ease-out',
                             }}
                         >
@@ -103,7 +134,7 @@ export const PlayerList: React.FC<Props> = ({
                                 width: 34, height: 34, borderRadius: '50%', flex: 'none',
                                 display: 'grid', placeItems: 'center',
                                 background: Color.white,
-                                border: `2px solid ${p.isTagger ? Color.red[2] : stroke}`,
+                                border: `2px solid ${p.isTagger ? statusInk.bad : stroke}`,
                                 color: Color.black, fontSize: HUD_METRICS.bodyFont, fontWeight: 800,
                             }}>{playerLabel(p.id)}</span>
 
@@ -115,13 +146,13 @@ export const PlayerList: React.FC<Props> = ({
 
                             {compact ? null : p.isTagger ? (
                                 <span style={{
+                                    ...surface(theme, 'red', true),
                                     flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
-                                    background: Color.red[2], color: Color.white,
                                 }}>술래</span>
                             ) : canTarget ? (
                                 <span style={{
+                                    ...surface(theme, 'blue', true),
                                     flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
-                                    background: Color.blue[2], color: Color.white,
                                 }}>{playerLabel(p.id)}</span>
                             ) : watching ? (
                                 <span style={{
@@ -132,7 +163,7 @@ export const PlayerList: React.FC<Props> = ({
                         </div>
                     );
                 })}
-            </div>
+            </div>}
         </div>
     );
 };

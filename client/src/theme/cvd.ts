@@ -18,8 +18,21 @@
 // 8명이 전부 같은 색으로 보이며, 교체 후에는 확실히 갈린다.
 //
 // 색을 못 쓰는 상황을 대비한 2차 단서(본체 번호, 술래의 깃발/링 모양)는 그대로 유지된다.
+//
+// ⚠️ **위 측정값은 재현되지 않는다.** 2026-09-05에 표준 Viénot 구현 둘(논문 원본 행렬,
+// HPE/D65 정규화)로 같은 색 쌍을 다시 재 봤는데 어느 쪽도 위 숫자에 닿지 않았다.
+// 예를 들어 "녹색약에서 옛 수풀[2]와 빨강[2]이 ΔE 2.1"이라 적혀 있지만, 두 구현은
+// 각각 13.4와 4.8을 냈다. 같은 색 쌍이 구현에 따라 세 배 넘게 갈린다.
+//
+// 그래서 **이 팔레트가 틀렸다는 뜻은 아니다.** 다만 위 숫자를 근거로 인용하거나, 같은
+// 기준으로 새 색을 고르거나, 자동 점검의 문턱으로 삼지 마라 — 재현할 수 없는 값이다.
+// 다시 세우려면 시뮬레이션 구현 하나를 저장소 안에 두고(인게임과 UI가 같은 것을 쓰게),
+// 그 구현으로 값을 다시 뽑아 여기 적어야 한다.
+//
+// 그때까지 색약 안전은 **색이 아닌 2차 단서**가 맡는다. UI 쪽은 모양과 글자를 함께 쓰고
+// (`accessibility.test.ts`가 그것을 고정한다), 인게임은 번호와 링 모양이 그 역할이다.
 
-import { Color } from './color.ts';
+import { Color, statusInkColors } from './color.ts';
 
 export type ColorVisionMode = 'off' | 'protanopia' | 'deuteranopia' | 'tritanopia';
 
@@ -102,13 +115,19 @@ export const userColorsFor = (colorIndex: number, mode: ColorVisionMode): readon
     return (user[colorIndex] ?? user[0]!) as readonly [string, string];
 };
 
-/** React UI의 성공·주의·위험 색. 성공/주의는 검증된 색각 보조 램프를 그대로 쓴다. */
-export const uiStatusColorsFor = (mode: ColorVisionMode) => {
+/**
+ * React UI의 상태색. 파스텔 fill은 선택한 색각 팔레트를 따르고, 뜻을 지는 ink는 세 유형을 모두
+ * 통과한 공용 팔레트라 모드와 관계없이 유지된다.
+ */
+export const uiStatusColorsFor = (mode: ColorVisionMode, theme: 0 | 1) => {
     const palette = colorVisionPalette(mode);
+    const ink = statusInkColors(theme);
     return {
-        good: palette.grass[2]!,
-        warn: palette.frenzy[2]!,
-        bad: Color.red[2]!,
-        checking: palette.frenzy[2]!,
+        ...ink,
+        checking: ink.warn,
+        goodFill: palette.grass[0]!,
+        warnFill: palette.frenzy[0]!,
+        badFill: Color.red[0]!,
+        infoFill: Color.blue[0]!,
     } as const;
 };

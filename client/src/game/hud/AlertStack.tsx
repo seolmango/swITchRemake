@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Theme } from '../types.ts';
 import type { HudAlert } from './hudTypes.ts';
-import { Color } from '../../theme/color.ts';
-import { HUD_FONT, HUD_METRICS, bodyText, panel } from './hudTheme.ts';
+import { statusInkColors } from '../../theme/color.ts';
+import { HUD_FONT, HUD_METRICS, bodyText, panel, surface } from './hudTheme.ts';
 
 interface Props {
     theme: Theme;
     alerts: readonly HudAlert[];
     /** Pushes the stack down when a standing warning already occupies the top-centre slot. */
     offsetTop: number;
+    compact: boolean;
 }
 
 const LIFETIME_MS = 3400;
@@ -19,9 +20,10 @@ const MAX_VISIBLE = 3;
  * are still in that feed and drops each visible notification after `LIFETIME_MS`.
  *
  * Doing expiry here rather than in the caller means a message can't be cut short by an unrelated state
- * push, and the caller never has to run timers just to make text disappear.
+ * push, and the caller never has to run timers just to make text disappear. Compact layouts draw only
+ * the newest item while retaining the rest until their normal expiry.
  */
-export const AlertStack: React.FC<Props> = ({ theme, alerts, offsetTop }) => {
+export const AlertStack: React.FC<Props> = ({ theme, alerts, offsetTop, compact }) => {
     const [visible, setVisible] = useState<HudAlert[]>([]);
     const seenRef = useRef(new Set<number>());
     const timersRef = useRef(new Map<number, number>());
@@ -58,15 +60,16 @@ export const AlertStack: React.FC<Props> = ({ theme, alerts, offsetTop }) => {
             position: 'absolute', top: offsetTop, left: '50%', transform: 'translateX(-50%)',
             display: 'flex', flexDirection: 'column', gap: 9, alignItems: 'center',
             fontFamily: HUD_FONT, pointerEvents: 'none',
-        }}>
-            {visible.map((a) => (
+        }} role="status" aria-live="polite" aria-atomic="true">
+            {(compact ? visible.slice(-1) : visible).map((a) => (
                 <div
                     key={a.id}
                     style={a.tone === 'danger'
                         ? {
+                            ...surface(theme, 'red', true),
                             padding: '11px 21px', borderRadius: HUD_METRICS.controlRadius, whiteSpace: 'nowrap',
-                            background: Color.red[2], color: Color.white, fontSize: HUD_METRICS.bodyFont, fontWeight: 800,
-                            boxShadow: `0 3px 14px color-mix(in srgb, ${Color.red[2]} 48%, transparent)`,
+                            fontSize: HUD_METRICS.bodyFont, fontWeight: 800,
+                            boxShadow: `0 3px 14px color-mix(in srgb, ${statusInkColors(theme).bad} 48%, transparent)`,
                         }
                         : {
                             ...panel(theme), padding: '11px 21px', whiteSpace: 'nowrap',

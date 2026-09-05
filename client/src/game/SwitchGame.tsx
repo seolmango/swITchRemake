@@ -8,6 +8,9 @@ import { useSettingsStore } from '../stores/useSettingsStore.ts';
 import { PerformanceStats } from './hud/PerformanceStats.tsx';
 import { TouchControls } from './hud/touch/TouchControls.tsx';
 import { useTouchControlsVisible } from './hud/touch/useTouchControls.ts';
+import { useGameContainerScale } from '../components/layout/GameContainer.tsx';
+import { hudScaleCompensation } from './hud/hudTheme.ts';
+import { MobileOrientationSuggestion } from './hud/MobileOrientationSuggestion.tsx';
 
 export interface SwitchGameProps {
     mode?: EngineMode;
@@ -26,6 +29,8 @@ export interface SwitchGameProps {
     matchReady?: boolean;
     latencyMs?: number | null;
     estimatedTps?: number | null;
+    /** Only the live /game route recommends landscape; replay/help embeds must stay quiet. */
+    suggestLandscape?: boolean;
 }
 
 /**
@@ -47,6 +52,7 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
     matchReady = false,
     latencyMs = null,
     estimatedTps = null,
+    suggestLandscape = false,
 }) => {
     const theme = useSettingsStore((s) => s.theme);
     // 월드 쪽 설정은 GameCanvas가 엔진에 직접 밀어넣는다. 여기서 읽는 둘은 HUD(DOM)에만 걸리는 값이다.
@@ -54,6 +60,8 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
     const showControlHints = useSettingsStore((s) => s.showControlHints);
     const [engine, setEngine] = useState<SwitchEngine | null>(null);
     const touchVisible = useTouchControlsVisible();
+    const canvasScale = useGameContainerScale();
+    const hudScale = hudScaleCompensation(canvasScale);
 
     const handleEngine = useCallback((next: SwitchEngine | null) => {
         setEngine(next);
@@ -73,19 +81,30 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0 }}>
             <GameCanvas onEngine={handleEngine} mode={mode} />
-            <GameHud
-                key={matchReady ? 'match-ready' : 'match-loading'}
-                theme={theme}
-                mode={mode}
-                hud={hud}
-                colorVision={colorVision}
-                showControlHints={showControlHints}
-                matchReady={matchReady}
-                onUseMovementSkill={() => onUseMovementSkill?.()}
-                onSwitchTarget={(id) => onSwitchTarget?.(id)}
-                onSpectate={handleSpectate}
-                onEmoji={(id) => onEmoji?.(id)}
-            />
+            <div
+                data-hud-scale={hudScale.toFixed(3)}
+                style={{
+                    position: 'absolute', top: 0, left: 0,
+                    width: `${100 / hudScale}%`, height: `${100 / hudScale}%`,
+                    transform: `scale(${hudScale})`, transformOrigin: 'top left',
+                    pointerEvents: 'none',
+                }}
+            >
+                <GameHud
+                    key={matchReady ? 'match-ready' : 'match-loading'}
+                    theme={theme}
+                    mode={mode}
+                    hud={hud}
+                    colorVision={colorVision}
+                    showControlHints={showControlHints}
+                    matchReady={matchReady}
+                    onUseMovementSkill={() => onUseMovementSkill?.()}
+                    onSwitchTarget={(id) => onSwitchTarget?.(id)}
+                    onSpectate={handleSpectate}
+                    onEmoji={(id) => onEmoji?.(id)}
+                />
+                <PerformanceStats theme={theme} engine={engine} latencyMs={latencyMs} estimatedTps={estimatedTps} />
+            </div>
             {touchVisible && mode !== EngineMode.Spectate && (
                 <TouchControls
                     theme={theme}
@@ -96,7 +115,7 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
                     onEmoji={(id) => onEmoji?.(id)}
                 />
             )}
-            <PerformanceStats theme={theme} engine={engine} latencyMs={latencyMs} estimatedTps={estimatedTps} />
+            {suggestLandscape && <MobileOrientationSuggestion />}
         </div>
     );
 };

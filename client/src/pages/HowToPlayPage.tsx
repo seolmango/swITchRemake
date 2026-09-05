@@ -6,7 +6,7 @@ import { PageLayout } from '../components/layout/PageLayout.tsx';
 import { HUD_METRICS } from '../game/hud/hudTheme.ts';
 import { SKILL_TUNING } from 'shared';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../theme/color.ts';
+import { Color, statusInkColors, themeColors } from '../theme/color.ts';
 import { formatKeyBindings } from '../utils/keyBinding.ts';
 import { HelpDemoCanvas } from './howToPlay/HelpDemoCanvas.tsx';
 import { HELP_DEMO_IDS, TAGGER_DEMO_ID, type HelpDemoId } from './howToPlay/tutorialSnapshots.ts';
@@ -91,9 +91,9 @@ export const HowToPlayPage: React.FC = () => {
         '--guide-panel-border': colors.panelBorder,
         '--guide-canvas': colors.canvas,
         '--guide-blue-soft': theme === 0 ? Color.blue[0] : 'transparent',
-        '--guide-blue': Color.blue[2],
+        '--guide-blue': statusInkColors(theme).info,
         '--guide-red-soft': theme === 0 ? Color.red[0] : 'transparent',
-        '--guide-red': Color.red[2],
+        '--guide-red': statusInkColors(theme).bad,
         '--guide-gray': Color.gray[2],
         // HUD 크기를 쓰면 안 된다. HUD는 게임 화면 위에 얹히는 물건이라 작아야 하는 것이고,
         // 도움말은 전체 화면을 쓰는 페이지다. 타이틀·프로필 같은 다른 페이지의 눈금에 맞춘다.

@@ -20,6 +20,7 @@ export const PLAYER = {
     outlineWidth: px(3),
     labelFontPx: px(15),
     nameplateFontPx: px(13),
+    nameplateStrokePx: px(2.4),
     /** Gap between the bar stack's top and the nickname's baseline. */
     nameplateGap: px(5),
     selectionRingOffset: px(13),

@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import type { Theme } from '../../types.ts';
 import type { HudPlayer } from '../hudTypes.ts';
-import { Color } from '../../../theme/color.ts';
+import { Color, statusInkColors } from '../../../theme/color.ts';
 import type { ColorVisionMode } from '../../../theme/cvd.ts';
 import { slotFromOffset } from '../../touchInput.ts';
 import { HUD_FONT } from '../hudTheme.ts';
@@ -35,6 +35,7 @@ export const ActionJoystick: React.FC<Props> = ({ theme, colorVision, size, mode
     const pointerId = useRef<number | null>(null);
     const [open, setOpen] = useState(false);
     const [hover, setHover] = useState<number | null>(null);
+    const infoInk = statusInkColors(theme).info;
 
     const track = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
         const base = baseRef.current;
@@ -81,7 +82,7 @@ export const ActionJoystick: React.FC<Props> = ({ theme, colorVision, size, mode
                     touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none',
                     display: 'grid', placeItems: 'center',
                     background: `color-mix(in srgb, ${theme === 1 ? Color.black : Color.white} ${open ? 52 : 32}%, transparent)`,
-                    border: `3px solid color-mix(in srgb, ${open ? Color.blue[2] : (theme === 1 ? Color.smoke[2] : Color.gray[1])} 85%, transparent)`,
+                    border: `3px solid ${open ? infoInk : Color.smoke[2]}`,
                     backdropFilter: 'blur(2px)',
                     fontFamily: HUD_FONT, fontWeight: 800, fontSize: size * 0.2,
                     color: theme === 1 ? Color.white : Color.black,

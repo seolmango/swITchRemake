@@ -71,6 +71,50 @@ a:focus-visible,
   color: var(--color-black);
 }
 
+.mobile-orientation-suggestion {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background: var(--theme-backdrop);
+  pointer-events: auto;
+}
+
+.mobile-orientation-card {
+  width: min(360px, 100%);
+  box-sizing: border-box;
+  padding: 24px;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  border: 4px solid var(--semantic-info);
+  border-radius: 24px;
+  background: var(--theme-canvas);
+  color: var(--theme-text);
+  text-align: center;
+}
+
+.mobile-orientation-icon { color: var(--semantic-info); font-size: 44px; font-weight: 800; line-height: 1; }
+.mobile-orientation-card h2 { margin: 0; font-family: var(--font-display); font-size: 27px; font-weight: normal; }
+.mobile-orientation-card p { margin: 0; color: var(--theme-muted); font-size: 17px; line-height: 1.45; }
+.mobile-orientation-card button {
+  min-width: 190px;
+  min-height: 48px;
+  margin-top: 4px;
+  padding: 8px 18px;
+  border: 3px solid var(--semantic-info);
+  border-radius: 15px;
+  background: var(--color-blue-0);
+  color: var(--color-black);
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 800;
+}
+html[data-theme='dark'] .mobile-orientation-card button { background: transparent; color: var(--theme-text); }
+
 .page-screen {
   position: absolute;
   inset: 0;
@@ -781,7 +825,7 @@ html[data-theme='dark'] .mfa-backup-dialog .mfa-primary-button { background: tra
 .keymap-help { margin: 24px 0 16px; padding: 22px 26px; display: grid; gap: 8px; }
 .keymap-help strong { font-size: 22px; }
 .keymap-help span { color: var(--settings-muted); font-size: 20px; font-weight: 300; line-height: 1.45; }
-.keymap-error { position: sticky; top: 6px; z-index: 2; margin: 10px 0; padding: 16px 20px; border: 4px solid var(--color-red-2); border-radius: 15px; background: color-mix(in srgb, var(--color-red-0) 92%, var(--settings-panel)); font-size: 20px; color: var(--color-black); }
+.keymap-error { position: sticky; top: 6px; z-index: 2; margin: 10px 0; padding: 16px 20px; border: 4px solid var(--semantic-bad); border-radius: 15px; background: color-mix(in srgb, var(--color-red-0) 92%, var(--settings-panel)); font-size: 20px; color: var(--color-black); }
 .keymap-group { margin-top: 26px; }
 .keymap-group h3 { position: sticky; top: 0; z-index: 1; margin: 0; padding: 18px 8px 13px; background: var(--settings-panel); font-family: var(--font-display); font-size: 26px; font-weight: normal; }
 .keymap-row { min-height: 84px; padding: 11px 8px; box-sizing: border-box; display: grid; grid-template-columns: 1fr 520px; align-items: center; gap: 25px; border-bottom: 3px solid color-mix(in srgb, var(--settings-border) 70%, transparent); }
@@ -835,7 +879,7 @@ html[data-theme='dark'] .mfa-backup-dialog .mfa-primary-button { background: tra
 .mfa-settings .is-danger { border-color: var(--settings-danger); color: var(--settings-danger); }
 .mfa-settings .is-danger:hover { background: var(--settings-danger-soft); color: var(--settings-dark-text); }
 .mfa-status-card { min-height: 110px; padding: 22px 28px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-.mfa-status-card.is-enabled { border-color: var(--semantic-good); background: color-mix(in srgb, var(--semantic-good) 20%, var(--settings-field)); }
+.mfa-status-card.is-enabled { border-color: var(--semantic-good); background: color-mix(in srgb, var(--semantic-good-fill) 58%, var(--settings-field)); }
 .mfa-status-card.is-disabled { border-color: var(--semantic-bad); }
 .mfa-status-card > div { display: grid; gap: 7px; }
 .mfa-status-copy { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 16px !important; }
@@ -1377,7 +1421,7 @@ html[data-motion='reduced'] .room-card {
 }
 
 .training-actions button:hover,
-.training-settings-close:hover { border-color: var(--color-blue-2); }
+.training-settings-close:hover { border-color: var(--semantic-info); }
 
 .training-respawn {
   position: absolute;
@@ -1386,7 +1430,7 @@ html[data-motion='reduced'] .room-card {
   bottom: 42px;
   min-width: 260px;
   transform: translateX(-50%);
-  border-color: var(--color-red-2);
+  border-color: var(--semantic-bad);
   font-size: 21px;
 }
 
@@ -1520,7 +1564,7 @@ html[data-motion='reduced'] .room-card {
   background: var(--session-field); display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center; gap: 14px; box-sizing: border-box;
 }
-.session-list article.is-current { border-color: var(--color-blue-2); }
+.session-list article.is-current { border-color: var(--semantic-info); }
 .session-list article > div { display: grid; min-width: 0; gap: 4px; }
 .session-list article strong { font-size: 21px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-list article div span { font-size: 16px; color: var(--session-muted); }
@@ -1609,7 +1653,7 @@ html[data-motion='reduced'] .room-card {
   font: inherit;
   font-size: 17px;
 }
-.lobby-lock-button[aria-pressed='true'] { border-color: var(--color-frenzy-2); background: color-mix(in srgb, var(--color-frenzy-0) 55%, var(--surface-field)); }
+.lobby-lock-button[aria-pressed='true'] { border-color: var(--semantic-warn); background: color-mix(in srgb, var(--color-frenzy-0) 55%, var(--surface-field)); }
 
 .lobby-player-grid {
   min-height: 0;
@@ -1648,7 +1692,7 @@ html[data-motion='reduced'] .room-card {
 .lobby-player-card.is-selectable:hover {
   opacity: 1;
   transform: translateY(-3px);
-  border-color: var(--color-blue-2);
+  border-color: var(--semantic-info);
   background: color-mix(in srgb, var(--color-blue-0) 28%, transparent);
 }
 .lobby-player-number {
@@ -1698,7 +1742,7 @@ html[data-motion='reduced'] .room-card {
   font: inherit;
 }
 .lobby-player-loadout > button { cursor: pointer; }
-.lobby-player-loadout > button:hover { border-color: var(--color-blue-2); background: color-mix(in srgb, var(--color-blue-0) 45%, var(--surface-field)); }
+.lobby-player-loadout > button:hover { border-color: var(--semantic-info); background: color-mix(in srgb, var(--color-blue-0) 45%, var(--surface-field)); }
 .lobby-player-loadout img { width: 36px; height: 36px; object-fit: contain; border-radius: 9px; }
 .lobby-player-loadout small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; }
 .lobby-skill-button > svg { margin-left: auto; flex: 0 0 auto; }
@@ -1731,7 +1775,7 @@ html[data-motion='reduced'] .room-card {
   cursor: pointer;
 }
 .lobby-host-actions button:hover { transform: translateY(-2px); }
-.lobby-host-actions button.is-danger { color: var(--theme-text); border-color: var(--color-red-2); }
+.lobby-host-actions button.is-danger { color: var(--theme-text); border-color: var(--semantic-bad); }
 html[data-theme='dark'] .lobby-host-actions button.is-danger { color: var(--color-red-0); }
 .lobby-empty-copy { padding-left: 66px; display: grid; gap: 6px; }
 .lobby-empty-copy strong { font-size: 23px; }
@@ -1795,7 +1839,7 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: var(--colo
   color: inherit;
   font-size: 20px;
 }
-.lobby-skill-picker button.is-current { border-color: var(--color-blue-2); background: color-mix(in srgb, var(--color-blue-0) 65%, var(--surface-field)); }
+.lobby-skill-picker button.is-current { border-color: var(--semantic-info); background: color-mix(in srgb, var(--color-blue-0) 65%, var(--surface-field)); }
 .lobby-dialog-cancel,
 .lobby-dialog-actions button {
   min-height: 58px;
@@ -1809,8 +1853,8 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: var(--colo
   font-weight: 700;
 }
 .lobby-dialog-actions { display: flex; gap: 14px; }
-.lobby-dialog-actions button.is-primary { border-color: var(--color-blue-2); background: var(--color-blue-0); color: var(--color-black); }
-.lobby-dialog-actions button.is-danger { border-color: var(--color-red-2); background: var(--color-red-0); color: var(--color-black); }
+.lobby-dialog-actions button.is-primary { border-color: var(--semantic-info); background: var(--color-blue-0); color: var(--color-black); }
+.lobby-dialog-actions button.is-danger { border-color: var(--semantic-bad); background: var(--color-red-0); color: var(--color-black); }
 
 .result-shell { display: grid; grid-template-rows: minmax(0, 1fr) 132px; color: var(--result-text); }
 .result-main { min-height: 0; padding: 25px; display: grid; grid-template-columns: 520px minmax(0, 1fr); gap: 24px; box-sizing: border-box; overflow: hidden; }
@@ -2260,7 +2304,7 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: var(--colo
 .profile-danger-zone > button {
   min-height: 48px;
   padding: 0 18px;
-  border: 4px solid var(--color-red-2);
+  border: 4px solid var(--semantic-bad);
   border-radius: 16px;
   background: transparent;
   color: var(--theme-text);
@@ -2286,7 +2330,7 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: var(--colo
 }
 .delete-code-field.is-second-factor > input { width: 430px; font-size: 20px; letter-spacing: .03em; }
 .delete-dialog-message { min-height: 26px; font-size: 17px !important; }
-.delete-dialog-message[data-failed='true'] { color: var(--semantic-bad) !important; }
+.delete-dialog-message[data-failed='true'] { color: var(--theme-text) !important; }
 
 /* 결과 표의 신고 버튼. 평소에는 눈에 안 띄다가 그 줄에 손이 갔을 때 드러난다 — 늘 붉게 켜
    두면 결과를 보는 화면이 아니라 고발하는 화면이 된다. */
@@ -2380,9 +2424,9 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: var(--colo
 .replay-verdict.is-modified { border-color: var(--semantic-bad); }
 .replay-verdict.is-unverified { border-color: var(--semantic-warn); }
 .replay-verdict strong::before { display: inline-block; width: 1.45em; font-weight: 700; }
-.replay-verdict.is-verified strong::before { content: '✓'; }
-.replay-verdict.is-modified strong::before { content: '!'; }
-.replay-verdict.is-unverified strong::before { content: '?'; }
+.replay-verdict.is-verified strong::before { content: '✓'; color: var(--semantic-good); }
+.replay-verdict.is-modified strong::before { content: '!'; color: var(--semantic-bad); }
+.replay-verdict.is-unverified strong::before { content: '?'; color: var(--semantic-warn); }
 .replay-verdict.is-unsupported strong::before { content: '×'; }
 .replay-meta dl { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 20px; }
 .replay-meta dl > div { display: grid; gap: 2px; min-width: 0; }

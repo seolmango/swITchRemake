@@ -1,5 +1,5 @@
 import { Color, themeColors } from './color.ts';
-import { colorVisionPalette, type ColorVisionMode } from './cvd.ts';
+import { colorVisionPalette, uiStatusColorsFor, type ColorVisionMode } from './cvd.ts';
 import type { MotionLevel } from '../stores/useSettingsStore.ts';
 
 type Theme = 0 | 1;
@@ -12,6 +12,7 @@ type CssVariables = Record<`--${string}`, string>;
 export const appearanceCssVariables = (theme: Theme, colorVisionMode: ColorVisionMode): CssVariables => {
     const colors = themeColors(theme);
     const vision = colorVisionPalette(colorVisionMode);
+    const status = uiStatusColorsFor(colorVisionMode, theme);
     return {
         '--color-white': Color.white,
         '--color-black': Color.black,
@@ -42,9 +43,14 @@ export const appearanceCssVariables = (theme: Theme, colorVisionMode: ColorVisio
         '--theme-field': colors.field,
         '--theme-backdrop': colors.backdrop,
         '--theme-focus': colors.focus,
-        '--semantic-good': vision.grass[2]!,
-        '--semantic-warn': vision.frenzy[2]!,
-        '--semantic-bad': Color.red[2]!,
+        '--semantic-good': status.good,
+        '--semantic-warn': status.warn,
+        '--semantic-bad': status.bad,
+        '--semantic-info': status.info,
+        '--semantic-good-fill': status.goodFill,
+        '--semantic-warn-fill': status.warnFill,
+        '--semantic-bad-fill': status.badFill,
+        '--semantic-info-fill': status.infoFill,
     };
 };
 

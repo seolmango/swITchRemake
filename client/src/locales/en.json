@@ -572,6 +572,13 @@
     "serverPending": "The game renderer is ready for server snapshots, but the room and game server connection is still in progress.",
     "reconnecting": "Restoring the connection… The match will resume shortly.",
     "noKeyBinding": "Unassigned",
+    "orientation": {
+      "title": "Landscape works best",
+      "body": "Rotate your device to see the HUD more clearly at a glance.",
+      "dismiss": "Keep playing in portrait"
+    },
+    "playerListExpand": "Expand player list",
+    "playerListCollapse": "Collapse player list",
     "skillRejected": {
       "notAlive": "You cannot use skills after elimination.",
       "noSkill": "That skill slot is unavailable.",

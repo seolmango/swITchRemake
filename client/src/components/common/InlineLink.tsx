@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../../theme/color.ts';
+import { statusInkColors, themeColors } from '../../theme/color.ts';
 
 interface InlineLinkProps {
     children: React.ReactNode;
@@ -11,12 +11,13 @@ interface InlineLinkProps {
 export const InlineLink: React.FC<InlineLinkProps> = ({ children, onClick, style }) => {
     const theme = useSettingsStore((state) => state.theme);
     const [hover, setHover] = useState(false);
+    const infoInk = statusInkColors(theme).info;
     return (
         <button type="button" className="inline-link" onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{
             border: 0,
-            borderBottom: `5px solid ${hover ? Color.blue[2] : themeColors(theme).muted}`,
+            borderBottom: `5px solid ${hover ? infoInk : themeColors(theme).muted}`,
             background: 'transparent',
-            color: hover ? Color.blue[2] : themeColors(theme).text,
+            color: hover ? infoInk : themeColors(theme).text,
             cursor: 'pointer',
             fontSize: 31,
             lineHeight: 1.15,

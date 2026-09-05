@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import type { Theme } from '../../types.ts';
 import type { HudPlayer } from '../hudTypes.ts';
-import { Color } from '../../../theme/color.ts';
+import { Color, statusInkColors } from '../../../theme/color.ts';
 import type { ColorVisionMode } from '../../../theme/cvd.ts';
 import { emojiDataUri } from '../../emoji.ts';
 import { HUD_FONT, HUD_METRICS, mutedText, userColors } from '../hudTheme.ts';
@@ -39,6 +39,7 @@ export const ActionWheel: React.FC<Props> = ({ theme, colorVision, mode, players
     const radius = Math.max(74, Math.min(150, shortSide * 0.3));
     const slot = radius * 0.46;
     const iconColor = theme === 1 ? Color.white : Color.black;
+    const infoInk = statusInkColors(theme).info;
 
     /*
      * `document.body`로 한 번 더 포털한다. 조이스틱을 화면 구석에 놓는 감싸개가
@@ -75,8 +76,8 @@ export const ActionWheel: React.FC<Props> = ({ theme, colorVision, mode, players
                                 transform: `translate(-50%, -50%) translate(${Math.cos(angle) * radius}px, ${Math.sin(angle) * radius}px) scale(${focused ? 1.16 : 1})`,
                                 display: 'grid', placeItems: 'center',
                                 background: theme === 1 ? Color.black : Color.white,
-                                border: `4px solid ${focused ? Color.blue[2] : tint}`,
-                                boxShadow: focused ? `0 0 0 5px color-mix(in srgb, ${Color.blue[2]} 34%, transparent)` : 'none',
+                                border: `4px solid ${focused ? infoInk : tint}`,
+                                boxShadow: focused ? `0 0 0 5px color-mix(in srgb, ${infoInk} 34%, transparent)` : 'none',
                                 opacity: focused ? 1 : 0.82,
                                 transition: 'transform 90ms ease-out, border-color 90ms ease-out, opacity 90ms ease-out',
                             }}

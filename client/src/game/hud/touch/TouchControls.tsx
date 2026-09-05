@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Theme } from '../../types.ts';
 import type { HudSkill, HudState } from '../hudTypes.ts';
-import { Color } from '../../../theme/color.ts';
+import { Color, statusInkColors } from '../../../theme/color.ts';
 import type { ColorVisionMode } from '../../../theme/cvd.ts';
 import { useSettingsStore } from '../../../stores/useSettingsStore.ts';
 import { HUD_FONT } from '../hudTheme.ts';
@@ -111,11 +111,12 @@ const ModeToggle: React.FC<{
     const pad = 8 * scale;
     const font = 15 * scale;
     const labels: Record<ActionMode, string> = { switch: '스위치', emoji: '이모지' };
+    const infoInk = statusInkColors(theme).info;
 
     return (
         <div style={{
             display: 'flex', borderRadius: 999, overflow: 'hidden', touchAction: 'none',
-            border: `3px solid color-mix(in srgb, ${theme === 1 ? Color.smoke[2] : Color.gray[1]} 80%, transparent)`,
+            border: `3px solid ${Color.smoke[2]}`,
             background: `color-mix(in srgb, ${theme === 1 ? Color.black : Color.white} 62%, transparent)`,
             backdropFilter: 'blur(2px)',
         }}>
@@ -128,10 +129,10 @@ const ModeToggle: React.FC<{
                         // pointerdown으로 받는다. click은 손을 뗀 뒤에 오고 조이스틱의 포인터 캡처와 겹친다.
                         onPointerDown={(event) => { event.preventDefault(); onChange(value); }}
                         style={{
-                            padding: `${pad}px ${pad * 1.9}px`, border: 'none', cursor: 'pointer',
+                            minHeight: 48 * scale, padding: `${pad}px ${pad * 1.9}px`, border: 'none', cursor: 'pointer',
                             fontFamily: HUD_FONT, fontSize: font, fontWeight: 800, whiteSpace: 'nowrap',
-                            background: selected ? Color.blue[2] : 'transparent',
-                            color: selected ? Color.white : (theme === 1 ? Color.smoke[2] : Color.gray[2]),
+                            background: selected ? infoInk : 'transparent',
+                            color: selected ? (theme === 1 ? Color.black : Color.white) : (theme === 1 ? Color.white : Color.black),
                         }}
                     >
                         {labels[value]}
@@ -150,6 +151,7 @@ const SkillButton: React.FC<{
 }> = ({ theme, skill, size, onUse }) => {
     const ready = skill.cooldown <= 0 && !skill.unavailable;
     const ratio = skill.cooldownTotal > 0 ? Math.max(0, Math.min(1, skill.cooldown / skill.cooldownTotal)) : 0;
+    const infoInk = statusInkColors(theme).info;
 
     return (
         <button
@@ -161,8 +163,8 @@ const SkillButton: React.FC<{
                 position: 'relative', width: size, height: size, borderRadius: '50%', padding: 0,
                 touchAction: 'none', overflow: 'hidden',
                 background: `color-mix(in srgb, ${theme === 1 ? Color.black : Color.white} 62%, transparent)`,
-                border: `4px solid ${ready ? Color.blue[2] : (theme === 1 ? Color.smoke[2] : Color.gray[1])}`,
-                boxShadow: ready ? `0 0 0 4px color-mix(in srgb, ${Color.blue[2]} 30%, transparent)` : 'none',
+                border: `4px solid ${ready ? infoInk : Color.smoke[2]}`,
+                boxShadow: ready ? `0 0 0 4px color-mix(in srgb, ${infoInk} 30%, transparent)` : 'none',
                 backdropFilter: 'blur(2px)',
             }}
         >

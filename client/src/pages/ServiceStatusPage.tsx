@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { RoundButton } from '../components/common/RoundButton.tsx';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../theme/color.ts';
+import { themeColors } from '../theme/color.ts';
 import { uiStatusColorsFor } from '../theme/cvd.ts';
 import { localizedServiceText, type ServiceStatus } from '../api/health.ts';
 
@@ -15,7 +15,7 @@ export const ServiceStatusPage: React.FC<{
     const theme = useSettingsStore((state) => state.theme);
     const colorVisionMode = useSettingsStore((state) => state.colorVisionMode);
     const colors = themeColors(theme);
-    const statusColors = uiStatusColorsFor(colorVisionMode);
+    const statusColors = uiStatusColorsFor(colorVisionMode, theme);
     const maintenance = status.kind === 'maintenance';
     const title = t(status.kind === 'checking' ? 'serviceStatus.checkingTitle' : maintenance ? 'serviceStatus.maintenanceTitle' : 'serviceStatus.offlineTitle');
     const body = status.kind === 'checking'
@@ -27,7 +27,7 @@ export const ServiceStatusPage: React.FC<{
         ? statusColors.checking
         : maintenance
             ? statusColors.warn
-            : theme === 0 ? Color.red[1] : Color.red[2];
+            : statusColors.bad;
 
     React.useEffect(() => {
         document.title = `${title} · swITch`;

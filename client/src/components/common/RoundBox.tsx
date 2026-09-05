@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
-import { toneColors, type ThemeTone } from '../../theme/color.ts';
+import { Color, statusInkColors, toneColors, type ThemeTone } from '../../theme/color.ts';
 
 interface RoundBoxProps {
     width: number;
@@ -16,6 +16,8 @@ export const RoundBox: React.FC<RoundBoxProps> = ({ width, height, type = 2, x, 
     const theme = useSettingsStore((state) => state.theme);
     const tone: ThemeTone = type === 0 ? 'red' : type === 1 ? 'blue' : 'gray';
     const ramp = toneColors(tone);
+    const statusInk = statusInkColors(theme);
+    const border = type === 0 ? statusInk.bad : type === 1 ? statusInk.info : Color.smoke[2];
     const absolute = x !== undefined && y !== undefined;
     return (
         <div style={{
@@ -23,7 +25,7 @@ export const RoundBox: React.FC<RoundBoxProps> = ({ width, height, type = 2, x, 
             height,
             boxSizing: 'border-box',
             borderRadius: 26,
-            border: `7px solid ${theme === 0 ? ramp[1] : ramp[2]}`,
+            border: `7px solid ${border}`,
             background: theme === 0 ? ramp[0] : 'transparent',
             position: absolute ? 'absolute' : 'relative',
             left: x,

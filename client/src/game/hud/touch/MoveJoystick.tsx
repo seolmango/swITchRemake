@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import type { Theme } from '../../types.ts';
-import { Color } from '../../../theme/color.ts';
+import { Color, statusInkColors } from '../../../theme/color.ts';
 import { clearTouchDirection, directionFromOffset, setTouchDirection } from '../../touchInput.ts';
 
 interface Props {
@@ -52,6 +52,7 @@ export const MoveJoystick: React.FC<Props> = ({ theme, size }) => {
     }, []);
 
     const active = knob !== null;
+    const infoInk = statusInkColors(theme).info;
 
     return (
         <div
@@ -74,7 +75,7 @@ export const MoveJoystick: React.FC<Props> = ({ theme, size }) => {
                 position: 'relative', width: size, height: size, borderRadius: '50%',
                 touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none',
                 background: `color-mix(in srgb, ${theme === 1 ? Color.black : Color.white} ${active ? 46 : 30}%, transparent)`,
-                border: `3px solid color-mix(in srgb, ${theme === 1 ? Color.smoke[2] : Color.gray[1]} ${active ? 85 : 55}%, transparent)`,
+                border: `3px solid ${active ? infoInk : Color.smoke[2]}`,
                 backdropFilter: 'blur(2px)',
                 transition: 'background-color 120ms ease-out, border-color 120ms ease-out',
             }}
@@ -85,8 +86,8 @@ export const MoveJoystick: React.FC<Props> = ({ theme, size }) => {
                 width: knobSize, height: knobSize, borderRadius: '50%',
                 transform: `translate(-50%, -50%) translate(${knob?.x ?? 0}px, ${knob?.y ?? 0}px)`,
                 background: theme === 1 ? Color.smoke[2] : Color.white,
-                border: `3px solid ${active ? Color.blue[2] : (theme === 1 ? Color.smoke[1] : Color.gray[1])}`,
-                boxShadow: active ? `0 0 0 3px color-mix(in srgb, ${Color.blue[2]} 32%, transparent)` : '0 2px 8px rgba(0,0,0,0.28)',
+                border: `3px solid ${active ? infoInk : Color.smoke[2]}`,
+                boxShadow: active ? `0 0 0 3px color-mix(in srgb, ${infoInk} 32%, transparent)` : '0 2px 8px rgba(0,0,0,0.28)',
                 pointerEvents: 'none',
                 transition: active ? 'none' : 'transform 140ms ease-out, border-color 120ms ease-out',
             }} />

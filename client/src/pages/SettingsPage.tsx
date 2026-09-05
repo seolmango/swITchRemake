@@ -6,13 +6,14 @@ import {
     type SettingsSection,
     useSettingsStore,
 } from '../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../theme/color.ts';
+import { Color, statusInkColors, themeColors } from '../theme/color.ts';
 import { formatKeyBinding } from '../utils/keyBinding.ts';
 import { TouchLayoutEditor } from '../game/hud/touch/TouchLayoutEditor.tsx';
 import { BgmCard } from '../components/settings/BgmCard.tsx';
 import { MfaSettings } from '../components/settings/MfaSettings.tsx';
 import { CreditsDialog, LegalDocumentDialog } from '../components/legal/LegalDialogs.tsx';
 import { OPERATOR_CREDIT, PRIVACY_POLICY } from '../legal/legalDocuments.ts';
+import { isMobileDevice } from '../utils/mobileDevice.ts';
 
 interface Choice<T extends string> {
     value: T;
@@ -101,11 +102,9 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
     const [generalDialog, setGeneralDialog] = useState<'privacy' | 'credits' | null>(null);
     const settings = useSettingsStore();
     const colors = themeColors(settings.theme);
+    const statusInk = statusInkColors(settings.theme);
 
-    const isMobile = useMemo(() => {
-        const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
-        return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && coarsePointer);
-    }, []);
+    const isMobile = useMemo(isMobileDevice, []);
 
     useEffect(() => {
         if (!editing) return;
@@ -352,8 +351,8 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                     '--settings-field': colors.field,
                     '--settings-muted': colors.muted,
                     '--settings-text': colors.text,
-                    '--settings-accent': settings.theme === 0 ? Color.blue[1] : Color.blue[2],
-                    '--settings-danger': Color.red[2],
+                    '--settings-accent': statusInk.info,
+                    '--settings-danger': statusInk.bad,
                     '--settings-danger-soft': Color.red[0],
                     '--settings-dark-text': Color.black,
                 } as React.CSSProperties}

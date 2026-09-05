@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RoomSummary } from '../../api/rooms.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../../theme/color.ts';
+import { Color, statusInkColors, themeColors } from '../../theme/color.ts';
 import { Icon } from '../common/Icon.tsx';
 
 interface RoomCardProps {
@@ -15,10 +15,10 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, onClick }) => {
     const theme = useSettingsStore((state) => state.theme);
     const [hover, setHover] = useState(false);
     const colors = themeColors(theme);
-    const accent = room.status === 'waiting' ? Color.blue[2] : Color.gray[2];
+    const accent = room.status === 'waiting' ? statusInkColors(theme).info : Color.smoke[2]!;
     const statusColor = theme === 0
         ? (room.status === 'waiting' ? colors.focus : Color.black)
-        : accent;
+        : (room.status === 'waiting' ? accent : colors.muted);
     return (
         <button
             type="button"
@@ -36,7 +36,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, onClick }) => {
             onMouseLeave={() => setHover(false)}
             style={{
             background: theme === 0 ? (hover ? Color.gray[1] : Color.gray[0]) : 'transparent',
-            borderColor: hover ? accent : (theme === 0 ? Color.gray[1] : Color.gray[2]),
+            borderColor: hover ? accent : Color.smoke[2],
             color: theme === 0 ? Color.black : (hover ? accent : colors.text),
             transform: hover ? 'scale(1.025)' : 'scale(1)',
             boxShadow: hover ? `0 12px 28px ${colors.backdrop}` : 'none',

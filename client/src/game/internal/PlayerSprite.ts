@@ -55,10 +55,10 @@ export class PlayerSprite {
     private readonly nameplate: Phaser.GameObjects.Text;
     private readonly emoji: Phaser.GameObjects.Image;
     /**
-     * 마지막으로 적용한 닉네임 색. Phaser의 `Text.setColor()`는 값이 같아도 `updateText()`를 태워
+     * 마지막으로 적용한 닉네임 잉크. Phaser의 `Text.setColor()`/`setStroke()`는 값이 같아도 `updateText()`를 태워
      * **텍스트를 캔버스에 다시 굽고 텍스처를 재업로드한다**(TextStyle.update -> parent.updateText).
      * 매 프레임 부르면 보이는 인원수 × 프레임률만큼 텍스처가 갈려 나가 메모리가 터진다.
-     * 실제로 경기 중 out-of-memory로 클라이언트가 죽었다. 값이 바뀔 때만 부른다.
+     * 실제로 경기 중 out-of-memory로 클라이언트가 죽었다. 색/외곽선은 테마가 바뀔 때만 갱신한다.
      */
     private nameplateColor: string | null = null;
 
@@ -127,6 +127,7 @@ export class PlayerSprite {
             if (this.nameplateColor !== nameColor) {
                 this.nameplateColor = nameColor;
                 this.nameplate.setColor(nameColor);
+                this.nameplate.setStroke(theme === 1 ? Color.black : Color.white, PLAYER.nameplateStrokePx);
             }
         }
         drawBars(this.bars, s, theme, t, opts);

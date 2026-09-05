@@ -1,8 +1,8 @@
 import React from 'react';
 import type { Theme } from '../types.ts';
 import type { HudPlayer } from './hudTypes.ts';
-import { Color } from '../../theme/color.ts';
-import { HUD_DISPLAY_FONT, HUD_FONT, HUD_METRICS, bodyText, mutedText, panel } from './hudTheme.ts';
+import { statusInkColors } from '../../theme/color.ts';
+import { HUD_DISPLAY_FONT, HUD_FONT, HUD_METRICS, bodyText, mutedText, panel, surface } from './hudTheme.ts';
 
 interface Props {
     theme: Theme;
@@ -57,10 +57,10 @@ export const StatusBar: React.FC<Props> = ({ theme, spectating, compact, elapsed
 
         {selfIsTagger && (
             <div style={{
+                ...surface(theme, 'red', true),
                 padding: compact ? '8px 13px' : '10px 16px', borderRadius: HUD_METRICS.controlRadius, whiteSpace: 'nowrap',
-                background: Color.red[2], color: Color.white,
                 fontSize: compact ? HUD_METRICS.bodyFontCompact : HUD_METRICS.bodyFont, fontWeight: 800, letterSpacing: 0.5,
-                boxShadow: `0 3px 12px color-mix(in srgb, ${Color.red[2]} 48%, transparent)`,
+                boxShadow: `0 3px 12px color-mix(in srgb, ${statusInkColors(theme).bad} 48%, transparent)`,
             }}>당신이 술래입니다</div>
         )}
     </div>

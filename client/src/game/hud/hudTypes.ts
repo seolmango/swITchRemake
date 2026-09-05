@@ -30,7 +30,10 @@ export interface HudSkill {
     id: string;
     label: string;
     iconUrl: string;
-    /** Keybind shown on the button. Without it a player has no way to learn the binding mid-match. */
+    /**
+     * 키보드 바인딩. 버튼에는 이름을 찍으므로 여기는 툴팁과 조작 안내가 쓴다.
+     * 터치로 하는 사람에게는 뜻이 없는 값이라 화면 앞면에 두지 않는다.
+     */
     key: string;
     /** Seconds left; 0 means ready. */
     cooldown: number;

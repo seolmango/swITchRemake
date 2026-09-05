@@ -7,7 +7,7 @@ import { SettingsDock } from "../components/layout/SettingsDock.tsx";
 import { ServerStatusIndicator } from '../components/status/ServerStatusIndicator.tsx';
 import { localizedServiceText, type ServiceAnnouncement } from '../api/health.ts';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../theme/color.ts';
+import { Color, statusInkColors, themeColors } from '../theme/color.ts';
 
 export const TitlePage: React.FC<{ announcement?: ServiceAnnouncement | null }> = ({ announcement = null }) => {
     const { t, i18n } = useTranslation();
@@ -27,7 +27,7 @@ export const TitlePage: React.FC<{ announcement?: ServiceAnnouncement | null }> 
                     aria-label={t('titlePage.announcement')}
                     style={{
                         '--title-notice-fill': theme === 0 ? Color.blue[0] : 'transparent',
-                        '--title-notice-border': theme === 0 ? Color.blue[1] : Color.blue[2],
+                        '--title-notice-border': statusInkColors(theme).info,
                         '--title-notice-text': colors.text,
                     } as React.CSSProperties}
                 >

@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { Color } from '../../theme/color.ts';
+import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH, gameCanvasScale } from './gameScale.ts';
 
-const DESIGN_WIDTH = 1920;
-const DESIGN_HEIGHT = 1080;
+const GameContainerScaleContext = createContext(1);
+
+/** Actual transform applied to the fixed design stage. Portalled controls intentionally ignore it. */
+export const useGameContainerScale = (): number => useContext(GameContainerScaleContext);
 
 interface GameContainerProps {
     children: React.ReactNode;
@@ -23,9 +26,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({
 
     useEffect(() => {
         const handleResize = () => {
-            const scaleX = window.innerWidth / DESIGN_WIDTH;
-            const scaleY = window.innerHeight / DESIGN_HEIGHT;
-            setScale(Math.min(scaleX, scaleY) * fillFactor);
+            setScale(gameCanvasScale(window.innerWidth, window.innerHeight, fillFactor));
         };
         window.addEventListener('resize', handleResize);
         handleResize();
@@ -50,8 +51,8 @@ export const GameContainer: React.FC<GameContainerProps> = ({
             overflow: 'clip'
         }}>
             <div style={{
-                width: `${DESIGN_WIDTH}px`,
-                height: `${DESIGN_HEIGHT}px`,
+                width: `${GAME_DESIGN_WIDTH}px`,
+                height: `${GAME_DESIGN_HEIGHT}px`,
                 transform: `scale(${scale})`,
                 transformOrigin: 'center center',
                 flexShrink: 0,
@@ -61,7 +62,9 @@ export const GameContainer: React.FC<GameContainerProps> = ({
                 pointerEvents: 'auto',
                 transition: 'background-color 0.3s ease'
             }}>
-                {children}
+                <GameContainerScaleContext.Provider value={scale}>
+                    {children}
+                </GameContainerScaleContext.Provider>
             </div>
         </div>
     );

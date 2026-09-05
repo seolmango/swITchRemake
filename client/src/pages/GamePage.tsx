@@ -363,6 +363,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
                     matchReady={matchReady}
                     latencyMs={session.latencyMs}
                     estimatedTps={session.estimatedTps}
+                    suggestLandscape={!training}
                 />
                 {training && matchReady && (
                     <>

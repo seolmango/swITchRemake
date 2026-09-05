@@ -1,6 +1,6 @@
 import React, { forwardRef, useId, useState } from 'react';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../../theme/color.ts';
+import { statusInkColors, themeColors } from '../../theme/color.ts';
 
 interface TextFieldProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
     label: string;
@@ -13,6 +13,7 @@ interface TextFieldProps extends Omit<React.InputHTMLAttributes<HTMLInputElement
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(({ label, value, onChange, error, hint, disabled, ...props }, ref) => {
     const theme = useSettingsStore((state) => state.theme);
     const colors = themeColors(theme);
+    const statusInk = statusInkColors(theme);
     const id = useId();
     const [focused, setFocused] = useState(false);
     const labelId = `${id}-label`;
@@ -44,7 +45,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(({ label, 
                     height: 72,
                     boxSizing: 'border-box',
                     border: 0,
-                    borderBottom: `6px solid ${error ? Color.red[2] : focused ? Color.blue[2] : colors.panelBorder}`,
+                    borderBottom: `6px solid ${error ? statusInk.bad : focused ? statusInk.info : colors.panelBorder}`,
                     borderRadius: '18px 18px 4px 4px',
                     outline: 'none',
                     padding: '6px 20px 0',

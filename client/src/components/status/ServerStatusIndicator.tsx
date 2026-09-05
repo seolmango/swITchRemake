@@ -43,7 +43,7 @@ export const ServerStatusIndicator: React.FC = () => {
     }, [checkConnection]);
 
     const colors = themeColors(theme);
-    const statusColors = uiStatusColorsFor(colorVisionMode);
+    const statusColors = uiStatusColorsFor(colorVisionMode, theme);
     const accent = connection === 'online' ? statusColors.good : connection === 'offline' ? statusColors.bad : statusColors.checking;
     const label = connection === 'online' && latency !== null
         ? t('serverStatus.connected', { latency })

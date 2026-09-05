@@ -1,12 +1,12 @@
 import type { CSSProperties } from 'react';
-import { Color, themeColors } from '../../theme/color.ts';
+import { Color, statusInkColors, themeColors } from '../../theme/color.ts';
 import { userColorsFor, type ColorVisionMode } from '../../theme/cvd.ts';
 import type { Theme } from '../types.ts';
 
 /**
- * The HUD follows the same light/dark rule as `RoundButton`: light mode fills with the pastel tone and
- * writes in near-black, dark mode drops the fill entirely and carries the colour in the border and text.
- * Centralised here so every HUD piece stays consistent instead of each re-deriving it.
+ * Light mode keeps the pastel fill and uses a darker ink; dark mode drops the coloured fill but keeps a
+ * black backing under world-overlaid text. Centralised here so every HUD piece stays consistent instead
+ * of each re-deriving it.
  *
  * Legacy drew all of this into the canvas with fixed 1600x900 coordinates, which is why it ended up
  * cramped and low-contrast. These are plain DOM styles, so spacing and contrast can be tuned freely.
@@ -23,11 +23,17 @@ const RAMP: Record<Tone, readonly string[]> = {
 
 export const surface = (theme: Theme, tone: Tone, emphasis = false): CSSProperties => {
     const ramp = RAMP[tone];
-    const border = emphasis ? ramp[2]! : ramp[1]!;
+    const ink = tone === 'red'
+        ? statusInkColors(theme).bad
+        : tone === 'blue'
+            ? statusInkColors(theme).info
+            : tone === 'frenzy'
+                ? statusInkColors(theme).warn
+                : Color.smoke[2]!;
     return {
-        background: theme === 1 ? 'transparent' : (emphasis ? ramp[1]! : ramp[0]!),
-        border: `2px solid ${border}`,
-        color: theme === 1 ? border : Color.black,
+        background: theme === 1 ? Color.black : (emphasis ? ramp[1]! : ramp[0]!),
+        border: `2px solid ${ink}`,
+        color: ink,
     };
 };
 
@@ -36,7 +42,7 @@ export const panel = (theme: Theme): CSSProperties => ({
     background: theme === 1
         ? `color-mix(in srgb, ${Color.black} 78%, transparent)`
         : `color-mix(in srgb, ${Color.white} 86%, transparent)`,
-    border: `3px solid ${theme === 1 ? Color.smoke[2] : Color.smoke[1]}`,
+    border: `3px solid ${Color.smoke[2]}`,
     borderRadius: 18,
     backdropFilter: 'blur(6px)',
 });
@@ -65,7 +71,7 @@ export const HUD_METRICS = Object.freeze({
     panelGapCompact: 9,
     captionFont: 14,
     bodyFont: 16,
-    bodyFontCompact: 15,
+    bodyFontCompact: 16,
     badgeFont: 14,
     skillSize: 92,
     skillSizeCompact: 72,
@@ -75,3 +81,30 @@ export const HUD_METRICS = Object.freeze({
     compactWidth: 820,
     compactHeight: 620,
 });
+
+export const HUD_MIN_SCREEN_PX = Object.freeze({
+    caption: 11,
+    body: 12,
+    badge: 11,
+});
+
+/**
+ * HUD-only inverse scale. At the 844×390 reference viewport it keeps captions/badges at 11px and body
+ * text above 12px. The cap is deliberate: portrait phones keep the playable world ahead of typography;
+ * touch controls already live outside the fixed stage and retain their physical size.
+ */
+export const HUD_MAX_SCALE_COMPENSATION = 2.2;
+const HUD_ROUNDING_MARGIN_PX = 0.1;
+
+export const hudScaleCompensation = (canvasScale: number): number => {
+    const safeScale = Math.max(canvasScale, Number.EPSILON);
+    const minimumMetricScale = Math.max(
+        (HUD_MIN_SCREEN_PX.caption + HUD_ROUNDING_MARGIN_PX) / HUD_METRICS.captionFont,
+        (HUD_MIN_SCREEN_PX.body + HUD_ROUNDING_MARGIN_PX) / HUD_METRICS.bodyFont,
+        (HUD_MIN_SCREEN_PX.badge + HUD_ROUNDING_MARGIN_PX) / HUD_METRICS.badgeFont,
+    );
+    return Math.min(HUD_MAX_SCALE_COMPENSATION, Math.max(1, minimumMetricScale / safeScale));
+};
+
+export const isCompactHud = (width: number, height: number): boolean =>
+    width < HUD_METRICS.compactWidth || height < HUD_METRICS.compactHeight;

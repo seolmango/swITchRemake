@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Theme } from '../types.ts';
 import type { HudSkill } from './hudTypes.ts';
-import { Color } from '../../theme/color.ts';
+import { Color, statusInkColors } from '../../theme/color.ts';
 import { HUD_FONT, HUD_METRICS, bodyText, mutedText, panel } from './hudTheme.ts';
 
 interface Props {
@@ -25,6 +25,7 @@ const SkillSlot: React.FC<{
 }> = ({ theme, size, skill, onClick, passive, blockedReason }) => {
     const ready = skill.cooldown <= 0 && !skill.unavailable && !blockedReason;
     const ratio = skill.cooldownTotal > 0 ? Math.max(0, Math.min(1, skill.cooldown / skill.cooldownTotal)) : 0;
+    const statusInk = statusInkColors(theme);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -37,8 +38,8 @@ const SkillSlot: React.FC<{
                     cursor: ready && !passive ? 'pointer' : 'default',
                     background: theme === 1 ? Color.black : Color.white,
                     // Ready reads as a lit blue rim, so availability is legible without reading the number.
-                    border: `3px solid ${ready ? Color.blue[2] : (theme === 1 ? Color.smoke[2] : Color.gray[1])}`,
-                    boxShadow: ready ? `0 0 0 3px color-mix(in srgb, ${Color.blue[2]} 38%, transparent)` : 'none',
+                    border: `3px solid ${ready ? statusInk.info : Color.smoke[2]}`,
+                    boxShadow: ready ? `0 0 0 3px color-mix(in srgb, ${statusInk.info} 38%, transparent)` : 'none',
                     overflow: 'hidden',
                     transition: 'border-color 120ms ease-out, box-shadow 120ms ease-out',
                 }}
@@ -71,10 +72,10 @@ const SkillSlot: React.FC<{
                 player has no way to learn that being the tagger disables switch entirely. */}
             <span style={{
                 fontSize: HUD_METRICS.badgeFont, fontWeight: 800, letterSpacing: 0.4,
-                color: blockedReason ? Color.red[2] : (ready ? bodyText(theme) : mutedText(theme)),
+                color: blockedReason ? statusInk.bad : (ready ? bodyText(theme) : mutedText(theme)),
                 padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap',
-                border: `2px solid ${ready ? (theme === 1 ? Color.smoke[2] : Color.gray[1]) : 'transparent'}`,
-            }}>{blockedReason ?? (skill.unavailable ? '—' : skill.key)}</span>
+                border: `2px solid ${ready ? Color.smoke[2] : 'transparent'}`,
+            }}>{blockedReason ?? (skill.unavailable ? '—' : skill.label)}</span>
         </div>
     );
 };
@@ -83,9 +84,13 @@ const SkillSlot: React.FC<{
  * Bottom-right, matching legacy's placement (RenderingManager.js:390-396) — under the hand that isn't on
  * the movement keys, and clear of the centre where the action is.
  *
- * Two fixes over legacy: the keybind is printed on the slot (otherwise it's unlearnable in-game), and the
- * cooldown is a draining wedge instead of a whole-button alpha ramp — with alpha alone, "one second left"
- * and "just pressed" looked nearly identical.
+ * 칸에는 **스킬 이름**을 찍는다. 예전에는 키를 찍었는데(게임 안에서 배울 데가 없다는 이유),
+ * 터치로 하는 사람에게는 뜻이 없는 글자였고 스위치는 "1 / 2 / 3 / 4 / 5 / 6 / 7 / 8"이라 폰
+ * 가로에서 칸을 통째로 먹었다. 키는 `ControlsGuide`가 이미 가르친다 — 거기서 Space와 1~8을
+ * 스킬 이름과 함께 보여 주고, 설정의 "조작 힌트 항상 표시"로 계속 띄워 둘 수도 있다.
+ *
+ * 쿨다운은 버튼 전체의 투명도가 아니라 줄어드는 부채꼴이다. 투명도만으로는 "1초 남음"과
+ * "방금 눌렀음"이 거의 같아 보였다.
  */
 export const SkillBar: React.FC<Props> = ({ theme, compact, movementSkill, switchSkill, onUseMovement, switchBlockedReason }) => {
     const size = compact ? HUD_METRICS.skillSizeCompact : HUD_METRICS.skillSize;

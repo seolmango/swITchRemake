@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../../theme/color.ts';
+import { statusInkColors, themeColors } from '../../theme/color.ts';
 import {
     ASSET_CREDITS,
     OPERATOR_CREDIT,
@@ -33,7 +33,7 @@ const DialogFrame: React.FC<DialogFrameProps> = ({ labelledBy, onClose, children
                 '--legal-field': colors.field,
                 '--legal-text': colors.text,
                 '--legal-muted': colors.muted,
-                '--legal-accent': theme === 0 ? Color.blue[1] : Color.blue[2],
+                '--legal-accent': statusInkColors(theme).info,
                 '--legal-backdrop': colors.backdrop,
             } as React.CSSProperties}
             onMouseDown={(event) => event.target === event.currentTarget && onClose()}
