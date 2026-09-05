@@ -16,6 +16,7 @@ import { isInAppBrowser, openInExternalBrowser } from '../../utils/inAppBrowser.
 import { createResultImage, shareOrSaveResultImage } from '../../utils/resultImage.ts';
 import { isValidMatchId } from '../../utils/matchId.ts';
 import { matchResultWinners } from '../../utils/matchResultWinners.ts';
+import { colorVisionPalette, userColorsFor } from '../../theme/cvd.ts';
 
 const IN_APP_BROWSER = typeof navigator !== 'undefined' && isInAppBrowser();
 
@@ -30,7 +31,9 @@ export const MatchResultPage: React.FC = () => {
     const { matchId } = useParams();
     const [searchParams] = useSearchParams();
     const theme = useSettingsStore((state) => state.theme);
+    const colorVisionMode = useSettingsStore((state) => state.colorVisionMode);
     const colors = themeColors(theme);
+    const visionColors = colorVisionPalette(colorVisionMode);
     const [result, setResult] = useState<MatchResultSnapshot | null>(null);
     const [message, setMessage] = useState('');
     const [loadFailed, setLoadFailed] = useState(false);
@@ -137,7 +140,7 @@ export const MatchResultPage: React.FC = () => {
                 switchRate: t('result.switchShort'),
                 tags: t('result.tagsShort'),
                 you: t('lobby.you'),
-            });
+            }, colorVisionMode);
             const action = await shareOrSaveResultImage(image, result.matchId, getShareSummary());
             setMessage(t(action === 'shared' ? 'result.imageShared' : 'result.imageSaved'));
         } catch (error) {
@@ -164,8 +167,8 @@ export const MatchResultPage: React.FC = () => {
                     '--surface-field': colors.field,
                     '--surface-muted': colors.muted,
                     '--result-text': colors.text,
-                    '--result-victory-fill': Color.frenzy[0],
-                    '--result-victory-accent': Color.frenzy[2],
+                    '--result-victory-fill': visionColors.frenzy[0],
+                    '--result-victory-accent': visionColors.frenzy[2],
                     '--result-self-fill': Color.blue[0],
                     '--result-progress': Color.blue[2],
                     '--result-dark-text': Color.black,
@@ -182,30 +185,34 @@ export const MatchResultPage: React.FC = () => {
                                     <strong>{t('result.noWinner')}</strong>
                                     <p>{t('result.noWinnerDetail')}</p>
                                 </div>
-                            ) : winners.map((winner) => (
-                                <article
-                                    key={winner.playerId}
-                                    style={{
-                                        '--winner-fill': theme === 0 ? Color.user[(winner.slot - 1) % Color.user.length]![0] : 'transparent',
-                                        '--winner-border': Color.user[(winner.slot - 1) % Color.user.length]![1],
-                                    } as React.CSSProperties}
-                                >
-                                    <div
-                                        className="result-winner-avatar"
+                            ) : winners.map((winner) => {
+                                const winnerColors = userColorsFor((winner.slot - 1) % Color.user.length, colorVisionMode);
+                                return (
+                                    <article
+                                        key={winner.playerId}
                                         style={{
-                                            background: Color.user[(winner.slot - 1) % Color.user.length]![0],
-                                            borderColor: Color.user[(winner.slot - 1) % Color.user.length]![1],
-                                        }}
+                                            '--winner-fill': theme === 0 ? winnerColors[0] : 'transparent',
+                                            '--winner-border': winnerColors[1],
+                                            '--winner-text': theme === 0 ? Color.black : colors.text,
+                                        } as React.CSSProperties}
                                     >
-                                        <span>{winner.slot}</span>
-                                        <i aria-hidden="true">★</i>
-                                    </div>
-                                    <div className="result-winner-copy">
-                                        <h2 title={winner.nickname}>{winner.nickname}</h2>
-                                        <p>{t('result.winnerDetail', { tags: winner.tagCount, success: winner.switchSuccess, tries: winner.switchTry })}</p>
-                                    </div>
-                                </article>
-                            ))}
+                                        <div
+                                            className="result-winner-avatar"
+                                            style={{
+                                                background: theme === 0 ? winnerColors[0] : 'transparent',
+                                                borderColor: winnerColors[1],
+                                            }}
+                                        >
+                                            <span>{winner.slot}</span>
+                                            <i aria-hidden="true">★</i>
+                                        </div>
+                                        <div className="result-winner-copy">
+                                            <h2 title={winner.nickname}>{winner.nickname}</h2>
+                                            <p>{t('result.winnerDetail', { tags: winner.tagCount, success: winner.switchSuccess, tries: winner.switchTry })}</p>
+                                        </div>
+                                    </article>
+                                );
+                            })}
                         </div>
                         <div className="result-summary-grid">
                             <div><span>{t('lobby.map')}</span><strong>{t(`lobby.maps.${result.map}`, { defaultValue: result.map })}</strong></div>

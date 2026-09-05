@@ -9,6 +9,7 @@ import { isVerificationCode } from '../../utils/validation.ts';
 import { getMfaStatus, type MfaMethod } from '../../api/mfa.ts';
 import { mfaErrorMessage, retryAfterSeconds } from '../../pages/auth/authErrorMessage.ts';
 import { deadlineAfterSeconds, useDeadlineSeconds } from '../../utils/deadline.ts';
+import { useModalFocusTrap } from '../common/useModalFocusTrap.ts';
 
 /**
  * 회원 탈퇴.
@@ -28,6 +29,7 @@ export const DeleteAccountDialog: React.FC<{ onClose: () => void; onDeleted: () 
     const [secondFactorCode, setSecondFactorCode] = useState('');
     const [retryDeadline, setRetryDeadline] = useState<number | null>(null);
     const retryRemaining = useDeadlineSeconds(retryDeadline);
+    const { dialogRef, onDialogKeyDown } = useModalFocusTrap<HTMLElement>(onClose);
 
     useEffect(() => {
         let active = true;
@@ -95,12 +97,14 @@ export const DeleteAccountDialog: React.FC<{ onClose: () => void; onDeleted: () 
             onMouseDown={(event) => event.target === event.currentTarget && onClose()}
         >
             <section
+                ref={dialogRef}
                 className="lobby-dialog"
                 role="alertdialog"
                 aria-modal="true"
                 aria-labelledby="delete-dialog-title"
                 aria-describedby="delete-dialog-body"
-                onKeyDown={(event) => event.key === 'Escape' && onClose()}
+                tabIndex={-1}
+                onKeyDown={onDialogKeyDown}
             >
                 <Icon name="remove" size={52}/>
                 <h2 id="delete-dialog-title">{t('profile.deleteTitle')}</h2>

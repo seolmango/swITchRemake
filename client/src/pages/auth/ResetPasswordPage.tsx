@@ -9,7 +9,7 @@ import { resetPassword, sendVerification } from '../../api/auth.ts';
 import { ApiError } from '../../api/http.ts';
 import { isEmail, isPassword, isVerificationCode } from '../../utils/validation.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../../theme/color.ts';
+import { themeColors } from '../../theme/color.ts';
 import { mfaErrorMessage, retryAfterSeconds } from './authErrorMessage.ts';
 import { deadlineAfterSeconds, useDeadlineSeconds } from '../../utils/deadline.ts';
 
@@ -98,7 +98,7 @@ export const ResetPasswordPage: React.FC = () => {
                         />
                     </div>
                 )}
-                <div className="status-message" role="status" style={{ color: error ? Color.red[2] : themeColors(theme).muted }}>
+                <div className={`status-message${error ? ' is-error' : ''}`} role="status" style={{ color: error ? themeColors(theme).text : themeColors(theme).muted }}>
                     {(retryRemaining ?? 0) > 0 ? t('auth.rateLimited', { seconds: retryRemaining }) : message || t(mfaRequired ? 'auth.resetMfaHelp' : 'auth.resetHelp')}
                 </div>
                 <RoundButton width={620} height={104} type={1} content={t('auth.resetAction')} disabled={!isVerificationCode(code) || !isPassword(password) || (mfaRequired && !secondFactorCode.trim()) || (retryRemaining ?? 0) > 0} isLoading={loading && codeSent} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>

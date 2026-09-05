@@ -6,6 +6,7 @@ import { PageLayout } from '../../components/layout/PageLayout.tsx';
 import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
 import { Icon } from '../../components/common/Icon.tsx';
+import { useModalFocusTrap } from '../../components/common/useModalFocusTrap.ts';
 import { LobbyPlayerCard } from '../../components/match/LobbyPlayerCard.tsx';
 import { type LobbySnapshot, type PlayerSkill } from '../../api/matches.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
@@ -52,6 +53,8 @@ export const LobbyPage: React.FC = () => {
     const [hostAction, setHostAction] = useState<HostAction | null>(null);
     const [skillPickerOpen, setSkillPickerOpen] = useState(false);
     const [pendingLoadout, setPendingLoadout] = useState<{ skill: PlayerSkill; errorEventId: number } | null>(null);
+    const skillDialog = useModalFocusTrap<HTMLElement>(() => setSkillPickerOpen(false), skillPickerOpen);
+    const hostDialog = useModalFocusTrap<HTMLElement>(() => setHostAction(null), hostAction !== null);
     const mapIds = mapCatalog?.hash === session.mapBundleHash && mapCatalog.origin === session.gameHttpOrigin
         ? mapCatalog.ids
         : null;
@@ -372,7 +375,7 @@ export const LobbyPage: React.FC = () => {
 
                 {skillPickerOpen && self && (
                     <div className="lobby-dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setSkillPickerOpen(false)}>
-                        <section className="lobby-dialog is-skill-dialog" role="dialog" aria-modal="true" aria-labelledby="skill-dialog-title" onKeyDown={(event) => event.key === 'Escape' && setSkillPickerOpen(false)}>
+                        <section ref={skillDialog.dialogRef} className="lobby-dialog is-skill-dialog" role="dialog" aria-modal="true" aria-labelledby="skill-dialog-title" tabIndex={-1} onKeyDown={skillDialog.onDialogKeyDown}>
                             <span className="result-kicker">{t('lobby.loadoutKicker')}</span>
                             <h2 id="skill-dialog-title">{t('lobby.changeSkill')}</h2>
                             <p>{t('lobby.changeSkillHelp')}</p>
@@ -391,7 +394,7 @@ export const LobbyPage: React.FC = () => {
 
                 {hostAction && actionTarget && (
                     <div className="lobby-dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setHostAction(null)}>
-                        <section className="lobby-dialog" role="alertdialog" aria-modal="true" aria-labelledby="host-dialog-title" aria-describedby="host-dialog-description" onKeyDown={(event) => event.key === 'Escape' && setHostAction(null)}>
+                        <section ref={hostDialog.dialogRef} className="lobby-dialog" role="alertdialog" aria-modal="true" aria-labelledby="host-dialog-title" aria-describedby="host-dialog-description" tabIndex={-1} onKeyDown={hostDialog.onDialogKeyDown}>
                             <Icon name={hostAction.type === 'kick' ? 'remove' : 'crown'} size={52}/>
                             <h2 id="host-dialog-title">{t(hostAction.type === 'kick' ? 'lobby.kickConfirmTitle' : 'lobby.passHostConfirmTitle')}</h2>
                             <p id="host-dialog-description">{t(hostAction.type === 'kick' ? 'lobby.kickConfirmBody' : 'lobby.passHostConfirmBody', { nickname: actionTarget.nickname })}</p>

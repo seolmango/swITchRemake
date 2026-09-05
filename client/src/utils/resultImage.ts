@@ -1,6 +1,7 @@
 import type { MatchResultSnapshot } from '../api/matches.ts';
 import { Color } from '../theme/color.ts';
 import { matchResultWinners } from './matchResultWinners.ts';
+import { colorVisionPalette, userColorsFor, type ColorVisionMode } from '../theme/cvd.ts';
 
 const roundRect = (context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number, fill: string, stroke?: string) => {
     context.beginPath();
@@ -61,7 +62,7 @@ export async function createResultImage(result: MatchResultSnapshot, labels: {
     switchRate: string;
     tags: string;
     you: string;
-}): Promise<Blob> {
+}, colorVisionMode: ColorVisionMode = 'off'): Promise<Blob> {
     await document.fonts?.ready;
 
     const canvas = document.createElement('canvas');
@@ -78,6 +79,7 @@ export async function createResultImage(result: MatchResultSnapshot, labels: {
     drawText(context, labels.title, 980, 120, 34, 700, 'right');
 
     const winners = matchResultWinners(result);
+    const visionColors = colorVisionPalette(colorVisionMode);
     const winnerIds = new Set(winners.map((winner) => winner.playerId));
     drawText(context, winners.length === 0 ? labels.noWinner : labels.winner, 540, 185, 27, 700, 'center');
     if (winners.length === 0) {
@@ -85,7 +87,7 @@ export async function createResultImage(result: MatchResultSnapshot, labels: {
         drawText(context, labels.noWinnerDetail, 540, 350, 22, 500, 'center');
     }
     winners.forEach((winner, index) => {
-        const winnerColor = Color.user[(winner.slot - 1) % Color.user.length]!;
+        const winnerColor = userColorsFor((winner.slot - 1) % Color.user.length, colorVisionMode);
         const card = resultImageWinnerCardLayout(winners.length, index);
         roundRect(context, card.x, card.y, card.width, card.height, card.compact ? 14 : 32, winnerColor[0], winnerColor[1]);
         if (card.compact) {
@@ -111,7 +113,8 @@ export async function createResultImage(result: MatchResultSnapshot, labels: {
         context.stroke();
         drawText(context, String(winner.slot), card.x + 100, 334, 58, 700, 'center');
         drawText(context, '★', card.x + 158, 273, 38, 700, 'center');
-        drawText(context, winner.nickname, card.x + 185, 305, 31, 700);
+        // 12자 한글 닉네임이 카드 안에 그대로 들어가는 크기를 처음부터 쓴다.
+        drawText(context, winner.nickname, card.x + 185, 305, 20, 700);
         drawText(context, `${labels.tags} ${winner.tagCount}`, card.x + 185, 352, 20, 500);
         drawText(context, `${labels.switchRate} ${winner.switchSuccess}/${winner.switchTry}`, card.x + 185, 389, 20, 500);
     });
@@ -128,10 +131,10 @@ export async function createResultImage(result: MatchResultSnapshot, labels: {
     const rowHeight = 78;
     sortedPlayers.slice(0, 8).forEach((player, index) => {
         const y = 615 + index * rowHeight;
-        const playerColor = Color.user[(player.slot - 1) % Color.user.length]!;
+        const playerColor = userColorsFor((player.slot - 1) % Color.user.length, colorVisionMode);
         const isWinner = winnerIds.has(player.playerId);
-        const rowFill = player.isSelf ? Color.blue[0] : isWinner ? Color.frenzy[0] : Color.white;
-        const rowStroke = player.isSelf ? Color.blue[2] : isWinner ? Color.frenzy[1] : Color.smoke[1];
+        const rowFill = player.isSelf ? Color.blue[0] : isWinner ? visionColors.frenzy[0]! : Color.white;
+        const rowStroke = player.isSelf ? Color.blue[2] : isWinner ? visionColors.frenzy[1]! : Color.smoke[1];
         roundRect(context, 100, y, 880, 66, 18, rowFill, rowStroke);
         context.beginPath();
         context.arc(145, y + 33, 23, 0, Math.PI * 2);

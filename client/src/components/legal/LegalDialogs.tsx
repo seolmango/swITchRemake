@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../../theme/color.ts';
@@ -7,6 +8,8 @@ import {
     OPERATOR_CREDIT,
     type LegalDocument,
 } from '../../legal/legalDocuments.ts';
+import { MarkdownDocument } from './MarkdownDocument.tsx';
+import { useModalFocusTrap } from '../common/useModalFocusTrap.ts';
 
 interface DialogFrameProps {
     labelledBy: string;
@@ -18,7 +21,9 @@ const DialogFrame: React.FC<DialogFrameProps> = ({ labelledBy, onClose, children
     const { t } = useTranslation();
     const theme = useSettingsStore((state) => state.theme);
     const colors = themeColors(theme);
-    return (
+    const { dialogRef, onDialogKeyDown } = useModalFocusTrap<HTMLElement>(onClose);
+
+    return createPortal(
         <div
             className="legal-dialog-backdrop"
             role="presentation"
@@ -34,16 +39,19 @@ const DialogFrame: React.FC<DialogFrameProps> = ({ labelledBy, onClose, children
             onMouseDown={(event) => event.target === event.currentTarget && onClose()}
         >
             <section
+                ref={dialogRef}
                 className="legal-dialog"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={labelledBy}
-                onKeyDown={(event) => event.key === 'Escape' && onClose()}
+                tabIndex={-1}
+                onKeyDown={onDialogKeyDown}
             >
                 {children}
                 <button type="button" className="legal-dialog-close" autoFocus onClick={onClose}>{t('legal.close')}</button>
             </section>
         </div>
+        , document.body,
     );
 };
 
@@ -62,7 +70,7 @@ export const LegalDocumentDialog: React.FC<{
                 </div>
                 <strong>{t('legal.version', { version: document.version })}</strong>
             </header>
-            <pre className="legal-document-source" tabIndex={0}>{document.source}</pre>
+            <MarkdownDocument source={document.source}/>
         </DialogFrame>
     );
 };

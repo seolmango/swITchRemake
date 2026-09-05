@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from "react";
-import { Color } from "../../theme/color.ts";
+import { Color, themeColors } from "../../theme/color.ts";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { playSfx } from "../../audio/sfxPlayer.ts";
 
@@ -37,7 +37,7 @@ export const RoundButton = React.memo<RoundButtonProps>(({
     const measureRef = useRef<HTMLSpanElement>(null);
 
     const isActive = (isHovered || isFocused) && !disabled;
-    const focusColor = theme === 0 ? '#185889' : Color.blue[0];
+    const focusColor = themeColors(theme).focus;
 
     const transformValue = isActive ? 'translate(-50%, -50%) scale(1.05)' : 'translate(-50%, -50%)';
 

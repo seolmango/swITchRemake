@@ -44,7 +44,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({
             position: isPopup ? 'absolute' : 'relative',
             top: 0,
             left: 0,
-            backgroundColor: isPopup ? 'transparent' : '#000',
+            backgroundColor: isPopup ? 'transparent' : Color.letterbox,
             zIndex: zIndex,
             pointerEvents: isPopup ? 'none' : 'auto',
             overflow: 'clip'

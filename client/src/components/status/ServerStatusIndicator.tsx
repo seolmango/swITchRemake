@@ -3,12 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { probeServer } from '../../api/health.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../../theme/color.ts';
+import { uiStatusColorsFor } from '../../theme/cvd.ts';
 
 type ConnectionState = 'checking' | 'online' | 'offline';
 
 export const ServerStatusIndicator: React.FC = () => {
     const { t } = useTranslation();
     const theme = useSettingsStore((state) => state.theme);
+    const colorVisionMode = useSettingsStore((state) => state.colorVisionMode);
     const [connection, setConnection] = useState<ConnectionState>('checking');
     const [latency, setLatency] = useState<number | null>(null);
 
@@ -41,7 +43,8 @@ export const ServerStatusIndicator: React.FC = () => {
     }, [checkConnection]);
 
     const colors = themeColors(theme);
-    const accent = connection === 'online' ? Color.grass[2] : connection === 'offline' ? Color.red[2] : Color.blue[2];
+    const statusColors = uiStatusColorsFor(colorVisionMode);
+    const accent = connection === 'online' ? statusColors.good : connection === 'offline' ? statusColors.bad : statusColors.checking;
     const label = connection === 'online' && latency !== null
         ? t('serverStatus.connected', { latency })
         : t(`serverStatus.${connection}`);
@@ -59,7 +62,7 @@ export const ServerStatusIndicator: React.FC = () => {
                 background: theme === 0 ? Color.smoke[0] : 'transparent',
             }}
         >
-            <span className={`server-status-dot ${connection === 'checking' ? 'is-checking' : ''}`} style={{ background: accent, boxShadow: `0 0 0 5px ${accent}2e` }}/>
+            <span className={`server-status-dot is-${connection}`} style={{ '--status-accent': accent } as React.CSSProperties}/>
             <span aria-live="polite">{label}</span>
         </button>
     );

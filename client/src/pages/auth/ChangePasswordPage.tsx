@@ -10,7 +10,6 @@ import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { themeColors } from '../../theme/color.ts';
 import { changePassword } from '../../api/auth.ts';
 import { ApiError } from '../../api/http.ts';
-import { Color } from '../../theme/color.ts';
 
 export const ChangePasswordPage: React.FC = () => {
     const { t } = useTranslation();
@@ -51,7 +50,7 @@ export const ChangePasswordPage: React.FC = () => {
                 <TextField label={t('auth.currentPassword')} value={currentPassword} type="password" autoComplete="current-password" onChange={setCurrentPassword}/>
                 <TextField label={t('auth.newPassword')} placeholder={t('auth.passwordPlaceholder')} value={newPassword} type="password" autoComplete="new-password" onChange={setNewPassword}/>
                 <TextField label={t('auth.confirmNewPassword')} placeholder={t('auth.passwordPlaceholder')} value={newPasswordConfirmation} type="password" autoComplete="new-password" error={newPasswordConfirmation && newPassword !== newPasswordConfirmation ? t('auth.passwordMismatch') : undefined} onChange={setNewPasswordConfirmation}/>
-                <div className="status-message" role="status" aria-live="polite" style={{ color: failed ? Color.red[2] : themeColors(theme).muted }}>{message}</div>
+                <div className={`status-message${failed ? ' is-error' : ''}`} role="status" aria-live="polite" style={{ color: failed ? themeColors(theme).text : themeColors(theme).muted }}>{message}</div>
                 <RoundButton width={620} height={104} type={1} content={t('auth.changeTitle')} disabled={!valid || loading} isLoading={loading} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
                 <RoundButton width={360} height={86} type={2} content={t('nav.back')} onClick={() => navigate('/profile')} style={{ justifySelf: 'center' }}/>
             </div>

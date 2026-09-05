@@ -22,6 +22,7 @@ import { GameContainer } from './components/layout/GameContainer.tsx';
 import { useAudioRuntime } from './audio/useAudio.ts';
 import { getServiceStatus, serviceRouteBypassesGate, serviceRouteRequiresServer, type ServiceStatus } from './api/health.ts';
 import { ServiceStatusPage } from './pages/ServiceStatusPage.tsx';
+import { applyAppearanceToDocument } from './theme/cssVariables.ts';
 
 // Phaser는 게임·훈련·도움말·리플레이에서만 필요하다. 이 화면들을 방문하기 전까지 엔진과
 // 맵 렌더러를 받지 않게 해 제목/로그인/방 목록의 초기 번들을 작게 유지한다.
@@ -98,6 +99,7 @@ function App() {
     const savedLanguage = useSettingsStore((state) => state.language);
     const theme = useSettingsStore((state) => state.theme);
     const motionLevel = useSettingsStore((state) => state.motionLevel);
+    const colorVisionMode = useSettingsStore((state) => state.colorVisionMode);
     const [serviceStatus, setServiceStatus] = useState<GateStatus>({ kind: 'checking' });
 
     useEffect(() => {
@@ -106,10 +108,8 @@ function App() {
     }, [savedLanguage, i18n]);
 
     useEffect(() => {
-        document.documentElement.style.colorScheme = theme === 0 ? 'light' : 'dark';
-        document.documentElement.dataset.theme = theme === 0 ? 'light' : 'dark';
-        document.documentElement.dataset.motion = motionLevel;
-    }, [theme, motionLevel]);
+        applyAppearanceToDocument(theme, motionLevel, colorVisionMode);
+    }, [theme, motionLevel, colorVisionMode]);
 
     const refreshServiceStatus = useCallback(async () => {
         setServiceStatus(await getServiceStatus());

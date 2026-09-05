@@ -55,7 +55,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(({ label, 
                     transition: 'border-color 160ms ease, background 160ms ease',
                 }}
             />
-            <span id={helpId} className="field-help" aria-live={error ? 'polite' : undefined} style={{ color: error ? Color.red[2] : colors.muted }}>{error || hint || ''}</span>
+            <span id={helpId} className={`field-help${error ? ' is-error' : ''}`} aria-live={error ? 'polite' : undefined} style={{ color: error ? colors.text : colors.muted }}>{error || hint || ''}</span>
         </label>
     );
 });

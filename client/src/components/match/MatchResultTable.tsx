@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import type { MatchPlayerResult } from '../../api/matches.ts';
 import { Icon } from '../common/Icon.tsx';
 import { Color } from '../../theme/color.ts';
+import { useSettingsStore } from '../../stores/useSettingsStore.ts';
+import { userColorsFor } from '../../theme/cvd.ts';
 
 const formatSurvival = (survivedMs: number) => {
     const totalSeconds = Math.floor(survivedMs / 1000);
@@ -18,6 +20,7 @@ interface Props {
 
 export const MatchResultTable: React.FC<Props> = ({ players, winnerIds, onReport }) => {
     const { t } = useTranslation();
+    const colorVisionMode = useSettingsStore((state) => state.colorVisionMode);
     return (
         <div className="result-table-wrap" tabIndex={0} aria-label={t('result.tableScrollLabel')}>
             <table className="result-table">
@@ -31,7 +34,7 @@ export const MatchResultTable: React.FC<Props> = ({ players, winnerIds, onReport
                 </thead>
                 <tbody>
                     {[...players].sort((a, b) => a.slot - b.slot).map((player) => {
-                        const ramp = Color.user[(player.slot - 1) % Color.user.length]!;
+                        const ramp = userColorsFor((player.slot - 1) % Color.user.length, colorVisionMode);
                         const successRate = Math.round(player.switchSuccess / Math.max(1, player.switchTry) * 100);
                         const isWinner = winnerIds.includes(player.playerId);
                         return (

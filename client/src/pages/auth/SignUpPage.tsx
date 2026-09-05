@@ -10,7 +10,7 @@ import { registerUser, sendVerification } from '../../api/auth.ts';
 import { ApiError } from '../../api/http.ts';
 import { isEmail, isNickname, isPassword, isVerificationCode } from '../../utils/validation.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../../theme/color.ts';
+import { themeColors } from '../../theme/color.ts';
 import { Checkbox } from '../../components/common/Checkbox.tsx';
 import { LegalDocumentDialog } from '../../components/legal/LegalDialogs.tsx';
 import {
@@ -104,7 +104,7 @@ export const SignUpPage: React.FC = () => {
                         <button type="button" onClick={() => setOpenDocument(PRIVACY_POLICY)}>{t('auth.readDocument')}</button>
                     </div>
                 </div>
-                <div className="status-message" role="status" style={{ color: error ? Color.red[2] : themeColors(theme).muted }}>{message}</div>
+                <div className={`status-message${error ? ' is-error' : ''}`} role="status" style={{ color: error ? themeColors(theme).text : themeColors(theme).muted }}>{message}</div>
                 <RoundButton width={480} height={104} type={1} content={t('auth.signup')} disabled={!valid} isLoading={loading} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
             </div>
             {openDocument && <LegalDocumentDialog document={openDocument} onClose={() => setOpenDocument(null)}/>}

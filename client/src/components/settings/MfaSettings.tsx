@@ -251,7 +251,7 @@ export const MfaSettings: React.FC = () => {
 
     if (backupCodes) {
         return (
-            <section className="mfa-backup-dialog" role="dialog" aria-labelledby="backup-code-title">
+            <section className="mfa-backup-dialog" role="region" aria-labelledby="backup-code-title">
                 <span>{t('settings.security.oneTimeCodes')}</span>
                 <h2 id="backup-code-title">{t('settings.security.saveBackupCodes')}</h2>
                 <p>{t('settings.security.backupCodesOnlyOnce')}</p>
@@ -278,10 +278,13 @@ export const MfaSettings: React.FC = () => {
 
     return (
         <div className="mfa-settings">
-            <section className={`mfa-status-card ${status.enabled ? 'is-enabled' : ''}`}>
-                <div>
-                    <span>{t('settings.security.status')}</span>
-                    <strong>{t(status.enabled ? 'settings.security.enabled' : 'settings.security.off')}</strong>
+            <section className={`mfa-status-card ${status.enabled ? 'is-enabled' : 'is-disabled'}`}>
+                <div className="mfa-status-copy">
+                    <Icon name={status.enabled ? 'shield' : 'unlock'} size={40}/>
+                    <div>
+                        <span>{t('settings.security.status')}</span>
+                        <strong>{t(status.enabled ? 'settings.security.enabled' : 'settings.security.off')}</strong>
+                    </div>
                 </div>
                 {status.enabled && <b>{t(`settings.security.method.${status.method}`)}</b>}
             </section>

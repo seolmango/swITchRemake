@@ -4,6 +4,7 @@ import type { LobbyViewPlayer, PlayerSkill } from '../../api/matches.ts';
 import { Icon, type IconName } from '../common/Icon.tsx';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color } from '../../theme/color.ts';
+import { userColorsFor } from '../../theme/cvd.ts';
 import dashIcon from '../../assets/images/skill_dash.svg';
 import flashIcon from '../../assets/images/skill_flash.svg';
 import exhaustIcon from '../../assets/images/skill_exhaust.svg';
@@ -35,7 +36,8 @@ interface LobbyPlayerCardProps {
 export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, viewerIsHost = false, canSelectEmptySlot = false, canChangeSkill = true, onSelectEmptySlot, onChangeSkill, onPassHost, onKick }) => {
     const { t } = useTranslation();
     const theme = useSettingsStore((state) => state.theme);
-    const ramp = Color.user[(player?.colorIndex ?? slot - 1) % Color.user.length]!;
+    const colorVisionMode = useSettingsStore((state) => state.colorVisionMode);
+    const ramp = userColorsFor((player?.colorIndex ?? slot - 1) % Color.user.length, colorVisionMode);
 
     if (!player) {
         const emptyContent = (

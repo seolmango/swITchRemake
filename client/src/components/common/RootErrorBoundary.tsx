@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Color } from '../../theme/color.ts';
 
 interface Props {
     children: ReactNode;
@@ -31,18 +32,18 @@ export class RootErrorBoundary extends Component<Props, State> {
                 display: 'grid',
                 placeItems: 'center',
                 padding: 32,
-                background: '#17191a',
-                color: '#fff',
-                fontFamily: 'system-ui, sans-serif',
+                background: Color.black,
+                color: Color.white,
+                fontFamily: 'var(--font-ui)',
             }}>
                 <section role="alert" style={{ width: 'min(720px, 100%)', display: 'grid', gap: 20 }}>
                     <h1 style={{ margin: 0 }}>{korean ? '화면을 표시하지 못했습니다' : 'The screen could not be displayed'}</h1>
-                    <p style={{ margin: 0, color: '#c8ccce', lineHeight: 1.55 }}>
+                    <p style={{ margin: 0, color: Color.smoke[1], lineHeight: 1.55 }}>
                         {korean
                             ? '예상하지 못한 오류가 발생했습니다. 아래 오류를 기록한 뒤 다시 시도해 주세요.'
                             : 'An unexpected error occurred. Keep the details below and try again.'}
                     </p>
-                    <pre style={{ margin: 0, padding: 16, overflow: 'auto', borderRadius: 10, background: '#252829', color: '#ffb7b7', whiteSpace: 'pre-wrap' }}>
+                    <pre style={{ margin: 0, padding: 16, overflow: 'auto', borderRadius: 10, background: Color.smoke[2], color: Color.red[0], whiteSpace: 'pre-wrap' }}>
                         {error.stack || `${error.name}: ${error.message}`}
                     </pre>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>

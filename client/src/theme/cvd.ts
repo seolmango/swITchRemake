@@ -101,3 +101,14 @@ export const userColorsFor = (colorIndex: number, mode: ColorVisionMode): readon
     const { user } = colorVisionPalette(mode);
     return (user[colorIndex] ?? user[0]!) as readonly [string, string];
 };
+
+/** React UI의 성공·주의·위험 색. 성공/주의는 검증된 색각 보조 램프를 그대로 쓴다. */
+export const uiStatusColorsFor = (mode: ColorVisionMode) => {
+    const palette = colorVisionPalette(mode);
+    return {
+        good: palette.grass[2]!,
+        warn: palette.frenzy[2]!,
+        bad: Color.red[2]!,
+        checking: palette.frenzy[2]!,
+    } as const;
+};

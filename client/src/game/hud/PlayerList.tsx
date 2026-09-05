@@ -50,9 +50,8 @@ export const PlayerList: React.FC<Props> = ({
             ...panel(theme),
             position: 'absolute', top: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner, right: compact ? HUD_METRICS.cornerCompact : HUD_METRICS.corner,
             padding: compact ? HUD_METRICS.panelPaddingCompact : HUD_METRICS.panelPadding,
-            // Compact drops the name column entirely — number chips alone still identify everyone, and a
-            // truncated nickname is worth less than the space it costs on a small viewport.
-            minWidth: compact ? 0 : 250,
+            // 한글 12자를 처음부터 담는다. 작은 화면에서도 번호만 남겨 이름을 버리지 않는다.
+            minWidth: compact ? 250 : 330,
             maxHeight: compact ? `calc(100% - ${HUD_METRICS.cornerCompact * 2}px)` : `calc(100% - ${HUD_METRICS.corner * 2}px)`,
             display: 'flex', flexDirection: 'column',
             fontFamily: HUD_FONT,
@@ -108,14 +107,11 @@ export const PlayerList: React.FC<Props> = ({
                                 color: Color.black, fontSize: HUD_METRICS.bodyFont, fontWeight: 800,
                             }}>{playerLabel(p.id)}</span>
 
-                            {!compact && (
-                                <span style={{
-                                    flex: 1, minWidth: 0, fontSize: HUD_METRICS.bodyFont, fontWeight: isSelf ? 800 : 600,
-                                    color: Color.black,
-                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                    textDecoration: p.alive ? 'none' : 'line-through',
-                                }}>{p.nickname || `Player ${playerLabel(p.id)}`}</span>
-                            )}
+                            <span style={{
+                                flex: '0 0 12em', minWidth: 0, fontSize: HUD_METRICS.bodyFont, fontWeight: isSelf ? 800 : 600,
+                                color: Color.black, whiteSpace: 'nowrap',
+                                textDecoration: p.alive ? 'none' : 'line-through',
+                            }}>{p.nickname || `Player ${playerLabel(p.id)}`}</span>
 
                             {compact ? null : p.isTagger ? (
                                 <span style={{

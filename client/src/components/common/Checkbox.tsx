@@ -12,7 +12,7 @@ interface CheckboxProps {
 export const Checkbox: React.FC<CheckboxProps> = ({ checked, onChange, label }) => {
     const theme = useSettingsStore((state) => state.theme);
     return (
-        <button type="button" role="checkbox" aria-checked={checked} onClick={() => onChange(!checked)} style={{
+        <button type="button" className="round-checkbox" role="checkbox" aria-checked={checked} onClick={() => onChange(!checked)} style={{
             display: 'inline-flex', alignItems: 'center', gap: 20, border: 0, background: 'transparent',
             color: themeColors(theme).text, fontSize: 34, cursor: 'pointer',
         }}>

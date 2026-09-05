@@ -1,6 +1,12 @@
 export const Color = {
     white: "#FAFAF8",
     black: "#3B3B3B",
+    /** 16:9 캔버스 밖의 레터박스. 콘텐츠 표면의 black과 섞지 않는다. */
+    letterbox: "#000000",
+    /** 본문보다 한 단계 낮은 정보색. 라이트/다크 순서다. */
+    muted: ["#625F5C", "#CFD1D2"],
+    /** 밝은 배경에서도 키보드 포커스가 묻히지 않는 전용 링. 라이트/다크 순서다. */
+    focus: ["#185889", "#BEDFFF"],
     red: [
         "#FFBDBD",
         "#FFA4A4",
@@ -50,7 +56,8 @@ export const toneColors = (tone: ThemeTone) => Color[tone];
 export const themeColors = (theme: 0 | 1) => ({
     canvas: theme === 0 ? Color.white : Color.black,
     text: theme === 0 ? Color.black : Color.white,
-    muted: theme === 0 ? '#625F5C' : '#CFD1D2',
+    muted: Color.muted[theme],
+    focus: Color.focus[theme],
     panel: theme === 0 ? Color.smoke[0] : 'transparent',
     panelBorder: theme === 0 ? Color.smoke[1] : Color.smoke[2],
     field: theme === 0 ? 'rgba(250,250,248,0.72)' : 'transparent',

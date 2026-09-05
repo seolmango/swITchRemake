@@ -11,7 +11,7 @@ import { useAuthStore } from '../../stores/useAuthStore.ts';
 import { isEmail, isPassword } from '../../utils/validation.ts';
 import { loginErrorMessage, mfaErrorMessage, retryAfterSeconds } from './authErrorMessage.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../../theme/color.ts';
+import { themeColors } from '../../theme/color.ts';
 import { resendMfaLoginEmail, type LoginMfaChallenge } from '../../api/auth.ts';
 import { deadlineAfterSeconds, useDeadlineSeconds } from '../../utils/deadline.ts';
 import { ApiError } from '../../api/http.ts';
@@ -117,7 +117,7 @@ export const LoginPage: React.FC = () => {
                     <TextField ref={emailRef} label={t('auth.email')} placeholder={t('auth.emailPlaceholder')} autoComplete="email" inputMode="email" value={email} error={touched && !isEmail(email) ? t('auth.invalidEmail') : undefined} onChange={setEmail}/>
                     <TextField label={t('auth.password')} placeholder={t('auth.passwordPlaceholder')} autoComplete="current-password" type="password" value={password} error={touched && !isPassword(password) ? t('auth.invalidPassword') : undefined} onChange={setPassword}/>
                     <InlineLink onClick={() => navigate('/reset-password')} style={{ justifySelf: 'center' }}>{t('auth.forgot')}</InlineLink>
-                    <div className="status-message" role="status" style={{ color: messageFailed ? Color.red[2] : themeColors(theme).muted }}>
+                    <div className={`status-message${messageFailed ? ' is-error' : ''}`} role="status" style={{ color: messageFailed ? themeColors(theme).text : themeColors(theme).muted }}>
                         {(retryRemaining ?? 0) > 0 ? t('auth.rateLimited', { seconds: retryRemaining }) : message || handoff}
                     </div>
                     <RoundButton width={460} height={104} type={1} content={t('auth.login')} disabled={!valid || pending || (retryRemaining ?? 0) > 0} isLoading={pending} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
@@ -141,7 +141,7 @@ export const LoginPage: React.FC = () => {
                             <InlineLink onClick={() => void resendEmailCode()} style={{ fontSize: 22 }}>{t('auth.resendCode')}</InlineLink>
                         )}
                     </div>
-                    <div className="status-message" role="status" aria-live="polite" style={{ color: messageFailed ? Color.red[2] : themeColors(theme).muted }}>
+                    <div className={`status-message${messageFailed ? ' is-error' : ''}`} role="status" aria-live="polite" style={{ color: messageFailed ? themeColors(theme).text : themeColors(theme).muted }}>
                         {(retryRemaining ?? 0) > 0 ? t('auth.rateLimited', { seconds: retryRemaining }) : message}
                     </div>
                     <div className="mfa-login-actions">

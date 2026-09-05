@@ -5,6 +5,7 @@ import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { themeColors } from '../../theme/color.ts';
 import { ApiError } from '../../api/http.ts';
 import { createReport, REPORT_CATEGORIES, type ReportCategory } from '../../api/reports.ts';
+import { useModalFocusTrap } from '../common/useModalFocusTrap.ts';
 
 const MIN_DESCRIPTION = 10;
 const MAX_DESCRIPTION = 500;
@@ -47,6 +48,7 @@ export const ReportDialog: React.FC<Props> = ({ matchId, target, onClose }) => {
     const [message, setMessage] = useState('');
     const [failed, setFailed] = useState(false);
     const [sent, setSent] = useState(false);
+    const { dialogRef, onDialogKeyDown } = useModalFocusTrap<HTMLElement>(onClose);
 
     const ready = category !== null && description.trim().length >= MIN_DESCRIPTION;
 
@@ -79,11 +81,13 @@ export const ReportDialog: React.FC<Props> = ({ matchId, target, onClose }) => {
             onMouseDown={(event) => event.target === event.currentTarget && onClose()}
         >
             <section
+                ref={dialogRef}
                 className="lobby-dialog is-report-dialog"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="report-dialog-title"
-                onKeyDown={(event) => event.key === 'Escape' && onClose()}
+                tabIndex={-1}
+                onKeyDown={onDialogKeyDown}
             >
                 <Icon name="flag" size={44}/>
                 <h2 id="report-dialog-title">{t('report.title', { nickname: target.nickname })}</h2>

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { PageLayout } from '../components/layout/PageLayout.tsx';
 import { RoundButton } from '../components/common/RoundButton.tsx';
 import { Icon } from '../components/common/Icon.tsx';
+import { useModalFocusTrap } from '../components/common/useModalFocusTrap.ts';
 import { getAdminOverview, type AdminOverview } from '../api/admin.ts';
 import { AdminInspect } from '../components/admin/AdminInspect.tsx';
 import {
@@ -20,7 +21,7 @@ import {
 } from '../api/reports.ts';
 import { useAuthStore } from '../stores/useAuthStore.ts';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
-import { Color, themeColors } from '../theme/color.ts';
+import { themeColors } from '../theme/color.ts';
 
 /** 자동 갱신 주기. heartbeat가 2초라 그보다 촘촘히 물어봐야 새 값이 나오지 않는다. */
 const REFRESH_MS = 4_000;
@@ -121,9 +122,9 @@ export const AdminPage: React.FC = () => {
                     '--surface-field': colors.field,
                     '--surface-muted': colors.muted,
                     '--admin-text': colors.text,
-                    '--admin-good': Color.grass[2],
-                    '--admin-warn': Color.frenzy[2],
-                    '--admin-bad': Color.red[2],
+                    '--admin-good': 'var(--semantic-good)',
+                    '--admin-warn': 'var(--semantic-warn)',
+                    '--admin-bad': 'var(--semantic-bad)',
                 } as React.CSSProperties}
             >
                 <nav className="admin-tabs" aria-label={t('admin.title')}>
@@ -352,6 +353,7 @@ const ReportCaseDialog: React.FC<ReportCaseDialogProps> = ({ caseId, time, onClo
     const [actionFailed, setActionFailed] = useState(false);
     const [sanctionMessage, setSanctionMessage] = useState('');
     const [sanctionFailed, setSanctionFailed] = useState(false);
+    const { dialogRef, onDialogKeyDown } = useModalFocusTrap<HTMLElement>(onClose);
 
     useEffect(() => {
         let active = true;
@@ -420,11 +422,13 @@ const ReportCaseDialog: React.FC<ReportCaseDialogProps> = ({ caseId, time, onClo
             onMouseDown={(event) => event.target === event.currentTarget && onClose()}
         >
             <section
+                ref={dialogRef}
                 className="lobby-dialog admin-case-dialog"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="admin-case-title"
-                onKeyDown={(event) => event.key === 'Escape' && onClose()}
+                tabIndex={-1}
+                onKeyDown={onDialogKeyDown}
             >
                 {state.kind === 'loading' && <p role="status">{t('common.loading')}</p>}
                 {state.kind === 'failed' && <p role="alert" className="is-bad">{t('admin.reportsLoadFailed')}</p>}

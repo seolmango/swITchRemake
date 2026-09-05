@@ -17,7 +17,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, onClick }) => {
     const colors = themeColors(theme);
     const accent = room.status === 'waiting' ? Color.blue[2] : Color.gray[2];
     const statusColor = theme === 0
-        ? (room.status === 'waiting' ? '#185889' : '#5B5B59')
+        ? (room.status === 'waiting' ? colors.focus : Color.black)
         : accent;
     return (
         <button
