@@ -122,7 +122,7 @@ test('room-not-found and bad-password replies are externally masked alike', asyn
         payload: null,
     });
 
-    await assert.rejects(service.join(1, 'private-room', 'wrong'), (error: unknown) => {
+    await assert.rejects(service.join(1, 'private-room', 'wrong', '203.0.113.1'), (error: unknown) => {
         assert.ok(error instanceof ConflictException);
         assert.deepEqual(error.getResponse(), {
             code: 'ROOM_UNAVAILABLE',
@@ -154,7 +154,7 @@ test('quick join skips cooldown and kick-marked rooms before issuing a command',
         };
     };
 
-    const result = await service.quickJoin(1);
+    const result = await service.quickJoin(1, '203.0.113.1');
 
     assert.deepEqual(result, { roomId: 'open', roomCode: 'ABC234', wsPath: '/game/game-a', ticket: 'ticket', expiresAt: 1 });
     assert.equal(commands.length, 1);
@@ -162,7 +162,7 @@ test('quick join skips cooldown and kick-marked rooms before issuing a command',
     assert.equal((commands[0].payload as { roomId: string }).roomId, 'open');
 });
 
-test('guest quick join is limited by both actor id and request IP', async () => {
+test('빠른 참가는 신원 종류와 무관하게 actor와 IP를 함께 센다', async () => {
     const redis = new FakeRedis();
     redis.sorted.set('dev:rooms:waiting', ['open']);
     addLiveRoom(redis, 'open');
@@ -186,6 +186,15 @@ test('guest quick join is limited by both actor id and request IP', async () => 
     assert.equal(redis.values.get(`dev:operation:room-join-rate:actor:${guest.id}`), '1');
     assert.equal(redis.values.get('dev:operation:room-join-rate:ip:hmac:203.0.113.9'), '1');
     assert.equal((command!.payload as { userId: string }).userId, guest.id);
+
+    const accountRedis = new FakeRedis();
+    accountRedis.sorted.set('dev:rooms:waiting', ['open']);
+    addLiveRoom(accountRedis, 'open');
+    const accountService = makeService(accountRedis);
+    (accountService as any).sendCommand = (service as any).sendCommand;
+    await accountService.quickJoin(1, '203.0.113.9');
+    assert.equal(accountRedis.values.get('dev:operation:room-join-rate:actor:1'), '1');
+    assert.equal(accountRedis.values.get('dev:operation:room-join-rate:ip:hmac:203.0.113.9'), '1');
 });
 
 test('a reply resolves only the pending request from its expected server', async () => {
@@ -247,7 +256,7 @@ test('join command uncertainty rolls back assignment and active-room reservation
     (service as any).sendCommand = async () => {
         throw new ServiceUnavailableException({ code: 'COMMAND_TIMEOUT', retryable: true, outcome: 'unknown' });
     };
-    await assert.rejects(service.join(1, 'room-id'), ServiceUnavailableException);
+    await assert.rejects(service.join(1, 'room-id', undefined, '203.0.113.1'), ServiceUnavailableException);
     assert.equal(redis.values.has('dev:user:1:active-room'), false);
 });
 
@@ -261,7 +270,7 @@ test('six-character room code resolves to the internal room id', async () => {
         v: CONTROL_VERSION, requestId: command.requestId, serverId: 'game-a', ok: true, code: null,
         payload: { wsPath: '/game-ws/game-a', ticket: 'ticket', expiresAt: 1 },
     });
-    const result = await service.joinByCode(1, 'abc234');
+    const result = await service.joinByCode(1, 'abc234', undefined, '203.0.113.1');
     assert.equal('alreadyAssigned' in result, false);
     if ('alreadyAssigned' in result) throw new Error('unexpected existing assignment');
     assert.equal(result.roomId, roomId);
@@ -282,8 +291,9 @@ test('계정 사용자의 전적이 자리 예약 명령에 실린다', async ()
         };
     };
 
-    await service.join(1, 'room-1');
+    await service.join(1, 'room-1', undefined, '203.0.113.1');
 
+    assert.equal(redis.values.get('dev:operation:room-join-rate:target:room-1'), '1');
     assert.deepEqual((command!.payload as { stats: unknown }).stats, {
         games: 3,
         wins: 2,
@@ -379,11 +389,11 @@ test('방 목록은 요청한 쪽만 Redis에서 읽는다', async () => {
     const page = await service.list(2);
 
     assert.equal(page.total, 45);
-    assert.equal(page.totalPages, 3);
-    assert.equal(page.rooms.length, 20);
-    assert.equal(page.rooms[0]?.id, 'room-20');
-    // 방이 500개여도 목록 한 번은 20개만 읽어야 한다. 사람이 가장 자주 누르는 화면이다.
-    assert.deepEqual(redis.rangeReads, [{ key: 'dev:rooms:waiting', start: 20, stop: 39 }]);
+    assert.equal(page.totalPages, 8);
+    assert.equal(page.rooms.length, 6);
+    assert.equal(page.rooms[0]?.id, 'room-6');
+    // 모바일 세로 한 화면에 맞춘 여섯 개만 읽는다.
+    assert.deepEqual(redis.rangeReads, [{ key: 'dev:rooms:waiting', start: 6, stop: 11 }]);
 });
 
 test('경기 제한 계정은 방으로 들어오는 모든 길에서 막힌다', async () => {

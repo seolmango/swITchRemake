@@ -44,11 +44,12 @@ import { lobbyStatsFrom } from '../user/stored-stats';
 const COMMAND_RETRY_INTERVAL_MS = 2_000;
 const COMMAND_DEADLINE_MS = 6_000;
 const ACTIVE_ROOM_RESERVATION_TTL_SECONDS = 30;
-// A shared NAT can have ten guests create/join or retry a room request within a minute.
+// 내부 진입점도 같은 숫자를 쓴다. HTTP 가드보다 넓어서 정상 경로에서는 이중 제한이 되지 않는다.
 const JOIN_RATE_LIMIT = 30;
+const JOIN_IP_RATE_LIMIT = JOIN_RATE_LIMIT * 4;
 const JOIN_RATE_WINDOW_SECONDS = 60;
 const REJOIN_COOLDOWN_SECONDS = 60;
-const ROOM_LIST_PAGE_SIZE = 20;
+const ROOM_LIST_PAGE_SIZE = 6;
 /**
  * 자기 전용 응답 stream을 살려 두는 시간. 읽기 루프가 한 바퀴(최대 1초)마다 갱신한다.
  * 프로세스가 죽으면 갱신이 멈추고 키가 사라진다 — 죽은 인스턴스의 stream이 Redis에 남지 않는다.
@@ -185,7 +186,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     /**
      * 방 목록 한 쪽.
      *
-     * **Redis에서 그 쪽만 읽는다.** 예전에는 대기 중인 방을 전부 읽어 요약한 뒤 20개로 잘랐다.
+     * **Redis에서 그 쪽만 읽는다.** 예전에는 대기 중인 방을 전부 읽어 요약한 뒤 6개로 잘랐다.
      * 방이 500개면 목록 한 번에 방 GET 500번 + 서버 heartbeat GET 500번이었고, 그건 사람이
      * 가장 자주 누르는 화면이다.
      *
@@ -215,7 +216,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     async create(principal: ActorId | RoomPrincipal, dto: CreateRoomDto, clientIp?: string) {
         const actor = await this.requireActor(principal);
         await this.enforceActorRate(actor.id, 'room-create-rate');
-        await this.enforceGuestIpRate(actor, clientIp, 'room-create-rate');
+        await this.enforceIpRate(clientIp, 'room-create-rate');
         const training = dto.mode === RoomMode.Training;
         const roomName = this.cleanRoomName(dto.name);
         const requestId = randomUUID();
@@ -333,7 +334,7 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
     async quickJoin(principal: ActorId | RoomPrincipal, clientIp?: string): Promise<ClientSeatGrant | { alreadyAssigned: true; roomId?: string }> {
         const actor = await this.requireActor(principal);
         await this.enforceActorRate(actor.id, 'room-join-rate');
-        await this.enforceGuestIpRate(actor, clientIp, 'room-join-rate');
+        await this.enforceIpRate(clientIp, 'room-join-rate');
         const candidates = (await this.redis.sortedSetMembers(this.keys.roomsWaiting(), 0, -1))
             .map((roomId) => ({ roomId, sort: Math.random() }))
             .sort((a, b) => a.sort - b.sort);
@@ -521,7 +522,8 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
 
     private async enforceJoinAbuseLimits(actor: Actor, roomId: string, clientIp?: string): Promise<void> {
         await this.enforceActorRate(actor.id, 'room-join-rate');
-        await this.enforceGuestIpRate(actor, clientIp, 'room-join-rate');
+        await this.enforceIpRate(clientIp, 'room-join-rate');
+        await this.enforceTargetRate(roomId, 'room-join-rate');
         const blocked = await this.isJoinBlocked(actor.id, roomId);
         if (blocked?.kind === 'kicked') {
             throw new ForbiddenException({ code: ControlErrorCode.KickedFromRoom, message: 'You were removed from this room' });
@@ -567,20 +569,31 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
-    private async enforceGuestIpRate(actor: Actor, clientIp: string | undefined, bucket: string): Promise<void> {
-        if (!actor.guest) return;
-        if (!clientIp) throw new ForbiddenException('Client IP is required for guest requests');
+    private async enforceIpRate(clientIp: string | undefined, bucket: string): Promise<void> {
+        if (!clientIp) throw new ForbiddenException('Client IP is required for room requests');
         const ipKey = this.sessionSecurity.hmacIp(clientIp);
         const count = await this.redis.incrementWithTtl(
             this.keys.operation(`${bucket}:ip:${ipKey}`),
             JOIN_RATE_WINDOW_SECONDS,
         );
-        if (count > JOIN_RATE_LIMIT) {
+        if (count > JOIN_IP_RATE_LIMIT) {
             const retryAfterMs = await this.redis.ttlMilliseconds(this.keys.operation(`${bucket}:ip:${ipKey}`));
             throw new HttpException({
                 code: 'JOIN_RATE_LIMITED',
                 retryAfterMs: Math.max(0, retryAfterMs),
                 message: 'Too many room requests from this IP',
+            }, HttpStatus.TOO_MANY_REQUESTS);
+        }
+    }
+
+    private async enforceTargetRate(roomId: string, bucket: string): Promise<void> {
+        const key = this.keys.operation(`${bucket}:target:${roomId}`);
+        const count = await this.redis.incrementWithTtl(key, JOIN_RATE_WINDOW_SECONDS);
+        if (count > JOIN_IP_RATE_LIMIT) {
+            throw new HttpException({
+                code: 'JOIN_RATE_LIMITED',
+                retryAfterMs: Math.max(0, await this.redis.ttlMilliseconds(key)),
+                message: 'Too many requests for this room',
             }, HttpStatus.TOO_MANY_REQUESTS);
         }
     }
