@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { loginUser, logoutAndCreateGuest } = vi.hoisted(() => ({
+const { completeMfaLogin, loginUser, logoutAndCreateGuest } = vi.hoisted(() => ({
+    completeMfaLogin: vi.fn(),
     loginUser: vi.fn(),
     logoutAndCreateGuest: vi.fn(),
 }));
 
-vi.mock('../api/auth.ts', () => ({ loginUser }));
+vi.mock('../api/auth.ts', () => ({ completeMfaLogin, loginUser }));
 vi.mock('../api/http.ts', () => ({
     bootstrapApiIdentity: vi.fn(),
     logoutAndCreateGuest,
@@ -31,12 +32,12 @@ describe('auth action progress', () => {
     });
 
     it('keeps the boot status stable while login is pending', async () => {
-        const request = deferred<{ accessToken: string; nickname: string }>();
+        const request = deferred<{ mfaRequired: false; accessToken: string; nickname: string }>();
         loginUser.mockReturnValueOnce(request.promise);
         const action = useAuthStore.getState().login('alice@example.com', 'Password1');
 
         expect(useAuthStore.getState()).toMatchObject({ status: 'account', bootstrapped: true, pending: true });
-        request.resolve({ accessToken: 'new-token', nickname: 'Alice' });
+        request.resolve({ mfaRequired: false, accessToken: 'new-token', nickname: 'Alice' });
         await action;
         expect(useAuthStore.getState()).toMatchObject({ status: 'account', pending: false, accessToken: 'new-token' });
     });
@@ -52,11 +53,34 @@ describe('auth action progress', () => {
 
     it('sends the login request even when a stale active-room key remains', async () => {
         vi.stubGlobal('sessionStorage', { getItem: vi.fn((key: string) => key === 'switch-active-room' ? 'stale-room' : null) });
-        loginUser.mockResolvedValueOnce({ accessToken: 'new-token', nickname: 'Alice' });
+        loginUser.mockResolvedValueOnce({ mfaRequired: false, accessToken: 'new-token', nickname: 'Alice' });
 
         await useAuthStore.getState().login('alice@example.com', 'Password1');
 
         expect(loginUser).toHaveBeenCalledWith('alice@example.com', 'Password1');
+    });
+
+    it('keeps the challenge transient and completes it with the explicit trust choice', async () => {
+        loginUser.mockResolvedValueOnce({
+            mfaRequired: true,
+            challengeToken: 'challenge',
+            method: 'totp',
+            expiresIn: 300,
+        });
+        completeMfaLogin.mockResolvedValueOnce({
+            mfaRequired: false,
+            accessToken: 'verified-token',
+            nickname: 'Alice',
+        });
+
+        const challenge = await useAuthStore.getState().login('alice@example.com', 'Password1');
+        expect(challenge).toMatchObject({ challengeToken: 'challenge', method: 'totp' });
+        expect(useAuthStore.getState()).toMatchObject({ accessToken: 'old-token', pending: false });
+
+        await useAuthStore.getState().completeMfa('challenge', 'A1B2C3D4-ABCD-2345-ABCD-2345', false);
+
+        expect(completeMfaLogin).toHaveBeenCalledWith('challenge', 'A1B2C3D4-ABCD-2345-ABCD-2345', false);
+        expect(useAuthStore.getState()).toMatchObject({ accessToken: 'verified-token', identity: 'account', pending: false });
     });
 
     it('keeps the boot status stable while logout is pending', async () => {

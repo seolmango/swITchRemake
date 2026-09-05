@@ -147,7 +147,10 @@ export const apiRequest = async <T>(path: string, options: RequestOptions = {}):
             && options.retryAuth !== false
             && identity.kind !== 'anonymous'
             && error instanceof ApiError
-            && error.status === 401;
+            && error.status === 401
+            // 업무 오류 코드가 붙은 401은 access token 문제가 아니다. 특히 틀린 2차 코드를
+            // refresh 뒤에 자동으로 한 번 더 보내면 시도 횟수와 레이트리밋을 두 번 소비한다.
+            && error.code === null;
         if (!canRefresh) throw error;
         try {
             await refreshCurrentIdentity();

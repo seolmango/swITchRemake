@@ -139,6 +139,14 @@ html[lang='ko'] .page-title { top: 42px; }
   line-height: 1.2;
 }
 
+.mfa-login-stack { width: 900px; gap: 27px; }
+.mfa-login-prompt { margin: 0; text-align: center; font-size: 28px; line-height: 1.4; }
+.mfa-login-stack > [role='checkbox'] { justify-self: center; transition: transform 160ms ease, color 160ms ease; }
+.mfa-login-stack > [role='checkbox']:hover { transform: scale(1.025); color: inherit; }
+.mfa-login-meta { min-height: 50px; display: flex; align-items: center; justify-content: center; gap: 28px; font-size: 22px; }
+.mfa-login-actions { display: flex; justify-content: center; gap: 28px; }
+.reset-mfa-field { grid-column: 1 / -1; }
+
 .settings-dock {
   position: absolute;
   right: 30px;
@@ -721,6 +729,114 @@ html[lang='ko'] .page-title { top: 42px; }
 .key-binding.is-listening { border-color: var(--settings-accent); background: color-mix(in srgb, var(--settings-accent) 30%, transparent); animation: key-listening 800ms ease-in-out infinite alternate; }
 @keyframes key-listening { to { transform: scale(1.025); } }
 
+.mfa-settings { padding-top: 22px; display: grid; gap: 22px; }
+.mfa-loading { min-height: 360px; display: grid; place-items: center; color: var(--settings-muted); font-size: 24px; }
+.mfa-empty-card,
+.mfa-status-card,
+.mfa-enable-panel,
+.mfa-summary-grid article,
+.mfa-device-panel,
+.mfa-secret-card,
+.mfa-action-card,
+.mfa-backup-dialog {
+  border: 4px solid var(--settings-border);
+  border-radius: 22px;
+  background: var(--settings-field);
+  box-sizing: border-box;
+}
+.mfa-empty-card { min-height: 360px; display: grid; place-items: center; align-content: center; gap: 22px; text-align: center; }
+.mfa-empty-card strong { max-width: 650px; font-size: 27px; line-height: 1.4; }
+.mfa-empty-card button,
+.mfa-settings button,
+.mfa-backup-dialog button {
+  min-height: 54px;
+  padding: 0 20px;
+  border: 4px solid var(--settings-border);
+  border-radius: 16px;
+  background: var(--settings-field);
+  color: var(--settings-text);
+  cursor: pointer;
+  font-size: 19px;
+  font-weight: 700;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+.mfa-empty-card button:hover,
+.mfa-settings button:hover,
+.mfa-backup-dialog button:hover { transform: scale(1.035); border-color: var(--settings-accent); background: color-mix(in srgb, var(--settings-accent) 24%, var(--settings-field)); }
+.mfa-empty-card button:disabled,
+.mfa-settings button:disabled,
+.mfa-backup-dialog button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.mfa-settings .mfa-primary-button,
+.mfa-backup-dialog .mfa-primary-button { border-color: var(--settings-accent); background: color-mix(in srgb, var(--settings-accent) 58%, var(--settings-field)); color: var(--settings-dark-text); }
+.mfa-settings .is-danger { border-color: var(--settings-danger); color: var(--settings-danger); }
+.mfa-settings .is-danger:hover { background: var(--settings-danger-soft); color: var(--settings-dark-text); }
+.mfa-status-card { min-height: 110px; padding: 22px 28px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.mfa-status-card.is-enabled { border-color: var(--settings-accent); background: color-mix(in srgb, var(--settings-accent) 20%, var(--settings-field)); }
+.mfa-status-card > div { display: grid; gap: 7px; }
+.mfa-status-card span { color: var(--settings-muted); font-size: 18px; }
+.mfa-status-card strong { font-family: var(--font-display); font-size: 31px; font-weight: normal; }
+.mfa-status-card b { padding: 12px 18px; border: 4px solid var(--settings-accent); border-radius: 15px; font-size: 21px; }
+.mfa-enable-panel { padding: 28px; }
+.mfa-enable-panel h3,
+.mfa-device-panel h3,
+.mfa-secret-card h3,
+.mfa-action-card h3 { margin: 0; font-family: var(--font-display); font-size: 27px; font-weight: normal; }
+.mfa-methods { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.mfa-methods > button { min-height: 105px; padding: 17px 20px; display: grid; align-content: center; gap: 8px; text-align: left; }
+.mfa-methods > button.is-active { border-color: var(--settings-accent); background: color-mix(in srgb, var(--settings-accent) 34%, var(--settings-field)); }
+.mfa-methods strong { font-size: 24px; }
+.mfa-methods span { color: var(--settings-muted); font-size: 18px; font-weight: 300; line-height: 1.35; }
+.mfa-enable-fields { margin-top: 22px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 22px; }
+.mfa-settings .field-label { font-size: 23px; }
+.mfa-settings .field-help { min-height: 16px; font-size: 16px; }
+.mfa-settings .field-group input { height: 62px !important; font-size: 24px !important; border-bottom-width: 5px !important; }
+.mfa-enable-fields > button { margin-bottom: 26px; min-height: 62px; }
+.mfa-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.mfa-summary-grid article { min-height: 145px; padding: 22px 24px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 20px; }
+.mfa-summary-grid article > span { grid-column: 1 / -1; color: var(--settings-muted); font-size: 18px; }
+.mfa-summary-grid article > strong { font-family: var(--font-display); font-size: 34px; font-weight: normal; }
+.mfa-summary-grid article > button { justify-self: end; }
+.mfa-device-panel { overflow: hidden; }
+.mfa-device-panel > header { min-height: 94px; padding: 17px 23px; display: flex; align-items: center; justify-content: space-between; border-bottom: 4px solid var(--settings-border); }
+.mfa-device-panel > header > div { display: grid; gap: 5px; }
+.mfa-device-panel > header span { color: var(--settings-muted); font-size: 15px; font-weight: 700; letter-spacing: .1em; }
+.mfa-device-panel > header > button { min-width: 56px; padding: 0; display: grid; place-items: center; }
+.mfa-device-list { display: grid; }
+.mfa-device-list article { min-height: 106px; padding: 16px 22px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 18px; border-bottom: 3px solid color-mix(in srgb, var(--settings-border) 70%, transparent); }
+.mfa-device-list article:last-child { border-bottom: 0; }
+.mfa-device-list article.is-current { background: color-mix(in srgb, var(--settings-accent) 18%, transparent); }
+.mfa-device-list article > div { min-width: 0; display: grid; gap: 4px; }
+.mfa-device-list strong { overflow-wrap: anywhere; font-size: 21px; }
+.mfa-device-list span,
+.mfa-device-list small { color: var(--settings-muted); font-size: 16px; }
+.mfa-device-list article > b { padding: 8px 12px; border: 3px solid var(--settings-accent); border-radius: 13px; font-size: 15px; }
+.mfa-device-list > p { margin: 0; padding: 34px; text-align: center; color: var(--settings-muted); font-size: 20px; }
+.mfa-secret-card { padding: 27px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 20px; align-items: center; }
+.mfa-secret-card > span { grid-column: 1 / -1; color: var(--settings-danger); font-size: 17px; font-weight: 700; }
+.mfa-secret-card h3,
+.mfa-secret-card p,
+.mfa-secret-card .field-group,
+.mfa-secret-actions { grid-column: 1 / -1; }
+.mfa-secret-card p { margin: 0; color: var(--settings-muted); font-size: 19px; line-height: 1.4; }
+.mfa-secret-card code { min-width: 0; padding: 17px; overflow-wrap: anywhere; border: 4px solid var(--settings-accent); border-radius: 15px; background: color-mix(in srgb, var(--settings-accent) 17%, transparent); font-size: 25px; letter-spacing: .08em; text-align: center; }
+.mfa-secret-actions { display: flex; align-items: center; justify-content: space-between; gap: 22px; color: var(--settings-muted); font-size: 18px; }
+.mfa-action-card { padding: 20px 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 13px; }
+.mfa-action-card > div { min-width: 220px; margin-right: auto; display: grid; gap: 5px; }
+.mfa-action-card > div span { color: var(--settings-muted); font-size: 17px; }
+.mfa-action-card > input { width: 290px; height: 58px; padding: 0 16px; border: 4px solid var(--settings-border); border-radius: 16px; box-sizing: border-box; background: transparent; color: var(--settings-text); font-size: 19px; }
+.mfa-message { min-height: 27px; margin: 0; text-align: center; color: var(--settings-muted); font-size: 18px; }
+.mfa-message[data-failed='true'] { color: var(--settings-danger); }
+.mfa-backup-dialog { width: min(880px, 100%); margin: 24px auto; padding: 30px; display: grid; justify-items: center; gap: 20px; color: var(--settings-text); text-align: center; }
+.mfa-backup-dialog > span { color: var(--settings-danger); font-size: 18px; font-weight: 700; }
+.mfa-backup-dialog h2 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: normal; }
+.mfa-backup-dialog > p { max-width: 720px; margin: 0; color: var(--settings-muted); font-size: 19px; line-height: 1.45; }
+.mfa-backup-list { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mfa-backup-list code { padding: 11px 13px; border: 3px solid var(--settings-border); border-radius: 13px; background: color-mix(in srgb, var(--settings-accent) 12%, transparent); font-size: 18px; letter-spacing: .04em; }
+.mfa-backup-actions { display: flex; gap: 14px; }
+.mfa-backup-dialog > [role='checkbox'] { font-size: 22px !important; transition: transform 160ms ease; }
+.mfa-backup-dialog > [role='checkbox']:hover { transform: scale(1.025); }
+.mfa-backup-dialog > [role='checkbox'] > span { width: 46px !important; height: 46px !important; border-width: 5px !important; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;
@@ -732,6 +848,11 @@ html[lang='ko'] .page-title { top: 42px; }
   .settings-tablist > button:hover,
   .server-status:hover,
   .settings-link-grid > button:hover,
+  .mfa-login-stack > [role='checkbox']:hover,
+  .mfa-empty-card button:hover,
+  .mfa-settings button:hover,
+  .mfa-backup-dialog button:hover,
+  .mfa-backup-dialog > [role='checkbox']:hover,
   .signup-consent-row [role='checkbox']:hover,
   .signup-consent-row > button:last-child:hover,
   .legal-dialog-close:hover,
@@ -753,6 +874,11 @@ html[data-motion='reduced'] *::after {
 html[data-motion='reduced'] .settings-tablist > button:hover,
 html[data-motion='reduced'] .server-status:hover,
 html[data-motion='reduced'] .settings-link-grid > button:hover,
+html[data-motion='reduced'] .mfa-login-stack > [role='checkbox']:hover,
+html[data-motion='reduced'] .mfa-empty-card button:hover,
+html[data-motion='reduced'] .mfa-settings button:hover,
+html[data-motion='reduced'] .mfa-backup-dialog button:hover,
+html[data-motion='reduced'] .mfa-backup-dialog > [role='checkbox']:hover,
 html[data-motion='reduced'] .signup-consent-row [role='checkbox']:hover,
 html[data-motion='reduced'] .signup-consent-row > button:last-child:hover,
 html[data-motion='reduced'] .legal-dialog-close:hover,
@@ -2012,6 +2138,7 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: #FFBDBD; }
   font-size: 30px;
   letter-spacing: .28em;
 }
+.delete-code-field.is-second-factor > input { width: 430px; font-size: 20px; letter-spacing: .03em; }
 .delete-dialog-message { min-height: 26px; font-size: 17px !important; }
 .delete-dialog-message[data-failed='true'] { color: #FF7171 !important; }
 

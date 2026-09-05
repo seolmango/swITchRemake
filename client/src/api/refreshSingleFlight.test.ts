@@ -56,4 +56,21 @@ describe('토큰 재발급 단일 비행', () => {
         // 회전 자체를 막는 것이 아니라 **동시 중복**만 막는다.
         expect(calls.filter((url) => url.endsWith('/auth/refresh'))).toHaveLength(2);
     });
+
+    it('MFA 업무 오류는 토큰 만료로 오해해 재시도하지 않는다', async () => {
+        vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+            calls.push(String(url));
+            return new Response(JSON.stringify({ code: 'INVALID_SECOND_FACTOR' }), {
+                status: 401, headers: { 'content-type': 'application/json' },
+            });
+        }));
+        const http = await import('./http.ts');
+        http.setApiAccessToken('valid-token', 'nick');
+
+        await expect(http.apiRequest('/users/me/mfa', { method: 'DELETE', body: { code: 'bad' } }))
+            .rejects.toMatchObject({ code: 'INVALID_SECOND_FACTOR' });
+
+        expect(calls.filter((url) => url.endsWith('/auth/refresh'))).toHaveLength(0);
+        expect(calls.filter((url) => url.endsWith('/users/me/mfa'))).toHaveLength(1);
+    });
 });

@@ -37,8 +37,11 @@ export interface UserMatchHistoryPage {
 export const sendDeleteCode = () =>
     apiRequest<{ sent: true }>('/users/me/delete-code', { method: 'POST' });
 
-export const deleteMyAccount = (code: string) =>
-    apiRequest<{ deleted: true }>('/users/me', { method: 'DELETE', body: { code } });
+export const deleteMyAccount = (code: string, secondFactorCode?: string) =>
+    apiRequest<{ deleted: true }>('/users/me', {
+        method: 'DELETE',
+        body: { code, ...(secondFactorCode ? { secondFactorCode } : {}) },
+    });
 
 export const getMyStats = () => apiRequest<UserStats>('/users/me/stats', { method: 'GET' });
 

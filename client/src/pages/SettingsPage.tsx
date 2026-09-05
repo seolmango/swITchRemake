@@ -10,6 +10,7 @@ import { Color, themeColors } from '../theme/color.ts';
 import { formatKeyBinding } from '../utils/keyBinding.ts';
 import { TouchLayoutEditor } from '../game/hud/touch/TouchLayoutEditor.tsx';
 import { BgmCard } from '../components/settings/BgmCard.tsx';
+import { MfaSettings } from '../components/settings/MfaSettings.tsx';
 import { CreditsDialog, LegalDocumentDialog } from '../components/legal/LegalDialogs.tsx';
 import { OPERATOR_CREDIT, PRIVACY_POLICY } from '../legal/legalDocuments.ts';
 
@@ -149,6 +150,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
         { id: 'sound', label: t('settings.tabs.sound'), number: '02' },
         { id: 'game', label: t('settings.tabs.game'), number: '03' },
         { id: 'keymap', label: t('settings.tabs.keymap'), number: '04' },
+        ...(!embedded ? [{ id: 'security' as const, label: t('settings.tabs.security'), number: '05' }] : []),
     ];
 
     const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -351,6 +353,9 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                     '--settings-muted': colors.muted,
                     '--settings-text': colors.text,
                     '--settings-accent': settings.theme === 0 ? Color.blue[1] : Color.blue[2],
+                    '--settings-danger': Color.red[2],
+                    '--settings-danger-soft': Color.red[0],
+                    '--settings-dark-text': Color.black,
                 } as React.CSSProperties}
             >
                 <aside className="settings-tabs">
@@ -373,7 +378,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                         </button>
                         ))}
                     </div>
-                    <p>{t('settings.savedAutomatically')}</p>
+                    <p>{section === 'security' ? t('settings.security.notStoredHere') : t('settings.savedAutomatically')}</p>
                 </aside>
                 <section
                     className="settings-content"
@@ -386,17 +391,19 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                             <span>{t('settings.sectionLabel')}</span>
                             <h2>{tabItems.find((tab) => tab.id === section)?.label}</h2>
                         </div>
-                        <button
-                            type="button"
-                            className="settings-reset"
-                            onClick={() => {
-                                settings.resetSection(section);
-                                setEditing(null);
-                                setBindingError('');
-                            }}
-                        >
-                            {t('settings.resetSection')}
-                        </button>
+                        {section !== 'security' && (
+                            <button
+                                type="button"
+                                className="settings-reset"
+                                onClick={() => {
+                                    settings.resetSection(section);
+                                    setEditing(null);
+                                    setBindingError('');
+                                }}
+                            >
+                                {t('settings.resetSection')}
+                            </button>
+                        )}
                     </header>
                     <div className="settings-scroll" key={section}>
                         <p className="visually-hidden" aria-live="polite">
@@ -406,6 +413,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                         {section === 'sound' && renderSound()}
                         {section === 'game' && renderGame()}
                         {section === 'keymap' && renderKeymap()}
+                        {section === 'security' && <MfaSettings/>}
                     </div>
                 </section>
             </div>

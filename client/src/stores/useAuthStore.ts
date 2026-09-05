@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { getAdminAccess } from '../api/admin.ts';
-import { loginUser } from '../api/auth.ts';
+import { completeMfaLogin, loginUser, type LoginMfaChallenge } from '../api/auth.ts';
 import {
     ApiError,
     abandonSessionAndCreateGuest,
@@ -25,7 +25,8 @@ interface AuthState {
      */
     admin: boolean;
     bootstrap: () => Promise<void>;
-    login: (email: string, password: string) => Promise<void>;
+    login: (email: string, password: string) => Promise<LoginMfaChallenge | null>;
+    completeMfa: (challengeToken: string, code: string, trustDevice: boolean) => Promise<void>;
     logout: () => Promise<void>;
     /** 탈퇴 뒤 정리. 계정이 이미 없으므로 로그아웃을 부르지 않는다. */
     abandonSession: () => Promise<void>;
@@ -69,6 +70,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ pending: true });
         try {
             const result = await loginUser(email, password);
+            if (result.mfaRequired) {
+                set({ ...previous, pending: false });
+                return result;
+            }
+            set({ accessToken: result.accessToken, nickname: result.nickname, identity: 'account', status: 'account', pending: false });
+            set({ admin: await readAdminAccess('account') });
+            return null;
+        } catch (error) {
+            set({ ...previous, pending: false });
+            throw error;
+        }
+    },
+    completeMfa: async (challengeToken, code, trustDevice) => {
+        const previous = get();
+        set({ pending: true });
+        try {
+            const result = await completeMfaLogin(challengeToken, code, trustDevice);
             set({ accessToken: result.accessToken, nickname: result.nickname, identity: 'account', status: 'account', pending: false });
             set({ admin: await readAdminAccess('account') });
         } catch (error) {

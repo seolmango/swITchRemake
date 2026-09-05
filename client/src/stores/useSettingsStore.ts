@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ColorVisionMode } from '../theme/cvd.ts';
 
-export type SettingsSection = 'general' | 'sound' | 'game' | 'keymap';
+export type SettingsSection = 'general' | 'sound' | 'game' | 'keymap' | 'security';
 export type VolumeChannel = 'master' | 'bgm' | 'sfx';
 export type FrameRate = '30' | '60' | '120' | 'unlimited';
 export type MotionLevel = 'reduced' | 'standard' | 'full';
@@ -145,7 +145,8 @@ export const useSettingsStore = create<SettingsState>()(
                 if (section === 'general') return GENERAL_DEFAULTS;
                 if (section === 'sound') return SOUND_DEFAULTS;
                 if (section === 'game') return GAME_DEFAULTS;
-                return { keyBindings: createDefaultKeyBindings() };
+                if (section === 'keymap') return { keyBindings: createDefaultKeyBindings() };
+                return {};
             }),
             resetSettings: () => set(createDefaults()),
         }),

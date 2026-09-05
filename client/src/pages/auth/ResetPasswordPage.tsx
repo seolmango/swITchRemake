@@ -10,12 +10,15 @@ import { ApiError } from '../../api/http.ts';
 import { isEmail, isPassword, isVerificationCode } from '../../utils/validation.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../../theme/color.ts';
+import { mfaErrorMessage, retryAfterSeconds } from './authErrorMessage.ts';
+import { deadlineAfterSeconds, useDeadlineSeconds } from '../../utils/deadline.ts';
 
 export const ResetPasswordPage: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const theme = useSettingsStore((state) => state.theme);
     const emailRef = useRef<HTMLInputElement>(null);
+    const secondFactorRef = useRef<HTMLInputElement>(null);
     const [email, setEmail] = useState('');
     const [code, setCode] = useState('');
     const [password, setPassword] = useState('');
@@ -23,27 +26,53 @@ export const ResetPasswordPage: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const [error, setError] = useState(false);
+    const [mfaRequired, setMfaRequired] = useState(false);
+    const [secondFactorCode, setSecondFactorCode] = useState('');
+    const [retryDeadline, setRetryDeadline] = useState<number | null>(null);
+    const retryRemaining = useDeadlineSeconds(retryDeadline);
 
     const sendCode = async () => {
-        if (!isEmail(email)) { emailRef.current?.focus(); return; }
+        if (!isEmail(email) || (retryRemaining ?? 0) > 0) { emailRef.current?.focus(); return; }
         setLoading(true); setMessage(''); setError(false);
         try { await sendVerification(email, 'reset-password'); setCodeSent(true); setMessage(t('auth.codeSent')); }
-        catch { setError(true); setMessage(t('auth.serverError')); }
+        catch (requestError) {
+            const retrySeconds = retryAfterSeconds(requestError);
+            if (retrySeconds !== null) setRetryDeadline(deadlineAfterSeconds(retrySeconds));
+            setError(true);
+            setMessage(retrySeconds !== null ? t('auth.retryNow') : t('auth.serverError'));
+        }
         finally { setLoading(false); }
     };
 
     const submit = async () => {
-        if (!isVerificationCode(code) || !isPassword(password)) return;
+        if (!isVerificationCode(code) || !isPassword(password) || (mfaRequired && !secondFactorCode.trim()) || (retryRemaining ?? 0) > 0) return;
         setLoading(true); setMessage(''); setError(false);
         try {
-            await resetPassword({ email, code, newPassword: password });
+            await resetPassword({
+                email,
+                code,
+                newPassword: password,
+                ...(mfaRequired ? { secondFactorCode: secondFactorCode.trim() } : {}),
+            });
             // 이 화면에 성공 문구를 남겨 봐야 다음에 할 일은 로그인이다. 바로 그리로 보낸다.
             navigate('/login', { replace: true, state: { message: t('auth.resetSuccess') } });
         } catch (requestError) {
             setError(true);
-            setMessage(requestError instanceof ApiError && requestError.status === 400
-                ? t('auth.invalidCodeServer')
-                : t('auth.serverError'));
+            const retrySeconds = retryAfterSeconds(requestError);
+            if (retrySeconds !== null) setRetryDeadline(deadlineAfterSeconds(retrySeconds));
+            if (requestError instanceof ApiError && requestError.code === 'MFA_REQUIRED') {
+                setMfaRequired(true);
+                setMessage(t('auth.resetMfaRequired'));
+                window.requestAnimationFrame(() => secondFactorRef.current?.focus());
+            } else if (requestError instanceof ApiError && requestError.code === 'INVALID_SECOND_FACTOR') {
+                setMessage(mfaErrorMessage(requestError, t));
+            } else {
+                setMessage(requestError instanceof ApiError && requestError.status === 400
+                    ? t('auth.invalidCodeServer')
+                    : retrySeconds !== null
+                        ? t('auth.retryNow')
+                        : t('auth.serverError'));
+            }
         } finally { setLoading(false); }
     };
 
@@ -53,12 +82,26 @@ export const ResetPasswordPage: React.FC = () => {
             <div className="signup-grid" style={{ top: 240 }}>
                 <div className="form-row" style={{ gridColumn: '1 / -1' }}>
                     <TextField ref={emailRef} label={t('auth.email')} placeholder={t('auth.emailPlaceholder')} value={email} disabled={codeSent} error={email && !isEmail(email) ? t('auth.invalidEmail') : undefined} onChange={setEmail}/>
-                    <RoundButton width={240} height={82} type={2} content={loading && !codeSent ? t('auth.sending') : t('auth.sendCode')} disabled={!isEmail(email) || codeSent} isLoading={loading && !codeSent} onClick={() => void sendCode()}/>
+                    <RoundButton width={240} height={82} type={2} content={loading && !codeSent ? t('auth.sending') : t('auth.sendCode')} disabled={!isEmail(email) || codeSent || (retryRemaining ?? 0) > 0} isLoading={loading && !codeSent} onClick={() => void sendCode()}/>
                 </div>
                 <TextField label={t('auth.code')} placeholder={t('auth.codePlaceholder')} value={code} disabled={!codeSent} maxLength={6} inputMode="numeric" onChange={(value) => setCode(value.replace(/\D/g, ''))}/>
                 <TextField label={t('auth.newPassword')} placeholder={t('auth.passwordPlaceholder')} value={password} disabled={!codeSent} type="password" autoComplete="new-password" error={password && !isPassword(password) ? t('auth.invalidPassword') : undefined} onChange={setPassword}/>
-                <div className="status-message" role="status" style={{ color: error ? Color.red[2] : themeColors(theme).muted }}>{message || t('auth.resetHelp')}</div>
-                <RoundButton width={620} height={104} type={1} content={t('auth.resetAction')} disabled={!isVerificationCode(code) || !isPassword(password)} isLoading={loading && codeSent} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
+                {mfaRequired && (
+                    <div className="reset-mfa-field">
+                        <TextField
+                            ref={secondFactorRef}
+                            label={t('auth.secondFactorCode')}
+                            placeholder={t('auth.secondFactorPlaceholder')}
+                            value={secondFactorCode}
+                            autoComplete="one-time-code"
+                            onChange={setSecondFactorCode}
+                        />
+                    </div>
+                )}
+                <div className="status-message" role="status" style={{ color: error ? Color.red[2] : themeColors(theme).muted }}>
+                    {(retryRemaining ?? 0) > 0 ? t('auth.rateLimited', { seconds: retryRemaining }) : message || t(mfaRequired ? 'auth.resetMfaHelp' : 'auth.resetHelp')}
+                </div>
+                <RoundButton width={620} height={104} type={1} content={t('auth.resetAction')} disabled={!isVerificationCode(code) || !isPassword(password) || (mfaRequired && !secondFactorCode.trim()) || (retryRemaining ?? 0) > 0} isLoading={loading && codeSent} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
             </div>
         </PageLayout>
     );

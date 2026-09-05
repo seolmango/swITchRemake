@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../common/Icon.tsx';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
@@ -6,13 +6,15 @@ import { themeColors } from '../../theme/color.ts';
 import { ApiError } from '../../api/http.ts';
 import { deleteMyAccount, sendDeleteCode } from '../../api/profile.ts';
 import { isVerificationCode } from '../../utils/validation.ts';
+import { getMfaStatus, type MfaMethod } from '../../api/mfa.ts';
+import { mfaErrorMessage, retryAfterSeconds } from '../../pages/auth/authErrorMessage.ts';
+import { deadlineAfterSeconds, useDeadlineSeconds } from '../../utils/deadline.ts';
 
 /**
  * 회원 탈퇴.
  *
- * 되돌릴 수 없는 일이라 두 단계를 거친다 — 메일로 온 코드를 넣어야 버튼이 열린다. 비밀번호로
- * 확인하지 않는 이유는, 남이 잠깐 자리를 비운 사이 브라우저를 만지는 상황이 이 화면의 주된
- * 위험이고 그때 비밀번호는 이미 필요 없기 때문이다. 코드는 계정 주인의 메일함에만 간다.
+ * 되돌릴 수 없는 일이라 메일 코드를 먼저 받는다. TOTP 계정은 인증 앱 코드나 백업 코드도
+ * 별도로 확인한다. 메일 MFA 계정은 탈퇴 메일 코드가 서버에서 2차 확인을 겸한다.
  */
 export const DeleteAccountDialog: React.FC<{ onClose: () => void; onDeleted: () => void }> = ({ onClose, onDeleted }) => {
     const { t } = useTranslation();
@@ -22,6 +24,24 @@ export const DeleteAccountDialog: React.FC<{ onClose: () => void; onDeleted: () 
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
     const [failed, setFailed] = useState(false);
+    const [mfaMethod, setMfaMethod] = useState<MfaMethod | null>(null);
+    const [secondFactorCode, setSecondFactorCode] = useState('');
+    const [retryDeadline, setRetryDeadline] = useState<number | null>(null);
+    const retryRemaining = useDeadlineSeconds(retryDeadline);
+
+    useEffect(() => {
+        let active = true;
+        void getMfaStatus().then((result) => {
+            if (active) setMfaMethod(result.method);
+        }).catch(() => undefined);
+        return () => { active = false; };
+    }, []);
+
+    const rememberRateLimit = (error: unknown) => {
+        const seconds = retryAfterSeconds(error);
+        if (seconds !== null) setRetryDeadline(deadlineAfterSeconds(seconds));
+        return seconds;
+    };
 
     const requestCode = async () => {
         setBusy(true); setFailed(false); setMessage('');
@@ -29,23 +49,34 @@ export const DeleteAccountDialog: React.FC<{ onClose: () => void; onDeleted: () 
             await sendDeleteCode();
             setCodeSent(true);
             setMessage(t('profile.deleteCodeSent'));
-        } catch {
+        } catch (error) {
+            const retrySeconds = rememberRateLimit(error);
             setFailed(true);
-            setMessage(t('auth.serverError'));
+            setMessage(retrySeconds !== null ? t('auth.retryNow') : t('auth.serverError'));
         } finally { setBusy(false); }
     };
 
     const confirm = async () => {
-        if (!isVerificationCode(code)) return;
+        if (!isVerificationCode(code) || (mfaMethod === 'totp' && !secondFactorCode.trim()) || (retryRemaining ?? 0) > 0) return;
         setBusy(true); setFailed(false); setMessage('');
         try {
-            await deleteMyAccount(code);
+            await deleteMyAccount(code, mfaMethod === 'totp' ? secondFactorCode.trim() : undefined);
             onDeleted();
         } catch (error) {
+            const retrySeconds = rememberRateLimit(error);
             setFailed(true);
-            setMessage(error instanceof ApiError && error.status === 400
-                ? t('auth.invalidCodeServer')
-                : t('profile.deleteFailed'));
+            if (error instanceof ApiError && error.code === 'MFA_REQUIRED') {
+                setMfaMethod('totp');
+                setMessage(t('profile.deleteMfaRequired'));
+            } else if (error instanceof ApiError && error.code === 'INVALID_SECOND_FACTOR') {
+                setMessage(mfaErrorMessage(error, t));
+            } else {
+                setMessage(error instanceof ApiError && error.status === 400
+                    ? t('auth.invalidCodeServer')
+                    : retrySeconds !== null
+                        ? t('auth.retryNow')
+                        : t('profile.deleteFailed'));
+            }
             setBusy(false);
         }
     };
@@ -89,16 +120,31 @@ export const DeleteAccountDialog: React.FC<{ onClose: () => void; onDeleted: () 
                     </label>
                 )}
 
-                <p className="delete-dialog-message" role="status" aria-live="polite" data-failed={failed ? 'true' : 'false'}>{message}</p>
+                {codeSent && mfaMethod === 'totp' && (
+                    <label className="delete-code-field is-second-factor">
+                        <span>{t('auth.secondFactorCode')}</span>
+                        <input
+                            type="text"
+                            autoComplete="one-time-code"
+                            placeholder={t('auth.secondFactorPlaceholder')}
+                            value={secondFactorCode}
+                            onChange={(event) => setSecondFactorCode(event.target.value)}
+                        />
+                    </label>
+                )}
+
+                <p className="delete-dialog-message" role="status" aria-live="polite" data-failed={failed ? 'true' : 'false'}>
+                    {(retryRemaining ?? 0) > 0 ? t('auth.rateLimited', { seconds: retryRemaining }) : message}
+                </p>
 
                 <div className="lobby-dialog-actions">
                     <button type="button" onClick={onClose}>{t('common.cancel')}</button>
                     {codeSent ? (
-                        <button type="button" className="is-danger" disabled={busy || !isVerificationCode(code)} onClick={() => void confirm()}>
+                        <button type="button" className="is-danger" disabled={busy || !isVerificationCode(code) || (mfaMethod === 'totp' && !secondFactorCode.trim()) || (retryRemaining ?? 0) > 0} onClick={() => void confirm()}>
                             {t('profile.deleteConfirm')}
                         </button>
                     ) : (
-                        <button type="button" className="is-danger" disabled={busy} onClick={() => void requestCode()}>
+                        <button type="button" className="is-danger" disabled={busy || (retryRemaining ?? 0) > 0} onClick={() => void requestCode()}>
                             {t('profile.deleteSendCode')}
                         </button>
                     )}
