@@ -23,12 +23,31 @@ test('sink mode stores a ten-minute test mail without calling sendMail', async (
     await fixture.service.sendRegistrationCodeEmail('test@example.com', '123456');
     assert.equal(fixture.sendMailCalls, 0);
     assert.equal(fixture.saved.length, 1);
-    assert.equal(fixture.saved[0].key, 'test:mail:test@example.com');
+    assert.equal(fixture.saved[0].key, 'test:mail:signup:test@example.com');
     assert.equal(fixture.saved[0].ttl, 600);
     const payload = JSON.parse(fixture.saved[0].value);
     assert.deepEqual({ ...payload, sentAt: typeof payload.sentAt }, {
-        kind: 'signup', subject: '[swITch] 회원가입 계정 인증 코드', code: '123456', sentAt: 'string',
+        kind: 'signup', purpose: 'signup', subject: '[swITch] 회원가입 계정 인증 코드', code: '123456', sentAt: 'string',
     });
+});
+
+/*
+ * 2차 인증 메일은 본문이 하나지만 쓰임이 셋이다. 주소만으로 담으면 한 흐름이 두 용도의 코드를
+ * 연달아 받을 때 최신 것이 앞의 것을 덮어써서, 자동 점검이 어느 코드인지 가릴 수 없다.
+ * 실제로 그것 때문에 신뢰 기기 흐름이 엉뚱한 코드를 넣고 실패했다.
+ */
+test('2차 인증 메일은 같은 주소라도 용도별로 나눠 담는다', async () => {
+    const fixture = createService({ EMAIL_TRANSPORT: 'sink' });
+
+    await fixture.service.sendMfaCodeEmail('test@example.com', '111111', 'mfa-login');
+    await fixture.service.sendMfaCodeEmail('test@example.com', '222222', 'mfa-step-up');
+
+    assert.deepEqual(fixture.saved.map((entry) => entry.key), [
+        'test:mail:mfa-login:test@example.com',
+        'test:mail:mfa-step-up:test@example.com',
+    ]);
+    assert.equal(JSON.parse(fixture.saved[0].value).code, '111111');
+    assert.equal(JSON.parse(fixture.saved[1].value).code, '222222');
 });
 
 test('sink mode preserves the successful email delivery contract', async () => {

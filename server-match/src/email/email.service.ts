@@ -65,15 +65,29 @@ export class EmailService implements OnModuleInit {
     async sendRegistrationCodeEmail(to: string, code: string): Promise<boolean> { return this.sendCodeEmail('signup', to, code); }
     async sendPasswordResetCodeEmail(to: string, code: string): Promise<boolean> { return this.sendCodeEmail('reset-password', to, code); }
     async sendDeleteAccountCodeEmail(to: string, code: string): Promise<boolean> { return this.sendCodeEmail('delete', to, code); }
-    async sendMfaCodeEmail(to: string, code: string): Promise<boolean> { return this.sendCodeEmail('mfa', to, code); }
+    /**
+     * 2차 인증 메일은 쓰임이 셋이다(로그인·재확인·비밀번호 재설정). 메일 본문은 같지만
+     * **코드는 서로 다른 용도의 것**이라, 자동 점검이 "지금 필요한 그 코드"를 집으려면
+     * 용도를 알아야 한다. 실제로 한 흐름에서 두 용도를 연달아 쓰다가 엉뚱한 코드를 넣었다.
+     */
+    async sendMfaCodeEmail(to: string, code: string, purpose: string): Promise<boolean> {
+        return this.sendCodeEmail('mfa', to, code, purpose);
+    }
 
-    private async sendCodeEmail(kind: EmailKind, to: string, code: string): Promise<boolean> {
+    private async sendCodeEmail(kind: EmailKind, to: string, code: string, sinkPurpose: string = kind): Promise<boolean> {
         const template = EMAIL_TEMPLATES[kind];
         try {
             if (this.transport === 'sink') {
-                // RedisService has no list operations; tests only need the newest code per address,
-                // so one TTL-bound key intentionally overwrites earlier messages for that address.
-                await this.redisService.set(`test:mail:${to}`, JSON.stringify({ kind, subject: template.subject, code, sentAt: new Date().toISOString() }), 600);
+                /*
+                 * 주소가 아니라 **주소+용도**로 나눠 담는다. 예전에는 주소 하나에 최신 메일만
+                 * 덮어써서, 한 흐름이 두 용도의 코드를 연달아 받으면 점검이 어느 쪽인지 가릴 수
+                 * 없었다. 용도별로 두면 원하는 코드를 정확히 집는다.
+                 */
+                await this.redisService.set(
+                    `test:mail:${sinkPurpose}:${to}`,
+                    JSON.stringify({ kind, purpose: sinkPurpose, subject: template.subject, code, sentAt: new Date().toISOString() }),
+                    600,
+                );
             } else {
                 await this.transporter.sendMail({ to, subject: template.subject, html: this.renderHtml(template, code) });
             }

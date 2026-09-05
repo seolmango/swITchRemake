@@ -24,6 +24,18 @@ const redis = (): Redis => {
     return client;
 };
 
+/**
+ * 인증 메일의 용도. 서버의 `VerificationPurpose`와 같은 문자열이며, sink가 주소+용도로
+ * 나눠 담으므로 점검이 원하는 코드를 정확히 집을 수 있다.
+ */
+export type MailPurpose =
+    | 'signup'
+    | 'reset-password'
+    | 'delete'
+    | 'mfa-login'
+    | 'mfa-step-up'
+    | 'mfa-reset-password';
+
 export interface SinkMail {
     kind: 'signup' | 'reset-password' | 'delete' | 'mfa';
     subject: string;
@@ -39,28 +51,32 @@ export interface SinkMail {
  */
 export async function waitForMail(
     email: string,
-    expectKind: SinkMail['kind'],
+    purpose: MailPurpose,
     timeoutMs = 10_000,
 ): Promise<SinkMail> {
     const deadline = Date.now() + timeoutMs;
     let last: string | null = null;
     while (Date.now() < deadline) {
-        last = await redis().get(`test:mail:${email}`);
-        if (last !== null) {
-            const mail = JSON.parse(last) as SinkMail;
-            if (mail.kind === expectKind) return mail;
-        }
+        last = await redis().get(`test:mail:${purpose}:${email}`);
+        if (last !== null) return JSON.parse(last) as SinkMail;
         await new Promise((done) => setTimeout(done, 200));
     }
     throw new Error(
-        `${email} 앞으로 온 ${expectKind} 메일을 ${timeoutMs}ms 안에 찾지 못했습니다.`
+        `${email} 앞으로 온 ${purpose} 메일을 ${timeoutMs}ms 안에 찾지 못했습니다.`
         + ` (.env의 EMAIL_TRANSPORT가 sink인지 확인) 마지막으로 본 값: ${last ?? '없음'}`,
     );
 }
 
 /** 앞선 점검이 남긴 코드를 새 코드로 오인하지 않게, 보내기 전에 비운다. */
-export async function clearMail(email: string): Promise<void> {
-    await redis().del(`test:mail:${email}`);
+/**
+ * 그 주소로 온 메일을 지운다. 용도를 주면 그 용도만, 안 주면 전부 지운다.
+ * 흐름이 여러 용도의 코드를 쓰므로 통째로 지우면 아직 쓸 코드까지 날아간다.
+ */
+export async function clearMail(email: string, purpose?: MailPurpose): Promise<void> {
+    const purposes: MailPurpose[] = purpose
+        ? [purpose]
+        : ['signup', 'reset-password', 'delete', 'mfa-login', 'mfa-step-up', 'mfa-reset-password'];
+    await Promise.all(purposes.map((each) => redis().del(`test:mail:${each}:${email}`)));
 }
 
 export async function closeMail(): Promise<void> {

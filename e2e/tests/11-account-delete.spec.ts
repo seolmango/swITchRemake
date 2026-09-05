@@ -26,8 +26,8 @@ test.describe('탈퇴', () => {
         await page.getByRole('button', { name: T.profile.deleteConfirm }).click();
         await expect(page.getByText(T.auth.invalidCodeServer)).toBeVisible();
 
-        const mail = await waitForMail(account.email, 'delete');
-        await page.locator('.delete-code-field input').fill(mail.code);
+        const firstDeleteMail = await waitForMail(account.email, 'delete');
+        await page.locator('.delete-code-field input').fill(firstDeleteMail.code);
         await page.getByRole('button', { name: T.profile.deleteConfirm }).click();
         await page.waitForURL((url) => new URL(url).pathname === '/', { timeout: 30_000 });
 
@@ -56,6 +56,9 @@ test.describe('탈퇴', () => {
 
         await clearMail(account.email);
         await page.goto('/profile');
+        // 이 흐름은 탈퇴 코드를 두 번 받는다(본 검증 한 번, 정리 한 번). 같은 용도라
+        // 60초 창을 기다려야 두 번째가 실제로 발송된다 — 안 기다리면 경계에서 흔들린다.
+        await waitForMailReissue(firstDeleteMail);
         await button(page, T.profile.deleteTitle).click();
         await page.getByRole('button', { name: T.profile.deleteSendCode }).click();
         const cleanupMail = await waitForMail(account.email, 'delete');

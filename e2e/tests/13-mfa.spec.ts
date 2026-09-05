@@ -62,7 +62,7 @@ const loginWithMfaMail = async (
     await clearMail(email);
     await beginMfaLogin(page, email, password);
     await expect(page.getByText(T.auth.mfaEmailPrompt)).toBeVisible();
-    const mail = await waitForMail(email, 'mfa');
+    const mail = await waitForMail(email, 'mfa-login');
     await finishMfaLogin(page, mail.code, trustDevice);
     // 같은 용도(mfa-login)의 코드는 60초에 한 번만 나간다. 한 흐름에서 두 번 로그인하려면
     // 그 창을 기다려야 하므로 언제 받았는지를 돌려준다.
@@ -80,7 +80,7 @@ const disableEmailMfa = async (page: Page, email: string): Promise<void> => {
     await expect(confirm).toBeDisabled();
     await clearMail(email);
     await action.getByRole('button', { name: T.settings.security.sendEmailCode, exact: true }).click();
-    const mail = await waitForMail(email, 'mfa');
+    const mail = await waitForMail(email, 'mfa-step-up');
     await action.getByLabel(T.auth.secondFactorCode, { exact: true }).fill(mail.code);
     await expect(confirm).toBeEnabled();
     await confirm.click();
@@ -143,7 +143,7 @@ test.describe('2차 인증', () => {
         await expect(confirm).toBeDisabled();
         await clearMail(account.email);
         await action.getByRole('button', { name: T.settings.security.sendEmailCode, exact: true }).click();
-        const revokeMail = await waitForMail(account.email, 'mfa');
+        const revokeMail = await waitForMail(account.email, 'mfa-step-up');
         await action.getByLabel(T.auth.secondFactorCode, { exact: true }).fill(revokeMail.code);
         await confirm.click();
         await expect(page.getByText(T.settings.security.noTrustedDevices)).toBeVisible();
@@ -156,7 +156,7 @@ test.describe('2차 인증', () => {
         await waitForMailReissue(trustLoginMail);
         await clearMail(account.email);
         await beginMfaLogin(page, account.email, account.password);
-        const loginMail = await waitForMail(account.email, 'mfa');
+        const loginMail = await waitForMail(account.email, 'mfa-login');
         await finishMfaLogin(page, loginMail.code);
 
         await disableEmailMfa(page, account.email);
@@ -181,7 +181,7 @@ test.describe('2차 인증', () => {
         await button(page, T.auth.resetAction).click();
 
         await expect(page.getByText(T.auth.resetMfaRequired)).toBeVisible();
-        const mfaMail = await waitForMail(account.email, 'mfa');
+        const mfaMail = await waitForMail(account.email, 'mfa-reset-password');
         await page.getByLabel(T.auth.secondFactorCode, { exact: true }).fill(mfaMail.code);
         await button(page, T.auth.resetAction).click();
         await page.waitForURL('**/login');

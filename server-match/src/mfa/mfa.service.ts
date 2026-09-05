@@ -557,7 +557,7 @@ export class MfaService {
         ).where(eq(schema.users.id, userId));
         if (!row || row.status !== 'ACTIVE' || row.method !== expectedMethod || row.method !== 'email') throw invalidFactor();
         const code = await issueVerificationCode(this.redis, purpose, row.email);
-        if (code !== null && !await this.email.sendMfaCodeEmail(row.email, code)) {
+        if (code !== null && !await this.email.sendMfaCodeEmail(row.email, code, purpose)) {
             throw new InternalServerErrorException('Verification email send failed');
         }
     }
