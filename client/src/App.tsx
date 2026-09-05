@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { BrowserRouter, Routes, Route, Outlet, useLocation } from 'react-router-dom'
 import { TitlePage } from "./pages/TitlePage.tsx";
 import './i18n.ts';
 import { useTranslation } from "react-i18next";
@@ -18,9 +18,10 @@ import { SettingsPage } from './pages/SettingsPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { useAuthStore } from './stores/useAuthStore.ts';
-import { Outlet } from 'react-router-dom';
 import { GameContainer } from './components/layout/GameContainer.tsx';
 import { useAudioRuntime } from './audio/useAudio.ts';
+import { getServiceStatus, serviceRouteBypassesGate, serviceRouteRequiresServer, type ServiceStatus } from './api/health.ts';
+import { ServiceStatusPage } from './pages/ServiceStatusPage.tsx';
 
 // Phaser는 게임·훈련·도움말·리플레이에서만 필요하다. 이 화면들을 방문하기 전까지 엔진과
 // 맵 렌더러를 받지 않게 해 제목/로그인/방 목록의 초기 번들을 작게 유지한다.
@@ -31,19 +32,76 @@ const ReplayPage = lazy(() => import('./pages/ReplayPage.tsx').then((module) => 
 
 const UiLayout = () => <GameContainer><Outlet/></GameContainer>;
 
+type GateStatus = ServiceStatus | { kind: 'checking' };
+
+const ServiceAwareApplication: React.FC<{
+    serviceStatus: GateStatus;
+    retryServiceStatus: () => void;
+}> = ({ serviceStatus, retryServiceStatus }) => {
+    const location = useLocation();
+    const bootstrapAuth = useAuthStore((state) => state.bootstrap);
+    const bootstrapped = useAuthStore((state) => state.bootstrapped);
+    const activeRoomId = sessionStorage.getItem('switch-active-room');
+    const bypassGate = serviceRouteBypassesGate(location.pathname, activeRoomId);
+    const gateApplies = serviceRouteRequiresServer(location.pathname) && !bypassGate;
+    const serviceBlocksEntry = serviceStatus.kind === 'checking'
+        || serviceStatus.kind === 'maintenance'
+        || serviceStatus.kind === 'offline';
+
+    useEffect(() => {
+        if (!serviceBlocksEntry || !gateApplies) void bootstrapAuth();
+    }, [bootstrapAuth, gateApplies, serviceBlocksEntry]);
+
+    if (gateApplies && serviceStatus.kind === 'checking') {
+        return <ServiceStatusPage status={serviceStatus} checking onRetry={retryServiceStatus}/>;
+    }
+    if (gateApplies && (serviceStatus.kind === 'maintenance' || serviceStatus.kind === 'offline')) {
+        return <ServiceStatusPage status={serviceStatus} checking={false} onRetry={retryServiceStatus}/>;
+    }
+
+    if (!bootstrapped) {
+        return <div style={{ width: '100vw', height: '100vh' }} aria-busy="true"/>;
+    }
+
+    const announcement = serviceStatus.kind === 'available' ? serviceStatus.announcement : null;
+    return (
+        <Suspense fallback={<div style={{ width: '100%', height: '100%' }} aria-busy="true"/>}>
+            <Routes>
+                <Route element={<UiLayout/>}>
+                    <Route path="/" element={<TitlePage announcement={announcement}/>} />
+                    <Route path="/rooms" element={<RoomListPage />} />
+                    <Route path="/rooms/create" element={<CreateRoomPage />} />
+                    <Route path="/rooms/join" element={<JoinRoomPage />} />
+                    <Route path="/rooms/:roomId/lobby" element={<LobbyPage />} />
+                    <Route path="/matches/:matchId/result" element={<MatchResultPage />} />
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/signup" element={<SignUpPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
+                    <Route path="/change-password" element={<ChangePasswordPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/how-to-play" element={<HowToPlayPage />} />
+                    <Route path="/game" element={<GamePage />} />
+                    <Route path="/training" element={<TrainingPage />} />
+                    <Route path="/admin" element={<AdminPage />} />
+                    <Route path="/replay" element={<ReplayPage />} />
+                    <Route path="*" element={<NotFoundPage />} />
+                </Route>
+            </Routes>
+        </Suspense>
+    );
+};
+
 function App() {
     const { i18n } = useTranslation();
     useAudioRuntime();
     const savedLanguage = useSettingsStore((state) => state.language);
     const theme = useSettingsStore((state) => state.theme);
     const motionLevel = useSettingsStore((state) => state.motionLevel);
-    const bootstrapAuth = useAuthStore((state) => state.bootstrap);
-    const bootstrapped = useAuthStore((state) => state.bootstrapped);
+    const [serviceStatus, setServiceStatus] = useState<GateStatus>({ kind: 'checking' });
 
     useEffect(() => {
-        if (i18n.language !== savedLanguage) {
-            i18n.changeLanguage(savedLanguage);
-        }
+        if (i18n.language !== savedLanguage) void i18n.changeLanguage(savedLanguage);
         document.documentElement.lang = savedLanguage;
     }, [savedLanguage, i18n]);
 
@@ -53,39 +111,31 @@ function App() {
         document.documentElement.dataset.motion = motionLevel;
     }, [theme, motionLevel]);
 
-    useEffect(() => { void bootstrapAuth(); }, [bootstrapAuth]);
+    const refreshServiceStatus = useCallback(async () => {
+        setServiceStatus(await getServiceStatus());
+    }, []);
 
-    if (!bootstrapped) {
-        return <div style={{ width: '100vw', height: '100vh' }} aria-busy="true"/>;
-    }
+    const retryServiceStatus = useCallback(() => {
+        setServiceStatus({ kind: 'checking' });
+        void refreshServiceStatus();
+    }, [refreshServiceStatus]);
+
+    useEffect(() => {
+        const initialCheck = window.setTimeout(() => void refreshServiceStatus(), 0);
+        const interval = window.setInterval(() => void refreshServiceStatus(), 15_000);
+        const handleOnline = () => void refreshServiceStatus();
+        window.addEventListener('online', handleOnline);
+        return () => {
+            window.clearTimeout(initialCheck);
+            window.clearInterval(interval);
+            window.removeEventListener('online', handleOnline);
+        };
+    }, [refreshServiceStatus]);
 
     return (
         <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
             <BrowserRouter>
-                <Suspense fallback={<div style={{ width: '100%', height: '100%' }} aria-busy="true"/>}>
-                    <Routes>
-                        <Route element={<UiLayout/>}>
-                            <Route path="/" element={<TitlePage />} />
-                            <Route path="/rooms" element={<RoomListPage />} />
-                            <Route path="/rooms/create" element={<CreateRoomPage />} />
-                            <Route path="/rooms/join" element={<JoinRoomPage />} />
-                            <Route path="/rooms/:roomId/lobby" element={<LobbyPage />} />
-                            <Route path="/matches/:matchId/result" element={<MatchResultPage />} />
-                            <Route path="/login" element={<LoginPage />} />
-                            <Route path="/signup" element={<SignUpPage />} />
-                            <Route path="/reset-password" element={<ResetPasswordPage />} />
-                            <Route path="/change-password" element={<ChangePasswordPage />} />
-                            <Route path="/profile" element={<ProfilePage />} />
-                            <Route path="/settings" element={<SettingsPage />} />
-                            <Route path="/how-to-play" element={<HowToPlayPage />} />
-                            <Route path="/game" element={<GamePage />} />
-                            <Route path="/training" element={<TrainingPage />} />
-                            <Route path="/admin" element={<AdminPage />} />
-                            <Route path="/replay" element={<ReplayPage />} />
-                            <Route path="*" element={<NotFoundPage />} />
-                        </Route>
-                    </Routes>
-                </Suspense>
+                <ServiceAwareApplication serviceStatus={serviceStatus} retryServiceStatus={retryServiceStatus}/>
             </BrowserRouter>
         </div>
     )

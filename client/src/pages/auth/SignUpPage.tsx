@@ -11,6 +11,15 @@ import { ApiError } from '../../api/http.ts';
 import { isEmail, isNickname, isPassword, isVerificationCode } from '../../utils/validation.ts';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color, themeColors } from '../../theme/color.ts';
+import { Checkbox } from '../../components/common/Checkbox.tsx';
+import { LegalDocumentDialog } from '../../components/legal/LegalDialogs.tsx';
+import {
+    hasRequiredAgreements,
+    PRIVACY_POLICY,
+    registrationAgreements,
+    TERMS_OF_SERVICE,
+    type LegalDocument,
+} from '../../legal/legalDocuments.ts';
 
 export const SignUpPage: React.FC = () => {
     const { t } = useTranslation();
@@ -26,7 +35,11 @@ export const SignUpPage: React.FC = () => {
     const [touched, setTouched] = useState(false);
     const [message, setMessage] = useState('');
     const [error, setError] = useState(false);
-    const valid = isEmail(email) && isNickname(nickname) && isPassword(password) && isVerificationCode(code);
+    const [termsAcceptedAt, setTermsAcceptedAt] = useState<string | null>(null);
+    const [privacyAcceptedAt, setPrivacyAcceptedAt] = useState<string | null>(null);
+    const [openDocument, setOpenDocument] = useState<LegalDocument | null>(null);
+    const agreementsAccepted = hasRequiredAgreements(termsAcceptedAt, privacyAcceptedAt);
+    const valid = isEmail(email) && isNickname(nickname) && isPassword(password) && isVerificationCode(code) && agreementsAccepted;
 
     const sendCode = async () => {
         setTouched(true);
@@ -42,7 +55,14 @@ export const SignUpPage: React.FC = () => {
         if (!valid) return;
         setLoading(true); setMessage(''); setError(false);
         try {
-            await registerUser({ email, password, nickname, code });
+            if (termsAcceptedAt === null || privacyAcceptedAt === null) return;
+            await registerUser({
+                email,
+                password,
+                nickname,
+                code,
+                agreements: registrationAgreements(termsAcceptedAt, privacyAcceptedAt),
+            });
             navigate('/login', { replace: true, state: { message: t('auth.signupSuccess') } });
         } catch (requestError) {
             setError(true);
@@ -66,9 +86,28 @@ export const SignUpPage: React.FC = () => {
                 <TextField label={t('auth.nickname')} placeholder={t('auth.nicknamePlaceholder')} autoComplete="nickname" value={nickname} error={touched && !isNickname(nickname) ? t('auth.invalidNickname') : undefined} onChange={setNicknameValue}/>
                 <TextField label={t('auth.code')} placeholder={t('auth.codePlaceholder')} inputMode="numeric" maxLength={6} value={code} disabled={!codeSent} error={touched && codeSent && !isVerificationCode(code) ? t('auth.invalidCode') : undefined} onChange={(value) => setCode(value.replace(/\D/g, ''))}/>
                 <TextField label={t('auth.password')} placeholder={t('auth.passwordPlaceholder')} autoComplete="new-password" type="password" value={password} error={touched && !isPassword(password) ? t('auth.invalidPassword') : undefined} onChange={setPassword}/>
+                <div className="signup-consents">
+                    <div className="signup-consent-row">
+                        <Checkbox
+                            checked={termsAcceptedAt !== null}
+                            label={t('auth.agreeTerms')}
+                            onChange={(checked) => setTermsAcceptedAt(checked ? new Date().toISOString() : null)}
+                        />
+                        <button type="button" onClick={() => setOpenDocument(TERMS_OF_SERVICE)}>{t('auth.readDocument')}</button>
+                    </div>
+                    <div className="signup-consent-row">
+                        <Checkbox
+                            checked={privacyAcceptedAt !== null}
+                            label={t('auth.agreePrivacy')}
+                            onChange={(checked) => setPrivacyAcceptedAt(checked ? new Date().toISOString() : null)}
+                        />
+                        <button type="button" onClick={() => setOpenDocument(PRIVACY_POLICY)}>{t('auth.readDocument')}</button>
+                    </div>
+                </div>
                 <div className="status-message" role="status" style={{ color: error ? Color.red[2] : themeColors(theme).muted }}>{message}</div>
                 <RoundButton width={480} height={104} type={1} content={t('auth.signup')} disabled={!valid} isLoading={loading} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
             </div>
+            {openDocument && <LegalDocumentDialog document={openDocument} onClose={() => setOpenDocument(null)}/>}
         </PageLayout>
     );
 };

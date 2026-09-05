@@ -10,6 +10,8 @@ import { Color, themeColors } from '../theme/color.ts';
 import { formatKeyBinding } from '../utils/keyBinding.ts';
 import { TouchLayoutEditor } from '../game/hud/touch/TouchLayoutEditor.tsx';
 import { BgmCard } from '../components/settings/BgmCard.tsx';
+import { CreditsDialog, LegalDocumentDialog } from '../components/legal/LegalDialogs.tsx';
+import { OPERATOR_CREDIT, PRIVACY_POLICY } from '../legal/legalDocuments.ts';
 
 interface Choice<T extends string> {
     value: T;
@@ -95,6 +97,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
     const [section, setSection] = useState<SettingsSection>('general');
     const [editing, setEditing] = useState<{ action: KeyAction; slot: 0 | 1 } | null>(null);
     const [bindingError, setBindingError] = useState('');
+    const [generalDialog, setGeneralDialog] = useState<'privacy' | 'credits' | null>(null);
     const settings = useSettingsStore();
     const colors = themeColors(settings.theme);
 
@@ -184,16 +187,16 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                 <small>{navigator.platform || t('settings.general.unknownPlatform')} · {navigator.maxTouchPoints > 0 ? t('settings.general.touchAvailable') : t('settings.general.keyboardPointer')}</small>
             </div>
             <div className="settings-link-grid">
-                <article className="settings-info-card">
+                <button type="button" className="settings-info-card" onClick={() => setGeneralDialog('privacy')}>
                     <span className="settings-card-kicker">{t('settings.general.privacy')}</span>
                     <strong>{t('settings.general.privacyTitle')}</strong>
-                    <p>{t('settings.general.privacyDummy')}</p>
-                </article>
-                <article className="settings-info-card">
+                    <p>{t('settings.general.openPrivacy')}</p>
+                </button>
+                <button type="button" className="settings-info-card" onClick={() => setGeneralDialog('credits')}>
                     <span className="settings-card-kicker">{t('settings.general.credits')}</span>
-                    <strong>swITch Team</strong>
-                    <p>{t('settings.general.creditsDummy')}</p>
-                </article>
+                    <strong>{OPERATOR_CREDIT.name}</strong>
+                    <p>{OPERATOR_CREDIT.contact}</p>
+                </button>
             </div>
         </>
     );
@@ -408,6 +411,12 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
             </div>
     );
 
-    if (embedded) return panel;
-    return <PageLayout title={t('settings.title')}>{panel}</PageLayout>;
+    const dialogs = (
+        <>
+            {generalDialog === 'privacy' && <LegalDocumentDialog document={PRIVACY_POLICY} onClose={() => setGeneralDialog(null)}/>}
+            {generalDialog === 'credits' && <CreditsDialog onClose={() => setGeneralDialog(null)}/>}
+        </>
+    );
+    if (embedded) return <>{panel}{dialogs}</>;
+    return <PageLayout title={t('settings.title')}>{panel}{dialogs}</PageLayout>;
 };

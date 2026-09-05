@@ -21,7 +21,25 @@
     "offline": "Server offline",
     "retry": "Click to check again"
   },
+  "browserUnsupported": {
+    "title": "This browser isn’t supported",
+    "body": "Update your browser to use every feature, including replays.",
+    "supported": "Supported browsers",
+    "desktop": "Desktop · Chrome/Edge 103+, Firefox 113+, Safari 16.4+",
+    "mobile": "Mobile · iOS Safari 16.4+, Android Chrome 103+"
+  },
+  "serviceStatus": {
+    "checkingTitle": "Checking the server",
+    "checkingBody": "Just a moment.",
+    "maintenanceTitle": "Maintenance in progress",
+    "maintenanceBody": "We’re tuning the server for more reliable matches.",
+    "returnsAt": "Back at",
+    "offlineTitle": "Can’t reach the server",
+    "offlineBody": "There is no maintenance notice, but the server isn’t responding. Try again shortly.",
+    "retry": "Check Again"
+  },
   "titlePage": {
+    "announcement": "Notice",
     "button": {
       "gameStart": "Start Game",
       "gameGuide": "How to Play"
@@ -237,7 +255,23 @@
     "duplicateAccount": "That email or nickname is already in use.",
     "serverError": "Could not reach the server. Try again in a moment.",
     "identitySwitchDuringRoom": "Leave the active room before logging in.",
+    "agreeTerms": "I agree to the Terms of Service",
+    "agreePrivacy": "I agree to the Privacy Policy",
+    "readDocument": "Read",
     "logout": "Log Out"
+  },
+  "legal": {
+    "document": "Legal document",
+    "termsOfService": "Terms of Service",
+    "privacyPolicy": "Privacy Policy",
+    "version": "Version {{version}}",
+    "close": "Close",
+    "credits": "Credits",
+    "operator": "Operator",
+    "name": "Name",
+    "contact": "Contact",
+    "repository": "Repository",
+    "assets": "Asset sources and licenses"
   },
   "profile": {
     "title": "Profile",
@@ -325,9 +359,8 @@
       "keyboardPointer": "Keyboard and pointer input",
       "privacy": "Privacy Policy",
       "privacyTitle": "How is my data used?",
-      "privacyDummy": "Account and match-data policies will be explained here. (Coming soon)",
-      "credits": "Credits",
-      "creditsDummy": "This space will list the team behind game design, UI, client, and server development."
+      "openPrivacy": "Read the full policy",
+      "credits": "Credits"
     },
     "sound": {
       "master": "Master volume",

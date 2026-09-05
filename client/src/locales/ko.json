@@ -21,7 +21,25 @@
     "offline": "서버 연결 끊김",
     "retry": "눌러서 다시 확인"
   },
+  "browserUnsupported": {
+    "title": "지원하지 않는 브라우저예요",
+    "body": "리플레이까지 제대로 이용하려면 브라우저를 업데이트해 주세요.",
+    "supported": "지원 브라우저",
+    "desktop": "컴퓨터 · Chrome·Edge 103+, Firefox 113+, Safari 16.4+",
+    "mobile": "모바일 · iOS Safari 16.4+, Android Chrome 103+"
+  },
+  "serviceStatus": {
+    "checkingTitle": "서버를 확인하고 있어요",
+    "checkingBody": "잠시만 기다려 주세요.",
+    "maintenanceTitle": "지금은 점검 중이에요",
+    "maintenanceBody": "더 안정적인 경기를 위해 서버를 다듬고 있어요.",
+    "returnsAt": "돌아오는 시각",
+    "offlineTitle": "서버에 연결할 수 없어요",
+    "offlineBody": "점검 안내는 없지만 서버가 응답하지 않아요. 잠시 뒤 다시 확인해 주세요.",
+    "retry": "다시 확인"
+  },
   "titlePage": {
+    "announcement": "공지",
     "button": {
       "gameStart": "게임 시작",
       "gameGuide": "게임 방법"
@@ -237,7 +255,23 @@
     "duplicateAccount": "이미 사용 중인 이메일 또는 닉네임입니다.",
     "serverError": "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     "identitySwitchDuringRoom": "진행 중인 방에서 나간 뒤 로그인해 주세요.",
+    "agreeTerms": "이용약관에 동의합니다",
+    "agreePrivacy": "개인정보처리방침에 동의합니다",
+    "readDocument": "본문 보기",
     "logout": "로그아웃"
+  },
+  "legal": {
+    "document": "법률 문서",
+    "termsOfService": "이용약관",
+    "privacyPolicy": "개인정보처리방침",
+    "version": "버전 {{version}}",
+    "close": "닫기",
+    "credits": "크레딧",
+    "operator": "운영 주체",
+    "name": "이름",
+    "contact": "문의",
+    "repository": "저장소",
+    "assets": "자산 출처와 라이선스"
   },
   "profile": {
     "title": "프로필",
@@ -325,9 +359,8 @@
       "keyboardPointer": "키보드·포인터 입력",
       "privacy": "개인정보 처리방침",
       "privacyTitle": "내 정보는 어떻게 쓰이나요?",
-      "privacyDummy": "계정과 게임 기록 처리 기준을 이곳에서 안내할 예정입니다. (준비 중)",
-      "credits": "크레딧",
-      "creditsDummy": "게임 기획, 디자인, 클라이언트와 서버 제작에 참여한 팀 정보를 표시할 자리입니다."
+      "openPrivacy": "전체 본문 보기",
+      "credits": "크레딧"
     },
     "sound": {
       "master": "마스터 사운드",
