@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import {
     buildReplayContainer,
-    decodeChunk,
+    decodeNodeReplayChunk,
     FRAMES_PER_CHUNK,
     parseReplayContainer,
     REPLAY_FORMAT_VERSION,
@@ -68,7 +68,7 @@ test('chunk를 디코드하면 프레임·시야·이벤트가 순서대로 복�
     const container = await buildReplayContainer(MANIFEST_BASE, chunks, nodeReplayCodec);
     const { chunkIndex } = parseReplayContainer(container.bytes);
 
-    const decoded = await decodeChunk(container.bytes, chunkIndex[0]!, nodeReplayCodec);
+    const decoded = await decodeNodeReplayChunk(container.bytes, chunkIndex[0]!);
     assert.equal(decoded.frames.length, 3);
     assert.deepEqual(decoded.frames.map((f) => f.tick), [2, 4, 6]);
     assert.equal(decoded.frames[0]!.full, true);
@@ -88,7 +88,20 @@ test('chunk 해시가 어긋나면 손상으로 거부한다', async () => {
     // 압축된 chunk 영역 한 바이트를 뒤집는다. 해시 검증이 없으면 조용히 잘못된 프레임을 읽는다.
     tampered[chunkIndex[0]!.offset] = tampered[chunkIndex[0]!.offset]! ^ 0xff;
 
-    await assert.rejects(decodeChunk(tampered, chunkIndex[0]!, nodeReplayCodec), ReplayDecodeError);
+    await assert.rejects(decodeNodeReplayChunk(tampered, chunkIndex[0]!), ReplayDecodeError);
+});
+
+test('작게 선언하고 크게 부푸는 chunk는 선언 크기를 넘는 즉시 압축 해제를 중단한다', async () => {
+    const bomb = makeChunk(2, 1, false);
+    bomb.frames[0] = { tick: 2, full: true, bytes: new Uint8Array(1024 * 1024).fill(65) };
+    const container = await buildReplayContainer(MANIFEST_BASE, [bomb], nodeReplayCodec);
+    const { chunkIndex } = parseReplayContainer(container.bytes);
+    const entry = { ...chunkIndex[0]!, rawLen: 64 };
+
+    await assert.rejects(
+        decodeNodeReplayChunk(container.bytes, entry),
+        (error: unknown) => error instanceof ReplayDecodeError && /declared raw length: 64/.test(error.message),
+    );
 });
 
 test('bad magic은 즉시 거부한다', async () => {

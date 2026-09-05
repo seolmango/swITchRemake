@@ -7,7 +7,7 @@
  * 자리가 여기뿐이라 여기에 둔다. 옮길 때 고칠 곳은 이 파일 하나다.
  *
  * 키가 없으면 서명하지 않는다. 서명 없는 파일도 재생은 된다 — 개발 중에 만든 파일에는 서명이
- * 없고, 그걸 막으면 파일을 주고받는 것 자체가 안 된다. 재생기가 딱지만 다르게 붙인다.
+ * 없을 수 있다. 운영 기동은 `startup-config.ts`가 키 누락을 먼저 거부한다.
  */
 
 import { createPrivateKey, createPublicKey, sign as nodeSign } from 'node:crypto';

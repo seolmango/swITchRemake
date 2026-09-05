@@ -72,8 +72,8 @@ async function main(): Promise<void> {
         replayEnabled && replayStore
             ? new MemoryReplayRecorder({
                 store: replayStore,
-                // 키가 없으면 서명하지 않는다. 키가 있는데 못 읽으면 여기서 부팅이 멈춘다 —
-                // 서명하라고 키를 줬는데 조용히 서명 없이 도는 것이 제일 나쁘다.
+                // 운영의 키 누락은 startup-config가 이미 막았다. 키가 있는데 못 읽는 경우도
+                // replaySignerFrom에서 부팅을 멈춰 무서명 파일로 조용히 떨어지지 않는다.
                 ...(replaySigner ? { signer: replaySigner } : {}),
             })
             : new NullReplayRecorder();

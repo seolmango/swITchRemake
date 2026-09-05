@@ -96,7 +96,7 @@ export const INFRA = Object.freeze({
     REPLAY_LOCAL_DIR: optional('REPLAY_LOCAL_DIR', './replays'),
     REPLAY_ENABLED: optional('REPLAY_ENABLED', 'false') === 'true',
     /*
-     * 리플레이 서명 키. 없으면 서명하지 않는다 — 개발 중에는 그것이 정상이다.
+     * 리플레이 서명 키. 개발에서는 없으면 경고 후 서명하지 않고, 운영에서는 기동 검증이 거부한다.
      * PKCS#8 PEM을 base64로 한 줄에 담는다(env에 줄바꿈을 넣지 않으려는 것뿐이다).
      */
     REPLAY_SIGNING_KEY: optional('REPLAY_SIGNING_KEY', ''),

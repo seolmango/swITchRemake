@@ -12,13 +12,16 @@
  *   node dist/replay/cli.js <file.swrp> --dump-json <out.json>   전체를 프레임 배열 JSON으로 내보냄
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
+import { readFile, stat } from 'node:fs/promises';
 import { decodeSnapshot, type Snapshot } from 'shared';
+import { NETWORK } from '../config/network';
 import {
-    decodeChunk,
-    nodeReplayCodec,
+    decodeNodeReplayChunk,
     parseReplayContainer,
+    ReplayDecodeError,
     verifyRootHash,
+    nodeReplayCodec,
     type ChunkIndexEntry,
     type RecordedEvent,
 } from './format';
@@ -28,6 +31,26 @@ interface Options {
     verify: boolean;
     tick: number | null;
     dumpJsonPath: string | null;
+}
+
+export interface ReplayFileIo {
+    stat(path: string): Promise<{ size: number }>;
+    readFile(path: string): Promise<Uint8Array>;
+}
+
+const replayFileIo: ReplayFileIo = { stat, readFile };
+
+/** 파일 내용을 메모리에 올리기 전에 stat 크기부터 검사한다. */
+export async function readReplayFileWithinLimit(
+    path: string,
+    maxBytes = NETWORK.MAX_REPLAY_FILE_BYTES,
+    io: ReplayFileIo = replayFileIo,
+): Promise<Uint8Array> {
+    const metadata = await io.stat(path);
+    if (metadata.size > maxBytes) {
+        throw new ReplayDecodeError(`replay file exceeds size limit: ${metadata.size} > ${maxBytes}`);
+    }
+    return new Uint8Array(await io.readFile(path));
 }
 
 function parseArgs(argv: readonly string[]): Options {
@@ -53,7 +76,7 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 
 /** chunk 안에서 tick 이하 중 가장 가까운 keyframe부터 tileChanges를 누적 적용해 그 tick의 스냅샷을 만든다. */
 async function reconstructAt(bytes: Uint8Array, entry: ChunkIndexEntry, tick: number): Promise<Snapshot | null> {
-    const chunk = await decodeChunk(bytes, entry, nodeReplayCodec);
+    const chunk = await decodeNodeReplayChunk(bytes, entry);
     const frames = chunk.frames.filter((f) => f.tick <= tick).sort((a, b) => a.tick - b.tick);
     const keyframe = frames[0];
     if (!keyframe) return null;
@@ -82,7 +105,7 @@ async function reconstructAt(bytes: Uint8Array, entry: ChunkIndexEntry, tick: nu
 
 async function main(): Promise<void> {
     const options = parseArgs(process.argv.slice(2));
-    const bytes = new Uint8Array(readFileSync(options.file));
+    const bytes = await readReplayFileWithinLimit(options.file);
     const { manifest, chunkIndex } = parseReplayContainer(bytes);
 
     console.log(`match       ${manifest.matchId}`);
@@ -103,7 +126,7 @@ async function main(): Promise<void> {
         let allOk = rootOk;
         for (const entry of chunkIndex) {
             try {
-                await decodeChunk(bytes, entry, nodeReplayCodec);
+                await decodeNodeReplayChunk(bytes, entry);
                 console.log(`  chunk [${entry.startTick}..${entry.endTick}] OK`);
             } catch (error) {
                 allOk = false;
@@ -131,7 +154,7 @@ async function main(): Promise<void> {
         const frames: { tick: number; full: boolean; snapshot: Snapshot }[] = [];
         const events: RecordedEvent[] = [];
         for (const entry of chunkIndex) {
-            const chunk = await decodeChunk(bytes, entry, nodeReplayCodec);
+            const chunk = await decodeNodeReplayChunk(bytes, entry);
             for (const frame of chunk.frames) {
                 const snapshot = decodeSnapshot(toArrayBuffer(frame.bytes));
                 frames.push({ tick: frame.tick, full: frame.full, snapshot });
@@ -143,4 +166,9 @@ async function main(): Promise<void> {
     }
 }
 
-main();
+if (require.main === module) {
+    void main().catch((error: unknown) => {
+        console.error(`리플레이를 열지 못했다: ${error instanceof Error ? error.message : String(error)}`);
+        process.exitCode = 1;
+    });
+}
