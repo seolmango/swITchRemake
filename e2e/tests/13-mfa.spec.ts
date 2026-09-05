@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { T, button, deleteAccount, logIn, newAccount, signUp } from '../support/app';
-import { clearMail, waitForMail } from '../support/mail';
+import { clearMail, waitForMail, waitForMailReissue, type SinkMail } from '../support/mail';
 
 const openSecuritySettings = async (page: Page): Promise<void> => {
     await page.goto('/settings');
@@ -58,12 +58,15 @@ const loginWithMfaMail = async (
     email: string,
     password: string,
     trustDevice = false,
-): Promise<void> => {
+): Promise<SinkMail> => {
     await clearMail(email);
     await beginMfaLogin(page, email, password);
     await expect(page.getByText(T.auth.mfaEmailPrompt)).toBeVisible();
     const mail = await waitForMail(email, 'mfa');
     await finishMfaLogin(page, mail.code, trustDevice);
+    // 같은 용도(mfa-login)의 코드는 60초에 한 번만 나간다. 한 흐름에서 두 번 로그인하려면
+    // 그 창을 기다려야 하므로 언제 받았는지를 돌려준다.
+    return mail;
 };
 
 const disableEmailMfa = async (page: Page, email: string): Promise<void> => {
@@ -124,7 +127,7 @@ test.describe('2차 인증', () => {
         await enableEmailMfa(page, account.password);
 
         await logOut(page);
-        await loginWithMfaMail(page, account.email, account.password, true);
+        const trustLoginMail = await loginWithMfaMail(page, account.email, account.password, true);
         await logOut(page);
 
         // 같은 브라우저의 신뢰 쿠키가 살아 있으므로 일반 로그인처럼 바로 들어간다.
@@ -145,7 +148,12 @@ test.describe('2차 인증', () => {
         await confirm.click();
         await expect(page.getByText(T.settings.security.noTrustedDevices)).toBeVisible();
 
+        // 해제에 mfa-step-up 코드를 썼다. 아래 disableEmailMfa가 같은 용도를 또 쓰므로 창을 기다린다.
+        await waitForMailReissue(revokeMail);
+
         await logOut(page);
+        // 위에서 이미 mfa-login 코드를 한 번 받았다. 같은 용도라 60초 창이 지나야 다시 나온다.
+        await waitForMailReissue(trustLoginMail);
         await clearMail(account.email);
         await beginMfaLogin(page, account.email, account.password);
         const loginMail = await waitForMail(account.email, 'mfa');

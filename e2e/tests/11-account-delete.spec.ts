@@ -1,11 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { T, button, gotoHome, logIn, newAccount, signUp } from '../support/app';
-import { clearMail, waitForMail } from '../support/mail';
+import { clearMail, waitForMail, waitForMailReissue } from '../support/mail';
 
 test.describe('탈퇴', () => {
     test('탈퇴하면 계정과 로그인 기기가 사라지고 같은 이메일로 다시 가입할 수 있다', async ({ page, browser }) => {
         const account = newAccount('bye');
         await signUp(page, account);
+        // 끝에서 같은 주소로 다시 가입한다. 그때 메일을 또 받아야 하므로 첫 메일의 시각을 잡아 둔다.
+        const firstSignupMail = await waitForMail(account.email, 'signup');
         await logIn(page, account);
 
         // 다른 기기 하나. 탈퇴 뒤에 이쪽도 못 들어가야 한다.
@@ -47,6 +49,7 @@ test.describe('탈퇴', () => {
         await expect(button(page, T.rooms.create)).toBeVisible();
 
         // 탈퇴는 상태 표시가 아니라 실제 삭제다. 이메일과 닉네임의 유일성도 함께 풀려야 한다.
+        await waitForMailReissue(firstSignupMail);
         await signUp(page, account);
         await expect(page.getByText(T.auth.signupSuccess)).toBeVisible();
         await logIn(page, account);

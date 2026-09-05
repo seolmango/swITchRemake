@@ -69,3 +69,23 @@ export async function closeMail(): Promise<void> {
     client = null;
     await closing.quit().catch(() => undefined);
 }
+
+/**
+ * 같은 주소·같은 용도의 인증 메일은 60초에 한 번만 나간다(§9의 "아주 좁게" 등급).
+ * 한 흐름에서 같은 용도의 메일을 두 번 받아야 하면 그 창이 지나기를 기다려야 한다 —
+ * 안 기다리면 두 번째 요청이 조용히 발송되지 않고, 화면에는 "코드를 보냈다"만 뜬다.
+ *
+ * 실제로 탈퇴 흐름이 여기 걸려 있었다. 23초짜리 흐름이라 60초 창 안에서 같은 주소로 다시
+ * 가입하려 했고, 메일이 안 와서 제품 버그처럼 보였다.
+ */
+export const MAIL_REISSUE_WINDOW_MS = 60_000;
+
+export function mailCooldownRemainingMs(previous: SinkMail, now = Date.now()): number {
+    return Math.max(0, new Date(previous.sentAt).getTime() + MAIL_REISSUE_WINDOW_MS - now);
+}
+
+/** 같은 용도의 메일을 다시 받을 수 있을 때까지 기다린다. 여유를 조금 더 둔다. */
+export async function waitForMailReissue(previous: SinkMail): Promise<void> {
+    const remaining = mailCooldownRemainingMs(previous);
+    if (remaining > 0) await new Promise((done) => setTimeout(done, remaining + 250));
+}
