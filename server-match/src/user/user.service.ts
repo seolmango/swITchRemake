@@ -1,7 +1,8 @@
-import { Injectable, Inject, ConflictException, InternalServerErrorException, BadRequestException, NotFoundException, UnauthorizedException} from "@nestjs/common";
+import { Injectable, Inject, ConflictException, InternalServerErrorException, BadRequestException, NotFoundException, UnauthorizedException, Logger} from "@nestjs/common";
 import { DRIZZLE } from "../database/database.module";
 import { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from '../database/schema';
+import { uniqueViolationTarget } from '../database/pg-error';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from "./dto/create-user.dto";
 import { RedisService } from "../redis/redis.service";
@@ -88,6 +89,7 @@ const encodeCursor = (cursor: MatchCursor): string => Buffer.from(JSON.stringify
 
 @Injectable()
 export class UserService {
+    private readonly logger = new Logger(UserService.name);
     constructor(
         @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
         private readonly redisService: RedisService,
@@ -158,15 +160,19 @@ export class UserService {
         } catch (error: any) {
             await releaseVerificationCodeClaim(this.redisService, claim).catch(() => undefined);
             if (error instanceof ConflictException) throw error;
-            if (error?.code === '23505') {
-                const detail = String(error.detail ?? error.details ?? error.constraint ?? '');
-                if (detail.includes('email')) {
+            // drizzle이 감싼 오류라 error.code를 그대로 보면 못 잡는다. cause를 따라간다.
+            const uniqueTarget = uniqueViolationTarget(error);
+            if (uniqueTarget !== null) {
+                if (uniqueTarget.includes('email')) {
                     throw emailUnavailable();
                 }
-                if (detail.includes('nickname')) {
+                if (uniqueTarget.includes('nickname')) {
                     throw new ConflictException('Nickname already exists');
                 }
             }
+            // 원인을 버리면 500이 났을 때 무엇이 터졌는지 아무도 알 수 없다. 사용자에게는
+            // 그대로 일반 오류를 주되, 서버 로그에는 원본을 남긴다(§14.5).
+            this.logger.error(`가입 처리 실패: ${error?.message ?? error}`, error?.stack);
             throw new InternalServerErrorException('Failed to create user');
         }
     }
