@@ -13,6 +13,7 @@ import {
 } from 'shared';
 import { resumeRoom, type RoomSeatGrant } from '../api/rooms.ts';
 import { reconnectDelayMs } from './reconnectPolicy.ts';
+import { roleFromLobby } from './roomRole.ts';
 
 type AuthOkMessage = Extract<ServerMessage, { type: 'auth.ok' }>;
 type LobbyStateMessage = Extract<ServerMessage, { type: 'lobby.state' }>;
@@ -384,7 +385,11 @@ class GameSession {
                 this.startPingLoop();
                 break;
             case 'lobby.state':
-                this.setState({ lobby: message.payload, lobbyReceivedAt: Date.now() });
+                this.setState({
+                    lobby: message.payload,
+                    lobbyReceivedAt: Date.now(),
+                    role: roleFromLobby(this.state.role, this.state.selfId, message.payload.players),
+                });
                 break;
             case 'game.starting':
                 this.setState({ roomState: RoomState.Countdown, starting: message.payload, ended: null });

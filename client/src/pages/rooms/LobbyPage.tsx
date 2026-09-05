@@ -18,6 +18,7 @@ import { cancelScheduledLobbyLeave, scheduleLobbyLeave } from './lobbyLeave.ts';
 import dashIcon from '../../assets/images/skill_dash.svg';
 import flashIcon from '../../assets/images/skill_flash.svg';
 import exhaustIcon from '../../assets/images/skill_exhaust.svg';
+import { canEnterRunningGame } from '../../game/roomRole.ts';
 
 const MIN_PLAYERS_TO_START = 3;
 const SKILLS: Array<{ id: PlayerSkill; icon: string }> = [
@@ -119,10 +120,10 @@ export const LobbyPage: React.FC = () => {
     }, [live, navigate, session.errorCode, session.errorEventId, t]);
 
     useEffect(() => {
-        if (!live || !session.starting) return;
+        if (!live || !session.starting || !canEnterRunningGame(session.role)) return;
         transitioningToGame.current = true;
         navigate(`/game?room_id=${encodeURIComponent(currentRoomId)}`, { replace: true });
-    }, [currentRoomId, live, navigate, session.starting]);
+    }, [currentRoomId, live, navigate, session.role, session.starting]);
 
     useEffect(() => {
         if (!live || !session.lobby || session.lobby.startLockMs <= 0) return;

@@ -26,6 +26,7 @@ import { isValidMatchId } from '../utils/matchId.ts';
 import { Icon } from '../components/common/Icon.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 import { matchSfx, useMatchSfx } from '../audio/matchSfx.ts';
+import { canEnterRunningGame } from '../game/roomRole.ts';
 
 const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { iconUrl: string; labelKey: string }> = {
     [SkillId.Dash]: { iconUrl: dashIcon, labelKey: 'lobby.skills.dash' },
@@ -74,7 +75,8 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
     const nextInputSequence = useCallback(() => inputSequence.current++ & 0xffff, []);
     const requestedRoomId = searchParams.get('room_id');
     const live = session.status === 'connected' && session.roomId !== null;
-    const gameVisible = live || (session.status === 'reconnecting' && session.roomId !== null && session.started !== null);
+    const mayEnterGame = training || canEnterRunningGame(session.role);
+    const gameVisible = mayEnterGame && (live || (session.status === 'reconnecting' && session.roomId !== null && session.started !== null));
     const mapId = session.starting?.mapId ?? session.lobby?.mapId ?? null;
     const mapBundleHash = session.mapBundleHash;
 
@@ -97,12 +99,17 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
             .then((grant) => gameSession.connect(grant))
             .then(() => {
                 const state = gameSession.getSnapshot();
-                if (state.roomState !== RoomState.Playing) {
+                if (state.roomState !== RoomState.Playing || !canEnterRunningGame(state.role)) {
                     navigate(`/rooms/${encodeURIComponent(requestedRoomId)}/lobby`, { replace: true });
                 }
             })
             .catch((error) => console.error('[swITch] game recovery failed', { roomId: requestedRoomId, error }));
     }, [live, navigate, requestedRoomId, session.roomId, session.status]);
+
+    useEffect(() => {
+        if (training || !live || session.role !== 'waiting' || !session.roomId) return;
+        navigate(`/rooms/${encodeURIComponent(session.roomId)}/lobby`, { replace: true });
+    }, [live, navigate, session.role, session.roomId, training]);
 
     const loadMap = useCallback(async (engine: SwitchEngine, id: string, hash: string, gameOrigin: string) => {
         const key = `${hash}:${id}`;
