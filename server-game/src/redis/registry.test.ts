@@ -74,7 +74,7 @@ class FakeRedis implements RedisPort {
 const lifecycle: RoomLifecyclePort = {
     startGame: (snapshot) => ({ startTick: 1, taggerId: snapshot.players[0]!.playerId }),
     connectionChanged: () => undefined,
-    participantTimedOut: () => undefined,
+    participantDisconnected: () => undefined,
     participantRemoved: () => undefined,
     stopRoom: () => undefined,
 };

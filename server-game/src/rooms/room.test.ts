@@ -31,7 +31,7 @@ class FakeConnection implements Connection {
 class FakeLifecycle implements RoomLifecyclePort {
     readonly starts: RoomStartSnapshot[] = [];
     readonly connections: { playerId: number; connected: boolean }[] = [];
-    readonly timeouts: number[] = [];
+    readonly disconnects: number[] = [];
     readonly removals: { playerId: number; reason: string }[] = [];
 
     public startGame(snapshot: RoomStartSnapshot) {
@@ -41,7 +41,7 @@ class FakeLifecycle implements RoomLifecyclePort {
     public connectionChanged(_roomId: string, playerId: number, connected: boolean): void {
         this.connections.push({ playerId, connected });
     }
-    public participantTimedOut(_roomId: string, playerId: number): void { this.timeouts.push(playerId); }
+    public participantDisconnected(_roomId: string, playerId: number): void { this.disconnects.push(playerId); }
     public participantRemoved(_roomId: string, playerId: number, reason: string): void {
         this.removals.push({ playerId, reason });
     }
@@ -82,8 +82,8 @@ function setup(overrides: Partial<RoomOptions> = {}, mode: RoomMode = RoomMode.M
         hudGameplay: { cooldownMs: 123 },
         timing: {
             countdownMs: 3_000,
-            postGameMs: 30_000,
-            reconnectGraceMs: 10_000,
+            postGameMs: 10_000,
+            reconnectGraceMs: 5_000,
             startLockOnJoinMs: 5_000,
             startLockOnMapChangeMs: 10_000,
             startLockJoinBudgetMs: 15_000,
@@ -157,7 +157,7 @@ test('ALLOCATING부터 POST_GAME 복귀까지 명단과 관전 자격을 서버�
     assert.equal(c2.messages.some((message) => message.type === 'player.eliminated'), true);
     assert.equal(context.room.finishGame([1, 3]), true);
     assert.equal(context.room.state, RoomState.PostGame);
-    context.setNow(38_001);
+    context.setNow(18_001);
     context.room.advance();
     assert.equal(context.room.state, RoomState.Waiting);
     assert.equal(context.room.memberByUser(2)?.role, PlayerRole.Player);
@@ -167,7 +167,7 @@ test('ALLOCATING부터 POST_GAME 복귀까지 명단과 관전 자격을 서버�
 test('재경기는 매칭 서버가 발급한 다음 경기 id로만 시작한다', async () => {
     const { context } = await playingRoom();
     assert.equal(context.room.finishGame([1, 3]), true);
-    context.setNow(context.getNow() + 30_001);
+    context.setNow(context.getNow() + 10_001);
     context.room.advance();
     assert.equal(context.room.state, RoomState.Waiting);
 
@@ -185,10 +185,23 @@ test('재경기는 매칭 서버가 발급한 다음 경기 id로만 시작한�
 
     // 한 번 쓴 발급은 소모된다. 같은 id로 두 경기를 치를 수 없다.
     assert.equal(context.room.finishGame([1, 3]), true);
-    context.setNow(context.getNow() + 30_001);
+    context.setNow(context.getNow() + 10_001);
     context.room.advance();
     assert.equal(context.room.state, RoomState.Waiting);
     assert.equal(context.room.requestStart(1), ErrorCode.ResultBacklog);
+});
+
+test('경기 종료 메시지는 한 명 승자를 그대로 보내고 승자 계약을 경계에서 검증한다', async () => {
+    const { context, c2 } = await playingRoom();
+
+    assert.throws(() => context.room.finishGame([]), /invalid winner ids/);
+    assert.throws(() => context.room.finishGame([1, 1]), /invalid winner ids/);
+    assert.throws(() => context.room.finishGame([9]), /invalid winner ids/);
+    assert.equal(context.room.state, RoomState.Playing, '잘못된 결과로 방 상태를 바꾸면 안 된다');
+
+    assert.equal(context.room.finishGame([1]), true);
+    const ended = c2.messages.find((message) => message.type === 'game.ended');
+    assert.deepEqual(ended?.payload.winnerIds, [1]);
 });
 
 test('좌표를 싣는 연출은 시전자를 보는 사람에게만 간다', async () => {
@@ -238,7 +251,7 @@ test('skill.rejected is sent only to the requesting player', () => {
     assert.equal(c2.messages.some((message) => message.type === 'skill.rejected'), false);
 });
 
-test('최신 u16 sequence만 유지하고 disconnect 즉시 입력을 중립화한 뒤 같은 자리를 복구한다', () => {
+test('disconnect 즉시 입력을 중립화하고 탈락시킨 뒤 같은 자리를 관전자로 복구한다', () => {
     const context = setup();
     const c1 = context.connect(context.owner);
     const r2 = seat(2, 0);
@@ -263,6 +276,8 @@ test('최신 u16 sequence만 유지하고 disconnect 즉시 입력을 중립화�
     context.room.disconnect(c1, 'network');
     assert.equal(context.room.resolvedInputs().some((value) => value.playerId === 1), false);
     assert.deepEqual(context.lifecycle.connections.at(-1), { playerId: 1, connected: false });
+    assert.deepEqual(context.lifecycle.disconnects, [1]);
+    assert.equal(context.room.memberByUser(1)?.role, PlayerRole.Spectator);
 
     const resume = seat(1, context.getNow(), true);
     assert.equal(context.room.canReserveResume(1), null);
@@ -270,11 +285,11 @@ test('최신 u16 sequence만 유지하고 disconnect 즉시 입력을 중립화�
     assert.equal(admission.playerId, 1);
     const resumed = new FakeConnection(99, 1, 'p1', 'room-1', 1, true);
     assert.equal(context.room.bindConnection(resumed), true);
-    assert.equal(context.room.acceptInput(resumed, input(1, true)), true);
-    assert.equal(context.room.resolvedInputs().find((value) => value.playerId === 1)?.lastProcessedSequence, 1);
+    assert.equal(context.room.acceptInput(resumed, input(1, true)), false);
+    assert.equal(context.room.snapshotAccess(1), 'unfiltered', '그 경기에서 탈락했으므로 관전으로 돌아와야 한다');
 });
 
-test('재접속 유예 만료는 slot을 해제하고 시뮬레이션 경계에 알린다', () => {
+test('재접속 유예 5초가 끝나면 이미 탈락한 참가자의 slot을 해제한다', () => {
     const context = setup();
     const c1 = context.connect(context.owner);
     const r2 = seat(2, 0);
@@ -282,15 +297,15 @@ test('재접속 유예 만료는 slot을 해제하고 시뮬레이션 경계에 
     const c2 = context.connect(r2);
     context.room.disconnect(c1, 'network');
 
-    context.setNow(10_001);
+    context.setNow(5_001);
     context.room.advance();
     assert.equal(context.room.memberByUser(1), null);
-    assert.deepEqual(context.lifecycle.timeouts, [1]);
+    assert.deepEqual(context.lifecycle.disconnects, [], '대기실 연결 종료는 경기 탈락이 아니다');
     assert.equal(context.room.hostId, 2);
     assert.equal(c2.messages.some((message) => message.type === 'lobby.hostChanged'), true);
 });
 
-test('resume admission 뒤 연결이 완성되지 않아도 원래 grace가 끝날 때까지 자리를 보존한다', () => {
+test('resume admission만 받고 연결이 완성되지 않으면 5초 뒤 자리를 놓는다', () => {
     const context = setup();
     const c1 = context.connect(context.owner);
     const r2 = seat(2, 0);
@@ -300,13 +315,10 @@ test('resume admission 뒤 연결이 완성되지 않아도 원래 grace가 끝�
 
     const shortResume = { ...seat(1, 0, true), expiresAt: 1_000 };
     assert.notEqual(context.room.admitReservation(shortResume), null);
-    context.setNow(1_001);
+    context.setNow(5_001);
     context.room.advance();
-    assert.notEqual(context.room.memberByUser(1), null, 'resume 소켓 실패가 기존 10초 grace를 잘라먹으면 안 된다');
-
-    const retry = seat(1, 1_001, true);
-    assert.equal(context.room.canReserveResume(1), null);
-    assert.notEqual(context.room.admitReservation(retry), null);
+    assert.equal(context.room.memberByUser(1), null, '인증 시도만으로 자리 보존이 5초를 넘으면 안 된다');
+    assert.notEqual(context.room.canReserveResume(1), null);
 });
 
 test('강퇴한 사용자는 방이 살아 있는 동안 다시 예약할 수 없다', () => {
@@ -414,7 +426,75 @@ async function playingRoom() {
     return { context, c2 };
 }
 
-test('경기 중에 재접속하면 game.starting과 game.started를 다시 받는다', async () => {
+test('경기 중 참가자는 Waiting으로 들어와 게임 상태를 받지 않고 다음 경기부터 참가한다', async () => {
+    const { context } = await playingRoom();
+    const lateReservation = seat(4, context.getNow());
+    assert.equal(context.room.reserveJoin(lateReservation, 'secret'), null);
+    const admission = context.room.admitReservation(lateReservation)!;
+    assert.equal(admission.role, PlayerRole.Waiting);
+    const late = new FakeConnection(4, 4, 'p4', 'room-1', admission.playerId);
+    assert.equal(context.room.bindConnection(late), true);
+    await Promise.resolve();
+
+    assert.equal(context.room.playerCount, 4, '경기 중 참가자도 방 정원을 차지한다');
+    assert.equal(context.room.memberByUser(4)?.inCurrentGame, false);
+    assert.equal(context.room.memberByUser(4)?.spectatorEligible, false);
+    assert.equal(context.room.snapshotAccess(4), 'none');
+    assert.equal(context.room.snapshotTargets().some((target) => target.playerId === 4), false);
+    assert.equal(late.messages.some((message) => message.type === 'game.starting' || message.type === 'game.started'), false);
+
+    context.room.broadcastTagged(1, null);
+    assert.equal(late.messages.some((message) => message.type === 'player.tagged'), false, '게임 이벤트도 대기자에게 보내면 안 된다');
+    assert.equal(context.room.setSpectating(4, true), ErrorCode.SpectateDenied);
+
+    assert.equal(context.room.finishGame([1, 3]), true);
+    assert.equal(late.messages.some((message) => message.type === 'game.ended'), false, '참가하지 않은 경기 결과를 보내면 안 된다');
+    context.setNow(context.getNow() + 10_001);
+    context.room.advance();
+    assert.equal(context.room.memberByUser(4)?.role, PlayerRole.Player);
+
+    context.room.grantMatchId('match-2');
+    assert.equal(context.room.requestStart(1), null);
+    context.setNow(context.getNow() + 3_001);
+    context.room.advance();
+    assert.deepEqual(context.lifecycle.starts[1]?.players.map((player) => player.playerId), [1, 2, 3, 4]);
+});
+
+test('경기 중 참가자도 8명 정원에 포함된다', async () => {
+    const { context } = await playingRoom();
+    for (const userId of [4, 5, 6, 7, 8]) {
+        assert.equal(context.room.reserveJoin(seat(userId, context.getNow()), 'secret'), null);
+    }
+    assert.equal(context.room.occupiedCount, 8);
+    assert.equal(context.room.reserveJoin(seat(9, context.getNow()), 'secret'), 'ROOM_FULL');
+});
+
+test('유예 만료로 빈 번호라도 현재 경기 명단이 쓰는 동안에는 새 참가자에게 배정하지 않는다', () => {
+    const context = setup();
+    context.connect(context.owner);
+    const reservations = [2, 3, 4].map((userId) => seat(userId, 0));
+    for (const reservation of reservations) {
+        assert.equal(context.room.reserveJoin(reservation, 'secret'), null);
+    }
+    const second = context.connect(reservations[0]!);
+    context.connect(reservations[1]!);
+    context.connect(reservations[2]!);
+    context.setNow(5_001);
+    assert.equal(context.room.requestStart(1), null);
+    context.setNow(8_001);
+    context.room.advance();
+
+    context.room.disconnect(second, 'network');
+    context.setNow(13_002);
+    context.room.advance();
+    assert.equal(context.room.memberByUser(2), null);
+
+    const lateReservation = seat(5, context.getNow());
+    assert.equal(context.room.reserveJoin(lateReservation, 'secret'), null);
+    assert.equal(context.room.admitReservation(lateReservation)?.playerId, 5);
+});
+
+test('경기 중 끊긴 참가자가 5초 안에 돌아오면 같은 번호의 관전자로 시작 상태를 다시 받는다', async () => {
     // 두 메시지는 시작하는 순간 한 번만 나갔다. 그래서 경기 도중에 끊겼다 돌아온 사람은
     // 방이 멀쩡히 PLAYING인데도 "경기 시작 신호를 기다리는" 화면에서 영영 멈춰 있었다.
     const { context, c2 } = await playingRoom();
@@ -422,8 +502,16 @@ test('경기 중에 재접속하면 game.starting과 game.started를 다시 받�
     context.room.disconnect(c2, 'network');
     assert.equal(context.room.canReserveResume(2), null);
     const resumed = seat(2, context.getNow(), true);
-    const back = context.connect(resumed);
+    const admission = context.room.admitReservation(resumed)!;
+    const back = new FakeConnection(99, 2, 'p2', 'room-1', admission.playerId, true);
+    assert.equal(context.room.bindConnection(back), true);
     await Promise.resolve();
+
+    assert.equal(back.playerId, c2.playerId);
+    assert.equal(context.room.memberByUser(2)?.role, PlayerRole.Spectator);
+    assert.equal(context.room.snapshotAccess(2), 'unfiltered');
+    context.room.disconnect(c2, '늦게 도착한 이전 연결 종료');
+    assert.equal(context.room.memberByUser(2)?.connection?.id, back.id, '이전 연결 종료가 새 연결을 끊으면 안 된다');
 
     const starting = back.messages.find((message) => message.type === 'game.starting');
     const started = back.messages.find((message) => message.type === 'game.started');
@@ -530,23 +618,18 @@ test('아무도 안 붙어 있는 방은 넘기지 않는다', () => {
 
 
 
-test('경기 중 유예가 끝나면 탈락하되 자리는 남고, 돌아오면 관전으로 들어간다', async () => {
-    // 유예가 끝나면 탈락은 맞다 — 자리를 비워 두면 경기가 안 끝난다. 그런데 명단에서까지
-    // 빼면 돌아올 방이 사라진다. 죽은 사람은 원래 관전하다 결과 화면까지 가는데,
-    // 새로고침이 느렸다는 이유로 그 사람만 방 밖으로 나가떨어졌다.
+test('경기 중에는 즉시 탈락하고 5초가 지나면 자리와 재접속 권한을 함께 놓는다', async () => {
     const { context, c2 } = await playingRoom();
     context.room.disconnect(c2, 'network');
 
-    context.setNow(context.getNow() + 10_001);
+    assert.deepEqual(context.lifecycle.disconnects, [2], '유예 만료까지 탈락을 미루면 안 된다');
+    assert.equal(context.room.memberByUser(2)?.role, PlayerRole.Spectator);
+
+    context.setNow(context.getNow() + 5_001);
     context.room.advance();
 
-    assert.deepEqual(context.lifecycle.timeouts, [2], '탈락은 그대로 일어나야 한다');
-    assert.notEqual(context.room.memberByUser(2), null, '자리는 남아 있어야 한다');
-    assert.equal(context.room.canReserveResume(2), null, '유예가 끝나도 경기 중이면 돌아올 수 있다');
-
-    const back = context.connect(seat(2, context.getNow(), true));
-    await Promise.resolve();
-    assert.notEqual(back.messages.find((message) => message.type === 'game.started'), undefined);
+    assert.equal(context.room.memberByUser(2), null);
+    assert.notEqual(context.room.canReserveResume(2), null);
 });
 
 test('대기실에서 유예가 끝나면 예전처럼 자리를 놓는다', () => {
@@ -558,7 +641,7 @@ test('대기실에서 유예가 끝나면 예전처럼 자리를 놓는다', () 
     context.connect(r2);
     context.room.disconnect(c1, 'network');
 
-    context.setNow(10_001);
+    context.setNow(5_001);
     context.room.advance();
     assert.equal(context.room.memberByUser(1), null);
     assert.notEqual(context.room.canReserveResume(1), null);

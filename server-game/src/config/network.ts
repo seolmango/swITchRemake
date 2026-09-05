@@ -44,6 +44,10 @@ export const NETWORK = Object.freeze({
     MAX_REPLAY_REQUESTS_PER_MINUTE: 30,
     /** readFile 기반 저장소가 큰 파일을 동시에 너무 많이 메모리에 올리지 못하게 한다. */
     MAX_CONCURRENT_REPLAY_DOWNLOADS: 4,
+    /** 오프라인 재생기가 파일을 통째로 읽기 전에 거르는 상한. 경기별 spool 상한과 같은 크기로 둔다. */
+    MAX_REPLAY_FILE_BYTES: 256 * 1024 * 1024,
+    /** 조각 선언이 망가진 호출 경로에서도 스트리밍 압축 해제가 무한히 커지지 않게 하는 최종 상한. */
+    MAX_REPLAY_CHUNK_RAW_BYTES: 16 * 1024 * 1024,
 
     // ── backpressure ──
     /** 이 이상 쌓이면 교체 가능한 위치 스냅샷을 생략한다. 누적되어야 하는 변경은 생략하지 않는다. */
@@ -54,11 +58,11 @@ export const NETWORK = Object.freeze({
 
     // ── 예약과 재접속 ──
     SEAT_RESERVATION_TTL_MS: 15_000,
-    RECONNECT_GRACE_MS: 10_000,
+    RECONNECT_GRACE_MS: 5_000,
 
     // ── 방 수명 ──
     COUNTDOWN_MS: 3_000,
-    POST_GAME_MS: 30_000,
+    POST_GAME_MS: 10_000,
 
     // ── 시작 잠금 ──
     /** 참가가 걸어주는 잠금. 들어온 사람이 로드아웃을 고를 시간이다. */

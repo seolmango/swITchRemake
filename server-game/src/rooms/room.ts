@@ -49,15 +49,16 @@ export interface GameStartInfo {
 }
 
 /**
- * 방 수명과 시뮬레이션의 좁은 연결점. 누가 술래인지, 유예 만료가 탈락인지 퇴장인지는
- * rooms가 판정하지 않고 시뮬레이션 조립 계층에 알린다.
+ * 방 수명과 시뮬레이션의 좁은 연결점. 연결 종료와 명시적 퇴장이 시뮬레이션의 생존 상태에
+ * 미치는 영향은 rooms가 직접 world를 건드리지 않고 조립 계층에 알린다.
  */
 export interface RoomLifecyclePort {
     startGame(snapshot: RoomStartSnapshot): GameStartInfo;
     /** 방이 사라졌다. 결과를 내보내지 않고 돌던 세션만 내린다. */
     stopRoom(roomId: string): void;
     connectionChanged(roomId: string, playerId: number, connected: boolean): void;
-    participantTimedOut(roomId: string, playerId: number): void;
+    /** 경기 중 연결이 끊긴 참가자를 즉시 시뮬레이션에서 탈락시킨다. */
+    participantDisconnected(roomId: string, playerId: number): void;
     participantRemoved(roomId: string, playerId: number, reason: string): void;
 }
 
@@ -292,12 +293,21 @@ export class Room {
         this.advance(now);
         if (this.state === RoomState.Closed) return ControlErrorCode.RoomNotFound;
         if (reservation.roomId !== this.id || reservation.resume || reservation.expiresAt <= now) return ControlErrorCode.Expired;
-        if (this.state !== RoomState.Waiting || this.#locked) return ControlErrorCode.RoomLocked;
+        if ((this.state !== RoomState.Waiting && this.state !== RoomState.Playing) || this.#locked) {
+            return ControlErrorCode.RoomLocked;
+        }
         if (this.#kickedUsers.has(reservation.userId)) return ControlErrorCode.KickedFromRoom;
         if (this.#password !== null && (password === null || !passwordMatches(this.#password, password))) {
             return ControlErrorCode.BadPassword;
         }
-        const result = this.#roster.hold(reservation);
+        // 경기 명단은 끝날 때까지 잠겨 있다. 유예가 끝나 방 명단에서 빠진 번호도 현재 world와
+        // 리플레이에는 남아 있으므로, 늦게 들어온 사람에게 같은 번호를 주지 않는다.
+        const lockedPlayerIds = this.state === RoomState.Playing
+            ? new Set(this.#startSnapshot?.players.map((player) => player.playerId) ?? [])
+            : undefined;
+        const result = lockedPlayerIds === undefined
+            ? this.#roster.hold(reservation)
+            : this.#roster.hold(reservation, lockedPlayerIds);
         if (!result.ok) return result.reason === 'duplicate' ? ControlErrorCode.AlreadyInRoom : ControlErrorCode.RoomFull;
         this.#directoryChanged();
         return null;
@@ -311,11 +321,8 @@ export class Room {
         if (member === null || member.connection !== null || member.admissionPendingUntil !== null) {
             return ControlErrorCode.NoGraceSlot;
         }
-        // 유예 안이거나, 유예는 끝났지만 경기 중이라 자리가 남아 있는 경우다. 뒤쪽은 이미
-        // 탈락한 사람이고 돌아오면 관전으로 들어간다.
         const withinGrace = member.reconnectUntil !== null && member.reconnectUntil > now;
-        if (!withinGrace && !member.timedOut) return ControlErrorCode.NoGraceSlot;
-        return null;
+        return withinGrace ? null : ControlErrorCode.NoGraceSlot;
     }
 
     /** TicketAuthenticator가 티켓을 소비하는 동기 구간에서 호출한다. */
@@ -332,13 +339,14 @@ export class Room {
             return { playerId: member.playerId, roomState: this.state, role: member.role };
         }
 
-        if (this.state !== RoomState.Allocating && this.state !== RoomState.Waiting) return null;
+        if (this.state !== RoomState.Allocating && this.state !== RoomState.Waiting
+            && this.state !== RoomState.Playing) return null;
         const held = this.#roster.heldSeat(reservation.userId);
         if (held === null
             || held.reservation.issuedAt !== reservation.issuedAt
             || held.reservation.expiresAt !== reservation.expiresAt
             || held.reservation.serverId !== reservation.serverId) return null;
-        const role = PlayerRole.Player;
+        const role = this.state === RoomState.Playing ? PlayerRole.Waiting : PlayerRole.Player;
         const member = this.#roster.claim(reservation.userId, now, role);
         if (member === null) return null;
         this.#startLock.applyJoin(now);
@@ -433,12 +441,11 @@ export class Room {
         const member = this.#roster.getByUser(connection.userId);
         if (member === null || member.playerId !== connection.playerId || member.connection !== null
             || member.admissionPendingUntil === null || member.admissionPendingUntil <= now) return false;
-        if (connection.resume !== (member.reconnectUntil !== null || member.timedOut)) return false;
+        if (connection.resume !== (member.reconnectUntil !== null)) return false;
 
         member.connection = connection;
         member.admissionPendingUntil = null;
         member.reconnectUntil = null;
-        member.timedOut = false;
         member.latestInput = null;
         member.lastInputSequence = null;
         this.#options.lifecycle.connectionChanged(this.id, member.playerId, true);
@@ -446,7 +453,9 @@ export class Room {
         queueMicrotask(() => {
             if (member.connection !== connection || this.state === RoomState.Closed) return;
             this.broadcastLobbyState();
-            this.#replayGameState(connection);
+            // 현재 경기의 잠긴 명단에 든 사람에게만 시작 상태를 복구한다. 경기 중 새로 들어온
+            // Waiting 참가자에게 이 메시지를 보내면 대기실 화면을 벗어나고 게임 정보도 샌다.
+            if (this.#belongsToLockedGame(member)) this.#replayGameState(connection);
         });
         return true;
     }
@@ -459,11 +468,23 @@ export class Room {
         member.reconnectUntil = this.#now() + this.#options.timing.reconnectGraceMs;
         member.latestInput = null;
         this.#options.lifecycle.connectionChanged(this.id, member.playerId, false);
-        this.#broadcast({
+        const reconnecting = {
             type: 'player.reconnecting',
             payload: { playerId: member.playerId, graceMs: this.#options.timing.reconnectGraceMs },
-        });
-        this.broadcastLobbyState();
+        } as const;
+        if (this.state === RoomState.Playing && member.inCurrentGame) {
+            this.#broadcastCurrentGame(reconnecting);
+        } else {
+            this.#broadcast(reconnecting);
+        }
+        if (this.state === RoomState.Playing && member.inCurrentGame && !member.spectatorEligible) {
+            // 자리 보존 타이머와 탈락 판정은 별개다. 방 쪽 역할을 먼저 바꿔 남은 연결에 알린 뒤,
+            // lifecycle이 world를 죽이고 종료 조건ㆍ결과ㆍ리플레이 경로를 즉시 밟게 한다.
+            this.#markEliminatedMember(member, member.playerId);
+            this.#options.lifecycle.participantDisconnected(this.id, member.playerId);
+        } else {
+            this.broadcastLobbyState();
+        }
     }
 
     public releaseSeat(userId: ActorId, reason = 'released'): boolean {
@@ -535,7 +556,7 @@ export class Room {
     }
 
     /**
-     * 로비 화면에서 만질 수 있는 상태인가. 경기가 끝나고 방으로 돌아온 30초(POST_GAME_MS) 동안
+     * 로비 화면에서 만질 수 있는 상태인가. 경기가 끝나고 방으로 돌아온 10초(POST_GAME_MS) 동안
      * 화면은 로비인데 자리도 스킬도 안 바뀌면 사용자에게는 그냥 고장 난 것으로 보인다. 자리와
      * 로드아웃은 다음 `requestStart`에서야 쓰이고 그쪽은 Waiting을 따로 확인하므로, 여기서
      * PostGame을 막을 이유가 없다.
@@ -614,8 +635,16 @@ export class Room {
         return null;
     }
 
-    public finishGame(winnerIds: readonly [number, number]): boolean {
+    public finishGame(winnerIds: readonly number[]): boolean {
         if (this.state !== RoomState.Playing) return false;
+        const currentPlayerIds = new Set(this.#startSnapshot?.players.map((player) => player.playerId) ?? []);
+        const orderedWinnerIds = [...winnerIds].sort((a, b) => a - b);
+        if (orderedWinnerIds.length === 0
+            || new Set(orderedWinnerIds).size !== orderedWinnerIds.length
+            || orderedWinnerIds.some((playerId) => !currentPlayerIds.has(playerId))) {
+            // 내부 호출 경계다. 잘못된 결과를 조용히 전송ㆍ저장하면 복구할 수 없으므로 즉시 드러낸다.
+            throw new Error(`invalid winner ids for match ${this.matchId}: ${winnerIds.join(',')}`);
+        }
         const now = this.#now();
         this.#postGameEndsAt = now + this.#options.timing.postGameMs;
         this.#stateMachine.transition(RoomState.PostGame, now);
@@ -623,9 +652,9 @@ export class Room {
         this.#resumeStarting = null;
         this.#resumeStarted = null;
         this.#directoryChanged();
-        this.#broadcast({
+        this.#broadcastCurrentGame({
             type: 'game.ended',
-            payload: { matchId: this.matchId, winnerIds: [winnerIds[0], winnerIds[1]], returnsAt: this.#postGameEndsAt },
+            payload: { matchId: this.matchId, winnerIds: orderedWinnerIds, returnsAt: this.#postGameEndsAt },
         });
         return true;
     }
@@ -655,7 +684,7 @@ export class Room {
         member.role = PlayerRole.Player;
         member.inCurrentGame = true;
         member.latestInput = null;
-        this.#broadcast({ type: 'spectate.changed', payload: { playerId, spectating: false } });
+        this.#broadcastCurrentGame({ type: 'spectate.changed', payload: { playerId, spectating: false } });
         this.broadcastLobbyState();
         return true;
     }
@@ -664,13 +693,21 @@ export class Room {
         if (this.state !== RoomState.Playing) return false;
         const member = this.#roster.getByPlayerId(playerId);
         if (member === null || !member.inCurrentGame || member.spectatorEligible) return false;
+        this.#markEliminatedMember(member, by);
+        return true;
+    }
+
+    #markEliminatedMember(member: LobbyMember, by: number): void {
         member.spectatorEligible = true;
         member.role = PlayerRole.Spectator;
         member.latestInput = null;
-        this.#broadcast({ type: 'player.eliminated', payload: { playerId, by } });
-        this.#broadcast({ type: 'spectate.changed', payload: { playerId, spectating: true } });
+        this.#broadcastCurrentGame({
+            type: 'player.eliminated', payload: { playerId: member.playerId, by },
+        });
+        this.#broadcastCurrentGame({
+            type: 'spectate.changed', payload: { playerId: member.playerId, spectating: true },
+        });
         this.broadcastLobbyState();
-        return true;
     }
 
     public setSpectating(userId: ActorId, spectating: boolean): ErrorCodeValue | null {
@@ -681,7 +718,9 @@ export class Room {
         if (member.role !== nextRole) {
             member.role = nextRole;
             member.latestInput = null;
-            this.#broadcast({ type: 'spectate.changed', payload: { playerId: member.playerId, spectating } });
+            this.#broadcastCurrentGame({
+                type: 'spectate.changed', payload: { playerId: member.playerId, spectating },
+            });
             this.broadcastLobbyState();
         }
         return null;
@@ -728,7 +767,7 @@ export class Room {
 
     /** 술래가 바뀌었다. 시뮬레이션이 판정하고 방은 알리기만 한다. */
     public broadcastTagged(playerId: number, by: number | null): void {
-        this.#broadcast({ type: 'player.tagged', payload: { playerId, by: by ?? playerId } });
+        this.#broadcastCurrentGame({ type: 'player.tagged', payload: { playerId, by: by ?? playerId } });
     }
 
     /**
@@ -852,18 +891,10 @@ export class Room {
                     continue;
                 }
             }
-            if (member.connection === null && member.admissionPendingUntil === null
-                && member.reconnectUntil !== null && member.reconnectUntil <= now) {
-                this.#options.lifecycle.participantTimedOut(this.id, member.playerId);
-                if (this.state === RoomState.Playing || this.state === RoomState.PostGame) {
-                    // 탈락은 위에서 끝났다. 자리는 경기가 끝날 때까지 남겨 둔다 — 돌아오면
-                    // 관전으로 들어간다. 대기실이었다면 붙들 이유가 없으니 그냥 뺀다.
-                    member.reconnectUntil = null;
-                    member.timedOut = true;
-                    this.broadcastLobbyState();
-                } else {
-                    this.#removeMember(member.userId, 'reconnect-timeout', false);
-                }
+            if (member.connection === null && member.reconnectUntil !== null && member.reconnectUntil <= now) {
+                // 탈락은 disconnect 순간에 이미 끝났다. 여기서는 정확히 5초 동안 보존한 자리만
+                // 놓는다. 인증 중인 새 소켓도 이 시각을 넘겼다면 보존을 연장하지 않는다.
+                this.#removeMember(member.userId, 'reconnect-timeout', false);
             }
         }
 
@@ -879,26 +910,17 @@ export class Room {
             for (const member of this.#roster.members()) {
                 member.inCurrentGame = snapshot.players.some((player) => player.playerId === member.playerId);
                 member.role = member.inCurrentGame ? PlayerRole.Player : PlayerRole.Waiting;
-                member.spectatorEligible = !member.inCurrentGame;
+                member.spectatorEligible = false;
                 member.latestInput = null;
             }
             this.#countdownEndsAt = null;
             this.#stateMachine.transition(RoomState.Playing, now);
             this.#resumeStarted = Object.freeze({ startTick: started.startTick, taggerId: started.taggerId });
-            this.#broadcast({ type: 'game.started', payload: this.#resumeStarted });
+            this.#broadcastCurrentGame({ type: 'game.started', payload: this.#resumeStarted });
             this.broadcastLobbyState();
         }
 
         if (this.state === RoomState.PostGame && this.#postGameEndsAt !== null && now >= this.#postGameEndsAt) {
-            // 경기 내내 안 돌아온 사람의 자리를 여기서 놓는다. 대기실에서까지 붙들고 있으면
-            // 그 방은 영영 안 찬다 — 여기가 자리가 진짜로 비는 순간이다.
-            for (const member of this.#roster.members()) {
-                if (member.timedOut && member.connection === null) {
-                    this.#removeMember(member.userId, 'reconnect-timeout', false);
-                }
-            }
-            // 마지막 한 명까지 안 돌아왔으면 위에서 방이 닫혔다. 그 뒤로는 할 일이 없다.
-            if (this.#roster.size === 0) return;
             for (const member of this.#roster.members()) {
                 member.role = PlayerRole.Player;
                 member.spectatorEligible = false;
@@ -977,6 +999,17 @@ export class Room {
 
     #broadcast(message: Parameters<Connection['sendJson']>[0]): void {
         for (const member of this.#roster.members()) member.connection?.sendJson(message);
+    }
+
+    /** 현재 경기의 잠긴 명단에 든 사람에게만 게임 이벤트를 보낸다. */
+    #broadcastCurrentGame(message: Parameters<Connection['sendJson']>[0]): void {
+        for (const member of this.#roster.members()) {
+            if (member.inCurrentGame) member.connection?.sendJson(message);
+        }
+    }
+
+    #belongsToLockedGame(member: LobbyMember): boolean {
+        return this.#startSnapshot?.players.some((player) => player.playerId === member.playerId) ?? false;
     }
 
     /**

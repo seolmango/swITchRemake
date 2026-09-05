@@ -9,6 +9,7 @@ import {
     JSON_MESSAGE_VERSION,
     MovementBits,
     RoomMode,
+    PlayerRole,
     RoomState,
     SkillId,
     type AdoptRoomPayload,
@@ -41,7 +42,7 @@ class FakeConnection implements Connection {
 const lifecycle: RoomLifecyclePort = {
     startGame: (snapshot) => ({ startTick: 1, taggerId: snapshot.players[0]!.playerId }),
     connectionChanged: () => undefined,
-    participantTimedOut: () => undefined,
+    participantDisconnected: () => undefined,
     participantRemoved: () => undefined,
         stopRoom: () => undefined,
 };
@@ -194,6 +195,37 @@ test('lobby.setLoadout rejects players and spectators once the game is playing',
     fixture.manager.get('room')?.markEliminated(spectator!.playerId, fixture.owner.playerId);
     fixture.manager.onJson(spectator!, loadoutMessage([SkillId.Exhaust]));
     assert.equal(errorCode(spectator!), ErrorCode.BadState);
+});
+
+test('경기 중 새 참가자의 관전 요청은 서버가 자격 없음으로 거부한다', async () => {
+    const fixture = managerFixture();
+    startFixtureGame(fixture);
+    const reservation = seat(4);
+    assert.equal(fixture.manager.reserveJoin(reservation, null).ok, true);
+    const admission = fixture.manager.admitReservation(reservation)!;
+    assert.equal(admission.role, PlayerRole.Waiting);
+    const waiting = new FakeConnection(4, 4, 'p4', 'room', admission.playerId);
+    fixture.manager.onConnect(waiting);
+    await Promise.resolve();
+
+    fixture.manager.onJson(waiting, {
+        v: JSON_MESSAGE_VERSION,
+        type: 'lobby.spectate',
+        requestId: 44,
+        payload: { spectate: true },
+    });
+
+    assert.equal(errorCode(waiting), ErrorCode.SpectateDenied);
+    assert.equal(fixture.manager.get('room')?.snapshotAccess(4), 'none');
+    assert.equal(waiting.messages.some((message) => message.type === 'game.starting' || message.type === 'game.started'), false);
+
+    fixture.manager.onJson(waiting, {
+        v: JSON_MESSAGE_VERSION,
+        type: 'lobby.leave',
+        requestId: 45,
+        payload: {},
+    });
+    assert.equal(fixture.manager.get('room')?.memberByUser(4), null, '다음 경기를 기다리는 사람은 방을 나갈 수 있어야 한다');
 });
 
 test('lobby.setSlot changes the roster slot and rejects invalid waiting-room moves', () => {
@@ -402,7 +434,7 @@ test('상한을 넘으면 방을 더 만들지 않는다', () => {
         violationSink: () => undefined,
         now: () => now,
         timing: {
-            reconnectGraceMs: 10_000,
+            reconnectGraceMs: 5_000,
             startLockOnJoinMs: 0,
             startLockOnMapChangeMs: 0,
         },

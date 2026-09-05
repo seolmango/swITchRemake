@@ -113,6 +113,11 @@ export class GameLifecycle implements RoomLifecyclePort {
             ...(trainingGround === undefined ? {} : { trainingGround }),
             violationSink: this.#options.violationSink,
             recorder: (this.#options.replayRecorderFactory ?? (() => new NullReplayRecorder()))(),
+            // 방이 시작할 때 고정한 rules snapshot을 쓴다. 예전 snapshot에 필드가 없을 때만 현재
+            // 기본값으로 보완한다.
+            maxDurationTicks: typeof snapshot.rules.MAX_MATCH_DURATION_TICKS === 'number'
+                ? snapshot.rules.MAX_MATCH_DURATION_TICKS
+                : GAMEPLAY.MAX_MATCH_DURATION_TICKS,
             meta: {
                 serverId: this.#options.serverId,
                 buildId: this.#options.buildId,
@@ -148,13 +153,13 @@ export class GameLifecycle implements RoomLifecyclePort {
         if (connected) session?.requestFullSnapshot(playerId);
     }
 
-    /** 유예가 끝났다. 경기 중이면 탈락이다. 자리를 비워두면 경기가 안 끝난다. */
-    public participantTimedOut(roomId: string, playerId: number): void {
-        this.#markDead(roomId, playerId);
+    /** 연결이 끊긴 순간 탈락시킨다. 자리 보존 만료와는 별개의 사건이다. */
+    public participantDisconnected(roomId: string, playerId: number): void {
+        this.#sessions.get(roomId)?.eliminateDisconnected(playerId);
     }
 
     public participantRemoved(roomId: string, playerId: number, _reason: string): void {
-        this.#markDead(roomId, playerId);
+        this.#sessions.get(roomId)?.eliminateDisconnected(playerId);
     }
 
     public queueSkill(roomId: string, request: SkillRequest): boolean {
@@ -191,14 +196,6 @@ export class GameLifecycle implements RoomLifecyclePort {
         session.stop();
         this.#sessions.delete(roomId);
         this.#options.scheduler.remove(roomId);
-    }
-
-    #markDead(roomId: string, playerId: number): void {
-        const session = this.#sessions.get(roomId);
-        const player = session?.world.players.find((p) => p.playerId === playerId);
-        if (player === undefined || !player.alive) return;
-        player.alive = false;
-        player.connected = false;
     }
 
     /**

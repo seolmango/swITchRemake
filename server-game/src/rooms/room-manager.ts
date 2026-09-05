@@ -333,19 +333,24 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
             case 'lobby.start':
                 error = room.requestStart(connection.userId);
                 break;
-            case 'lobby.leave':
-                if (room.state !== RoomState.Waiting && room.state !== RoomState.PostGame) error = ErrorCode.BadState;
-                else {
+            case 'lobby.leave': {
+                const member = room.memberByUser(connection.userId);
+                const waitingForNextGame = room.state === RoomState.Playing
+                    && member !== null && !member.inCurrentGame;
+                if (room.state !== RoomState.Waiting && room.state !== RoomState.PostGame && !waitingForNextGame) {
+                    error = ErrorCode.BadState;
+                } else {
                     room.releaseSeat(connection.userId, 'left');
                     connection.close(1000, 'left');
                     if (room.playerCount === 0) this.#rooms.delete(room.id);
                 }
                 break;
+            }
             case 'lobby.spectate':
                 error = room.setSpectating(connection.userId, message.payload.spectate);
                 break;
             case 'lobby.setLoadout':
-                // 상태 판정은 Room이 한다(경기 후 30초 동안도 로비에서 바꿀 수 있어야 한다).
+                // 상태 판정은 Room이 한다(경기 후 10초 동안도 로비에서 바꿀 수 있어야 한다).
                 // 여기서는 payload 모양만 본다.
                 if (message.payload.skills.length !== 1 || !isLoadoutSkill(message.payload.skills[0]!)) {
                     error = ErrorCode.InvalidPayload;
