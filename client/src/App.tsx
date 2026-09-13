@@ -98,6 +98,7 @@ function App() {
     useAudioRuntime();
     const savedLanguage = useSettingsStore((state) => state.language);
     const theme = useSettingsStore((state) => state.theme);
+    const highContrast = useSettingsStore((state) => state.highContrast);
     const motionLevel = useSettingsStore((state) => state.motionLevel);
     const colorVisionMode = useSettingsStore((state) => state.colorVisionMode);
     const [serviceStatus, setServiceStatus] = useState<GateStatus>({ kind: 'checking' });
@@ -108,8 +109,8 @@ function App() {
     }, [savedLanguage, i18n]);
 
     useEffect(() => {
-        applyAppearanceToDocument(theme, motionLevel, colorVisionMode);
-    }, [theme, motionLevel, colorVisionMode]);
+        applyAppearanceToDocument(theme, motionLevel, colorVisionMode, highContrast);
+    }, [theme, motionLevel, colorVisionMode, highContrast]);
 
     const refreshServiceStatus = useCallback(async () => {
         setServiceStatus(await getServiceStatus());

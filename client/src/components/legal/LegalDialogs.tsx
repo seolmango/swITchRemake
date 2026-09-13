@@ -13,11 +13,12 @@ import { useModalFocusTrap } from '../common/useModalFocusTrap.ts';
 
 interface DialogFrameProps {
     labelledBy: string;
+    compact?: boolean;
     onClose: () => void;
     children: React.ReactNode;
 }
 
-const DialogFrame: React.FC<DialogFrameProps> = ({ labelledBy, onClose, children }) => {
+const DialogFrame: React.FC<DialogFrameProps> = ({ labelledBy, onClose, children, compact = false }) => {
     const { t } = useTranslation();
     const theme = useSettingsStore((state) => state.theme);
     const colors = themeColors(theme);
@@ -40,7 +41,7 @@ const DialogFrame: React.FC<DialogFrameProps> = ({ labelledBy, onClose, children
         >
             <section
                 ref={dialogRef}
-                className="legal-dialog"
+                className={`legal-dialog${compact ? ' is-credits' : ''}`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={labelledBy}
@@ -78,7 +79,7 @@ export const LegalDocumentDialog: React.FC<{
 export const CreditsDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { t } = useTranslation();
     return (
-        <DialogFrame labelledBy="credits-dialog-title" onClose={onClose}>
+        <DialogFrame compact labelledBy="credits-dialog-title" onClose={onClose}>
             <header className="legal-dialog-header">
                 <div>
                     <span>swITch</span>

@@ -9,7 +9,7 @@ type CssVariables = Record<`--${string}`, string>;
  * React 화면과 CSS가 같은 팔레트를 보도록 색을 한 번만 내려준다.
  * 수풀·광란을 뜻으로 쓰는 성공/주의 색은 색각 보조 팔레트를 반드시 거친다.
  */
-export const appearanceCssVariables = (theme: Theme, colorVisionMode: ColorVisionMode): CssVariables => {
+export const appearanceCssVariables = (theme: Theme, colorVisionMode: ColorVisionMode, highContrast = false): CssVariables => {
     const colors = themeColors(theme);
     const vision = colorVisionPalette(colorVisionMode);
     const status = uiStatusColorsFor(colorVisionMode, theme);
@@ -39,7 +39,14 @@ export const appearanceCssVariables = (theme: Theme, colorVisionMode: ColorVisio
         '--theme-text': colors.text,
         '--theme-muted': colors.muted,
         '--theme-panel': colors.panel,
-        '--theme-border': colors.panelBorder,
+        '--theme-border': highContrast ? colors.text : colors.panelBorder,
+        '--ui-accent-fill': highContrast && theme === 0 ? status.info : Color.blue[0]!,
+        '--ui-accent-text': highContrast && theme === 0 ? Color.white : Color.black,
+        '--ui-blue-border': highContrast ? status.info : Color.blue[2]!,
+        '--ui-red-border': highContrast ? status.bad : Color.red[2]!,
+        '--ui-neutral-border': highContrast ? colors.text : Color.gray[2]!,
+        '--hud-panel-opacity': highContrast ? '100%' : theme === 0 ? '86%' : '78%',
+        '--hud-border-width': highContrast ? '3px' : '2px',
         '--theme-field': colors.field,
         '--theme-backdrop': colors.backdrop,
         '--theme-focus': colors.focus,
@@ -54,17 +61,29 @@ export const appearanceCssVariables = (theme: Theme, colorVisionMode: ColorVisio
     };
 };
 
+/**
+ * 설치한 앱의 상태 표시줄과 주소창이 앱 배경과 같은 색이 되게 한다. index.html의 값은
+ * 첫 화면용 기본값이고, 사용자가 고른 테마는 시스템 설정과 다를 수 있어 여기서 덮어쓴다.
+ */
+const applyThemeColorMeta = (canvas: string): void => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', canvas);
+};
+
 export const applyAppearanceToDocument = (
     theme: Theme,
     motionLevel: MotionLevel,
     colorVisionMode: ColorVisionMode,
+    highContrast = false,
 ): void => {
     const root = document.documentElement;
     root.style.colorScheme = theme === 0 ? 'light' : 'dark';
     root.dataset.theme = theme === 0 ? 'light' : 'dark';
     root.dataset.motion = motionLevel;
+    root.dataset.contrast = highContrast ? 'high' : 'standard';
     root.dataset.colorVision = colorVisionMode;
-    for (const [name, value] of Object.entries(appearanceCssVariables(theme, colorVisionMode))) {
+    for (const [name, value] of Object.entries(appearanceCssVariables(theme, colorVisionMode, highContrast))) {
         root.style.setProperty(name, value);
     }
+    applyThemeColorMeta(themeColors(theme).canvas);
 };

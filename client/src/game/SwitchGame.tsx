@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { TrainingHud, type TrainingHudOptions } from './hud/TrainingHud.tsx';
 import { GameCanvas } from './GameCanvas.tsx';
 import { GameHud } from './hud/GameHud.tsx';
 import { EMPTY_HUD, type HudState } from './hud/hudTypes.ts';
@@ -8,7 +9,7 @@ import { useSettingsStore } from '../stores/useSettingsStore.ts';
 import { PerformanceStats } from './hud/PerformanceStats.tsx';
 import { TouchControls } from './hud/touch/TouchControls.tsx';
 import { useTouchControlsVisible } from './hud/touch/useTouchControls.ts';
-import { useGameContainerScale } from '../components/layout/GameContainer.tsx';
+import { useGameContainerScale } from '../components/layout/gameContainerContext.ts';
 import { hudScaleCompensation } from './hud/hudTheme.ts';
 import { MobileOrientationSuggestion } from './hud/MobileOrientationSuggestion.tsx';
 
@@ -31,6 +32,8 @@ export interface SwitchGameProps {
     estimatedTps?: number | null;
     /** Live matches and training recommend landscape; replay/help embeds stay quiet. */
     suggestLandscape?: boolean;
+    trainingHud?: TrainingHudOptions;
+    inputEnabled?: boolean;
 }
 
 /**
@@ -53,6 +56,8 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
     latencyMs = null,
     estimatedTps = null,
     suggestLandscape = false,
+    trainingHud,
+    inputEnabled = true,
 }) => {
     const theme = useSettingsStore((s) => s.theme);
     // 월드 쪽 설정은 GameCanvas가 엔진에 직접 밀어넣는다. 여기서 읽는 둘은 HUD(DOM)에만 걸리는 값이다.
@@ -90,6 +95,7 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
                     pointerEvents: 'none',
                 }}
             >
+                <div style={{ position: 'absolute', inset: 0 }}>
                 <GameHud
                     key={matchReady ? 'match-ready' : 'match-loading'}
                     theme={theme}
@@ -98,14 +104,18 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
                     colorVision={colorVision}
                     showControlHints={showControlHints}
                     matchReady={matchReady}
+                    inputEnabled={inputEnabled}
+                    training={Boolean(trainingHud)}
                     onUseMovementSkill={() => onUseMovementSkill?.()}
                     onSwitchTarget={(id) => onSwitchTarget?.(id)}
                     onSpectate={handleSpectate}
                     onEmoji={(id) => onEmoji?.(id)}
                 />
+                </div>
+                {trainingHud && <TrainingHud options={trainingHud} engine={engine} theme={theme} />}
                 <PerformanceStats theme={theme} engine={engine} latencyMs={latencyMs} estimatedTps={estimatedTps} />
             </div>
-            {touchVisible && mode !== EngineMode.Spectate && (
+            {inputEnabled && touchVisible && mode !== EngineMode.Spectate && (
                 <TouchControls
                     theme={theme}
                     colorVision={colorVision}

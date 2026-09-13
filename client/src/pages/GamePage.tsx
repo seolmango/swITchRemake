@@ -23,7 +23,8 @@ import { cooldownTotalMs, getSwitchTargets, skillRejectionMessageKey, toCooldown
 import { switchTargetPlayerIdForMatch } from '../utils/switchTarget.ts';
 import { GameLoadingOverlay } from '../game/hud/GameLoadingOverlay.tsx';
 import { isValidMatchId } from '../utils/matchId.ts';
-import { Icon } from '../components/common/Icon.tsx';
+import type { MapView } from '../game/types.ts';
+import type { TrainingPad } from 'shared';
 import { SettingsPage } from './SettingsPage.tsx';
 import { matchSfx, useMatchSfx } from '../audio/matchSfx.ts';
 import { canEnterRunningGame } from '../game/roomRole.ts';
@@ -71,6 +72,8 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
     const recoveryAttempted = useRef(false);
     const inputSequence = useRef(0);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [trainingMap, setTrainingMap] = useState<MapView | null>(null);
+    const [trainingPads, setTrainingPads] = useState<readonly TrainingPad[]>([]);
     const [spectatingId, setSpectatingId] = useState<number | null>(null);
     const nextInputSequence = useCallback(() => inputSequence.current++ & 0xffff, []);
     const requestedRoomId = searchParams.get('room_id');
@@ -122,6 +125,8 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
             engine.map.load(view);
             // 패드는 맵과 같은 번들에서 온다. 별도 메시지로 받으면 두 경로가 갈라질 자리가 생긴다.
             const pads = trainingPadsFromMarkers(markers, TILE_SIZE);
+            setTrainingMap(view);
+            setTrainingPads(pads);
             engine.setTrainingPads(pads);
             gameSession.setTrainingPads(pads);
             await engine.whenReady();
@@ -155,9 +160,10 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
     }, [loadMap, mapBundleHash, mapId, session.gameHttpOrigin]);
 
     useEffect(() => {
-        if (!training || session.role !== 'spectator') return;
-        engineRef.current?.camera.free();
-    }, [session.role, training]);
+        if (!training) return;
+        if (session.role === 'spectator') engineRef.current?.camera.free();
+        else if (session.role === 'player' && session.selfId !== null) engineRef.current?.camera.follow(session.selfId);
+    }, [session.role, session.selfId, training, engineReady]);
 
     useEffect(() => {
         if (engineRef.current && mapId && mapBundleHash && session.gameHttpOrigin) {
@@ -255,7 +261,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
                 return;
             }
             const emojiIndex = EMOJI_ACTIONS.findIndex(matches);
-            if (emojiIndex >= 0) handleEmoji(emojiIndex);
+            if (emojiIndex >= 0) handleEmoji(emojiIndex + 1);
         };
         const onKeyUp = (event: KeyboardEvent) => pressed.delete(event.code);
         const onBlur = () => pressed.clear();
@@ -290,10 +296,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
     }, [handleEmoji, handleMovementSkill, handleSwitchTarget, live, nextInputSequence, session.role, session.roomState, settingsOpen]);
 
     const hudPlayers = training && session.trainingPlayers.length > 0
-        ? session.trainingPlayers.map((player) => ({
-            ...player,
-            isTagger: player.id === session.taggerId,
-        }))
+        ? session.trainingPlayers
         : (session.lobby?.players ?? []).map((player) => ({
             id: player.playerId,
             nickname: player.nickname,
@@ -361,30 +364,20 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
                     onEmoji={handleEmoji}
                     onSpectate={setSpectatingId}
                     matchReady={matchReady}
+                    inputEnabled={!settingsOpen}
                     latencyMs={session.latencyMs}
                     estimatedTps={session.estimatedTps}
                     suggestLandscape
+                    trainingHud={training && matchReady ? {
+                        map: trainingMap, pads: trainingPads, selfId: session.selfId, alive: selfAlive,
+                        isTagger: hudPlayers.find((player) => player.id === session.selfId)?.isTagger ?? false,
+                        movementSkillLabel: hud.movementSkill?.label ?? null,
+                        onSettings: () => setSettingsOpen(true), onExit: exitGame,
+                        onRespawn: () => gameSession.send({ type: 'training.respawn', payload: {} }),
+                    } : undefined}
                 />
                 {training && matchReady && (
                     <>
-                        <div className="training-guide" role="note">{t('training.guide')}</div>
-                        <div className="training-actions">
-                            <button type="button" onClick={() => setSettingsOpen(true)}>
-                                <Icon name="settings" size={26}/>{t('training.settings')}
-                            </button>
-                            <button type="button" onClick={exitGame}>
-                                <Icon name="back" size={26}/>{t('training.exit')}
-                            </button>
-                        </div>
-                        {!selfAlive && (
-                            <button
-                                type="button"
-                                className="training-respawn"
-                                onClick={() => gameSession.send({ type: 'training.respawn', payload: {} })}
-                            >
-                                <Icon name="refresh" size={30}/>{t('training.respawn')}
-                            </button>
-                        )}
                         {settingsOpen && (
                             <div className="training-settings-overlay" role="dialog" aria-modal="true" aria-label={t('settings.title')}>
                                 <SettingsPage embedded />

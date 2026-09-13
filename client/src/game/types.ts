@@ -113,6 +113,7 @@ export interface EngineSettings {
     motion: MotionLevel;
     quality: QualityLevel;
     colorVision: ColorVisionMode;
+    highContrast?: boolean;
     /** 광란 중 카메라 미세 진동. */
     screenShake: boolean;
     /** 끄면 팔로우 카메라가 지연 없이 바로 따라붙는다. */
@@ -127,6 +128,7 @@ export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
     motion: 'standard',
     quality: 'high',
     colorVision: 'off',
+    highContrast: false,
     screenShake: true,
     cameraSmoothing: true,
     reduceFlash: false,

@@ -75,6 +75,7 @@ export const ReportDialog: React.FC<Props> = ({ matchId, target, onClose }) => {
             style={{
                 '--surface': colors.panel === 'transparent' ? colors.canvas : colors.panel,
                 '--surface-border': colors.panelBorder,
+                '--surface-field': colors.field,
                 '--surface-muted': colors.muted,
                 color: colors.text,
             } as React.CSSProperties}

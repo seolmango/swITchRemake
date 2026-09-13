@@ -1,0 +1,40 @@
+/* Keep the eight seats inside the fixed design canvas without clipping names or stats. */
+.lobby-shell .lobby-player-card:not(.is-empty) {
+  grid-template-rows: minmax(120px, 1fr) 48px 54px;
+  padding: 8px;
+  gap: 6px;
+}
+.lobby-shell .lobby-player-main {
+  box-sizing: border-box;
+  min-height: 0;
+  padding-top: 64px;
+  gap: 3px;
+  align-content: start;
+}
+.lobby-shell .lobby-player-name-line { gap: 4px 6px; }
+.lobby-shell .lobby-player-name-line strong {
+  flex: 1 1 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 23px;
+}
+.lobby-shell .lobby-player-role { font-size: 15px; }
+.lobby-shell .lobby-you-badge,
+.lobby-shell .lobby-owner-badge { padding: 2px 7px; font-size: 14px; }
+.lobby-shell .lobby-player-loadout { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 6px; }
+.lobby-shell .lobby-player-loadout > span,
+.lobby-shell .lobby-player-loadout > button { height: 48px; padding: 0 7px; gap: 5px; box-sizing: border-box; }
+.lobby-shell .lobby-player-loadout img { width: 29px; height: 29px; flex-shrink: 0; }
+.lobby-shell .lobby-player-loadout small { font-size: 15px; }
+.lobby-shell .lobby-player-stats { min-height: 0; height: 47px; padding-top: 5px; }
+.lobby-shell .lobby-player-stats small { font-size: 14px; }
+.lobby-shell .lobby-player-card.is-empty { display: flex; align-items: center; }
+.lobby-shell .lobby-empty-copy { padding-left: 0; padding-top: 50px; }
+.lobby-shell .lobby-toolbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, .9fr); gap: 18px; }
+.lobby-shell .lobby-map-picker { gap: 12px; }
+.lobby-shell .lobby-map-picker > div { min-width: 0; flex: 1; text-align: center; }
+.lobby-shell .lobby-map-picker strong { max-width: 100%; font-size: 25px; overflow-wrap: anywhere; }
+.lobby-shell .lobby-room-code { flex-wrap: wrap; gap: 6px 12px; }
+.lobby-shell .lobby-room-code > span { flex-basis: 100%; }
+.lobby-shell .lobby-room-code strong { font-size: 28px; }

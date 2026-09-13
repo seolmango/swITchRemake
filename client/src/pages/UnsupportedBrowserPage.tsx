@@ -8,6 +8,7 @@ export const UnsupportedBrowserPage: React.FC = () => {
     const { t, i18n } = useTranslation();
     const language = useSettingsStore((state) => state.language);
     const theme = useSettingsStore((state) => state.theme);
+    const highContrast = useSettingsStore((state) => state.highContrast);
     const motionLevel = useSettingsStore((state) => state.motionLevel);
     const colorVisionMode = useSettingsStore((state) => state.colorVisionMode);
     const colors = themeColors(theme);
@@ -15,9 +16,9 @@ export const UnsupportedBrowserPage: React.FC = () => {
     useEffect(() => {
         if (i18n.language !== language) void i18n.changeLanguage(language);
         document.documentElement.lang = language;
-        applyAppearanceToDocument(theme, motionLevel, colorVisionMode);
+        applyAppearanceToDocument(theme, motionLevel, colorVisionMode, highContrast);
         document.title = `${t('browserUnsupported.title')} · swITch`;
-    }, [colorVisionMode, i18n, language, motionLevel, t, theme]);
+    }, [colorVisionMode, highContrast, i18n, language, motionLevel, t, theme]);
 
     return (
         <main

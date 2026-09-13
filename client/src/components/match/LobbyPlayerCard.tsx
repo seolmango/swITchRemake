@@ -79,7 +79,7 @@ export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, 
             aria-label={t('lobby.playerAccessible', {
                 slot,
                 nickname: player.nickname,
-                role: player.isHost ? t('lobby.owner') : t(`lobby.roles.${player.role}`),
+                role: player.isHost ? t('lobby.owner') : player.waitingForNextMatch ? t('lobby.waitingNextMatch') : player.guest ? t('lobby.guest') : t('lobby.players'),
                 control: t(`lobby.controls.${player.control}`),
                 skill: t(`lobby.skills.${player.skill}`),
             })}
@@ -105,7 +105,7 @@ export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, 
                     {player.isSelf && <span className="lobby-you-badge">{t('lobby.you')}</span>}
                     {player.isHost && <span className="lobby-owner-badge">{t('lobby.owner')}</span>}
                 </div>
-                <span className="lobby-player-role">{player.guest ? t('lobby.guest') : t(`lobby.roles.${player.role}`)}</span>
+                {(player.guest || player.waitingForNextMatch) && <span className="lobby-player-role">{player.waitingForNextMatch ? t('lobby.waitingNextMatch') : t('lobby.guest')}</span>}
             </div>
             <div className="lobby-player-loadout">
                 <span title={t(`lobby.controls.${player.control}`)}>

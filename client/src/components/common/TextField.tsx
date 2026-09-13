@@ -1,4 +1,5 @@
-import React, { forwardRef, useId, useState } from 'react';
+import React, { forwardRef, useEffect, useId, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { statusInkColors, themeColors } from '../../theme/color.ts';
 
@@ -16,23 +17,34 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(({ label, 
     const statusInk = statusInkColors(theme);
     const id = useId();
     const [focused, setFocused] = useState(false);
+    const [revealed, setRevealed] = useState(false);
+    const { t } = useTranslation();
+    const isPassword = props.type === 'password';
+    // Disabling a field ends the hold, including when it is enabled again later.
+    if (disabled && revealed) setRevealed(false);
+    useEffect(() => {
+        const hide = () => setRevealed(false);
+        window.addEventListener('blur', hide);
+        document.addEventListener('visibilitychange', hide);
+        return () => { window.removeEventListener('blur', hide); document.removeEventListener('visibilitychange', hide); };
+    }, []);
     const labelId = `${id}-label`;
     const helpId = `${id}-help`;
 
     return (
-        <label className="field-group" htmlFor={id}>
-            <span className="field-label" id={labelId}>{label}</span>
+        <div className="field-group">
+            <label className="field-label" id={labelId} htmlFor={id}>{label}</label>
+            <div style={{ position: 'relative', minWidth: 0 }}>
             <input
                 {...props}
+                type={isPassword && revealed && !disabled ? 'text' : props.type}
                 ref={ref}
                 id={id}
                 value={value}
                 disabled={disabled}
                 /*
-                 * 감싸는 `<label>`은 안에 있는 글자를 **전부** 이름으로 삼는다. 그래서 오류나
-                 * 힌트가 뜨는 순간 이 칸의 이름이 "닉네임"에서 "닉네임 2~12자 영문·숫자·한글만
-                 * 사용할 수 있습니다."로 바뀌어 버린다 — 스크린리더는 이름과 설명을 두 번 읽고,
-                 * 이름으로 칸을 찾는 코드는 칸을 잃는다. 이름은 라벨만, 설명은 도움말만.
+                 * 이름은 라벨만, 설명은 도움말만 연결한다. 오류나 힌트가 바뀌어도
+                 * 입력의 접근성 이름은 유지하고 표시 버튼은 별도 이름을 사용한다.
                  */
                 aria-labelledby={labelId}
                 aria-invalid={Boolean(error)}
@@ -48,7 +60,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(({ label, 
                     borderBottom: `6px solid ${error ? statusInk.bad : focused ? statusInk.info : colors.panelBorder}`,
                     borderRadius: '18px 18px 4px 4px',
                     outline: 'none',
-                    padding: '6px 20px 0',
+                    padding: isPassword ? '6px 90px 0 20px' : '6px 20px 0',
                     background: disabled ? 'transparent' : colors.field,
                     color: colors.text,
                     opacity: disabled ? 0.45 : 1,
@@ -56,8 +68,29 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(({ label, 
                     transition: 'border-color 160ms ease, background 160ms ease',
                 }}
             />
+            {isPassword && <button
+                type="button"
+                disabled={disabled}
+                aria-label={t('auth.holdToRevealPassword')}
+                title={t('auth.holdToRevealPassword')}
+                aria-pressed={revealed && !disabled}
+                onPointerDown={(event) => {
+                    if (event.button !== 0) return;
+                    event.preventDefault();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    setRevealed(true);
+                }}
+                onPointerUp={() => setRevealed(false)}
+                onPointerCancel={() => setRevealed(false)}
+                onLostPointerCapture={() => setRevealed(false)}
+                onBlur={() => setRevealed(false)}
+                onKeyDown={(event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); setRevealed(true); } }}
+                onKeyUp={(event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); setRevealed(false); } }}
+                style={{ position: 'absolute', right: 10, top: 10, width: 62, height: 48, border: `2px solid ${colors.panelBorder}`, borderRadius: 12, background: colors.field, color: colors.text, cursor: 'pointer', touchAction: 'none' }}
+            ><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>{revealed && <path d="m3 3 18 18"/>}</svg></button>}
+            </div>
             <span id={helpId} className={`field-help${error ? ' is-error' : ''}`} aria-live={error ? 'polite' : undefined} style={{ color: error ? colors.text : colors.muted }}>{error || hint || ''}</span>
-        </label>
+        </div>
     );
 });
 

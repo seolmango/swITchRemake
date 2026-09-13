@@ -3,8 +3,7 @@ import { apiRequest } from './http.ts';
 /** server-match/src/retention/retention.settings.ts 와 같은 모양이다. */
 export interface RetentionSettings {
     matchDays: number;
-    replayDays: number;
-    replayPerUserMatches: number;
+    replayHours: number;
 }
 
 /**

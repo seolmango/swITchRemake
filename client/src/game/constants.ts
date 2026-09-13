@@ -283,6 +283,7 @@ export const QUALITY_PRESETS: Record<QualityLevel, QualityPreset> = {
  * 'low'/'reduced' 같은 문자열을 다시 해석하지 않게 하려는 것 — 렌더러는 숫자만 읽는다.
  */
 export interface RenderOptions {
+    highContrast?: boolean;
     motion: MotionPreset;
     quality: QualityPreset;
     reduceFlash: boolean;

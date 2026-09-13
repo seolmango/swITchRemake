@@ -19,6 +19,13 @@ export class PlayerHandle {
         });
     }
 
+    getPosition(): { x: number; y: number } | null {
+        return this.scene.readScene((s) => {
+            const state = s.getPlayerState(this.id);
+            return state ? { x: state.x, y: state.y } : null;
+        }, null);
+    }
+
     /** Movement direction, used to aim the dash trail. Doesn't need to be normalized. */
     setFacing(dx: number, dy: number): void {
         this.scene.withScene((s) => {

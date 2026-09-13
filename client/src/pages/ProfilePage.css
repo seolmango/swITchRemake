@@ -1,0 +1,20 @@
+.profile-panel .profile-detail-stack { grid-template-rows: minmax(0, 1fr) auto auto; }
+.profile-panel .match-history-panel { display: flex; flex-direction: column; }
+.profile-panel .match-history-list { flex: 1; }
+.profile-panel .match-history-list article { grid-template-columns: 100px minmax(0, 1fr) 48px; gap: 8px 14px; }
+.profile-panel .match-history-list article > div:first-child { grid-column: 1; grid-row: 1 / 3; }
+.profile-panel .match-history-stats { grid-column: 2; grid-row: 1; }
+.profile-panel .match-history-list time { grid-column: 2; grid-row: 2; text-align: left; white-space: normal; }
+.profile-panel .match-history-download { grid-column: 3; grid-row: 1 / 3; opacity: 1; width: 44px; height: 44px; border: 2px solid var(--profile-border); }
+.profile-device-summary { display: flex; align-items: center; justify-content: space-between; gap: 20px; border: 5px solid; border-radius: 24px; padding: 16px 22px; }
+.profile-device-summary h2 { margin: 0; font-size: 25px; }
+.profile-device-summary p { margin: 6px 0 0; font-size: 17px; line-height: 1.4; }
+.profile-device-summary button, .session-dialog-close { flex-shrink: 0; border: 3px solid currentColor; border-radius: 14px; padding: 12px 18px; background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: 20px; }
+.profile-session-backdrop { position: absolute; inset: 0; z-index: 1000; background: #0008; display: grid; place-items: center; }
+.profile-session-dialog.session-panel { position: relative; width: 1120px; max-width: calc(100% - 80px); height: 780px; max-height: calc(100% - 100px); background: var(--dialog-surface); display: flex; flex-direction: column; }
+.profile-session-dialog .session-list { flex: 1; min-height: 0; }
+.profile-session-dialog .session-list article { min-height: 126px; }
+.profile-session-dialog .session-list article strong { white-space: normal; overflow-wrap: anywhere; }
+.profile-session-dialog .session-revoke { grid-column: 4; }
+.profile-session-dialog .session-dialog-close { align-self: flex-end; position: absolute; top: 26px; right: 96px; }
+.profile-session-dialog footer { flex-wrap: wrap; }

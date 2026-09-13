@@ -1,0 +1,53 @@
+.training-hud-toolbar {
+  position: absolute;
+  inset: 12px 18px auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  pointer-events: none;
+}
+.training-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.training-role { font-size: 13px; font-weight: 600; }
+.training-role::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #468163; }
+.training-role[data-role='tagger']::before { background: #c25f65; }
+.training-role[data-role='out']::before { background: #888; }
+.training-toolbar-actions { display: flex; gap: 6px; pointer-events: auto; }
+.training-pad-hint {
+  position: absolute;
+  left: 50%; bottom: 68px;
+  transform: translateX(-50%);
+  max-width: 300px;
+  padding: 7px 12px;
+  border: 1px solid;
+  border-radius: 10px;
+  font: 600 14px/1.4 var(--font-ui);
+  text-align: center;
+}
+.training-respawn-card {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 14px;
+  width: 240px;
+  padding: 20px;
+  border: 1px solid;
+  border-radius: 16px;
+  text-align: center;
+  font: 600 16px var(--font-ui);
+  pointer-events: auto;
+}
+
+/* Keep desktop controls compact; touch targets need room for a fingertip. */
+@media (pointer: coarse) {
+  .training-toolbar-actions > button, .training-minimap button { min-height: 44px !important; min-width: 44px; }
+}

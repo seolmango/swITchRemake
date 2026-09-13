@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from "react";
-import { Color, statusInkColors, themeColors } from "../../theme/color.ts";
+import { Color, themeColors } from "../../theme/color.ts";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { playSfx } from "../../audio/sfxPlayer.ts";
 
@@ -44,9 +44,7 @@ export const RoundButton = React.memo<RoundButtonProps>(({
     const { currentBg, currentStroke, currentTextColor } = useMemo(() => {
         const colorArray = type === 0 ? Color.red : type === 1 ? Color.blue : Color.gray;
         const bg = theme === 0 ? (isActive ? colorArray[1] : colorArray[0]) : 'transparent';
-        const statusInk = statusInkColors(theme);
-        const accessibleStroke = type === 0 ? statusInk.bad : type === 1 ? statusInk.info : Color.smoke[2];
-        const stroke = accessibleStroke;
+        const stroke = type === 0 ? 'var(--ui-red-border)' : type === 1 ? 'var(--ui-blue-border)' : 'var(--ui-neutral-border)';
         const textColor = theme === 0 ? Color.black : Color.white;
 
         return { currentBg: bg, currentStroke: stroke, currentTextColor: textColor };

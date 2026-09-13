@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Snapshot } from 'shared';
-import { EffectType, RoomState, SkillId } from 'shared';
+import { EffectType, RoomMode, RoomState, SkillId } from 'shared';
 import { gameSession } from '../game/GameSession.ts';
 import { useGameSession } from '../game/useGameSession.ts';
 import { TILE_SIZE } from '../game/constants.ts';
@@ -22,7 +22,7 @@ const STORM_WARN_PX = TILE_SIZE * 2.5;
 class MatchSfx {
     private previousEffects = new Map<number, number>();
     private previousEmoji = new Map<number, number | undefined>();
-    private previousTagger: number | null = null;
+    private previousRoles = new Map<number, boolean>();
     private previousCooldowns = new Map<number, number>();
     /** 마지막으로 스위치가 성사된 시각. 뒤따라오는 술래 교체를 태그로 오인하지 않기 위한 것이다. */
     private switchAt = -Infinity;
@@ -32,7 +32,7 @@ class MatchSfx {
         this.previousEffects.clear();
         this.previousEmoji.clear();
         this.previousCooldowns.clear();
-        this.previousTagger = null;
+        this.previousRoles.clear();
         this.switchAt = -Infinity;
         this.stormWarnedAt = -Infinity;
     }
@@ -45,8 +45,10 @@ class MatchSfx {
      * GamePage가 이미 디코드해 둔 스냅샷을 그대로 받는다. 여기서 다시 디코드하면
      * 30Hz로 같은 일을 두 번 하게 된다.
      */
-    onSnapshot(snapshot: Snapshot, selfId: number | null): void {
-        if (snapshot.tileChanges && snapshot.tileChanges.length > 0) playSfx('map-collapse');
+    onSnapshot(snapshot: Snapshot, selfId: number | null, roomMode = gameSession.getSnapshot().lobby?.mode): void {
+        // Training has no timed map collapse.
+        // The server suppresses no-op tile deltas before publishing them.
+        if (roomMode === RoomMode.Match && snapshot.tileChanges?.length) playSfx('map-collapse');
 
         const players = snapshot.players;
         if (players) {
@@ -71,15 +73,20 @@ class MatchSfx {
                 }
             }
 
-            const tagger = players.find((player) => player.isTagger)?.id ?? null;
-            if (tagger !== null && this.previousTagger !== null && tagger !== this.previousTagger) {
+            const gainedTag = players.some((player) => player.isTagger && this.previousRoles.get(player.id) === false);
+            const lostTag = players.some((player) => !player.isTagger && this.previousRoles.get(player.id) === true);
+            if (roomMode !== RoomMode.Training && gainedTag && lostTag) {
                 // 스위치도 술래를 바꾼다. 방금 스위치가 있었다면 그쪽 소리가 이미 났으니 겹치지 않는다.
                 if (performance.now() - this.switchAt > 500) playSfx('tag');
             }
-            if (tagger !== null) this.previousTagger = tagger;
+            // Visibility changes and multiple simultaneous training taggers are
+            // not tag transfers. Only compare roles actually observed twice.
+            this.previousRoles = new Map(players.map((player) => [player.id, player.isTagger]));
 
             const self = selfId === null ? undefined : players.find((player) => player.id === selfId);
-            if (self && snapshot.storm) {
+            // Training publishes a stationary map-boundary rectangle with zero
+            // barrier speed. It is not an approaching storm or a danger zone.
+            if (roomMode !== RoomMode.Training && self && snapshot.storm) {
                 const { x, y, width, height } = snapshot.storm;
                 const margin = Math.min(self.x - x, x + width - self.x, self.y - y, y + height - self.y);
                 const now = performance.now();

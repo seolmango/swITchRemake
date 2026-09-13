@@ -11,8 +11,8 @@ interface Props {
     onPick: (emojiId: number) => void;
 }
 
-const RADIUS = 145;
-const RADIUS_COMPACT = 104;
+const RADIUS = 180;
+const RADIUS_COMPACT = 110;
 
 /**
  * Legacy's radial picker (RenderingManager.js:404-425), rebuilt as DOM.
@@ -26,7 +26,7 @@ const RADIUS_COMPACT = 104;
 export const EmojiWheel: React.FC<Props> = ({ theme, compact, onPick }) => {
     const { t } = useTranslation();
     const radius = compact ? RADIUS_COMPACT : RADIUS;
-    const slot = compact ? 60 : 78;
+    const slot = compact ? 72 : 98;
     const iconColor = theme === 1 ? Color.white : Color.black;
 
     return (
@@ -44,6 +44,7 @@ export const EmojiWheel: React.FC<Props> = ({ theme, compact, onPick }) => {
                     return (
                         <button
                             key={id}
+                            type="button"
                             onClick={() => onPick(id)}
                             style={{
                                 position: 'absolute',

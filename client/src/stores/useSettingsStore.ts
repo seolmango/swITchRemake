@@ -35,6 +35,7 @@ export type KeyBinding = [string | null, string | null];
 export type KeyBindings = Record<KeyAction, KeyBinding>;
 
 interface GameSettings {
+    highContrast: boolean;
     frameRate: FrameRate;
     motionLevel: MotionLevel;
     graphicsQuality: GraphicsQuality;
@@ -94,9 +95,10 @@ const createDefaultKeyBindings = (): KeyBindings => ({
     emoji5: ['Shift+Digit5', null], emoji6: ['Shift+Digit6', null], emoji7: ['Shift+Digit7', null], emoji8: ['Shift+Digit8', null],
 });
 
-const GENERAL_DEFAULTS = { theme: 0 as const, language: 'ko' as const };
+const GENERAL_DEFAULTS = { theme: 0 as const, language: 'ko' as const, highContrast: false };
 const SOUND_DEFAULTS = { masterVolume: 85, bgmVolume: 70, sfxVolume: 85, bgmEnabled: false };
 const GAME_DEFAULTS: GameSettings = {
+    highContrast: false,
     frameRate: '60',
     motionLevel: 'standard',
     graphicsQuality: 'high',

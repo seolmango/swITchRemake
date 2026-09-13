@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import './lobby.css';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { RoomState, SkillId, isLoadoutSkill } from 'shared';
@@ -53,8 +54,8 @@ export const LobbyPage: React.FC = () => {
     const [hostAction, setHostAction] = useState<HostAction | null>(null);
     const [skillPickerOpen, setSkillPickerOpen] = useState(false);
     const [pendingLoadout, setPendingLoadout] = useState<{ skill: PlayerSkill; errorEventId: number } | null>(null);
-    const skillDialog = useModalFocusTrap<HTMLElement>(() => setSkillPickerOpen(false), skillPickerOpen);
-    const hostDialog = useModalFocusTrap<HTMLElement>(() => setHostAction(null), hostAction !== null);
+    const { dialogRef: skillDialogRef, onDialogKeyDown: onSkillDialogKeyDown } = useModalFocusTrap<HTMLElement>(() => setSkillPickerOpen(false), skillPickerOpen);
+    const { dialogRef: hostDialogRef, onDialogKeyDown: onHostDialogKeyDown } = useModalFocusTrap<HTMLElement>(() => setHostAction(null), hostAction !== null);
     const mapIds = mapCatalog?.hash === session.mapBundleHash && mapCatalog.origin === session.gameHttpOrigin
         ? mapCatalog.ids
         : null;
@@ -79,6 +80,7 @@ export const LobbyPage: React.FC = () => {
                 isSelf: player.playerId === session.selfId,
                 guest: player.guest,
                 role: player.role,
+                waitingForNextMatch: session.roomState === RoomState.Playing,
                 control: 'keyboard',
                 // `skills` is the shared lobby contract; this view has one movement-skill badge today.
                 skill: player.skills.find(
@@ -87,7 +89,7 @@ export const LobbyPage: React.FC = () => {
                 stats: player.stats,
             })),
         };
-    }, [currentRoomId, live, liveLockElapsedMs, session.isPrivate, session.lobby, session.selfId]);
+    }, [currentRoomId, live, liveLockElapsedMs, session.isPrivate, session.lobby, session.selfId, session.roomState]);
     const room = liveRoom;
     const displayCode = session.roomCode ?? currentRoomId;
 
@@ -375,7 +377,7 @@ export const LobbyPage: React.FC = () => {
 
                 {skillPickerOpen && self && (
                     <div className="lobby-dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setSkillPickerOpen(false)}>
-                        <section ref={skillDialog.dialogRef} className="lobby-dialog is-skill-dialog" role="dialog" aria-modal="true" aria-labelledby="skill-dialog-title" tabIndex={-1} onKeyDown={skillDialog.onDialogKeyDown}>
+                        <section ref={skillDialogRef} className="lobby-dialog is-skill-dialog" role="dialog" aria-modal="true" aria-labelledby="skill-dialog-title" tabIndex={-1} onKeyDown={onSkillDialogKeyDown}>
                             <span className="result-kicker">{t('lobby.loadoutKicker')}</span>
                             <h2 id="skill-dialog-title">{t('lobby.changeSkill')}</h2>
                             <p>{t('lobby.changeSkillHelp')}</p>
@@ -394,7 +396,7 @@ export const LobbyPage: React.FC = () => {
 
                 {hostAction && actionTarget && (
                     <div className="lobby-dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setHostAction(null)}>
-                        <section ref={hostDialog.dialogRef} className="lobby-dialog" role="alertdialog" aria-modal="true" aria-labelledby="host-dialog-title" aria-describedby="host-dialog-description" tabIndex={-1} onKeyDown={hostDialog.onDialogKeyDown}>
+                        <section ref={hostDialogRef} className="lobby-dialog" role="alertdialog" aria-modal="true" aria-labelledby="host-dialog-title" aria-describedby="host-dialog-description" tabIndex={-1} onKeyDown={onHostDialogKeyDown}>
                             <Icon name={hostAction.type === 'kick' ? 'remove' : 'crown'} size={52}/>
                             <h2 id="host-dialog-title">{t(hostAction.type === 'kick' ? 'lobby.kickConfirmTitle' : 'lobby.passHostConfirmTitle')}</h2>
                             <p id="host-dialog-description">{t(hostAction.type === 'kick' ? 'lobby.kickConfirmBody' : 'lobby.passHostConfirmBody', { nickname: actionTarget.nickname })}</p>

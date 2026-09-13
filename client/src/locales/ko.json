@@ -167,7 +167,8 @@
       "RESULT_BACKLOG": "서버가 지난 경기 결과를 아직 저장하는 중이에요. 잠시 뒤 다시 시작해 주세요."
     },
     "reconnecting": "게임 서버에 다시 연결하는 중입니다…",
-    "resumeFailed": "이 방의 연결을 복구할 수 없습니다."
+    "resumeFailed": "이 방의 연결을 복구할 수 없습니다.",
+    "waitingNextMatch": "다음 경기 대기 중"
   },
   "result": {
     "title": "게임 결과",
@@ -217,7 +218,7 @@
     "xpSurvival": "생존",
     "xpLevel": "Lv.{{level}}",
     "invalidMatch": "올바른 경기 정보가 없어 결과를 불러올 수 없습니다.",
-    "replayRetention": "이 경기의 리플레이는 {{days}}일, 또는 최근 {{count}}경기까지 남습니다."
+    "replayRetention": "리플레이는 경기 종료 후 {{hours}}시간 동안 보관됩니다."
   },
   "auth": {
     "login": "로그인",
@@ -285,7 +286,8 @@
     "agreeTerms": "이용약관에 동의합니다",
     "agreePrivacy": "개인정보처리방침에 동의합니다",
     "readDocument": "본문 보기",
-    "logout": "로그아웃"
+    "logout": "로그아웃",
+    "holdToRevealPassword": "누르는 동안 비밀번호 보기"
   },
   "legal": {
     "document": "법률 문서",
@@ -357,7 +359,10 @@
     "replayDownloadLabel": "{{date}} 경기의 리플레이 저장",
     "replayGone": "이 경기의 리플레이는 더 이상 남아 있지 않습니다.",
     "replayDownloadFailed": "리플레이를 받지 못했습니다.",
-    "replayHint": "리플레이는 {{days}}일, 또는 최근 {{count}}경기까지 남습니다. 보고 싶은 경기는 저장해 두세요."
+    "replayHint": "리플레이는 {{hours}}시간 동안 보관됩니다. 보고 싶은 경기는 저장해 두세요.",
+    "manageDevices": "기기 관리",
+    "sessionCreated": "로그인: {{date}}",
+    "sessionExpires": "만료: {{date}}"
   },
   "settings": {
     "title": "설정",
@@ -389,6 +394,10 @@
       "privacy": "개인정보 처리방침",
       "privacyTitle": "내 정보는 어떻게 쓰이나요?",
       "openPrivacy": "전체 본문 보기",
+      "install": "앱 설치",
+      "installTitle": "홈 화면에 추가",
+      "installAction": "눌러서 설치하기",
+      "installIos": "공유 메뉴에서 '홈 화면에 추가'를 고르면 앱처럼 열려요.",
       "credits": "크레딧"
     },
     "security": {
@@ -442,7 +451,11 @@
       "backupCodesOnlyOnce": "이 화면을 닫으면 다시 볼 수 없습니다. 새로 발급하면 이전 코드는 모두 사라집니다.",
       "codesCopied": "백업 코드를 복사했습니다.",
       "copyFailed": "복사하지 못했습니다. 파일로 저장해 주세요.",
-      "codesSaved": "안전한 곳에 저장했습니다"
+      "codesSaved": "안전한 곳에 저장했습니다",
+      "totpExplanation": "swITch는 30초마다 바뀌는 6자리 시간 기반(TOTP) 코드를 사용합니다. Google Authenticator 등에서 시간 기준을 선택하세요. 카운터 기준(HOTP)은 지원하지 않습니다. 휴대전화의 날짜와 시간을 자동으로 설정하세요.",
+      "scanQrHelp": "인증 앱에서 계정 추가 → QR 코드 스캔을 선택한 다음, 아래 코드를 스캔하고 앱의 6자리 코드를 입력하세요.",
+      "qrLabel": "인증 앱 등록 QR 코드",
+      "manualSetup": "스캔할 수 없다면 아래 키로 직접 등록하세요."
     },
     "sound": {
       "master": "마스터 사운드",
@@ -637,7 +650,23 @@
     "settings": "실시간 설정",
     "exit": "훈련 종료",
     "respawn": "다시 태어나기",
-    "closeSettings": "설정 닫기"
+    "closeSettings": "설정 닫기",
+    "minimap": "미니맵",
+    "minimapLabel": "훈련장 지도와 내 위치",
+    "padHints": {
+      "dash": "밟으면 스킬을 대시로 변경",
+      "flash": "밟으면 스킬을 점멸로 변경",
+      "exhaust": "밟으면 스킬을 탈진으로 변경",
+      "tagger": "밟으면 술래 역할 전환",
+      "reset": "밟으면 쿨타임과 효과 초기화",
+      "chaseMode": "밟으면 쫓는 역할과 도망가는 역할 전환"
+    },
+    "runner": "도망자",
+    "tagger": "술래",
+    "out": "잡혔어요",
+    "controls": "조작 안내",
+    "enlargeMap": "지도 확대",
+    "shrinkMap": "지도 축소"
   },
   "guide": {
     "title": "게임 방법",

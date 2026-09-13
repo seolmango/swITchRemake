@@ -1,9 +1,23 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>swITch.io</title>
+    <meta name="description" content="술래를 피해 마지막까지 살아남는 온라인 술래잡기." />
+
+    <!-- 설치했을 때 쓰는 정보. 아이콘은 npm run icons:build가 로고에서 만들어 낸다. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- 첫 화면용 기본값. 사용자가 고른 테마에 맞춰 cssVariables.ts가 다시 쓴다. -->
+    <meta name="theme-color" content="#FAFAF8" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="swITch" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   </head>
   <body>
     <div id="root"></div>

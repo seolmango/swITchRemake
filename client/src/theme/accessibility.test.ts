@@ -9,18 +9,12 @@ import {
     isCompactHud,
 } from '../game/hud/hudTheme.ts';
 import { Color, statusInkColors, themeColors } from './color.ts';
+import { appearanceCssVariables } from './cssVariables.ts';
 
 type Rgb = readonly [number, number, number];
-type Matrix = readonly [Rgb, Rgb, Rgb];
-type Deficiency = 'protanopia' | 'deuteranopia' | 'tritanopia';
 
 const hexToRgb = (hex: string): Rgb => [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255) as unknown as Rgb;
 const linear = (channel: number): number => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-const gamma = (channel: number): number => channel <= 0.0031308 ? 12.92 * channel : 1.055 * channel ** (1 / 2.4) - 0.055;
-const clamp = (value: number): number => Math.max(0, Math.min(1, value));
-const multiply = (matrix: Matrix, vector: Rgb): Rgb => matrix.map(
-    (row) => row[0] * vector[0] + row[1] * vector[1] + row[2] * vector[2],
-) as unknown as Rgb;
 
 const luminance = (hex: string): number => {
     const [r, g, b] = hexToRgb(hex).map(linear) as unknown as Rgb;
@@ -40,6 +34,22 @@ const contrast = (foreground: string, background: string): number => {
  */
 
 describe('meaning-bearing palette accessibility', () => {
+    it.each([0, 1] as const)('theme %i selected controls remain readable in both contrast modes', (theme) => {
+        for (const highContrast of [false, true]) {
+            const palette = appearanceCssVariables(theme, 'off', highContrast);
+            expect(contrast(palette['--ui-accent-text']!, palette['--ui-accent-fill']!)).toBeGreaterThanOrEqual(4.5);
+        }
+        expect(appearanceCssVariables(theme, 'off')['--ui-blue-border']).toBe(Color.blue[2]);
+        expect(appearanceCssVariables(theme, 'off', true)['--ui-blue-border']).toBe(statusInkColors(theme).info);
+    });
+
+    it('dialog surfaces are opaque in both themes', () => {
+        for (const theme of [0, 1] as const) {
+            expect(themeColors(theme).panel).toMatch(/^#[0-9a-f]{6}$/i);
+            expect(themeColors(theme).field).toMatch(/^#[0-9a-f]{6}$/i);
+        }
+    });
+
     it.each([0, 1] as const)('theme %i status inks exceed 4.5:1 for text', (theme) => {
         const canvas = themeColors(theme).canvas;
         for (const ink of Object.values(statusInkColors(theme))) {

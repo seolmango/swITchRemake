@@ -60,7 +60,7 @@ export interface GameSessionState {
     latencyMs: number | null;
     /** Client-side estimate from authoritative snapshot tick progress over arrival time. */
     estimatedTps: number | null;
-    trainingPlayers: ReadonlyArray<{ id: number; nickname: string; colorIndex: number; alive: boolean }>;
+    trainingPlayers: ReadonlyArray<{ id: number; nickname: string; colorIndex: number; alive: boolean; isTagger: boolean }>;
     trainingSkill: Exclude<SkillId, 'switch'> | null;
 }
 
@@ -195,7 +195,7 @@ class GameSession {
      */
     updateHudSnapshot(snapshot: Snapshot): void {
         const nextCooldowns = snapshot.cooldowns === undefined
-            ? null
+            ? this.state.cooldowns
             : snapshot.cooldowns.map(({ slot, remainingMs }) => ({ slot, remainingMs: Math.max(0, Math.round(remainingMs / 100) * 100) }));
         const previous = this.state.cooldowns;
         const cooldownsChanged = !(
@@ -205,7 +205,10 @@ class GameSession {
             && previous.every((cooldown, index) => cooldown.slot === nextCooldowns[index]?.slot && cooldown.remainingMs === nextCooldowns[index]?.remainingMs))
         );
         const snapshotTaggerId = snapshot.players?.find((player) => player.isTagger)?.id;
-        const taggerId = snapshotTaggerId ?? this.state.taggerId;
+        // A hidden tagger retains its last known identity; an explicitly visible
+        // runner must clear it. Training tracks each player's flag separately.
+        const previousTagger = snapshot.players?.find((player) => player.id === this.state.taggerId);
+        const taggerId = snapshotTaggerId ?? (previousTagger && !previousTagger.isTagger ? null : this.state.taggerId);
         const estimatedTps = this.sampleTps(snapshot.tick);
         let trainingPlayers = this.state.trainingPlayers;
         let trainingSkill = this.state.trainingSkill;
@@ -221,12 +224,13 @@ class GameSession {
                         nickname: entry.nickname,
                         colorIndex: player?.colorIndex ?? previous?.colorIndex ?? entry.id - 1,
                         alive: player !== undefined || previous?.alive !== false,
+                        isTagger: player?.isTagger ?? previous?.isTagger ?? false,
                     };
                 });
             } else if (snapshot.players) {
                 trainingPlayers = trainingPlayers.map((entry) => {
                     const player = visible.get(entry.id);
-                    return player ? { ...entry, colorIndex: player.colorIndex, alive: true } : entry;
+                    return player ? { ...entry, colorIndex: player.colorIndex, alive: true, isTagger: player.isTagger } : entry;
                 });
             }
 
@@ -246,7 +250,7 @@ class GameSession {
             || trainingPlayers.some((player, index) => {
                 const previous = this.state.trainingPlayers[index];
                 return !previous || player.id !== previous.id || player.nickname !== previous.nickname
-                    || player.colorIndex !== previous.colorIndex || player.alive !== previous.alive;
+                    || player.colorIndex !== previous.colorIndex || player.alive !== previous.alive || player.isTagger !== previous.isTagger;
             });
         if (!cooldownsChanged && taggerId === this.state.taggerId && estimatedTps === this.state.estimatedTps
             && !trainingPlayersChanged && trainingSkill === this.state.trainingSkill) return;
@@ -387,8 +391,9 @@ class GameSession {
             case 'lobby.state':
                 this.setState({
                     lobby: message.payload,
+                    selfId: message.payload.selfId ?? this.state.selfId,
                     lobbyReceivedAt: Date.now(),
-                    role: roleFromLobby(this.state.role, this.state.selfId, message.payload.players),
+                    role: roleFromLobby(this.state.role, message.payload.selfId ?? this.state.selfId, message.payload.players),
                 });
                 break;
             case 'game.starting':

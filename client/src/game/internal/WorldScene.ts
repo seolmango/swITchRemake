@@ -1,3 +1,4 @@
+import { SnapshotEmojiTracker } from './SnapshotEmojiTracker.ts';
 import Phaser from 'phaser';
 import { MapLayer } from './MapLayer.ts';
 import { PlayerSprite, type PlayerVisualState } from './PlayerSprite.ts';
@@ -65,6 +66,7 @@ export class WorldScene extends Phaser.Scene {
     private switchFx!: SwitchFxLayer;
     private trainingPads!: TrainingPadLayer;
     private readonly players = new Map<number, PlayerSprite>();
+    private readonly snapshotEmojis = new SnapshotEmojiTracker();
     private taggerId: number | null = null;
     private selfId: number | null = null;
     private mode: EngineMode = EngineMode.Play;
@@ -261,11 +263,11 @@ export class WorldScene extends Phaser.Scene {
 
     cameraFollow(id: number): void {
         const sprite = this.players.get(id);
-        if (!sprite) return;
         this.freeCamera = false;
         this.cameraInitialized = true;
         this.followedId = id;
-        this.startFollowing(sprite);
+        if (sprite) this.startFollowing(sprite);
+        else this.cameras.main.stopFollow();
     }
 
     cameraFree(): void {
@@ -362,6 +364,7 @@ export class WorldScene extends Phaser.Scene {
             motion: MOTION_PRESETS[this.settings.motion],
             quality: QUALITY_PRESETS[this.settings.quality],
             reduceFlash: this.settings.reduceFlash,
+            highContrast: this.settings.highContrast ?? false,
             display: { ...this.displayOptions },
         };
     }
@@ -426,14 +429,19 @@ export class WorldScene extends Phaser.Scene {
         s.nickname = init.nickname ?? s.nickname;
         s.isTagger = this.taggerId === id;
         s.isSelf = this.selfId === id;
+        // A respawn can announce its role before its sprite arrives. Keep the
+        // requested target across that gap, unless an explicit free action won.
+        if (!this.freeCamera && this.followedId === id) this.startFollowing(sprite);
         this.initializePlayCameraIfReady();
     }
 
     removePlayer(id: number): void {
         const sprite = this.players.get(id);
         if (!sprite) return;
+        if (this.followedId === id) this.cameras.main.stopFollow();
         sprite.destroy();
         this.players.delete(id);
+        this.snapshotEmojis.delete(id);
         const nextBuffers = new Map(this.entityPositionBuffers);
         nextBuffers.delete(id);
         this.entityPositionBuffers = nextBuffers;
@@ -572,6 +580,7 @@ export class WorldScene extends Phaser.Scene {
                 s.facingY = p.facingY;
                 s.colorIndex = p.colorIndex;
                 s.obscured = p.obscured;
+                s.isTagger = p.isTagger;
                 if (p.isTagger) tagger = p.id;
 
                 for (const key of EFFECT_BITS) {
@@ -581,7 +590,8 @@ export class WorldScene extends Phaser.Scene {
                     else s.effects[key] = { remaining: ratio, total: 1 };
                 }
 
-                if (p.emojiId) this.showEmoji(p.id, p.emojiId);
+                // Snapshot repeats the active emoji; restart only on a new activation.
+                if (this.snapshotEmojis.update(p.id, p.emojiId) && p.emojiId) this.showEmoji(p.id, p.emojiId);
                 const blink = this.pendingBlinks.get(p.id);
                 if (blink !== undefined) {
                     this.pendingBlinks.delete(p.id);
@@ -595,7 +605,9 @@ export class WorldScene extends Phaser.Scene {
             for (const id of [...this.pendingBlinks.keys()]) {
                 if (!seen.has(id)) this.pendingBlinks.delete(id);
             }
-            this.setTagger(tagger);
+            // Training can have several taggers. Snapshot flags are per-player;
+            // the single-target demo setter would erase a previously set flag.
+            this.taggerId = tagger;
         }
 
         // 점멸 같은 저빈도 연출은 JSON 이벤트(`player.blinked`)가 다음 위치 샘플을 snap으로 표시한다.

@@ -77,8 +77,8 @@ export const themeColors = (theme: 0 | 1) => ({
     text: theme === 0 ? Color.black : Color.white,
     muted: Color.muted[theme],
     focus: Color.focus[theme],
-    panel: theme === 0 ? Color.smoke[0] : 'transparent',
+    panel: theme === 0 ? Color.smoke[0] : '#454545',
     panelBorder: Color.smoke[2],
-    field: theme === 0 ? 'rgba(250,250,248,0.72)' : 'transparent',
+    field: theme === 0 ? '#F7F7F4' : '#343434',
     backdrop: theme === 0 ? 'rgba(59,59,59,0.16)' : 'rgba(0,0,0,0.42)',
 });

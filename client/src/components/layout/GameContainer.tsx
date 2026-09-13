@@ -1,12 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { Color } from '../../theme/color.ts';
 import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH, gameCanvasScale } from './gameScale.ts';
 
-const GameContainerScaleContext = createContext(1);
-
-/** Actual transform applied to the fixed design stage. Portalled controls intentionally ignore it. */
-export const useGameContainerScale = (): number => useContext(GameContainerScaleContext);
+import { GameContainerScaleContext } from './gameContainerContext.ts';
 
 interface GameContainerProps {
     children: React.ReactNode;

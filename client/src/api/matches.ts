@@ -15,6 +15,7 @@ export interface LobbyViewPlayer {
     isSelf: boolean;
     guest: boolean;
     role: PlayerRole;
+    waitingForNextMatch?: boolean;
     control: PlayerControl;
     skill: PlayerSkill;
     /** 게스트와 전적이 안 온 사람은 null이다. 계산은 매칭 서버가 한다. */
@@ -74,7 +75,7 @@ export interface MatchResultSnapshot {
     playedAt: string;
     /** game.ended returnsAt; omitted for persisted match-history responses. */
     returnsAt?: number;
-    /** Every surviving co-winner, without ordering (one to eight players). */
+    /** Every surviving co-winner, without ordering (zero to eight players). */
     winners: readonly string[];
     players: MatchPlayerResult[];
     /** 게스트와 예전 응답에는 없다. 없으면 보상 칸을 통째로 그리지 않는다. */

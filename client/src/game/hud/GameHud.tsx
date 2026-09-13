@@ -20,6 +20,8 @@ interface Props {
     /** 설정의 '조작 힌트 표시'. 끄면 좌하단 키 안내 패널이 사라진다. */
     showControlHints: boolean;
     matchReady: boolean;
+    inputEnabled?: boolean;
+    training?: boolean;
     onUseMovementSkill: () => void;
     onSwitchTarget: (playerId: number) => void;
     onSpectate: (playerId: number) => void;
@@ -39,7 +41,7 @@ interface Props {
  * the controls reference, play is the full set.
  */
 export const GameHud: React.FC<Props> = ({
-    theme, mode, hud, colorVision, showControlHints, matchReady, onUseMovementSkill, onSwitchTarget, onSpectate, onEmoji,
+    theme, mode, hud, colorVision, showControlHints, matchReady, inputEnabled = true, training = false, onUseMovementSkill, onSwitchTarget, onSpectate, onEmoji,
 }) => {
     const { t } = useTranslation();
     const [shiftHeld, setShiftHeld] = useState(false);
@@ -54,7 +56,7 @@ export const GameHud: React.FC<Props> = ({
      * self rather than read off the construction-time mode.
      */
     const spectating = mode === EngineMode.Spectate || (self !== null && !self.alive);
-    const canAct = !spectating && hud.selfId !== null;
+    const canAct = inputEnabled && !spectating && hud.selfId !== null;
 
     // Panels are corner-anchored at fixed sizes, so on a small viewport they overlap. Measured rather
     // than media-queried because the HUD sizes to its container, which needn't be the window.
@@ -88,11 +90,21 @@ export const GameHud: React.FC<Props> = ({
      * otherwise stay stuck open.
      */
     useEffect(() => {
+        const heldShifts = new Set<string>();
         const onDown = (e: KeyboardEvent) => {
-            if (e.key === 'Shift') setShiftHeld(true);
+            if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+            if (e.key === 'Shift') {
+                heldShifts.add(e.code);
+                setShiftHeld(true);
+            }
         };
-        const onUp = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftHeld(false); };
-        const onBlur = () => setShiftHeld(false);
+        const onUp = (e: KeyboardEvent) => {
+            if (e.key === 'Shift') {
+                heldShifts.delete(e.code);
+                setShiftHeld(heldShifts.size > 0);
+            }
+        };
+        const onBlur = () => { heldShifts.clear(); setShiftHeld(false); };
 
         window.addEventListener('keydown', onDown);
         window.addEventListener('keyup', onUp);
@@ -120,7 +132,7 @@ export const GameHud: React.FC<Props> = ({
             data-hud-spectating={spectating ? 'true' : 'false'}
             style={{ position: 'absolute', inset: 0, pointerEvents: 'none', fontFamily: HUD_FONT }}
         >
-            <StatusBar
+            {!training && <StatusBar
                 theme={theme}
                 spectating={spectating}
                 compact={compact}
@@ -128,9 +140,9 @@ export const GameHud: React.FC<Props> = ({
                 selfIsTagger={!spectating && self?.isTagger === true}
                 watching={hud.players.find((p) => p.id === hud.spectatingId) ?? null}
                 deadInMatch={deadInMatch}
-            />
+            />}
 
-            <div style={{ pointerEvents: 'auto' }}>
+            {!training && <div style={{ pointerEvents: 'auto' }}>
                 <PlayerList
                     theme={theme}
                     colorVision={colorVision}
@@ -143,7 +155,7 @@ export const GameHud: React.FC<Props> = ({
                     spectatingId={hud.spectatingId}
                     onSpectate={onSpectate}
                 />
-            </div>
+            </div>}
 
             {/* No out-of-zone warning: the storm is a solid boundary the server collides against, so a
                 player can never be outside it in the first place. */}
@@ -151,7 +163,7 @@ export const GameHud: React.FC<Props> = ({
 
             {/* 도움말 모드에서만 띄우던 것을 설정으로 옮겼다 — 문구가 "경기 중"을 약속하므로 인게임에서도 뜬다.
                 좁은 화면에서는 여전히 접는다(좌하단이 다른 패널과 겹친다). */}
-            {(showControlHints || showIntroHints) && !compact && (
+            {!training && (showControlHints || showIntroHints) && !compact && (
                 <ControlsGuide theme={theme} movementSkillLabel={hud.movementSkill?.label ?? null} />
             )}
 

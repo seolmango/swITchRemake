@@ -11,7 +11,7 @@ const portraitNow = (): boolean =>
 /** Dismissible for the current match; rotating to landscape hides it immediately. */
 export const MobileOrientationSuggestion: React.FC = () => {
     const { t } = useTranslation();
-    const mobile = useMemo(isMobileDevice, []);
+    const mobile = useMemo(() => isMobileDevice(), []);
     const [portrait, setPortrait] = useState(portraitNow);
     const [dismissed, setDismissed] = useState(false);
     const dismiss = useCallback(() => setDismissed(true), []);

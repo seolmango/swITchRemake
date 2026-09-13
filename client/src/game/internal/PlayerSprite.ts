@@ -261,8 +261,13 @@ function drawBody(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: T
         g.strokePath();
     }
 
-    const outlineColor = s.isTagger ? Palette.red[2] : (theme === 1 ? Palette.white : stroke);
-    const outlineAlpha = !s.isTagger && theme === 1 ? 0.55 : 1;
+    // Strengthen the silhouette without changing player identity colors or revealing concealed players.
+    if (opts.highContrast) {
+        g.lineStyle(PLAYER.outlineWidth + 4, theme === 1 ? Palette.black : Palette.white, 1);
+        g.strokeCircle(x, y, r);
+    }
+    const outlineColor = opts.highContrast ? (theme === 1 ? Palette.white : Palette.black) : s.isTagger ? Palette.red[2] : (theme === 1 ? Palette.white : stroke);
+    const outlineAlpha = !opts.highContrast && !s.isTagger && theme === 1 ? 0.55 : 1;
     g.lineStyle(PLAYER.outlineWidth, outlineColor, outlineAlpha);
     g.strokeCircle(x, y, r);
 

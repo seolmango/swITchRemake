@@ -91,6 +91,7 @@ export const DeleteAccountDialog: React.FC<{ onClose: () => void; onDeleted: () 
             style={{
                 '--surface': colors.panel === 'transparent' ? colors.canvas : colors.panel,
                 '--surface-border': colors.panelBorder,
+                '--surface-field': colors.field,
                 '--surface-muted': colors.muted,
                 color: colors.text,
             } as React.CSSProperties}

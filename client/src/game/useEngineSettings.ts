@@ -17,6 +17,7 @@ export function useEngineSettings(): { settings: EngineSettings; display: Displa
     const resolutionScale = useSettingsStore((s) => s.resolutionScale);
     const motion = useSettingsStore((s) => s.motionLevel);
     const quality = useSettingsStore((s) => s.graphicsQuality);
+    const highContrast = useSettingsStore((s) => s.highContrast);
     const colorVision = useSettingsStore((s) => s.colorVisionMode);
     const screenShake = useSettingsStore((s) => s.screenShake);
     const cameraSmoothing = useSettingsStore((s) => s.cameraSmoothing);
@@ -30,10 +31,11 @@ export function useEngineSettings(): { settings: EngineSettings; display: Displa
         motion,
         quality,
         colorVision,
+        highContrast,
         screenShake,
         cameraSmoothing,
         reduceFlash,
-    }), [frameRate, resolutionScale, motion, quality, colorVision, screenShake, cameraSmoothing, reduceFlash]);
+    }), [frameRate, resolutionScale, motion, quality, colorVision, highContrast, screenShake, cameraSmoothing, reduceFlash]);
 
     const display = useMemo<DisplayOptions>(() => ({ showNumber, showNickname }), [showNumber, showNickname]);
 

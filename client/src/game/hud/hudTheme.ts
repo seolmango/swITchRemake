@@ -32,7 +32,7 @@ export const surface = (theme: Theme, tone: Tone, emphasis = false): CSSProperti
                 : Color.smoke[2]!;
     return {
         background: theme === 1 ? Color.black : (emphasis ? ramp[1]! : ramp[0]!),
-        border: `2px solid ${ink}`,
+        border: `var(--hud-border-width, 2px) solid var(--ui-${tone === 'red' ? 'red' : tone === 'blue' ? 'blue' : 'neutral'}-border, ${ink})`,
         color: ink,
     };
 };
@@ -40,9 +40,9 @@ export const surface = (theme: Theme, tone: Tone, emphasis = false): CSSProperti
 /** Panel behind a group of HUD controls. Translucent so the world stays readable underneath. */
 export const panel = (theme: Theme): CSSProperties => ({
     background: theme === 1
-        ? `color-mix(in srgb, ${Color.black} 78%, transparent)`
-        : `color-mix(in srgb, ${Color.white} 86%, transparent)`,
-    border: `3px solid ${Color.smoke[2]}`,
+        ? `color-mix(in srgb, ${Color.black} var(--hud-panel-opacity, 78%), transparent)`
+        : `color-mix(in srgb, ${Color.white} var(--hud-panel-opacity, 86%), transparent)`,
+    border: `3px solid var(--ui-neutral-border, ${Color.smoke[2]})`,
     borderRadius: 18,
     backdropFilter: 'blur(6px)',
 });

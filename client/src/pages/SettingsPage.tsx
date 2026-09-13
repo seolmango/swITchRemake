@@ -6,6 +6,7 @@ import {
     type SettingsSection,
     useSettingsStore,
 } from '../stores/useSettingsStore.ts';
+import { colorVisionPalette } from '../theme/cvd.ts';
 import { Color, statusInkColors, themeColors } from '../theme/color.ts';
 import { formatKeyBinding } from '../utils/keyBinding.ts';
 import { TouchLayoutEditor } from '../game/hud/touch/TouchLayoutEditor.tsx';
@@ -14,6 +15,8 @@ import { MfaSettings } from '../components/settings/MfaSettings.tsx';
 import { CreditsDialog, LegalDocumentDialog } from '../components/legal/LegalDialogs.tsx';
 import { OPERATOR_CREDIT, PRIVACY_POLICY } from '../legal/legalDocuments.ts';
 import { isMobileDevice } from '../utils/mobileDevice.ts';
+import { isIOS } from '../utils/inAppBrowser.ts';
+import { isStandaloneDisplay, promptInstall, useInstallPromptState } from '../platform/installPrompt.ts';
 
 interface Choice<T extends string> {
     value: T;
@@ -103,8 +106,13 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
     const settings = useSettingsStore();
     const colors = themeColors(settings.theme);
     const statusInk = statusInkColors(settings.theme);
+    const label = (ko: string, en: string) => settings.language === 'ko' ? ko : en;
+    const palette = colorVisionPalette(settings.colorVisionMode);
 
-    const isMobile = useMemo(isMobileDevice, []);
+    const isMobile = useMemo(() => isMobileDevice(), []);
+    const isIos = useMemo(() => isIOS(), []);
+    const standalone = useMemo(() => isStandaloneDisplay(), []);
+    const install = useInstallPromptState();
 
     useEffect(() => {
         if (!editing) return;
@@ -167,6 +175,31 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
         window.requestAnimationFrame(() => document.getElementById(`settings-tab-${nextSection}`)?.focus());
     };
 
+    /**
+     * 설치 안내. 크로미움은 설치가 가능해질 때만 카드가 나타나고, iOS Safari는 설치 API가
+     * 없어서 공유 메뉴를 가리키는 한 줄로 대신한다. 이미 앱으로 열었으면 아무것도 띄우지 않는다.
+     */
+    const renderInstallCard = () => {
+        if (standalone || install.installed) return null;
+        if (install.canPrompt) {
+            return (
+                <button type="button" className="settings-info-card settings-install-card" onClick={() => void promptInstall()}>
+                    <span className="settings-card-kicker">{t('settings.general.install')}</span>
+                    <strong>{t('settings.general.installTitle')}</strong>
+                    <p>{t('settings.general.installAction')}</p>
+                </button>
+            );
+        }
+        if (!isIos) return null;
+        return (
+            <div className="settings-info-card settings-install-card">
+                <span className="settings-card-kicker">{t('settings.general.install')}</span>
+                <strong>{t('settings.general.installTitle')}</strong>
+                <p>{t('settings.general.installIos')}</p>
+            </div>
+        );
+    };
+
     const renderGeneral = () => (
         <>
             <SettingRow title={t('settings.general.theme')} description={t('settings.general.themeDescription')}>
@@ -175,6 +208,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                     { value: '1', label: t('settings.general.dark') },
                 ]} onChange={(value) => settings.setTheme(Number(value) as 0 | 1)} />
             </SettingRow>
+            <SettingRow title={label('고대비 모드', 'High contrast')} description={label('파스텔 색은 유지하면서 버튼 경계와 선택 상태를 더 뚜렷하게 표시합니다.', 'Keep pastel colors while strengthening control borders and selected states.')}><Toggle checked={settings.highContrast} label={label('고대비 모드', 'High contrast')} onChange={(value) => settings.setGameSetting('highContrast', value)} /></SettingRow>
             <SettingRow title={t('settings.general.language')} description={t('settings.general.languageDescription')}>
                 <SegmentedControl value={settings.language} options={[
                     { value: 'ko', label: '한국어' },
@@ -187,6 +221,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                 <p>{t('settings.general.detectedDevice', { device: isMobile ? t('settings.general.mobile') : t('settings.general.desktop') })}</p>
                 <small>{navigator.platform || t('settings.general.unknownPlatform')} · {navigator.maxTouchPoints > 0 ? t('settings.general.touchAvailable') : t('settings.general.keyboardPointer')}</small>
             </div>
+            {renderInstallCard()}
             <div className="settings-link-grid">
                 <button type="button" className="settings-info-card" onClick={() => setGeneralDialog('privacy')}>
                     <span className="settings-card-kicker">{t('settings.general.privacy')}</span>
@@ -219,15 +254,11 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
 
     const renderGame = () => (
         <>
+            <h3 className="settings-group-heading">{label('화질 · 성능', 'Graphics & performance')}</h3>
             <SettingRow title={t('settings.game.frameRate')} description={t('settings.game.frameRateDescription')}>
                 <SegmentedControl value={settings.frameRate} options={[
                     { value: '30', label: '30' }, { value: '60', label: '60' }, { value: '120', label: '120' }, { value: 'unlimited', label: t('settings.game.unlimited') },
                 ]} onChange={(value) => settings.setGameSetting('frameRate', value)} />
-            </SettingRow>
-            <SettingRow title={t('settings.game.motion')} description={t('settings.game.motionDescription')}>
-                <SegmentedControl value={settings.motionLevel} options={[
-                    { value: 'reduced', label: t('settings.game.reduced') }, { value: 'standard', label: t('settings.game.standard') }, { value: 'full', label: t('settings.game.full') },
-                ]} onChange={(value) => settings.setGameSetting('motionLevel', value)} />
             </SettingRow>
             <SettingRow title={t('settings.game.quality')} description={t('settings.game.qualityDescription')}>
                 <SegmentedControl value={settings.graphicsQuality} options={[
@@ -239,6 +270,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                     { value: '75', label: '75%' }, { value: '100', label: '100%' }, { value: '125', label: '125%' },
                 ]} onChange={(value) => settings.setGameSetting('resolutionScale', value)} />
             </SettingRow>
+            <h3 className="settings-group-heading">{label('플레이어 · 색상', 'Players & colors')}</h3>
             <SettingRow title={t('settings.game.nickname')} description={t('settings.game.nicknameDescription')}>
                 <Toggle checked={settings.showNickname} label={t('settings.game.nickname')} onChange={(value) => settings.setGameSetting('showNickname', value)} />
             </SettingRow>
@@ -251,6 +283,17 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                     { value: 'deuteranopia', label: t('settings.game.deuteranopia') }, { value: 'tritanopia', label: t('settings.game.tritanopia') },
                 ]} onChange={(value) => settings.setGameSetting('colorVisionMode', value)} />
             </SettingRow>
+            <figure className="settings-color-preview" aria-label={label('색상 미리보기', 'Color preview')}>
+                <figcaption>{label('색상 미리보기 · 선택 즉시 반영', 'Color preview · updates immediately')}</figcaption>
+                <div className="settings-player-swatches">{palette.user.map(([fill, border], index) => <span key={index} style={{ background: fill, borderColor: border }}>{index + 1}</span>)}</div>
+                <div className="settings-terrain-swatches">
+                    <span style={{ background: palette.grass[0] }}>{label('♣ 수풀', '♣ Grass')}</span>
+                    <span style={{ background: palette.frenzy[0] }}>{label('⚡ 광란', '⚡ Frenzy')}</span>
+                    <span style={{ background: Color.red[0] }}>{label('! 술래', '! Tagger')}</span>
+                    <span style={{ background: Color.blue[0] }}>{label('◇ 유체화', '◇ Phase')}</span>
+                </div>
+            </figure>
+            <h3 className="settings-group-heading">{label('터치 조작', 'Touch controls')}</h3>
             <SettingRow title={t('settings.game.touchControls')} description={t('settings.game.touchControlsDescription')}>
                 <SegmentedControl value={settings.touchControls} options={[
                     { value: 'auto', label: t('settings.game.touchAuto') },
@@ -280,19 +323,23 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                     hint: t('settings.game.touchLayoutHint'),
                 }} />
             </SettingRow>
+            <h3 className="settings-group-heading">{label('움직임 · 시각 효과', 'Motion & effects')}</h3>
+            <SettingRow title={t('settings.game.motion')} description={t('settings.game.motionDescription')}>
+                <SegmentedControl value={settings.motionLevel} options={[
+                    { value: 'reduced', label: t('settings.game.reduced') }, { value: 'standard', label: t('settings.game.standard') }, { value: 'full', label: t('settings.game.full') },
+                ]} onChange={(value) => settings.setGameSetting('motionLevel', value)} />
+            </SettingRow>
             {([
                 ['screenShake', 'screenShakeDescription'],
                 ['cameraSmoothing', 'cameraSmoothingDescription'],
                 ['reduceFlash', 'reduceFlashDescription'],
-                ['showControlHints', 'showControlHintsDescription'],
-                ['showLatency', 'showLatencyDescription'],
-                ['showFps', 'showFpsDescription'],
-                ['showTps', 'showTpsDescription'],
             ] as const).map(([key, descriptionKey]) => (
                 <SettingRow key={key} title={t(`settings.game.${key}`)} description={t(`settings.game.${descriptionKey}`)}>
                     <Toggle checked={settings[key]} label={t(`settings.game.${key}`)} onChange={(value) => settings.setGameSetting(key, value)} />
                 </SettingRow>
             ))}
+            <h3 className="settings-group-heading">{label('도움말 · 상태 표시', 'Hints & diagnostics')}</h3>
+            {(['showControlHints', 'showLatency', 'showFps', 'showTps'] as const).map((key) => <SettingRow key={key} title={t(`settings.game.${key}`)} description={t(`settings.game.${key}Description`)}><Toggle checked={settings[key]} label={t(`settings.game.${key}`)} onChange={(value) => settings.setGameSetting(key, value)} /></SettingRow>)}
         </>
     );
 
@@ -351,7 +398,8 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                     '--settings-field': colors.field,
                     '--settings-muted': colors.muted,
                     '--settings-text': colors.text,
-                    '--settings-accent': statusInk.info,
+                    '--settings-accent': 'var(--ui-accent-fill)',
+                    '--settings-accent-text': 'var(--ui-accent-text)',
                     '--settings-danger': statusInk.bad,
                     '--settings-danger-soft': Color.red[0],
                     '--settings-dark-text': Color.black,

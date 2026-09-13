@@ -23,6 +23,7 @@ import { Icon } from '../common/Icon.tsx';
 import { mfaErrorMessage, retryAfterSeconds } from '../../pages/auth/authErrorMessage.ts';
 import { deadlineAfterSeconds, useDeadlineSeconds } from '../../utils/deadline.ts';
 import { ApiError } from '../../api/http.ts';
+import { TotpQrCode } from './TotpQrCode.tsx';
 
 type SecurityAction =
     | { kind: 'disable' }
@@ -50,7 +51,7 @@ export const MfaSettings: React.FC = () => {
     const authenticated = useAuthStore((state) => state.status === 'account');
     const [status, setStatus] = useState<MfaStatus | null>(null);
     const [devices, setDevices] = useState<TrustedDevice[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(authenticated);
     const [busy, setBusy] = useState(false);
     const [method, setMethod] = useState<MfaMethod>('email');
     const [currentPassword, setCurrentPassword] = useState('');
@@ -75,13 +76,11 @@ export const MfaSettings: React.FC = () => {
         setMessage(mfaErrorMessage(error, t));
     }, [t]);
 
-    const loadSecurity = useCallback(async () => {
+    const loadSecurity = useCallback(() => {
         if (!authenticated) return;
-        setLoading(true);
-        setFailed(false);
-        setMessage('');
-        try {
-            const nextStatus = await getMfaStatus();
+        return getMfaStatus().then(async (nextStatus) => {
+            setFailed(false);
+            setMessage('');
             setStatus(nextStatus);
             if (nextStatus.enabled) {
                 try {
@@ -94,14 +93,17 @@ export const MfaSettings: React.FC = () => {
             } else {
                 setDevices([]);
             }
-        } catch (error) {
-            handleError(error);
-        } finally {
-            setLoading(false);
-        }
+        }).catch(handleError).finally(() => setLoading(false));
     }, [authenticated, handleError, t]);
 
     useEffect(() => { void loadSecurity(); }, [loadSecurity]);
+
+    const reloadSecurity = () => {
+        setLoading(true);
+        setFailed(false);
+        setMessage('');
+        void loadSecurity();
+    };
 
     useEffect(() => {
         if (!action) return;
@@ -244,7 +246,7 @@ export const MfaSettings: React.FC = () => {
         return (
             <div className="mfa-empty-card" role="alert">
                 <strong>{shownMessage || t('settings.security.loadFailed')}</strong>
-                <button type="button" disabled={(retryRemaining ?? 0) > 0} onClick={() => void loadSecurity()}>{t('common.retry')}</button>
+                <button type="button" disabled={(retryRemaining ?? 0) > 0} onClick={reloadSecurity}>{t('common.retry')}</button>
             </div>
         );
     }
@@ -307,6 +309,7 @@ export const MfaSettings: React.FC = () => {
                             </button>
                         ))}
                     </div>
+                    {method === 'totp' && <p>{t('settings.security.totpExplanation')}</p>}
                     <div className="mfa-enable-fields">
                         <TextField
                             label={t('auth.currentPassword')}
@@ -367,6 +370,13 @@ export const MfaSettings: React.FC = () => {
                     <span>{t('settings.security.oneTimeSecret')}</span>
                     <h3 id="mfa-secret-title">{t('settings.security.addToApp')}</h3>
                     <p>{t('settings.security.secretOnlyOnce')}</p>
+                    <p>{t('settings.security.scanQrHelp')}</p>
+                    {setupRemaining !== 0 && <TotpQrCode
+                        uri={setup.otpauthUri}
+                        title={t('settings.security.qrLabel')}
+                    />}
+                    <p>{t('settings.security.totpExplanation')}</p>
+                    <span>{t('settings.security.manualSetup')}</span>
                     <code>{setup.secret}</code>
                     <button type="button" onClick={() => void copySetupSecret()}>{t('common.copy')}</button>
                     <TextField

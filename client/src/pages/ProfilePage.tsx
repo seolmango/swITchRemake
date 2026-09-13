@@ -15,6 +15,8 @@ import { getMyMatches, getMyStats, type UserMatchHistoryItem, type UserStats } f
 import { getRetentionSettings, type RetentionSettings } from '../api/config.ts';
 import { createReplayTicket } from '../api/profile.ts';
 import { gameHttpOrigin } from '../game/GameSession.ts';
+import './ProfilePage.css';
+import { useModalFocusTrap } from '../components/common/useModalFocusTrap.ts';
 import { DeleteAccountDialog } from '../components/profile/DeleteAccountDialog.tsx';
 
 type RecordsState =
@@ -38,6 +40,8 @@ export const ProfilePage: React.FC = () => {
     const [hasSessionOverflow, setHasSessionOverflow] = useState(false);
     const [records, setRecords] = useState<RecordsState>({ kind: 'loading' });
     const [deleting, setDeleting] = useState(false);
+    const [devicesOpen, setDevicesOpen] = useState(false);
+    const { dialogRef, onDialogKeyDown } = useModalFocusTrap<HTMLElement>(() => setDevicesOpen(false), devicesOpen);
     /*
      * 보관 기간은 서버가 정한다. 화면이 30일을 직접 적으면 정책을 바꾸는 순간 화면만 옛
      * 숫자를 말한다. 못 받아 오면 아무 말도 하지 않는다 — 틀린 숫자보다 침묵이 낫다.
@@ -172,7 +176,7 @@ export const ProfilePage: React.FC = () => {
         const observer = new ResizeObserver(updateOverflow);
         observer.observe(list);
         return () => observer.disconnect();
-    }, [loadingSessions, sessions]);
+    }, [loadingSessions, sessions, devicesOpen]);
 
     const beginSessionDrag = (event: React.PointerEvent<HTMLDivElement>) => {
         if (event.button !== 0 || (event.target as Element).closest('button')) return;
@@ -278,7 +282,7 @@ export const ProfilePage: React.FC = () => {
                                     <small className="match-history-retention">
                                         {t('profile.historyRetention', { days: retention.matchDays })}
                                         {' '}
-                                        {t('profile.replayHint', { days: retention.replayDays, count: retention.replayPerUserMatches })}
+                                        {t('profile.replayHint', { hours: retention.replayHours })}
                                     </small>
                                 )}
                             </div>
@@ -318,14 +322,35 @@ export const ProfilePage: React.FC = () => {
                         )}
                     </section>
 
-                    <section className="session-panel" style={{ '--session-border': colors.panelBorder, '--session-field': colors.field, '--session-muted': colors.muted } as React.CSSProperties}>
+                    <section className="profile-device-summary" style={{ borderColor: colors.panelBorder }}>
+                        <div><h2>{t('profile.loginDevices')} · {loadingSessions ? '…' : sessions.length}</h2><p>{t('profile.loginDevicesHelp')}</p>{sessionMessage && <p role="status">{sessionMessage}</p>}</div>
+                        <button type="button" onClick={() => setDevicesOpen(true)}>{t('profile.manageDevices')}</button>
+                    </section>
+
+                    {/*
+                      * 탈퇴는 로그아웃 옆에 두지 않는다. 되돌릴 수 없는 것과 매일 누르는 것이
+                      * 나란히 있으면 언젠가 잘못 눌린다. 여기서는 문을 여는 것까지만 한다.
+                      */}
+                    <div
+                        className="profile-danger-zone"
+                        /* 옆 패널들과 같은 테두리·글자색을 쓴다. 여기만 밝으면 다크 모드에서 혼자 튄다. */
+                        style={{ '--profile-border': colors.panelBorder, '--profile-muted': colors.muted } as React.CSSProperties}
+                    >
+                        <span>{t('profile.dangerZone')}</span>
+                        <button type="button" onClick={() => setDeleting(true)}>{t('profile.deleteTitle')}</button>
+                    </div>
+                </div>
+            </section>
+            {devicesOpen && <div className="profile-session-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDevicesOpen(false); }} style={{ '--dialog-surface': colors.panel === 'transparent' ? colors.canvas : colors.panel, color: colors.text } as React.CSSProperties}>
+                    <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="session-dialog-title" tabIndex={-1} onKeyDown={onDialogKeyDown} className="session-panel profile-session-dialog" style={{ '--session-border': colors.panelBorder, '--session-field': colors.field, '--session-muted': colors.muted } as React.CSSProperties}>
                     <header>
                         <div>
                             <span>{t('profile.securityKicker')}</span>
-                            <h2>{t('profile.loginDevices')}</h2>
+                            <h2 id="session-dialog-title">{t('profile.loginDevices')}</h2>
                         </div>
                         <button type="button" onClick={() => void loadSessions()} disabled={loadingSessions} aria-label={t('rooms.refresh')}><Icon name="refresh" size={28}/></button>
                     </header>
+                    <button type="button" className="session-dialog-close" onClick={() => setDevicesOpen(false)}>{t('common.close')}</button>
                     <p>{t('profile.loginDevicesHelp')}</p>
                     <div
                         ref={sessionListRef}
@@ -344,6 +369,8 @@ export const ProfilePage: React.FC = () => {
                                 <div>
                                     <strong>{session.deviceLabel}</strong>
                                     <span>{t('profile.lastActive', { date: formatDate(session.lastUsedAt) })}</span>
+                                    <span>{t('profile.sessionCreated', { date: formatDate(session.createdAt) })}</span>
+                                    <span>{t('profile.sessionExpires', { date: formatDate(session.expiresAt) })}</span>
                                 </div>
                                 {session.current && <span className="session-current-badge">{t('profile.currentDevice')}</span>}
                                 <button type="button" className="session-revoke" disabled={sessionAction !== null} onClick={() => void revokeSession(session)}>
@@ -361,21 +388,7 @@ export const ProfilePage: React.FC = () => {
                         </button>
                     </footer>
                     </section>
-
-                    {/*
-                      * 탈퇴는 로그아웃 옆에 두지 않는다. 되돌릴 수 없는 것과 매일 누르는 것이
-                      * 나란히 있으면 언젠가 잘못 눌린다. 여기서는 문을 여는 것까지만 한다.
-                      */}
-                    <div
-                        className="profile-danger-zone"
-                        /* 옆 패널들과 같은 테두리·글자색을 쓴다. 여기만 밝으면 다크 모드에서 혼자 튄다. */
-                        style={{ '--profile-border': colors.panelBorder, '--profile-muted': colors.muted } as React.CSSProperties}
-                    >
-                        <span>{t('profile.dangerZone')}</span>
-                        <button type="button" onClick={() => setDeleting(true)}>{t('profile.deleteTitle')}</button>
-                    </div>
-                </div>
-            </section>
+            </div>}
             {deleting && (
                 <DeleteAccountDialog
                     onClose={() => setDeleting(false)}

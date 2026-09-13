@@ -167,7 +167,8 @@
       "RESULT_BACKLOG": "The server is still saving the last match's results. Try starting again in a moment."
     },
     "reconnecting": "Reconnecting to the game server…",
-    "resumeFailed": "This room connection could not be restored."
+    "resumeFailed": "This room connection could not be restored.",
+    "waitingNextMatch": "Waiting for the next match"
   },
   "result": {
     "title": "Match Results",
@@ -217,7 +218,7 @@
     "xpSurvival": "Survival",
     "xpLevel": "Lv.{{level}}",
     "invalidMatch": "The match result cannot be loaded because its identifier is invalid.",
-    "replayRetention": "This replay is kept for {{days}} days, or your {{count}} most recent matches."
+    "replayRetention": "Replays are kept for {{hours}} hours after the match."
   },
   "auth": {
     "login": "Log In",
@@ -285,7 +286,8 @@
     "agreeTerms": "I agree to the Terms of Service",
     "agreePrivacy": "I agree to the Privacy Policy",
     "readDocument": "Read",
-    "logout": "Log Out"
+    "logout": "Log Out",
+    "holdToRevealPassword": "Hold to show password"
   },
   "legal": {
     "document": "Legal document",
@@ -357,7 +359,10 @@
     "replayDownloadLabel": "Save the replay of the match on {{date}}",
     "replayGone": "This match’s replay is no longer kept.",
     "replayDownloadFailed": "Could not fetch the replay.",
-    "replayHint": "Replays are kept for {{days}} days, or your {{count}} most recent matches. Save the ones you want."
+    "replayHint": "Replays are kept for {{hours}} hours. Save the ones you want.",
+    "manageDevices": "Manage devices",
+    "sessionCreated": "Signed in: {{date}}",
+    "sessionExpires": "Expires: {{date}}"
   },
   "settings": {
     "title": "Settings",
@@ -389,6 +394,10 @@
       "privacy": "Privacy Policy",
       "privacyTitle": "How is my data used?",
       "openPrivacy": "Read the full policy",
+      "install": "Install app",
+      "installTitle": "Add to home screen",
+      "installAction": "Tap to install",
+      "installIos": "Use Share, then Add to Home Screen, to open it like an app.",
       "credits": "Credits"
     },
     "security": {
@@ -442,7 +451,11 @@
       "backupCodesOnlyOnce": "You cannot view these again after closing this screen. New codes replace every old one.",
       "codesCopied": "Backup codes copied.",
       "copyFailed": "Could not copy. Save them to a file instead.",
-      "codesSaved": "I saved them somewhere safe"
+      "codesSaved": "I saved them somewhere safe",
+      "totpExplanation": "swITch uses a 6-digit time-based (TOTP) code that changes every 30 seconds. Choose time-based in Google Authenticator or another authenticator. Counter-based (HOTP) codes are not supported. Set your phone’s date and time automatically.",
+      "scanQrHelp": "In your authenticator, choose Add account → Scan QR code, scan below, then enter the app’s 6-digit code.",
+      "qrLabel": "Authenticator enrollment QR code",
+      "manualSetup": "If you cannot scan, enter this setup key manually."
     },
     "sound": {
       "master": "Master volume",
@@ -637,7 +650,23 @@
     "settings": "Live settings",
     "exit": "Leave training",
     "respawn": "Respawn",
-    "closeSettings": "Close settings"
+    "closeSettings": "Close settings",
+    "minimap": "Minimap",
+    "minimapLabel": "Training map and your position",
+    "padHints": {
+      "dash": "Step here to equip Dash",
+      "flash": "Step here to equip Flash",
+      "exhaust": "Step here to equip Exhaust",
+      "tagger": "Step here to toggle the tagger role",
+      "reset": "Step here to reset cooldowns and effects",
+      "chaseMode": "Step here to switch between chasing and escaping"
+    },
+    "runner": "Runner",
+    "tagger": "Tagger",
+    "out": "Tagged",
+    "controls": "Controls",
+    "enlargeMap": "Enlarge map",
+    "shrinkMap": "Shrink map"
   },
   "guide": {
     "title": "How to Play",

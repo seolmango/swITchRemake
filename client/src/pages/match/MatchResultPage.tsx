@@ -247,7 +247,7 @@ export const MatchResultPage: React.FC = () => {
                             <span role="status" aria-live="polite" style={{ color: colors.muted }}>{message || t('result.returnNotice')}</span>
                             {retention && (
                                 <span className="result-retention-notice" style={{ color: colors.muted }}>
-                                    {t('result.replayRetention', { days: retention.replayDays, count: retention.replayPerUserMatches })}
+                                    {t('result.replayRetention', { hours: retention.replayHours })}
                                 </span>
                             )}
                         </div>
