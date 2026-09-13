@@ -12,3 +12,9 @@ e2e/artifacts/
 replays/
 server-game/replays/
 *.log
+*.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+__pycache__/
+*.pyc
