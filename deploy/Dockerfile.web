@@ -1,0 +1,23 @@
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+
+# Keep the complete workspace manifest graph available to npm's lockfile resolver.
+COPY package.json package-lock.json ./
+# shared's prepare lifecycle compiles its TypeScript during npm ci.
+COPY shared ./shared
+COPY client/package.json ./client/package.json
+COPY server-game/package.json ./server-game/package.json
+COPY server-gateway/package.json ./server-gateway/package.json
+COPY server-supervisor/package.json ./server-supervisor/package.json
+COPY server-match/package.json ./server-match/package.json
+RUN npm ci --no-audit --no-fund
+
+COPY . .
+RUN npm run build -w shared && npm run build -w client
+
+FROM nginx:1.28-alpine
+COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/client/dist /usr/share/nginx/html
+EXPOSE 80
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1

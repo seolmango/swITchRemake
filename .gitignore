@@ -11,3 +11,4 @@ dist-test/
 e2e/artifacts/
 replays/
 server-game/replays/
+*.log

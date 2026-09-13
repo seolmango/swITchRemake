@@ -28,7 +28,12 @@
     "e2e:cleanup": "node scripts/e2e-cleanup.cjs",
     "replay:keygen": "node scripts/replay-keygen.cjs",
     "audio:build": "node scripts/build-audio.cjs",
-    "icons:build": "node scripts/build-icons.cjs"
+    "icons:build": "node scripts/build-icons.cjs",
+    "internal:setup": "node scripts/setup-internal.cjs",
+    "internal:up": "docker compose --env-file .env.internal -f compose.internal.yml up -d --build",
+    "internal:down": "docker compose --env-file .env.internal -f compose.internal.yml down",
+    "internal:logs": "docker compose --env-file .env.internal -f compose.internal.yml logs -f --tail 100",
+    "internal:ps": "docker compose --env-file .env.internal -f compose.internal.yml ps"
   },
   "keywords": [],
   "author": "",

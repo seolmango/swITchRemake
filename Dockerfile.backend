@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1.7
+FROM node:24-bookworm-slim
+
+WORKDIR /app
+
+# Copy application inputs explicitly. Runtime secrets are supplied by Compose,
+# never copied from the repository root into the image.
+COPY package.json package-lock.json ./
+COPY shared ./shared
+COPY client/package.json ./client/package.json
+COPY server-match ./server-match
+COPY server-game ./server-game
+COPY server-gateway ./server-gateway
+COPY server-supervisor ./server-supervisor
+COPY scripts ./scripts
+
+RUN npm ci \
+    && node scripts/run-workspaces.cjs build shared server-match server-game server-gateway server-supervisor \
+    && npm cache clean --force \
+    && mkdir -p /app/replays \
+    && chown node:node /app/replays
+
+# The local launcher intentionally rebuilds on every launch. Containers already
+# contain built artifacts, so supervise those artifacts directly instead.
+COPY <<'EOF' /app/docker-cluster.cjs
+const { spawn } = require('node:child_process');
+const children = [];
+let stopping = false;
+const stop = (code) => {
+    if (stopping) return;
+    stopping = true;
+    for (const child of children) child.kill('SIGTERM');
+    const timeout = setTimeout(() => process.exit(code), 5000);
+    Promise.all(children.map(child => child.exitCode !== null ? Promise.resolve() : new Promise(resolve => child.once('exit', resolve))))
+        .then(() => { clearTimeout(timeout); process.exit(code); });
+};
+for (const path of ['server-gateway/dist/main.js', 'server-supervisor/dist/main.js']) {
+    const child = spawn(process.execPath, [path], { cwd: '/app', env: process.env, stdio: 'inherit' });
+    children.push(child);
+    child.once('error', error => { console.error(error); stop(1); });
+    child.once('exit', code => { if (!stopping) stop(code || 1); });
+}
+process.on('SIGTERM', () => stop(0));
+process.on('SIGINT', () => stop(0));
+EOF
+
+ENV NODE_ENV=production \
+    SWITCH_SKIP_ENV_FILE=true \
+    GAME_MAP_BUNDLE=/app/server-game/maps/server_maps.json \
+    REPLAY_LOCAL_DIR=/app/replays
+
+USER node
+CMD ["node", "server-match/dist/main.js"]

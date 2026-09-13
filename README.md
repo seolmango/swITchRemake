@@ -1,5 +1,11 @@
 # swITch
 
+## Docker 내부 테스트
+
+`npm run internal:setup` 후 `npm run internal:up`으로 전체 앱을 실행한다.
+기본 주소는 http://localhost:8080 이며 기존 개발 DB와 분리된다.
+다른 기기 접속과 HTTPS·메일 준비는 [내부 테스트 배포 안내](INTERNAL_TESTING.md)를 참고한다.
+
 ## 로컬에서 켜는 법
 
 최초 1회만 `.env`를 `.env.example` 보고 채워둘 것 (DB_*, REDIS_PASSWORD 등).
