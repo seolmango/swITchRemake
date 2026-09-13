@@ -5,68 +5,75 @@
     {
       "idx": 0,
       "version": "7",
+      "when": 1787443199999,
+      "tag": "0000_legacy_users_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
       "when": 1787443200000,
       "tag": "0000_session_management",
       "breakpoints": true
     },
     {
-      "idx": 1,
+      "idx": 2,
       "version": "7",
       "when": 1787446800000,
       "tag": "0001_match_results",
       "breakpoints": true
     },
     {
-      "idx": 2,
+      "idx": 3,
       "version": "7",
       "when": 1787625480877,
       "tag": "0002_rematch_per_room",
       "breakpoints": true
     },
     {
-      "idx": 3,
+      "idx": 4,
       "version": "7",
       "when": 1787829329633,
       "tag": "0003_admin_role",
       "breakpoints": true
     },
     {
-      "idx": 4,
+      "idx": 5,
       "version": "7",
       "when": 1787981565104,
       "tag": "0004_woozy_hedge_knight",
       "breakpoints": true
     },
     {
-      "idx": 5,
+      "idx": 6,
       "version": "7",
       "when": 1787983247586,
       "tag": "0005_square_red_shift",
       "breakpoints": true
     },
     {
-      "idx": 6,
+      "idx": 7,
       "version": "7",
       "when": 1788512400000,
       "tag": "0006_auth_security",
       "breakpoints": true
     },
     {
-      "idx": 7,
+      "idx": 8,
       "version": "7",
       "when": 1788595200000,
       "tag": "0007_privacy_retention_stats",
       "breakpoints": true
     },
     {
-      "idx": 8,
+      "idx": 9,
       "version": "7",
       "when": 1788681600000,
       "tag": "0008_admin_audit_append_only",
       "breakpoints": true
     },
     {
-      "idx": 9,
+      "idx": 10,
       "version": "7",
       "when": 1788685200000,
       "tag": "0009_two_factor_authentication",
