@@ -211,7 +211,7 @@ export interface LobbyStats {
 
 export interface LobbyPlayer {
     playerId: number;
-    /** 대기실 자리 번호(1..capacity). playerId와 다르다 — 자리를 옮겨도 playerId는 그대로다. */
+    /** 대기실 자리 번호(1..capacity). 자리를 옮기면 playerId도 같은 번호로 바뀐다. */
     slot: number;
     nickname: string;
     colorIndex: number;
@@ -246,6 +246,8 @@ export type AuthOkMessage = ServerEnvelope<'auth.ok', {
 }>;
 
 export type LobbyStateMessage = ServerEnvelope<'lobby.state', {
+    /** 수신자의 현재 번호. 자리 이동 후에도 자기 캐릭터와 권한을 식별한다. */
+    selfId?: number;
     hostId: number;
     /**
      * 방을 만든 사람이 붙인 이름.

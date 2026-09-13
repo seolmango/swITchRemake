@@ -31,7 +31,7 @@ function applyMapTimeline(world: World): void {
 
     for (const [x, y, physics] of changes) {
         const row = world.map.tiles[y];
-        if (!row || row[x] === undefined) continue;
+        if (!row || row[x] === undefined || row[x] === physics) continue;
         row[x] = physics;
         world.tileChanges.push({ x, y, physics });
     }

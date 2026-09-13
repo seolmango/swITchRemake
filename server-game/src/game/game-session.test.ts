@@ -299,7 +299,7 @@ test('방이 이미 끝났으면 늦게 끝난 세션이 결과를 다시 제출
     assert.equal(session.step(), null);
 });
 
-test('승자를 확정할 수 없는 경기만 정리하고 같은 프로세스의 다른 세션은 계속 진행한다', async () => {
+test('종료 콜백이 실패한 경기만 정리하고 같은 프로세스의 다른 세션은 계속 진행한다', async () => {
     const signals: ViolationSignal[] = [];
     let closed = 0;
     let replayAbortReason = '';
@@ -312,7 +312,7 @@ test('승자를 확정할 수 없는 경기만 정리하고 같은 프로세스�
         broadcastTagged: () => undefined,
         broadcastBlinked: () => undefined,
         broadcastSkillArea: () => undefined,
-        finishGame: () => true,
+        finishGame: () => { throw new Error('room finish failed'); },
         snapshotTargets: () => [],
         close: () => { closed += 1; },
     } as unknown as Room;

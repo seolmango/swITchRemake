@@ -86,11 +86,13 @@ test('accepts non-empty unique winner lists from one through eight players', () 
     assert.equal(isMatchResult(eightWinners), true);
 });
 
-test('rejects empty, duplicate, out-of-roster, and over-limit winner lists', () => {
+test('accepts a completed match with no survivors', () => {
     const empty = validResult();
     empty.winnerPlayerIds = [];
-    assert.equal(isMatchResult(empty), false);
+    assert.deepEqual(decodeMatchResult(JSON.stringify(empty)), empty);
+});
 
+test('rejects duplicate, out-of-roster, and over-limit winner lists', () => {
     const duplicate = validResult();
     duplicate.winnerPlayerIds = [1, 1];
     assert.equal(isMatchResult(duplicate), false);

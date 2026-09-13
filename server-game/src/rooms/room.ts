@@ -639,8 +639,7 @@ export class Room {
         if (this.state !== RoomState.Playing) return false;
         const currentPlayerIds = new Set(this.#startSnapshot?.players.map((player) => player.playerId) ?? []);
         const orderedWinnerIds = [...winnerIds].sort((a, b) => a - b);
-        if (orderedWinnerIds.length === 0
-            || new Set(orderedWinnerIds).size !== orderedWinnerIds.length
+        if (new Set(orderedWinnerIds).size !== orderedWinnerIds.length
             || orderedWinnerIds.some((playerId) => !currentPlayerIds.has(playerId))) {
             // 내부 호출 경계다. 잘못된 결과를 조용히 전송ㆍ저장하면 복구할 수 없으므로 즉시 드러낸다.
             throw new Error(`invalid winner ids for match ${this.matchId}: ${winnerIds.join(',')}`);
@@ -676,10 +675,13 @@ export class Room {
         this.#grantedMatchId = matchId;
     }
 
-    public reviveForTraining(playerId: number): boolean {
+    public reviveForTraining(playerId: number, reviveWorld: () => boolean = () => true): boolean {
         if (this.mode !== RoomMode.Training || this.state !== RoomState.Playing) return false;
         const member = this.#roster.getByPlayerId(playerId);
         if (member === null || !member.spectatorEligible) return false;
+        // Commit the roster only after the simulation accepts the respawn. A rejected
+        // attempt must remain retryable and must not announce a living spectator.
+        if (!reviveWorld()) return false;
         member.spectatorEligible = false;
         member.role = PlayerRole.Player;
         member.inCurrentGame = true;
@@ -855,9 +857,10 @@ export class Room {
             skills: [member.loadout],
             stats: member.stats,
         }));
-        this.#broadcast({
+        for (const member of this.#roster.members()) member.connection?.sendJson({
             type: 'lobby.state',
             payload: {
+                selfId: member.playerId,
                 hostId: this.#roster.hostId,
                 roomName: this.name,
                 mapId: this.#mapId,

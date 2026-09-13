@@ -186,6 +186,15 @@ test('자기장 inset이 tick에 정확히 비례한다', () => {
     assert.equal(world.storm!.x, 70, 'inset = tick * barrierSpeed여야 timeline과 어긋나지 않는다');
 });
 
+test('unchanged map timeline entries do not emit collapse changes', () => {
+    const world = makeWorld(mapFromRows([
+        '#####', '#.#.#', '#####',
+    ], { timeline: { 1: [[2, 1, 1]], 2: [[2, 1, 0]], 3: [[2, 1, 0]] } }), [makePlayer(1, 1, 1)]);
+    assert.deepEqual(stepWorld(world, []).world.tileChanges, []);
+    assert.deepEqual(stepWorld(world, []).world.tileChanges, [{ x: 2, y: 1, physics: 0 }]);
+    assert.deepEqual(stepWorld(world, []).world.tileChanges, []);
+});
+
 test('맵 timeline이 해당 tick에 적용된다', () => {
     const world = makeWorld(mapFromRows([
         '#####',

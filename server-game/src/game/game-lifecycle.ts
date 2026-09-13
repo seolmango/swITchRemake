@@ -73,7 +73,9 @@ export class GameLifecycle implements RoomLifecyclePort {
         const map = instantiateMap(this.#options.bundle, snapshot.mapId);
         // 훈련장은 자기장이 닫히지 않는다. barrierSpeed가 0이면 inset이 0으로 고정돼(storm.ts)
         // 자기장 사각형이 맵 전체가 되므로, 시뮬레이션을 고치지 않고 데이터만으로 꺼진다.
-        const trainingMap = snapshot.mode === RoomMode.Training ? { ...map, barrierSpeed: 0 } : map;
+        // The generated timeline also collapses tiles; stopping the storm alone
+        // leaves training walls disappearing and emits continuous collapse events.
+        const trainingMap = snapshot.mode === RoomMode.Training ? { ...map, barrierSpeed: 0, timeline: {} } : map;
         const seed = this.#options.makeSeed?.(snapshot) ?? Date.now();
         const players = this.#placePlayers(snapshot, map.tileSize, map.cols);
         const trainingGround = snapshot.mode === RoomMode.Training

@@ -194,7 +194,6 @@ test('재경기는 매칭 서버가 발급한 다음 경기 id로만 시작한�
 test('경기 종료 메시지는 한 명 승자를 그대로 보내고 승자 계약을 경계에서 검증한다', async () => {
     const { context, c2 } = await playingRoom();
 
-    assert.throws(() => context.room.finishGame([]), /invalid winner ids/);
     assert.throws(() => context.room.finishGame([1, 1]), /invalid winner ids/);
     assert.throws(() => context.room.finishGame([9]), /invalid winner ids/);
     assert.equal(context.room.state, RoomState.Playing, '잘못된 결과로 방 상태를 바꾸면 안 된다');
@@ -202,6 +201,15 @@ test('경기 종료 메시지는 한 명 승자를 그대로 보내고 승자 �
     assert.equal(context.room.finishGame([1]), true);
     const ended = c2.messages.find((message) => message.type === 'game.ended');
     assert.deepEqual(ended?.payload.winnerIds, [1]);
+});
+
+test('모두 탈락한 경기도 승자 없이 종료하고 결과 화면으로 보낸다', async () => {
+    const { context, c2 } = await playingRoom();
+    assert.equal(context.room.finishGame([]), true);
+    assert.equal(context.room.state, RoomState.PostGame);
+    const ended = c2.messages.find((message) => message.type === 'game.ended');
+    assert.deepEqual(ended?.payload.winnerIds, []);
+    assert.equal(ended?.payload.matchId, context.room.matchId);
 });
 
 test('좌표를 싣는 연출은 시전자를 보는 사람에게만 간다', async () => {
@@ -350,6 +358,11 @@ test('훈련장 부활은 관전자를 다시 플레이어로 돌린다', () => 
     const member = context.room.memberByUser(2)!;
     assert.equal(member.spectatorEligible, true);
 
+    let simulatedRespawns = 0;
+    assert.equal(context.room.reviveForTraining(2, () => { simulatedRespawns++; return false; }), false);
+    assert.equal(member.spectatorEligible, true, 'failed simulation respawn must stay retryable');
+    assert.equal(member.role, PlayerRole.Spectator);
+    assert.equal(simulatedRespawns, 1);
     assert.equal(context.room.reviveForTraining(2), true);
     assert.equal(member.spectatorEligible, false);
     assert.equal(member.role, PlayerRole.Player);

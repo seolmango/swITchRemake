@@ -71,6 +71,31 @@ function fakeRoom(): Room {
     } as unknown as Room;
 }
 
+test('training disables generated collapse timelines as well as storm movement', () => {
+    const trainingBundle: ServerMapBundle = {
+        ...bundle,
+        maps: { ...bundle.maps, map: {
+            ...bundle.maps.map!,
+            timeline: { 1: [[0, 0, TilePhysics.Wall]], 2: [[0, 0, TilePhysics.Floor]] },
+        } },
+    };
+    const lifecycle = new GameLifecycle({
+        bundle: trainingBundle, serverId: 'game', buildId: 'test', scheduler: new Scheduler(),
+        lookupRoom: () => fakeRoom(), violationSink: () => undefined, makeSeed: () => 1,
+    });
+    lifecycle.startGame({
+        roomId: 'room', matchId: 'training', mapId: 'map', mode: RoomMode.Training,
+        players: [{ playerId: 1 }], rules: {},
+    });
+    const session = lifecycle.session('room')!;
+    for (let tick = 0; tick < 30; tick++) {
+        const frame = session.step()!;
+        assert.equal(frame.world.map.tiles[0]![0], TilePhysics.Floor);
+        assert.deepEqual(frame.world.tileChanges, []);
+        assert.equal(frame.world.storm!.x, 0);
+    }
+});
+
 test('selected loadouts enter PlayerState and a missing recovered value falls back to dash', () => {
     const room = fakeRoom();
     const lifecycle = new GameLifecycle({

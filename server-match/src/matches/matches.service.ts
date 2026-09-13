@@ -122,8 +122,9 @@ export class MatchesService {
             }];
         });
         const winnerIds = players.filter((player) => player.isWinner).map((player) => player.playerId);
-        if (winnerIds.length === 0) {
-            throw new InternalServerErrorException({ code: 'MATCH_RESULT_INCOMPLETE', message: 'Recorded match has no winner' });
+        // Everyone may be eliminated or disconnect together; an empty winner list is a valid outcome.
+        if (players.length === 0) {
+            throw new InternalServerErrorException({ code: 'MATCH_RESULT_INCOMPLETE', message: 'Recorded match has no participants' });
         }
 
         return {

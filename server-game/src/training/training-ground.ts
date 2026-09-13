@@ -1,4 +1,5 @@
 import {
+    EffectType,
     MAX_PLAYERS_PER_ROOM,
     MapMarkerKind,
     MapZoneKind,
@@ -453,7 +454,10 @@ export class TrainingGround {
         this.#chaseActive = true;
         if (this.#chaseMode === ChaseMode.PlayerHunts) {
             // 내가 술래다. 표적은 코스를 돌고 나는 쫓는다.
-            for (const player of world.players) player.isTagger = false;
+            for (const player of world.players) {
+                player.isTagger = false;
+                delete player.effects[EffectType.Frenzy];
+            }
             const self = inside[0]!;
             self.isTagger = true;
             grantTaggerFrenzy(world, self);
@@ -467,7 +471,10 @@ export class TrainingGround {
                 const distance = Math.hypot(candidate.player.x - self.x, candidate.player.y - self.y);
                 if (distance < best) { best = distance; nearest = candidate; }
             }
-            for (const player of world.players) player.isTagger = false;
+            for (const player of world.players) {
+                player.isTagger = false;
+                delete player.effects[EffectType.Frenzy];
+            }
             if (nearest !== null) {
                 nearest.player.isTagger = true;
                 grantTaggerFrenzy(world, nearest.player);
@@ -478,6 +485,12 @@ export class TrainingGround {
 
     /** 표적을 집으로 돌려보내고 술래 역할을 지운다. */
     #resetChase(world: World): void {
+        if (this.#chaseActive) {
+            for (const player of world.players) {
+                player.isTagger = false;
+                delete player.effects[EffectType.Frenzy];
+            }
+        }
         this.#chaseActive = false;
         for (const state of this.#states) {
             if (state.kind !== 'chase') continue;
@@ -616,7 +629,10 @@ export class TrainingGround {
                 // 술래를 벗을 때 아무도 술래가 아닌 상태가 된다. 훈련장은 그래도 된다 —
                 // 경기가 아니라 실험실이고, 술래 없는 상태의 움직임도 볼 수 있어야 한다.
                 const becoming = !player.isTagger;
-                for (const other of world.players) other.isTagger = false;
+                for (const other of world.players) {
+                    other.isTagger = false;
+                    delete other.effects[EffectType.Frenzy];
+                }
                 player.isTagger = becoming;
                 if (becoming) grantTaggerFrenzy(world, player);
                 world.taggerChangedAtTick = world.tick;
@@ -643,7 +659,23 @@ export class TrainingGround {
     public respawn(world: World, playerId: number): boolean {
         const player = world.players.find((p) => p.playerId === playerId);
         if (player === undefined || this.isDummy(playerId) || player.alive) return false;
-        const [x, y] = tileCenter(world.map, nearestWalkable(world.map, desiredTile(world.map, [0.5, 0.62])));
+        const safeTiles: TilePoint[] = [];
+        for (let y = 0; y < world.map.rows; y++) for (let x = 0; x < world.map.cols; x++) {
+            if (world.map.tiles[y]?.[x] !== TilePhysics.Floor) continue;
+            const [px, py] = tileCenter(world.map, [x, y]);
+            if (world.map.zones.some((zone) => zone.kind === MapZoneKind.TrainingChase && insideZone(zone, world.map.tileSize, px, py))) continue;
+            if (this.pads.some((pad) => Math.hypot(pad.x - px, pad.y - py) <= pad.radius + player.radius)) continue;
+            if (world.players.some((other) => other !== player && other.alive && Math.hypot(other.x - px, other.y - py) <= other.radius + player.radius)) continue;
+            if (!isPositionFree(world.map, px, py, player.radius, stormRect(world))) continue;
+            safeTiles.push([x, y]);
+        }
+        const center = desiredTile(world.map, [0.5, 0.5]);
+        safeTiles.sort((a, b) => Math.abs(a[0] - center[0]) + Math.abs(a[1] - center[1]) - Math.abs(b[0] - center[0]) - Math.abs(b[1] - center[1]));
+        const safeTile = safeTiles[0];
+        if (!safeTile) return false;
+        this.#resetChase(world);
+        this.#standingOn.delete(playerId);
+        const [x, y] = tileCenter(world.map, safeTile);
         player.x = x;
         player.y = y;
         player.vx = 0;

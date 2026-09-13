@@ -166,6 +166,7 @@ test('술래 패드는 술래를 씌우고 다시 밟으면 벗긴다', () => {
     step(0, 0);          // 패드에서 내려온다
     step(pad.x, pad.y);  // 다시 밟는다
     assert.equal(human.isTagger, false, '두 번째로 밟았는데 안 벗겨졌다');
+    assert.equal(human.effects[EffectType.Frenzy], undefined, 'runner role must not retain tagger frenzy');
 });
 
 test('표적은 패드를 밟아도 아무 일이 없다', () => {
@@ -191,6 +192,37 @@ test('훈련장에서는 죽어도 다시 시작할 수 있다', () => {
     assert.equal(human.stats.eliminatedAtTick, null);
     assert.equal(ground.respawn(world, human.playerId), false, '살아 있는데 또 살아났다');
     assert.equal(ground.respawn(world, ground.players[0]!.playerId), false, '표적이 부활 요청으로 살아났다');
+});
+
+test('부활 후 같은 패드를 다시 밟을 수 있다', () => {
+    const { world, ground } = setup(OPEN_MAP, true);
+    const human = world.players.find((p) => !ground.isDummy(p.playerId))!;
+    const pad = ground.pads.find((p) => p.kind === TrainingPadKind.Tagger)!;
+    human.x = pad.x; human.y = pad.y;
+    ground.afterStep(world);
+    human.alive = false;
+    assert.equal(ground.respawn(world, human.playerId), true);
+    human.x = pad.x; human.y = pad.y;
+    ground.afterStep(world);
+    assert.equal(human.isTagger, true, 'a stale pad latch must not swallow the first post-respawn entry');
+});
+
+test('도망 연습에서 죽어도 부활 지점은 추격 구역 밖이고 다시 잡히지 않는다', () => {
+    const { world, ground } = setup(OPEN_MAP, true);
+    const human = world.players.find((p) => !ground.isDummy(p.playerId))!;
+    const pad = ground.pads.find((p) => p.kind === TrainingPadKind.ChaseMode)!;
+    human.x = pad.x; human.y = pad.y;
+    ground.afterStep(world);
+    assert.equal(ground.chaseMode, 'flee');
+    human.y = world.map.tileSize * 14.5;
+    human.x = world.map.tileSize * 12;
+    ground.resolveInputs(world);
+    human.alive = false;
+    assert.equal(ground.respawn(world, human.playerId), true);
+    assert.ok(human.y < world.map.tileSize * 11, 'respawn must not reactivate the chase zone');
+    for (let tick = 0; tick < 180; tick++) stepTraining(world, ground, [neutral(human.playerId)]);
+    assert.equal(human.alive, true);
+    assert.equal(human.isTagger, false);
 });
 
 function zonedTraining() {
@@ -237,6 +269,7 @@ test('구역을 나가면 추격 표적이 제자리로 돌아가고 술래가 �
     stepTraining(world, ground, [neutral(human.playerId)]);
     assert.deepEqual({ x: dummy.x, y: dummy.y }, home, '표적이 집으로 안 돌아갔다');
     assert.equal(dummy.isTagger, false);
+    assert.equal(human.isTagger, false, 'leaving the chase zone also clears the human tagger role');
 });
 
 test('모드 패드를 밟으면 역할이 뒤집혀 표적이 술래가 된다', () => {

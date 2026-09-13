@@ -228,7 +228,7 @@ test('경기 중 새 참가자의 관전 요청은 서버가 자격 없음으로
     assert.equal(fixture.manager.get('room')?.memberByUser(4), null, '다음 경기를 기다리는 사람은 방을 나갈 수 있어야 한다');
 });
 
-test('lobby.setSlot changes the roster slot and rejects invalid waiting-room moves', () => {
+test('lobby.setSlot changes the roster slot and rejects invalid waiting-room moves', async () => {
     const fixture = managerFixture();
     fixture.owner.messages.length = 0;
 
@@ -236,7 +236,13 @@ test('lobby.setSlot changes the roster slot and rejects invalid waiting-room mov
     assert.equal(fixture.manager.get('room')?.memberByUser(1)?.slot, 2);
     const state = fixture.owner.messages.at(-1);
     assert.equal(state?.type, 'lobby.state');
-    if (state?.type === 'lobby.state') assert.equal(state.payload.players[0]?.slot, 2);
+    if (state?.type === 'lobby.state') {
+        assert.equal(state.payload.players[0]?.slot, 2);
+        assert.equal(state.payload.selfId, 2);
+        assert.equal(state.payload.hostId, 2, 'moving the host preserves host identity');
+    }
+    assert.equal(fixture.manager.get('room')?.setLocked(1, true), null);
+    assert.equal(fixture.manager.get('room')?.setLocked(1, false), null);
 
     fixture.manager.onJson(fixture.owner, slotMessage(9));
     assert.equal(errorCode(fixture.owner), ErrorCode.InvalidPayload);
@@ -246,8 +252,43 @@ test('lobby.setSlot changes the roster slot and rejects invalid waiting-room mov
     const admission = fixture.manager.admitReservation(reservation)!;
     const peer = new FakeConnection(2, 2, 'p2', 'room', admission.playerId);
     fixture.manager.onConnect(peer);
+    await Promise.resolve();
+    const peerState = peer.messages.slice().reverse().find((message) => message.type === 'lobby.state');
+    const ownerState = fixture.owner.messages.slice().reverse().find((message) => message.type === 'lobby.state');
+    assert.equal(peerState?.payload.selfId, 1, 'the peer receives their own newly allocated slot');
+    assert.equal(peerState?.payload.hostId, 2);
+    assert.equal(ownerState?.payload.selfId, 2, 'broadcasting to a peer does not overwrite host selfId');
     fixture.manager.onJson(fixture.owner, slotMessage(1));
     assert.equal(errorCode(fixture.owner), ErrorCode.BadState);
+});
+
+test('slot changes preserve gameplay identity and reconnect admission', async () => {
+    const fixture = managerFixture();
+    fixture.manager.onJson(fixture.owner, slotMessage(2));
+    assert.equal(fixture.owner.playerId, 1, 'the connection retains its original admission id');
+    startFixtureGame(fixture);
+    fixture.manager.onInput(fixture.owner, encodeInput({
+        sequence: 1, left: true, right: false, up: false, down: false, heldActions: 0,
+    }));
+    assert.equal(fixture.manager.get('room')?.resolvedInputs()[0]?.playerId, 2);
+    fixture.manager.onJson(fixture.owner, {
+        v: JSON_MESSAGE_VERSION, type: 'game.emoji', requestId: 2, payload: { emojiId: 8 },
+    });
+    assert.deepEqual(fixture.emojis, [{ playerId: 2, emojiId: 8 }]);
+
+    fixture.manager.onDisconnect(fixture.owner, 'network');
+    const reservation = seat(1, true);
+    assert.equal(fixture.manager.reserveResume(reservation).ok, true);
+    const admission = fixture.manager.admitReservation(reservation)!;
+    assert.equal(admission.playerId, 2);
+    const resumed = new FakeConnection(4, 1, 'p1', 'room', admission.playerId, true);
+    fixture.manager.onConnect(resumed);
+    await Promise.resolve();
+    assert.equal(fixture.manager.get('room')?.memberByUser(1)?.connection?.id, 4);
+    assert.equal(fixture.manager.get('room')?.snapshotTargets().find((target) => target.connection.id === 4)?.playerId, 2);
+    const resumedState = resumed.messages.slice().reverse().find((message) => message.type === 'lobby.state');
+    assert.equal(resumedState?.payload.selfId, 2);
+    assert.equal(resumedState?.payload.hostId, 2);
 });
 
 test('lobby.setSlot rejects requests once the room has started', () => {

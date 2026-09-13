@@ -391,8 +391,8 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 // 명단과 시뮬레이션을 함께 되돌린다. 한쪽만 하면 화면에는 살아 있는데 입력이
                 // 관전자 것으로 버려져서 움직이지 않는다.
                 if (member === null
-                    || !room.reviveForTraining(member.playerId)
-                    || !this.#options.respawnSink?.(room.id, member.playerId)) {
+                    || !room.reviveForTraining(member.playerId,
+                        () => this.#options.respawnSink?.(room.id, member.playerId) === true)) {
                     error = ErrorCode.BadState;
                     break;
                 }

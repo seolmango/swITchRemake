@@ -412,7 +412,7 @@ export class GameSession implements SchedulerTarget {
 
     /**
      * shared 결과 계약을 서버가 확정하는 지점이다. 권위 world의 실제 경기 참가자 중 생존자만
-     * 고르고, 중복을 제거한 뒤 playerId 오름차순으로 고정한다. 따라서 반환값은 비어 있지 않고,
+     * 고르고, 중복을 제거한 뒤 playerId 오름차순으로 고정한다. 전원 탈락하면 빈 배열이며,
      * 중복이 없으며, 결과 `players`에도 들어가는 slot만 담는다.
      */
     #confirmedWinnerIds(): readonly number[] {
@@ -420,9 +420,6 @@ export class GameSession implements SchedulerTarget {
             .filter((player) => player.alive && this.#identities.has(player.playerId))
             .map((player) => player.playerId))]
             .sort((a, b) => a - b);
-        if (winners.length === 0) {
-            throw new Error(`match ${this.matchId} finished without a surviving participant`);
-        }
         return Object.freeze(winners);
     }
 

@@ -313,3 +313,22 @@ test('로스터 밖 world 액터는 결과와 전적 행에 들어가지 않는�
     assert.deepEqual(result.players.map((player) => player.playerId), [1, 2, 3]);
     assert.deepEqual(result.winnerPlayerIds, [1, 2]);
 });
+
+
+test('no surviving participants still publishes a complete result and ends the room', async () => {
+    const world = makeWorld(mapFromRows(MAP), [1, 2, 3].map((id) => makePlayer(id, id, 1, { alive: false })));
+    let announced: readonly number[] | null = null;
+    const room = { ...fakeRoom(), finishGame: (ids: readonly number[]) => { announced = ids; return true; } } as unknown as Room;
+    const result = await new Promise<MatchResultMessage>((resolve, reject) => {
+        const session = new GameSession({
+            room, world, matchId: 'no-survivors', mode: RoomMode.Match, roster: [],
+            violationSink: (signal) => reject(new Error(JSON.stringify(signal))),
+            meta: { serverId: 'game', buildId: 'test', mapId: 'testmap', mapBundleHash: 'hash' },
+            onFinished: (_session, finished) => resolve(finished),
+        });
+        session.step();
+    });
+    assert.deepEqual(announced, []);
+    assert.deepEqual(result.winnerPlayerIds, []);
+    assert.equal(result.players.length, 3);
+});

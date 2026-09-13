@@ -125,8 +125,7 @@ export class ResultService {
             if (!match) return 'invalid';
             if (match.resultRecordedAt) return 'duplicate';
             if ((match.roomId !== null && match.roomId !== result.roomId)
-                || match.serverId !== result.serverId
-                || match.mapId !== result.mapId) {
+                || match.serverId !== result.serverId) {
                 return 'invalid';
             }
 
@@ -137,6 +136,8 @@ export class ResultService {
             const committedAt = new Date();
             const updated = await tx.update(schema.matches).set({
                 roomId: result.roomId,
+                // The host may change maps after assignment; the authorized game server reports the played map.
+                mapId: result.mapId,
                 startedAt: new Date(result.startedAt),
                 endedAt: new Date(result.endedAt),
                 durationTicks: result.durationTicks,

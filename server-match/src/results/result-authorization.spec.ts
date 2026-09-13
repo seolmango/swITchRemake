@@ -74,7 +74,7 @@ test('같은 room/server의 과거 경기가 있어도 선발급되지 않은 ma
     assert.equal(inserted, false);
 });
 
-test('records exactly one winner in participant rows', async () => {
+for (const initialMap of ['map', 'previous-lobby-map']) test(`records winner and played map after assignment on ${initialMap}`, async () => {
     const singleWinner = structuredClone(result);
     singleWinner.winnerPlayerIds = [1];
     singleWinner.players = singleWinner.players.map((player, index) => ({
@@ -92,6 +92,7 @@ test('records exactly one winner in participant rows', async () => {
     }));
     let selectCount = 0;
     let participantRows: Array<Record<string, unknown>> = [];
+    let storedMatch: Record<string, unknown> = {};
     const tx = {
         select: () => {
             const call = selectCount++;
@@ -100,16 +101,17 @@ test('records exactly one winner in participant rows', async () => {
                     matchId: singleWinner.matchId,
                     roomId: singleWinner.roomId,
                     serverId: singleWinner.serverId,
-                    mapId: singleWinner.mapId,
+                    mapId: initialMap,
                     resultRecordedAt: null,
                 }] }) }) };
             }
             return { from: () => ({ where: async () => assignments }) };
         },
         update: () => ({
-            set: () => ({
-                where: () => ({ returning: async () => [{ matchId: singleWinner.matchId }] }),
-            }),
+            set: (values: Record<string, unknown>) => {
+                storedMatch = values;
+                return { where: () => ({ returning: async () => [{ matchId: singleWinner.matchId }] }) };
+            },
         }),
         insert: () => ({
             values: async (rows: Array<Record<string, unknown>>) => { participantRows = rows; },
@@ -119,8 +121,20 @@ test('records exactly one winner in participant rows', async () => {
     const service = new ResultService(db as never);
 
     assert.equal(await service.record(singleWinner), 'stored');
+    assert.equal(storedMatch['mapId'], singleWinner.mapId);
     assert.deepEqual(
         participantRows.map((player) => ({ playerId: player['playerId'], isWinner: player['isWinner'] })),
         [{ playerId: 1, isWinner: true }, { playerId: 2, isWinner: false }],
     );
 });
+
+for (const mismatch of [{ roomId: 'another-room' }, { serverId: 'another-server' }]) {
+    test('a map change never bypasses room/server authorization ' + JSON.stringify(mismatch), async () => {
+        const tx = {
+            select: () => ({ from: () => ({ where: () => ({ for: async () => [{ ...result, ...mismatch, mapId: 'old-map', resultRecordedAt: null }] }) }) }),
+            update: () => { throw new Error('unauthorized result must not be written'); },
+        };
+        const service = new ResultService({ transaction: async (run: (value: typeof tx) => unknown) => run(tx) } as never);
+        assert.equal(await service.record(result), 'invalid');
+    });
+}

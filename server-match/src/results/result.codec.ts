@@ -52,7 +52,6 @@ export function isMatchResult(value: unknown): value is MatchResultMessage {
         || value.players.length === 0
         || value.players.length > RESULT_SANITY.MAX_PLAYERS
         || !Array.isArray(value.winnerPlayerIds)
-        || value.winnerPlayerIds.length === 0
         || value.winnerPlayerIds.length > RESULT_SANITY.MAX_PLAYERS
         || !value.winnerPlayerIds.every(nonNegativeInteger)
         || !isReplay(value.replay)) {

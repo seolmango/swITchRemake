@@ -152,3 +152,14 @@ test('controller maps a pending result to HTTP 202', async () => {
     assert.deepEqual(result, { status: 'pending', retryAfterMs: 500 });
     assert.deepEqual(statuses, [202]);
 });
+
+
+test('returns completed no-survivor results without treating them as incomplete', async () => {
+    const rows = completedRows().map((row) => ({ ...row, isWinner: false }));
+    const service = new MatchesService(database(rows, { nickname: 'Account', isGuest: false }, { stats: { xp: 0 } }) as never);
+    const result = await service.getResult(MATCH_ID, 7);
+    assert.ok(!('status' in result));
+    assert.deepEqual(result.winners, []);
+    assert.equal(result.players.length, 2);
+    assert.equal(result.reward?.breakdown.win, 0);
+});
