@@ -3,8 +3,8 @@
  * 이 상수도 같이 올린다. 클라이언트가 임의로 보낸 값은 이 값과 정확히 같아야 한다.
  */
 export const LEGAL_DOCUMENT_VERSIONS = Object.freeze({
-    termsVersion: '1.0 (초안)',
-    privacyVersion: '1.0 (초안)',
+    termsVersion: '1.0',
+    privacyVersion: '1.0',
 });
 
 export type LegalDocumentVersions = typeof LEGAL_DOCUMENT_VERSIONS;

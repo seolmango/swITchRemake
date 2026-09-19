@@ -43,18 +43,20 @@ test.describe('가입 · 로그인 · 로그아웃', () => {
         await readButtons.nth(0).click();
         const terms = page.getByRole('dialog', { name: T.legal.termsOfService });
         await expect(terms).toContainText('제1조 (목적)');
-        await expect(terms).toContainText('zero2inf.zip@gmail.com');
+        await expect(terms).toContainText('seolchaehwan70@gmail.com');
         await button(page, T.legal.close).click();
 
         await readButtons.nth(1).click();
         const privacy = page.getByRole('dialog', { name: T.legal.privacyPolicy });
-        await expect(privacy).toContainText('무엇을 모으고, 왜 모으는가');
-        await expect(privacy).toContainText('zero2inf.zip@gmail.com');
+        await expect(privacy).toContainText('개인정보 처리 목적, 항목 및 근거');
+        await expect(privacy).toContainText('seolchaehwan70@gmail.com');
         await button(page, T.legal.close).click();
 
         await page.getByRole('checkbox', { name: T.auth.agreeTerms, exact: true }).click();
         await expect(signup).toBeDisabled();
         await page.getByRole('checkbox', { name: T.auth.agreePrivacy, exact: true }).click();
+        await expect(signup).toBeDisabled();
+        await page.getByRole('checkbox', { name: T.auth.confirmAge, exact: true }).click();
         await expect(signup).toBeEnabled();
         await signup.click();
         await page.waitForURL('**/login');
@@ -87,6 +89,7 @@ test.describe('가입 · 로그인 · 로그아웃', () => {
         await page.getByLabel(T.auth.password).fill(duplicate.password);
         await page.getByRole('checkbox', { name: T.auth.agreeTerms, exact: true }).click();
         await page.getByRole('checkbox', { name: T.auth.agreePrivacy, exact: true }).click();
+        await page.getByRole('checkbox', { name: T.auth.confirmAge, exact: true }).click();
         await button(page, T.auth.signup).click();
         await expect(page.getByText(T.auth.duplicateAccount)).toBeVisible();
 

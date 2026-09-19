@@ -43,6 +43,7 @@ export const sendVerification = (email: string, vtype: VerificationType, humanPr
     });
 
 export interface RegistrationRequest {
+    isOver14: true;
     email: string;
     password: string;
     nickname: string;

@@ -9,6 +9,7 @@ import { ConflictException } from '@nestjs/common';
 import { UserService } from './user.service';
 
 const valid = {
+    isOver14: true,
     email: 'user@example.com',
     password: 'Password1!',
     nickname: '사용자',
@@ -32,6 +33,13 @@ test('가입 DTO는 두 문서의 동의 시각과 버전을 각각 요구한다
         ...valid,
         agreements: { ...valid.agreements, privacyPolicy: undefined },
     }))).length > 0);
+});
+
+test('가입 DTO는 만 14세 이상이라는 명시적 확인을 요구한다', async () => {
+    for (const isOver14 of [false, undefined]) {
+        const errors = await validate(plainToInstance(CreateUserDto, { ...valid, isOver14 }));
+        assert.ok(errors.some((error) => error.property === 'isOver14'));
+    }
 });
 
 test('클라이언트가 동의 시각을 날짜가 아닌 값으로 보내면 가입 경계에서 거절한다', async () => {

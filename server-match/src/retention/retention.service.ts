@@ -87,18 +87,25 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
         try {
             const marked = await this.markExpiredReplays(now);
             const replayResult = await this.deleteReplayFiles();
+            const moderationCasesDeleted = await this.deleteExpiredModerationCases(now);
             const matchesDeleted = await this.deleteExpiredMatches(now);
             const sessionsDeleted = await this.deleteExpiredSessions(now);
+            const authSecurityEventsDeleted = await this.deleteExpiredAuthSecurityEvents(now);
             const auditIpsScrubbed = await this.scrubExpiredAuditIps(now);
             const auditLogsDeleted = await this.deleteExpiredAuditLogs(now);
             const sanctionHmacsDeleted = await this.deleteExpiredSanctionEmailHmacs(now);
+            const sanctionsDeleted = await this.deleteExpiredSanctions(now);
             if (marked > 0 || replayResult.attempted > 0 || matchesDeleted > 0 || sessionsDeleted > 0
-                || auditIpsScrubbed > 0 || auditLogsDeleted > 0 || sanctionHmacsDeleted > 0) {
+                || moderationCasesDeleted > 0 || authSecurityEventsDeleted > 0
+                || auditIpsScrubbed > 0 || auditLogsDeleted > 0 || sanctionHmacsDeleted > 0
+                || sanctionsDeleted > 0) {
                 this.logger.log(
                     `Retention marked=${marked} replayDeleted=${replayResult.deleted} `
                     + `replayFailed=${replayResult.attempted - replayResult.deleted} matchesDeleted=${matchesDeleted} `
-                    + `sessionsDeleted=${sessionsDeleted} auditIpsScrubbed=${auditIpsScrubbed} `
-                    + `auditLogsDeleted=${auditLogsDeleted} sanctionHmacsDeleted=${sanctionHmacsDeleted}`,
+                    + `moderationCasesDeleted=${moderationCasesDeleted} sessionsDeleted=${sessionsDeleted} `
+                    + `authSecurityEventsDeleted=${authSecurityEventsDeleted} auditIpsScrubbed=${auditIpsScrubbed} `
+                    + `auditLogsDeleted=${auditLogsDeleted} sanctionHmacsDeleted=${sanctionHmacsDeleted} `
+                    + `sanctionsDeleted=${sanctionsDeleted}`,
                 );
             }
         } finally {
@@ -116,7 +123,11 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
 
     private async markExpiredReplays(now: Date): Promise<number> {
         const rows = await this.db.execute<IdRow>(sql`
-            WITH candidates AS (
+            WITH released_holds AS (
+                DELETE FROM replay_holds
+                WHERE released_at IS NOT NULL
+                RETURNING replay_id
+            ), candidates AS (
                 SELECT replay.id
                 FROM replays replay
                 INNER JOIN matches match ON match.match_id = replay.match_id
@@ -244,7 +255,6 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
                       SELECT 1
                       FROM moderation_cases moderation_case
                       WHERE moderation_case.match_id = match.match_id
-                        AND moderation_case.status <> 'CLOSED'
                   )
                   AND NOT EXISTS (
                       SELECT 1
@@ -259,6 +269,51 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
             USING candidates candidate
             WHERE match.match_id = candidate.match_id
             RETURNING match.match_id AS id
+        `);
+        return rows.length;
+    }
+
+    /** 종결된 신고 사건과 신고 내용을 지우면 다음 단계에서 그 경기 증거도 일반 정리 대상이 된다. */
+    private async deleteExpiredModerationCases(now: Date): Promise<number> {
+        const rows = await this.db.execute<IdRow>(sql`
+            WITH candidates AS (
+                SELECT moderation_case.id
+                FROM moderation_cases moderation_case
+                WHERE moderation_case.status = 'CLOSED'
+                  AND moderation_case.updated_at
+                      < ${daysAgo(now, this.settings.moderationCaseDays)}::timestamptz
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM replay_holds hold
+                      WHERE hold.case_id = moderation_case.id
+                  )
+                ORDER BY moderation_case.updated_at, moderation_case.id
+                LIMIT 200
+                FOR UPDATE OF moderation_case SKIP LOCKED
+            )
+            DELETE FROM moderation_cases moderation_case
+            USING candidates candidate
+            WHERE moderation_case.id = candidate.id
+            RETURNING moderation_case.id
+        `);
+        return rows.length;
+    }
+
+    private async deleteExpiredAuthSecurityEvents(now: Date): Promise<number> {
+        const rows = await this.db.execute<IdRow>(sql`
+            WITH candidates AS (
+                SELECT security_event.id
+                FROM auth_security_events security_event
+                WHERE security_event.created_at
+                    < ${daysAgo(now, this.settings.authSecurityEventDays)}::timestamptz
+                ORDER BY security_event.created_at, security_event.id
+                LIMIT 500
+                FOR UPDATE OF security_event SKIP LOCKED
+            )
+            DELETE FROM auth_security_events security_event
+            USING candidates candidate
+            WHERE security_event.id = candidate.id
+            RETURNING security_event.id
         `);
         return rows.length;
     }
@@ -328,6 +383,49 @@ export class RetentionService implements OnModuleInit, OnModuleDestroy {
             UPDATE sanctions sanction
             SET email_hmac = NULL
             FROM candidates candidate
+            WHERE sanction.id = candidate.id
+            RETURNING sanction.id
+        `);
+        return rows.length;
+    }
+
+    /** 영구 BAN은 남기고, 끝난 제재·경고는 약속한 이력 보관 기간 뒤 지운다. */
+    private async deleteExpiredSanctions(now: Date): Promise<number> {
+        const cutoff = daysAgo(now, this.settings.sanctionDays);
+        const rows = await this.db.execute<IdRow>(sql`
+            WITH candidates AS (
+                SELECT sanction.id
+                FROM sanctions sanction
+                WHERE (
+                    sanction.type = 'WARN'
+                    AND sanction.created_at < ${cutoff}::timestamptz
+                    AND NOT EXISTS (
+                        SELECT 1 FROM sanction_revocations revocation
+                        WHERE revocation.sanction_id = sanction.id
+                    )
+                ) OR (
+                    sanction.expires_at IS NOT NULL
+                    AND sanction.expires_at < ${cutoff}::timestamptz
+                    AND NOT EXISTS (
+                        SELECT 1 FROM sanction_revocations revocation
+                        WHERE revocation.sanction_id = sanction.id
+                    )
+                ) OR EXISTS (
+                    SELECT 1 FROM sanction_revocations revocation
+                    WHERE revocation.sanction_id = sanction.id
+                      AND revocation.created_at < ${cutoff}::timestamptz
+                )
+                ORDER BY sanction.created_at, sanction.id
+                LIMIT 200
+                FOR UPDATE OF sanction SKIP LOCKED
+            ), deleted_revocations AS (
+                DELETE FROM sanction_revocations revocation
+                USING candidates candidate
+                WHERE revocation.sanction_id = candidate.id
+                RETURNING revocation.sanction_id
+            )
+            DELETE FROM sanctions sanction
+            USING candidates candidate
             WHERE sanction.id = candidate.id
             RETURNING sanction.id
         `);

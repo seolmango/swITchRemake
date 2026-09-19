@@ -25,6 +25,12 @@ export interface RetentionSettings {
     auditLogDays: number;
     /** 감사 로그의 암호화 IP 원본을 남기는 짧은 기간. */
     auditIpDays: number;
+    /** 종결된 신고 사건과 그 경기 증거를 남기는 기간. */
+    moderationCaseDays: number;
+    /** 끝난 기간제 제재와 경고 기록을 남기는 기간. */
+    sanctionDays: number;
+    /** refresh 재사용 등 인증 보안 사건을 남기는 기간. */
+    authSecurityEventDays: number;
 }
 
 export const RETENTION_DEFAULTS: RetentionSettings = {
@@ -36,6 +42,9 @@ export const RETENTION_DEFAULTS: RetentionSettings = {
     auditLogDays: 365,
     // 세션 IP 원본과 같은 7일이면 단기 장애·공격 조사는 가능하고 장기 원본 축적은 피한다.
     auditIpDays: 7,
+    moderationCaseDays: 365 * 5,
+    sanctionDays: 365 * 5,
+    authSecurityEventDays: 365,
 };
 
 const positiveInteger = (raw: string | undefined, fallback: number): number => {
@@ -58,5 +67,17 @@ export function retentionSettings(env: NodeJS.ProcessEnv = process.env): Retenti
         sessionDays: positiveInteger(env.SESSION_RETENTION_DAYS, RETENTION_DEFAULTS.sessionDays),
         auditLogDays: positiveInteger(env.AUDIT_LOG_RETENTION_DAYS, RETENTION_DEFAULTS.auditLogDays),
         auditIpDays: positiveInteger(env.AUDIT_IP_RETENTION_DAYS, RETENTION_DEFAULTS.auditIpDays),
+        moderationCaseDays: positiveInteger(
+            env.MODERATION_CASE_RETENTION_DAYS,
+            RETENTION_DEFAULTS.moderationCaseDays,
+        ),
+        sanctionDays: positiveInteger(
+            env.SANCTION_RETENTION_DAYS,
+            RETENTION_DEFAULTS.sanctionDays,
+        ),
+        authSecurityEventDays: positiveInteger(
+            env.AUTH_SECURITY_EVENT_RETENTION_DAYS,
+            RETENTION_DEFAULTS.authSecurityEventDays,
+        ),
     };
 }

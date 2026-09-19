@@ -1,9 +1,12 @@
-import { IsEmail, IsString, Length, Matches } from "class-validator";
+import { Equals, IsEmail, IsString, Length, Matches } from "class-validator";
 import { Transform } from 'class-transformer';
 import { IsValidPassword } from './password.validator';
 import { LegalConsentDto } from './legal-consent.dto';
 
 export class CreateUserDto extends LegalConsentDto {
+    @Equals(true, { message: 'You must be at least 14 years old' })
+    isOver14!: boolean;
+
     @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value)
     @IsEmail()
     email!: string;
@@ -19,5 +22,4 @@ export class CreateUserDto extends LegalConsentDto {
     @IsString()
     @Length(6, 6, { message: 'Verification code is 6 digits' })
     code!: string;
-
 }

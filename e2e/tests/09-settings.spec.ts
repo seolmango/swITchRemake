@@ -45,21 +45,13 @@ test.describe('설정 · 도움말', () => {
 
         await page.getByRole('button').filter({ hasText: T.settings.general.privacy }).click();
         const privacy = page.getByRole('dialog', { name: T.legal.privacyPolicy });
-        await expect(privacy).toContainText('0-INF');
-        await expect(privacy).toContainText('zero2inf.zip@gmail.com');
+        await expect(privacy).toContainText('설채환');
+        await expect(privacy).toContainText('seolchaehwan70@gmail.com');
         await expect(privacy).not.toContainText('작성자 메모');
         await expect(privacy).not.toContainText('확인 필요');
 
-        /*
-         * 「」는 아직 정하지 못한 자리다. 지금은 시행일과 호스팅 업체명 둘이 남아 있고,
-         * 출시하면서 채운다(§15.1). **그때까지 이 점검은 실패하는 것이 정상이다.**
-         * 빈칸이 화면에 그대로 보이는 것은 실제로 잘못된 상태라 통과시키지 않는다.
-         * 실패 문구에 이유를 적어 둔다 — 진짜 회귀와 헷갈리지 않게 하려는 것이다.
-         */
-        await expect(
-            privacy,
-            '아직 못 채운 「」 빈칸이 남아 있다. 출시 전까지는 이 실패가 정상이다(§15.1: 시행일·호스팅 업체명)',
-        ).not.toContainText('「');
+        await expect(privacy).toContainText('Korea Central');
+        await expect(privacy).not.toContainText('「');
     });
 
     test('크레딧은 실제 운영 내용을 보여 준다', async ({ page }) => {
@@ -69,8 +61,8 @@ test.describe('설정 · 도움말', () => {
         await page.getByRole('button').filter({ hasText: T.settings.general.credits }).click();
         const credits = page.getByRole('dialog', { name: T.legal.credits });
         await expect(credits).toContainText(T.legal.operator);
-        await expect(credits).toContainText('0-INF');
-        await expect(credits).toContainText('zero2inf.zip@gmail.com');
+        await expect(credits).toContainText('설채환 (0-INF)');
+        await expect(credits).toContainText('seolchaehwan70@gmail.com');
         await expect(credits).not.toContainText('준비 중');
     });
 

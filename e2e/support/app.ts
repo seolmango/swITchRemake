@@ -91,6 +91,7 @@ export async function signUp(page: Page, account: Account): Promise<void> {
     await page.getByLabel(T.auth.password, { exact: true }).fill(account.password);
     await page.getByRole('checkbox', { name: T.auth.agreeTerms, exact: true }).click();
     await page.getByRole('checkbox', { name: T.auth.agreePrivacy, exact: true }).click();
+    await page.getByRole('checkbox', { name: T.auth.confirmAge, exact: true }).click();
     await button(page, T.auth.signup).click();
 
     await page.waitForURL('**/login');

@@ -38,10 +38,12 @@ export const SignUpPage: React.FC = () => {
     const [error, setError] = useState(false);
     const [termsAcceptedAt, setTermsAcceptedAt] = useState<string | null>(null);
     const [privacyAcceptedAt, setPrivacyAcceptedAt] = useState<string | null>(null);
+    const [isOver14, setIsOver14] = useState(false);
     const [openDocument, setOpenDocument] = useState<LegalDocument | null>(null);
     const [challengeOpen, setChallengeOpen] = useState(false);
     const agreementsAccepted = hasRequiredAgreements(termsAcceptedAt, privacyAcceptedAt);
-    const valid = isEmail(email) && isNickname(nickname) && isPassword(password) && isVerificationCode(code) && agreementsAccepted;
+    const valid = isEmail(email) && isNickname(nickname) && isPassword(password) && isVerificationCode(code)
+        && agreementsAccepted && isOver14;
 
     const requestChallenge = () => {
         if (!isEmail(email)) { emailRef.current?.focus(); return; }
@@ -63,6 +65,7 @@ export const SignUpPage: React.FC = () => {
         try {
             if (termsAcceptedAt === null || privacyAcceptedAt === null) return;
             await registerUser({
+                isOver14: true,
                 email,
                 password,
                 nickname,
@@ -82,7 +85,7 @@ export const SignUpPage: React.FC = () => {
 
     return (
         <PageLayout title={t('auth.signup')} home settingsDock={false}>
-            <RoundBox x={960} y={550} width={1360} height={870} type={2}/>
+            <RoundBox x={960} y={540} width={1360} height={950} type={2}/>
             <div className="signup-grid">
                 <InlineLink onClick={() => navigate('/login')} style={{ gridColumn: '1 / -1', justifySelf: 'center' }}>{t('auth.goLogin')}</InlineLink>
                 <div className="form-row" style={{ gridColumn: '1 / -1' }}>
@@ -108,6 +111,13 @@ export const SignUpPage: React.FC = () => {
                             onChange={(checked) => setPrivacyAcceptedAt(checked ? new Date().toISOString() : null)}
                         />
                         <button type="button" onClick={() => setOpenDocument(PRIVACY_POLICY)}>{t('auth.readDocument')}</button>
+                    </div>
+                    <div className="signup-consent-row">
+                        <Checkbox
+                            checked={isOver14}
+                            label={t('auth.confirmAge')}
+                            onChange={setIsOver14}
+                        />
                     </div>
                 </div>
                 <div className={`status-message${error ? ' is-error' : ''}`} role="status" style={{ color: error ? themeColors(theme).text : themeColors(theme).muted }}>{message}</div>

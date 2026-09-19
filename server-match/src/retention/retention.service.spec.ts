@@ -77,15 +77,38 @@ test('활성 hold가 걸린 리플레이는 만료 표시에서 건너뛴다', a
     assert.match(pendingDeletion, /hold\.released_at is null/);
 });
 
-test('CLOSED가 아닌 사건이 걸린 경기는 30일이 지나도 지우지 않는다', async () => {
+test('해제된 replay hold는 정리하고 활성 hold만 리플레이 삭제를 막는다', async () => {
     const state = harness();
     await state.service.runOnce();
 
-    const removeMatches = queryText(state.queries[1]);
+    const mark = queryText(state.queries[0]);
+    assert.match(mark, /delete from replay_holds/);
+    assert.match(mark, /released_at is not null/);
+    assert.match(mark, /hold\.released_at is null/);
+});
+
+test('종결 여부와 무관하게 신고 사건이 남은 경기는 일반 30일 정리에서 건너뛴다', async () => {
+    const state = harness();
+    await state.service.runOnce();
+
+    const removeMatches = state.queries.map(queryText)
+        .find((query) => query.includes('delete from matches match'))!;
     assert.match(removeMatches, /from moderation_cases moderation_case/);
-    assert.match(removeMatches, /moderation_case\.status <> 'closed'/);
+    assert.doesNotMatch(removeMatches, /moderation_case\.status <> 'closed'/);
     assert.match(removeMatches, /delete from matches match/);
     assert.match(removeMatches, /limit 200/);
+});
+
+test('종결된 신고 사건과 경기 증거는 5년 뒤 정리한다', async () => {
+    const state = harness();
+    await state.service.runOnce(new Date('2026-08-29T00:00:00Z'));
+
+    const query = state.queries.map(queryText)
+        .find((text) => text.includes('delete from moderation_cases moderation_case'))!;
+    assert.match(query, /moderation_case\.status = 'closed'/);
+    assert.match(query, /from replay_holds hold/);
+    const original = state.queries.find((item) => queryText(item) === query)!;
+    assert.ok(dialect.sqlToQuery(original).params.includes('2021-08-30T00:00:00.000Z'));
 });
 
 test('리더 락을 못 잡으면 DB와 인게임 서버에 아무 일도 하지 않는다', async () => {
@@ -122,6 +145,9 @@ test('보관 설정 파싱은 잘못된 env를 부팅 전에 거절한다', () =
         ['RETENTION_INTERVAL_MINUTES', 'ten'],
         ['AUDIT_LOG_RETENTION_DAYS', '0'],
         ['AUDIT_IP_RETENTION_DAYS', '1.5'],
+        ['MODERATION_CASE_RETENTION_DAYS', '-5'],
+        ['SANCTION_RETENTION_DAYS', '0'],
+        ['AUTH_SECURITY_EVENT_RETENTION_DAYS', 'forever'],
     ]) {
         assert.throws(
             () => retentionSettings({ [name]: value }),
@@ -176,6 +202,16 @@ test('감사 IP 원본은 7일 뒤 비우고 감사 로그는 365일 뒤 삭제�
     assert.equal(dialect.sqlToQuery(state.queries[queries.indexOf(remove)]).params.at(-1), '2025-08-29T00:00:00.000Z');
 });
 
+test('인증 보안 이벤트는 1년 뒤 삭제한다', async () => {
+    const state = harness();
+    await state.service.runOnce(new Date('2026-08-29T00:00:00Z'));
+    const queries = state.queries.map(queryText);
+    const remove = queries.find((query) => query.includes('delete from auth_security_events'))!;
+    assert.match(remove, /security_event\.created_at < \$\d+::timestamptz/);
+    const original = state.queries.find((item) => queryText(item) === remove)!;
+    assert.ok(dialect.sqlToQuery(original).params.includes('2025-08-29T00:00:00.000Z'));
+});
+
 test('끝난 기간제·취소 제재의 이메일 HMAC만 지우고 영구 BAN은 남긴다', async () => {
     const state = harness();
     await state.service.runOnce();
@@ -184,6 +220,18 @@ test('끝난 기간제·취소 제재의 이메일 HMAC만 지우고 영구 BAN�
     assert.match(cleanup, /sanction\.expires_at <= \$\d+::timestamptz/);
     assert.match(cleanup, /sanction\.expires_at is null and sanction\.type <> 'ban'/);
     assert.match(cleanup, /from sanction_revocations revocation/);
+});
+
+test('끝난 제재와 경고는 5년 뒤 지우고 유효한 영구 BAN은 남긴다', async () => {
+    const state = harness();
+    await state.service.runOnce(new Date('2026-08-29T00:00:00Z'));
+    const cleanup = state.queries.map(queryText)
+        .find((query) => query.includes('delete from sanctions sanction'))!;
+    assert.match(cleanup, /sanction\.type = 'warn'/);
+    assert.match(cleanup, /sanction\.expires_at is not null/);
+    assert.match(cleanup, /revocation\.created_at < \$\d+::timestamptz/);
+    assert.doesNotMatch(cleanup, /sanction\.type = 'ban'.*sanction\.expires_at is null/);
+    assert.match(cleanup, /delete from sanction_revocations revocation/);
 });
 
 test('audit migration attaches the append-only trigger with only retention exceptions', () => {
