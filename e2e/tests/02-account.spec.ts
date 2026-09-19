@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { T, button, deleteAccount, logIn, newAccount, signUp } from '../support/app';
+import { T, button, completeHumanChallenge, deleteAccount, logIn, newAccount, signUp } from '../support/app';
 import { clearMail, waitForMail } from '../support/mail';
 
 test.describe('가입 · 로그인 · 로그아웃', () => {
@@ -29,6 +29,7 @@ test.describe('가입 · 로그인 · 로그아웃', () => {
         await page.goto('/signup');
         await page.getByLabel(T.auth.email, { exact: true }).fill(account.email);
         await button(page, T.auth.sendCode).click();
+        await completeHumanChallenge(page);
         const mail = await waitForMail(account.email, 'signup');
         await page.getByLabel(T.auth.nickname, { exact: true }).fill(account.nickname);
         await page.getByLabel(T.auth.code, { exact: true }).fill(mail.code);
@@ -77,6 +78,7 @@ test.describe('가입 · 로그인 · 로그아웃', () => {
         await page.goto('/signup');
         await page.getByLabel(T.auth.email).fill(duplicate.email);
         await button(page, T.auth.sendCode).click();
+        await completeHumanChallenge(page);
         await expect(page.getByText(T.auth.codeSent)).toBeVisible();
         const mail = await waitForMail(duplicate.email, 'signup');
 

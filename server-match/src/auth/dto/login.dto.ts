@@ -1,4 +1,4 @@
-import { IsEmail, IsString, Length, Matches } from "class-validator";
+import { IsEmail, IsOptional, IsString, IsUUID, Length, Matches } from "class-validator";
 import { Transform } from 'class-transformer';
 
 export class LoginDto {
@@ -10,4 +10,9 @@ export class LoginDto {
     @Length(8, 20)
     @Matches(/^[A-Za-z0-9!@#$%^&*]+$/)
     password!: string;
+
+    @IsOptional()
+    @IsString()
+    @IsUUID()
+    humanProof?: string;
 }

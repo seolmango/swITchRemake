@@ -12,17 +12,38 @@ import { GuestRefreshDto } from './dto/guest-refresh.dto';
 import { LoginMfaDto, LoginMfaEmailDto } from '../mfa/dto/login-mfa.dto';
 import { TRUSTED_DEVICE_COOKIE, trustedDeviceCookieOptions } from '../mfa/trusted-device-cookie';
 import { BlockDuringMaintenance } from '../maintenance/maintenance.decorator';
+import { HumanChallengePurpose, IssueHumanChallengeDto, VerifyHumanChallengeDto } from './dto/human-challenge.dto';
+import { HumanChallengeService } from './human-challenge.service';
 
 @Controller('auth')
 export class AuthController {
     constructor(
         private readonly authService: AuthService,
         private readonly configService: ConfigService,
+        private readonly humanChallenges: HumanChallengeService,
     ) {}
+
+    @Post('human-challenge')
+    @RateLimiter({ limit: 12, ttl: 60_000 })
+    issueHumanChallenge(@Body() dto: IssueHumanChallengeDto, @Req() req: FastifyRequest) {
+        return this.humanChallenges.issue(dto.purpose, dto.subject, req.ip);
+    }
+
+    @Post('human-challenge/verify')
+    @RateLimiter({ limit: 12, ttl: 60_000 })
+    verifyHumanChallenge(@Body() dto: VerifyHumanChallengeDto, @Req() req: FastifyRequest) {
+        return this.humanChallenges.verify(dto.challengeToken, dto.selectedSlot, req.ip);
+    }
 
     @Post('verify')
     @RateLimiter({ limit: 5, ttl: 60000 })
-    async sendVerificationEmail(@Body() sendEmailDto: SendEmailDto) {
+    async sendVerificationEmail(@Body() sendEmailDto: SendEmailDto, @Req() req: FastifyRequest) {
+        const purpose = sendEmailDto.vtype === 'signup'
+            ? HumanChallengePurpose.SIGNUP
+            : sendEmailDto.vtype === 'reset-password'
+                ? HumanChallengePurpose.RESET_PASSWORD
+                : HumanChallengePurpose.DELETE;
+        await this.humanChallenges.consumeProof(sendEmailDto.humanProof, purpose, sendEmailDto.email, req.ip);
         return this.authService.sendVerificationCodeEmail(sendEmailDto);
     }
 
@@ -44,10 +65,20 @@ export class AuthController {
         await this.authService.assertIdentitySwitchAllowed(
             (req as FastifyRequest & { user?: { id: number | string } }).user?.id,
         );
-        const result = await this.authService.login(loginDto, {
-            ip: req.ip,
-            userAgent: this.userAgent(req),
-        }, this.readSignedCookie(req, TRUSTED_DEVICE_COOKIE));
+        await this.humanChallenges.assertLoginAllowed(loginDto.email, req.ip, loginDto.humanProof);
+        let result;
+        try {
+            result = await this.authService.login(loginDto, {
+                ip: req.ip,
+                userAgent: this.userAgent(req),
+            }, this.readSignedCookie(req, TRUSTED_DEVICE_COOKIE));
+        } catch (error) {
+            if (error instanceof UnauthorizedException) {
+                await this.humanChallenges.recordLoginFailure(loginDto.email, req.ip);
+            }
+            throw error;
+        }
+        await this.humanChallenges.clearLoginFailures(loginDto.email, req.ip);
 
         if (result.mfaRequired) return result;
 

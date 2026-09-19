@@ -25,7 +25,7 @@ interface AuthState {
      */
     admin: boolean;
     bootstrap: () => Promise<void>;
-    login: (email: string, password: string) => Promise<LoginMfaChallenge | null>;
+    login: (email: string, password: string, humanProof?: string) => Promise<LoginMfaChallenge | null>;
     completeMfa: (challengeToken: string, code: string, trustDevice: boolean) => Promise<void>;
     logout: () => Promise<void>;
     /** 탈퇴 뒤 정리. 계정이 이미 없으므로 로그아웃을 부르지 않는다. */
@@ -65,11 +65,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             set({ accessToken: null, identity: 'anonymous', status: 'error', bootstrapped: true, admin: false });
         }
     },
-    login: async (email, password) => {
+    login: async (email, password, humanProof) => {
         const previous = get();
         set({ pending: true });
         try {
-            const result = await loginUser(email, password);
+            const result = humanProof
+                ? await loginUser(email, password, humanProof)
+                : await loginUser(email, password);
             if (result.mfaRequired) {
                 set({ ...previous, pending: false });
                 return result;

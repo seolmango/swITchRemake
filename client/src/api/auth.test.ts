@@ -3,7 +3,46 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { apiRequest, replaceGuestWithAccount } = vi.hoisted(() => ({ apiRequest: vi.fn(), replaceGuestWithAccount: vi.fn() }));
 vi.mock('./http.ts', () => ({ apiRequest, replaceGuestWithAccount }));
 
-import { completeMfaLogin, loginUser, registerUser, resendMfaLoginEmail, resetPassword, type RegistrationRequest } from './auth.ts';
+import {
+    completeMfaLogin,
+    issueHumanChallenge,
+    loginUser,
+    registerUser,
+    resendMfaLoginEmail,
+    resetPassword,
+    sendVerification,
+    verifyHumanChallenge,
+    type RegistrationRequest,
+} from './auth.ts';
+
+describe('human challenge requests', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('binds challenge issue to purpose and email, then submits only the chosen slot', async () => {
+        apiRequest.mockResolvedValueOnce({ challengeToken: 'challenge' }).mockResolvedValueOnce({ proofToken: 'proof' });
+
+        await issueHumanChallenge('test@example.com', 'signup');
+        await verifyHumanChallenge('challenge', 6);
+
+        expect(apiRequest).toHaveBeenNthCalledWith(1, '/auth/human-challenge', {
+            method: 'POST', auth: false, retryAuth: false,
+            body: { subject: 'test@example.com', purpose: 'signup' },
+        });
+        expect(apiRequest).toHaveBeenNthCalledWith(2, '/auth/human-challenge/verify', {
+            method: 'POST', auth: false, retryAuth: false,
+            body: { challengeToken: 'challenge', selectedSlot: 6 },
+        });
+    });
+
+    it('includes the one-use proof when requesting an email code', async () => {
+        apiRequest.mockResolvedValueOnce({ message: 'sent' });
+        await sendVerification('test@example.com', 'reset-password', 'proof');
+        expect(apiRequest).toHaveBeenCalledWith('/auth/verify', {
+            method: 'POST', auth: false, retryAuth: false,
+            body: { email: 'test@example.com', vtype: 'reset-password', humanProof: 'proof' },
+        });
+    });
+});
 
 describe('가입 요청', () => {
     beforeEach(() => vi.clearAllMocks());
@@ -45,6 +84,16 @@ describe('MFA authentication requests', () => {
 
         await expect(loginUser('test@example.com', 'Password1!')).resolves.toMatchObject({ mfaRequired: true });
         expect(replaceGuestWithAccount).not.toHaveBeenCalled();
+    });
+
+    it('attaches a human proof only to an escalated login retry', async () => {
+        apiRequest.mockResolvedValueOnce({ mfaRequired: false, accessToken: 'access', nickname: 'Tester' });
+        await loginUser('test@example.com', 'Password1!', 'proof');
+        expect(apiRequest).toHaveBeenCalledWith('/auth/login', {
+            method: 'POST',
+            retryAuth: false,
+            body: { email: 'test@example.com', password: 'Password1!', humanProof: 'proof' },
+        });
     });
 
     it('sends the code and opt-in trust choice, then installs the verified identity', async () => {

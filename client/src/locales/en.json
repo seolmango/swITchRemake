@@ -287,7 +287,41 @@
     "agreePrivacy": "I agree to the Privacy Policy",
     "readDocument": "Read",
     "logout": "Log Out",
-    "holdToRevealPassword": "Hold to show password"
+    "holdToRevealPassword": "Hold to show password",
+    "humanChallenge": {
+      "eyebrow": "Bot check · Entry check",
+      "title": "Your First Switch",
+      "instructions": {
+        "nearest": "When the tagger enters the dashed range, switch to the runner nearest to you.",
+        "farthest": "When the tagger enters the dashed range, switch to the runner farthest from you.",
+        "fastest": "When the tagger enters the dashed range, switch to the fastest-moving runner.",
+        "slowest": "When the tagger enters the dashed range, switch to the slowest-moving runner."
+      },
+      "arenaLabel": "Switch timing challenge arena",
+      "approaching": "Tagger approaching…",
+      "now": "Now!",
+      "me": "Me",
+      "out": "Out",
+      "botChecking": "Preparing bot check…",
+      "botCheckingHint": "Building a live match situation.",
+      "speedRank": "Speed {{rank}}",
+      "roundEnded": "This round is over.",
+      "retry": "Start New Round",
+      "stopMotion": "Use Still View",
+      "playMotion": "Use Motion",
+      "tooSoon": "The tagger is still outside your range.",
+      "wrong": "The switch failed. Try again in a new round.",
+      "success": "SWITCH! Entry check complete.",
+      "loadFailed": "Could not load the check. Try again in a moment.",
+      "status": {
+        "self": "Player {{slot}}, you",
+        "tagger": "Player {{slot}}, tagger",
+        "runner": "Player {{slot}}, runner",
+        "runnerSpeed": "Player {{slot}}, runner, speed {{rank}}",
+        "out": "Player {{slot}}, out",
+        "empty": "Player {{slot}}, empty"
+      }
+    }
   },
   "legal": {
     "document": "Legal document",

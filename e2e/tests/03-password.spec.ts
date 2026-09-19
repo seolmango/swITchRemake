@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { T, button, deleteAccount, logIn, newAccount, signUp } from '../support/app';
+import { T, button, completeHumanChallenge, deleteAccount, logIn, newAccount, signUp } from '../support/app';
 import { clearMail, waitForMail } from '../support/mail';
 
 test.describe('비밀번호 찾기와 변경', () => {
@@ -11,6 +11,7 @@ test.describe('비밀번호 찾기와 변경', () => {
         await page.goto('/reset-password');
         await page.getByLabel(T.auth.email, { exact: true }).fill(account.email);
         await button(page, T.auth.sendCode).click();
+        await completeHumanChallenge(page);
         await expect(page.getByText(T.auth.codeSent)).toBeVisible();
 
         const mail = await waitForMail(account.email, 'reset-password');
@@ -41,6 +42,7 @@ test.describe('비밀번호 찾기와 변경', () => {
         await page.goto('/reset-password');
         await page.getByLabel(T.auth.email, { exact: true }).fill(account.email);
         await button(page, T.auth.sendCode).click();
+        await completeHumanChallenge(page);
         await waitForMail(account.email, 'reset-password');
 
         await page.getByLabel(T.auth.code, { exact: true }).fill('000000');

@@ -7,10 +7,11 @@ import { SanctionModule } from '../sanction/sanction.module';
 import { ActorGuard } from './actor.guard';
 import { AccountGuard } from './account.guard';
 import { MfaModule } from '../mfa/mfa.module';
+import { HumanChallengeService } from './human-challenge.service';
 
 @Module({
     controllers: [AuthController],
-    providers: [AuthService, ActorGuard, AccountGuard],
+    providers: [AuthService, ActorGuard, AccountGuard, HumanChallengeService],
     exports: [AuthService, JwtModule],
     imports: [JwtModule.register({}), SessionModule, SanctionModule, MfaModule]
 })

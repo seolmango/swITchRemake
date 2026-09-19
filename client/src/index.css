@@ -153,6 +153,9 @@ html[lang='ko'] .page-title { top: 42px; }
   align-items: end;
 }
 
+/* TextField 아래에는 항상 25px 도움말 줄과 10px 간격이 있다. 옆 버튼은 입력선에 맞춘다. */
+.form-row > button { margin-bottom: 35px; }
+
 .field-group {
   display: grid;
   gap: 10px;
@@ -462,15 +465,15 @@ html[lang='ko'] .page-title { top: 42px; }
 }
 
 .signup-consents {
-  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  align-self: stretch;
 }
 
 .signup-consent-row {
   min-width: 0;
-  padding: 12px 16px;
+  padding: 8px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2354,6 +2357,228 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: var(--colo
 .delete-code-field.is-second-factor > input { width: 430px; font-size: 20px; letter-spacing: .03em; }
 .delete-dialog-message { min-height: 26px; font-size: 17px !important; }
 .delete-dialog-message[data-failed='true'] { color: var(--theme-text) !important; }
+
+/* 인증메일과 위험 로그인 앞의 짧은 게임 판정. Phaser를 불러오지 않고 원과 CSS만으로 그린다. */
+.human-challenge-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  padding: 20px;
+  box-sizing: border-box;
+}
+.lobby-dialog.human-challenge-dialog {
+  width: min(940px, calc(100% - 90px));
+  min-height: min(670px, calc(100dvh - 40px));
+  max-height: calc(100dvh - 40px);
+  padding: 28px 34px;
+  grid-template-rows: auto auto 1fr auto auto;
+  gap: 15px;
+  overflow: auto;
+}
+.human-challenge-header { width: 100%; display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.human-challenge-header > div { display: grid; justify-items: start; gap: 4px; }
+.human-challenge-header span { color: var(--surface-muted); font-size: 16px; font-weight: 800; letter-spacing: .15em; }
+.human-challenge-header h2 { margin: 0; }
+.human-challenge-header > button,
+.human-challenge-motion-toggle,
+.human-challenge-retry {
+  min-height: 50px;
+  padding: 0 18px;
+  border: 4px solid var(--surface-border);
+  border-radius: 15px;
+  background: var(--surface-field);
+  color: inherit;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.human-challenge-instruction { color: inherit !important; font-size: 23px !important; font-weight: 700; }
+.human-challenge-arena {
+  position: relative;
+  width: 100%;
+  min-height: 390px;
+  overflow: hidden;
+  border: 5px solid var(--surface-border);
+  border-radius: 24px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--color-blue-0) 18%, transparent) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, var(--color-blue-0) 18%, transparent) 1px, transparent 1px),
+    var(--surface-field);
+  background-size: 46px 46px;
+}
+.human-challenge-range {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  width: 230px;
+  height: 230px;
+  border: 5px dashed var(--color-blue-2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: .7;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+.human-challenge-arena.is-ready .human-challenge-range {
+  border-color: var(--semantic-good);
+  box-shadow: 0 0 0 12px color-mix(in srgb, var(--semantic-good) 15%, transparent);
+}
+.human-challenge-player {
+  position: absolute;
+  left: var(--player-x);
+  top: var(--player-y);
+  width: 74px;
+  height: 74px;
+  display: grid;
+  place-items: center;
+  border: 5px solid var(--color-gray-2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--color-user-0, #FFD5B8);
+  color: var(--color-black);
+  font: inherit;
+  font-size: 28px;
+  font-weight: 900;
+  cursor: pointer;
+  z-index: 2;
+  transition: scale 120ms ease, box-shadow 150ms ease;
+}
+.human-challenge-player:hover:not(:disabled),
+.human-challenge-player:focus-visible { scale: 1.09; }
+.human-challenge-player.is-self { border-color: var(--color-blue-2); background: var(--color-blue-0); }
+.human-challenge-player.is-tagger {
+  border-color: var(--color-red-2);
+  background: var(--color-red-0);
+  box-shadow: inset 0 0 0 7px var(--color-red-2);
+  animation: human-challenge-approach var(--approach-ms) ease-in-out forwards;
+}
+.human-challenge-arena:is(.rule-fastest, .rule-slowest):not(.is-static) .human-challenge-player.is-runner {
+  animation: human-challenge-runner var(--runner-motion-ms) ease-in-out infinite alternate;
+}
+.human-challenge-arena.is-ready:is(.rule-fastest, .rule-slowest):not(.is-static) .human-challenge-player.is-runner {
+  animation-play-state: paused;
+}
+.human-challenge-player.is-out { filter: grayscale(1); opacity: .42; cursor: not-allowed; }
+.human-challenge-player-number { position: relative; z-index: 2; }
+.human-challenge-speed-trail {
+  position: absolute;
+  right: calc(100% - 8px);
+  top: 50%;
+  z-index: 1;
+  transform: translateY(-53%);
+  color: var(--color-blue-2);
+  font-size: 28px;
+  font-style: normal;
+  letter-spacing: -.2em;
+  white-space: nowrap;
+  opacity: .75;
+}
+.human-challenge-player small {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 7px);
+  min-width: 54px;
+  transform: translateX(-50%);
+  color: var(--theme-text);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.human-challenge-player .human-challenge-speed-copy { display: none; }
+.human-challenge-arena.is-static .human-challenge-player .human-challenge-speed-copy { display: block; }
+.human-challenge-arena.is-static .human-challenge-speed-trail { display: none; }
+.human-challenge-range-copy {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--surface-muted);
+  font-size: 17px;
+}
+.human-challenge-arena.is-ready .human-challenge-range-copy { color: var(--semantic-good); }
+.human-challenge-arena.is-static .human-challenge-player.is-tagger { animation: none; }
+.human-challenge-motion-toggle { justify-self: center; min-height: 44px; font-size: 15px; }
+.human-challenge-placeholder {
+  min-height: 390px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: var(--surface-muted);
+  font-size: 21px;
+}
+.human-challenge-placeholder strong { color: var(--theme-text); font-size: 24px; }
+.human-challenge-placeholder small { font-size: 15px; }
+.human-challenge-scanner {
+  width: 58px;
+  height: 58px;
+  margin-bottom: 7px;
+  border: 5px solid color-mix(in srgb, var(--color-blue-2) 22%, transparent);
+  border-top-color: var(--color-blue-2);
+  border-radius: 50%;
+  animation: human-challenge-scan 780ms linear infinite;
+}
+.human-challenge-message { min-height: 25px; color: var(--surface-muted) !important; font-size: 17px !important; }
+.human-challenge-message[data-failed='true'] { color: var(--theme-text) !important; }
+.human-challenge-message[data-failed='true']::before { content: '! '; color: var(--semantic-bad); font-weight: 900; }
+.human-challenge-retry { justify-self: center; border-color: var(--semantic-info); background: var(--color-blue-0); color: var(--color-black); }
+
+@keyframes human-challenge-approach {
+  from { left: var(--start-x); top: var(--start-y); }
+  to { left: var(--player-x); top: var(--player-y); }
+}
+
+@keyframes human-challenge-runner {
+  from { transform: translate(calc(-50% - var(--runner-distance)), -50%); }
+  to { transform: translate(calc(-50% + var(--runner-distance)), -50%); }
+}
+
+@keyframes human-challenge-scan {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .human-challenge-player.is-tagger,
+  .human-challenge-player.is-runner,
+  .human-challenge-scanner { animation: none !important; }
+}
+
+html[data-motion='reduced'] .human-challenge-player.is-tagger,
+html[data-motion='reduced'] .human-challenge-player.is-runner,
+html[data-motion='reduced'] .human-challenge-scanner { animation: none !important; }
+
+@media (max-width: 700px), (max-height: 760px) {
+  .human-challenge-backdrop { padding: 10px; }
+  .lobby-dialog.human-challenge-dialog {
+    width: calc(100vw - 20px);
+    min-height: 0;
+    max-height: calc(100dvh - 20px);
+    padding: 18px;
+    gap: 10px;
+    border-width: 4px;
+    border-radius: 20px;
+  }
+  .human-challenge-header { gap: 12px; }
+  .human-challenge-header span { font-size: 12px; }
+  .human-challenge-header h2 { font-size: 28px; }
+  .human-challenge-header > button { min-height: 42px; padding: 0 13px; border-width: 3px; font-size: 15px; }
+  .human-challenge-instruction { font-size: 17px !important; line-height: 1.35 !important; }
+  .human-challenge-arena { min-height: 315px; border-width: 4px; border-radius: 18px; background-size: 34px 34px; }
+  .human-challenge-range { width: 170px; height: 170px; border-width: 4px; }
+  .human-challenge-player { width: 58px; height: 58px; border-width: 4px; font-size: 22px; }
+  .human-challenge-player.is-tagger { box-shadow: inset 0 0 0 5px var(--color-red-2); }
+  .human-challenge-speed-trail { font-size: 22px; }
+  .human-challenge-player small { top: calc(100% + 4px); font-size: 12px; }
+  .human-challenge-range-copy { top: 9px; padding: 5px 11px; font-size: 13px; }
+  .human-challenge-motion-toggle { min-height: 40px; border-width: 3px; font-size: 13px; }
+  .human-challenge-message { min-height: 20px; font-size: 14px !important; }
+  .human-challenge-placeholder { min-height: 315px; font-size: 17px; }
+  .human-challenge-placeholder strong { font-size: 20px; }
+  .human-challenge-placeholder small { font-size: 13px; }
+  .human-challenge-scanner { width: 48px; height: 48px; border-width: 4px; }
+}
 
 /* 결과 표의 신고 버튼. 평소에는 눈에 안 띄다가 그 줄에 손이 갔을 때 드러난다 — 늘 붉게 켜
    두면 결과를 보는 화면이 아니라 고발하는 화면이 된다. */

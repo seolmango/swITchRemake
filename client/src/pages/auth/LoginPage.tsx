@@ -15,6 +15,7 @@ import { themeColors } from '../../theme/color.ts';
 import { resendMfaLoginEmail, type LoginMfaChallenge } from '../../api/auth.ts';
 import { deadlineAfterSeconds, useDeadlineSeconds } from '../../utils/deadline.ts';
 import { ApiError } from '../../api/http.ts';
+import { HumanChallengeDialog } from '../../components/auth/HumanChallengeDialog.tsx';
 
 export const LoginPage: React.FC = () => {
     const { t } = useTranslation();
@@ -35,18 +36,19 @@ export const LoginPage: React.FC = () => {
     const [secondFactorCode, setSecondFactorCode] = useState('');
     const [trustDevice, setTrustDevice] = useState(false);
     const [retryDeadline, setRetryDeadline] = useState<number | null>(null);
+    const [challengeOpen, setChallengeOpen] = useState(false);
     const challengeRemaining = useDeadlineSeconds(challenge?.expiresAt ?? null);
     const retryRemaining = useDeadlineSeconds(retryDeadline);
     const valid = isEmail(email) && isPassword(password);
 
     useEffect(() => { emailRef.current?.focus(); }, []);
 
-    const submit = async () => {
+    const submit = async (humanProof?: string) => {
         setTouched(true);
         if (!valid) return;
         setMessage(''); setMessageFailed(false);
         try {
-            const nextChallenge = await login(email, password);
+            const nextChallenge = await login(email, password, humanProof);
             if (nextChallenge) {
                 setChallenge({ ...nextChallenge, expiresAt: deadlineAfterSeconds(nextChallenge.expiresIn) });
                 setPassword('');
@@ -57,6 +59,10 @@ export const LoginPage: React.FC = () => {
             }
             navigate('/', { replace: true });
         } catch (error) {
+            if (error instanceof ApiError && error.code === 'HUMAN_CHALLENGE_REQUIRED') {
+                setChallengeOpen(true);
+                return;
+            }
             setMessageFailed(true);
             const seconds = retryAfterSeconds(error);
             if (seconds !== null) setRetryDeadline(deadlineAfterSeconds(seconds));
@@ -149,6 +155,14 @@ export const LoginPage: React.FC = () => {
                         <RoundButton width={420} height={94} type={1} content={t('auth.verify')} disabled={!secondFactorCode.trim() || challengeRemaining === 0 || (retryRemaining ?? 0) > 0 || pending} isLoading={pending} onClick={() => void verifySecondFactor()}/>
                     </div>
                 </div>
+            )}
+            {challengeOpen && (
+                <HumanChallengeDialog
+                    purpose="login"
+                    subject={email}
+                    onVerified={(proof) => { setChallengeOpen(false); void submit(proof); }}
+                    onClose={() => setChallengeOpen(false)}
+                />
             )}
         </PageLayout>
     );

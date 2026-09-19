@@ -287,7 +287,41 @@
     "agreePrivacy": "개인정보처리방침에 동의합니다",
     "readDocument": "본문 보기",
     "logout": "로그아웃",
-    "holdToRevealPassword": "누르는 동안 비밀번호 보기"
+    "holdToRevealPassword": "누르는 동안 비밀번호 보기",
+    "humanChallenge": {
+      "eyebrow": "봇 방지 · 입장 판정",
+      "title": "첫 스위치",
+      "instructions": {
+        "nearest": "술래가 점선 안에 들어오면 나와 가장 가까운 러너에게 스위치하세요.",
+        "farthest": "술래가 점선 안에 들어오면 나에게서 가장 먼 러너에게 스위치하세요.",
+        "fastest": "술래가 점선 안에 들어오면 가장 빠르게 움직이는 러너에게 스위치하세요.",
+        "slowest": "술래가 점선 안에 들어오면 가장 느리게 움직이는 러너에게 스위치하세요."
+      },
+      "arenaLabel": "스위치 타이밍 확인 경기장",
+      "approaching": "술래 접근 중…",
+      "now": "지금!",
+      "me": "나",
+      "out": "탈락",
+      "botChecking": "봇 방지 판정 준비 중…",
+      "botCheckingHint": "플레이 상황을 만들고 있습니다.",
+      "speedRank": "속도 {{rank}}단계",
+      "roundEnded": "이 판은 끝났습니다.",
+      "retry": "새 판 시작",
+      "stopMotion": "움직임 없이 확인",
+      "playMotion": "움직임으로 확인",
+      "tooSoon": "아직 술래가 사거리 밖에 있어요.",
+      "wrong": "스위치에 실패했습니다. 새 판에서 다시 시도해 주세요.",
+      "success": "SWITCH! 입장 판정을 통과했습니다.",
+      "loadFailed": "판정을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "status": {
+        "self": "{{slot}}번, 나",
+        "tagger": "{{slot}}번, 술래",
+        "runner": "{{slot}}번, 러너",
+        "runnerSpeed": "{{slot}}번, 러너, 속도 {{rank}}단계",
+        "out": "{{slot}}번, 탈락",
+        "empty": "{{slot}}번, 빈 자리"
+      }
+    }
   },
   "legal": {
     "document": "법률 문서",

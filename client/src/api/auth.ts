@@ -2,9 +2,45 @@ import { apiRequest, replaceGuestWithAccount } from './http.ts';
 import type { RegistrationAgreements } from '../legal/legalDocuments.ts';
 
 export type VerificationType = 'signup' | 'reset-password' | 'delete';
+export type HumanChallengePurpose = VerificationType | 'login';
 
-export const sendVerification = (email: string, vtype: VerificationType) =>
-    apiRequest<{ message: string }>('/auth/verify', { method: 'POST', auth: false, retryAuth: false, body: { email, vtype } });
+export type HumanChallengeSlotStatus = 'self' | 'tagger' | 'runner' | 'out' | 'empty';
+export type HumanChallengeRule = 'nearest' | 'farthest' | 'fastest' | 'slowest';
+
+export interface HumanChallengeScene {
+    slots: Array<{
+        slot: number;
+        status: HumanChallengeSlotStatus;
+        x: number;
+        y: number;
+        motionMs: number | null;
+        speedRank: number | null;
+    }>;
+    rule: HumanChallengeRule;
+    approachMs: number;
+    approachFrom: 'left' | 'right' | 'top';
+}
+
+export interface HumanChallenge {
+    challengeToken: string;
+    expiresIn: number;
+    scene: HumanChallengeScene;
+}
+
+export const issueHumanChallenge = (subject: string, purpose: HumanChallengePurpose) =>
+    apiRequest<HumanChallenge>('/auth/human-challenge', {
+        method: 'POST', auth: false, retryAuth: false, body: { subject, purpose },
+    });
+
+export const verifyHumanChallenge = (challengeToken: string, selectedSlot: number) =>
+    apiRequest<{ proofToken: string; expiresIn: number }>('/auth/human-challenge/verify', {
+        method: 'POST', auth: false, retryAuth: false, body: { challengeToken, selectedSlot },
+    });
+
+export const sendVerification = (email: string, vtype: VerificationType, humanProof: string) =>
+    apiRequest<{ message: string }>('/auth/verify', {
+        method: 'POST', auth: false, retryAuth: false, body: { email, vtype, humanProof },
+    });
 
 export interface RegistrationRequest {
     email: string;
@@ -33,9 +69,9 @@ export interface LoginMfaChallenge {
 
 export type LoginResult = LoginSuccess | LoginMfaChallenge;
 
-export const loginUser = async (email: string, password: string): Promise<LoginResult> => {
+export const loginUser = async (email: string, password: string, humanProof?: string): Promise<LoginResult> => {
     const result = await apiRequest<LoginResult>('/auth/login', {
-        method: 'POST', retryAuth: false, body: { email, password },
+        method: 'POST', retryAuth: false, body: { email, password, ...(humanProof ? { humanProof } : {}) },
     });
     if (!result.mfaRequired) replaceGuestWithAccount(result.accessToken, result.nickname);
     return result;

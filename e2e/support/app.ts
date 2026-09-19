@@ -36,12 +36,53 @@ export async function gotoHome(page: Page): Promise<void> {
     await expect(button(page, T.titlePage.button.gameStart)).toBeVisible();
 }
 
+/** 장면의 거리·속도 명령을 읽고 실제 타이밍에 맞춰 공통 "첫 스위치" 판정을 통과한다. */
+export async function completeHumanChallenge(page: Page): Promise<void> {
+    const dialog = page.getByRole('dialog', { name: T.auth.humanChallenge.title });
+    await expect(dialog).toBeVisible();
+    const arena = dialog.locator('.human-challenge-arena');
+    await expect(arena).toHaveClass(/is-ready/, { timeout: 5_000 });
+    const rule = await arena.getAttribute('data-challenge-rule');
+    if (!['nearest', 'farthest', 'fastest', 'slowest'].includes(rule ?? '')) {
+        throw new Error(`알 수 없는 첫 스위치 명령입니다: ${rule}`);
+    }
+    const readPosition = (element: Element) => {
+        const style = (element as HTMLElement).style;
+        return {
+            x: Number.parseFloat(style.getPropertyValue('--player-x')),
+            y: Number.parseFloat(style.getPropertyValue('--player-y')),
+            motionMs: Number.parseFloat(style.getPropertyValue('--runner-motion-ms')),
+        };
+    };
+    const self = await arena.locator('.human-challenge-player.is-self').evaluate(readPosition);
+    const runners = arena.locator('.human-challenge-player.is-runner');
+    const candidates = await runners.evaluateAll((elements) => elements.map((element, index) => {
+        const style = (element as HTMLElement).style;
+        return {
+            index,
+            x: Number.parseFloat(style.getPropertyValue('--player-x')),
+            y: Number.parseFloat(style.getPropertyValue('--player-y')),
+            motionMs: Number.parseFloat(style.getPropertyValue('--runner-motion-ms')),
+        };
+    }));
+    const score = (runner: (typeof candidates)[number]) => rule === 'nearest' || rule === 'farthest'
+        ? ((runner.x - self.x) ** 2) + ((runner.y - self.y) ** 2)
+        : runner.motionMs;
+    const ascending = rule === 'nearest' || rule === 'fastest';
+    const target = [...candidates].sort((left, right) =>
+        ascending ? score(left) - score(right) : score(right) - score(left))[0];
+    if (!target) throw new Error('첫 스위치에 선택할 러너가 없습니다.');
+    await runners.nth(target.index).click();
+    await expect(dialog).toBeHidden();
+}
+
 /** 가입 화면을 처음부터 끝까지. 인증 코드는 sink에서 읽는다. */
 export async function signUp(page: Page, account: Account): Promise<void> {
     await clearMail(account.email);
     await page.goto('/signup');
     await page.getByLabel(T.auth.email, { exact: true }).fill(account.email);
     await button(page, T.auth.sendCode).click();
+    await completeHumanChallenge(page);
     await expect(page.getByText(T.auth.codeSent)).toBeVisible();
 
     const mail = await waitForMail(account.email, 'signup');

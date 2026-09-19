@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsString, Length } from 'class-validator';
+import { IsEmail, IsEnum, IsString, IsUUID, Length } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export enum EmailAuthType {
@@ -14,4 +14,8 @@ export class SendEmailDto {
 
     @IsEnum(EmailAuthType, { message: 'vtype must be signup or reset-password or delete' })
     vtype!: EmailAuthType;
+
+    @IsString()
+    @IsUUID()
+    humanProof!: string;
 }
