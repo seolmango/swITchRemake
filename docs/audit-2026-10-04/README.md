@@ -71,9 +71,9 @@
 
 공개 저장소임을 GitHub API로 확인했다. `ubuntu-24.04` 표준 runner만 사용한다. 공개 저장소 표준 runner는 무료라는 [GitHub 공식 기준](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)에 맞춰 유료 runner/API를 활성화하지 않았다. 실제 실행 시간과 검사 SHA/link는 실행 후 아래에 기입한다.
 
-- 로컬 전체 최종 실행: 진행 중.
-- Git commit/push: 준비 중.
-- GitHub Actions URL/SHA: 미실행.
+- 로컬 core: 정적 배포/egress/앱 및 audit 타입/lint/단위 전부 통과, 실제 브라우저 8/8 통과(219.2초, skip0/retry0). 확장 검사는 진행 중.
+- 첫 Git commit/push: `90cf59851f5ecf8fc91cd4208180da6f7e4305f5`, `origin/codex/independent-audit-20261004` 성공.
+- 첫 GitHub Actions: [실행 37203940677](https://github.com/seolmango/swITchRemake/actions/runs/37203940677), SHA `90cf59851f5ecf8fc91cd4208180da6f7e4305f5`, 환경 준비 실패: 기본 러너 AZURE_EXTENSION_DIR 설치 경로를 운영 설정으로 오판. 이 변수만 비워 후속 실행 예정; 앱 검사는 미실행.
 - Azure 배포: 미실행, 별도 승인 필요. [수동 배포 및 원복](deployment-followup.md).
 
 ## 실행 중 발견한 검사 자체의 오류
@@ -83,3 +83,5 @@
 그 뒤 typecheck/lint/workspace 단위는 통과했고 첫 실제 브라우저 실행은 8개 중 3개 통과/5개 실패였다. 동시 다중 탭, 합성 결과 트랜잭션, 관리자 조회는 통과했다. 실패 원인 중 내부 HTTP origin의 WebCrypto 부재, 내부 서비스 DNS 결과의 지나친 통신 차단, 설정 탭 이름 앞 번호를 누락한 locator를 분리했다. 이 실행을 정상 전체 경기 성공으로 세지 않는다. 보정 후 같은 사용자 결과 assertion을 다시 실행한다.
 
 프로토콜 계층에는 seed `0x41004`로 정상 이동/속도 상한/sequence wrap 512개와 최대512바이트의 비신뢰 입력512개를 추가했다. 입력·snapshot·리플레이 헤더 파서는 형식별 거부 또는 유효 객체로 종료해야 한다. 파일 압축 해제나 네트워크 퍼징이 아니며, 실패 시 해당 작은 입력을 기록한다. host 실행 52/52 통과, 각 property test 제한2초.
+
+실제 로컬 core의 3인 경기는 서로 다른 Chromium 프로세스와 계정으로 수행했다. 소프트웨어 그래픽의 2CPU 제한에서 UI의 30fps·낮은 화질·75% 렌더 해상도를 선택했다. 방향 입력 송신과 권위 좌표 이동을 각 경기에서 함께 확인했다. 2경기/3인 UI-API-DB-XP 일치·신고 moderation·리플레이 실제 재생·방장 이전/퇴장이 통과했다. 기본 그래픽의 단일 훈련은 별도 통과했으나 3인 기본 고화질 성능을 이 결과로 보장하지 않는다. 증거는 `e2e/artifacts/audit/local-oct04/core-passed-90cf598`에 보존했다.

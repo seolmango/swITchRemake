@@ -15,7 +15,7 @@ RUN npm install --global npm@11.21.0 && npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build -w shared && npm run build -w client
 
-FROM nginx:1.28-alpine
+FROM nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/client/dist /usr/share/nginx/html
 EXPOSE 80

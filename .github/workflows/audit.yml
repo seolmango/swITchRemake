@@ -24,6 +24,9 @@ jobs:
     timeout-minutes: 35
     env:
       AUDIT_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
+      # Hosted Ubuntu exports this CLI installation path; it is not an application credential.
+      # Clear only this metadata field; inherited cloud credentials still fail closed.
+      AZURE_EXTENSION_DIR: ''
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -55,6 +58,8 @@ jobs:
     timeout-minutes: 45
     env:
       AUDIT_RUN_ID: extended-${{ github.run_id }}-${{ github.run_attempt }}
+      # Clear hosted-runner CLI path metadata without weakening credential rejection.
+      AZURE_EXTENSION_DIR: ''
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

@@ -2,7 +2,7 @@ import { test, expect, type Browser, type Page } from '@playwright/test';
 import { decodeSnapshot, type Snapshot } from 'shared';
 import { apiLogin, database, isolatedContext, login, seedAccount } from './helpers';
 
-test('three member browsers complete two games, persist results and stats, download replay and leave', async ({ browser }, testInfo) => {
+test('three member browsers complete two games, persist results and stats, download replay and leave', async ({ playwright }, testInfo) => {
     test.setTimeout(420_000);
     const db = database();
     const playerBrowsers: Browser[] = [];
@@ -17,7 +17,7 @@ test('three member browsers complete two games, persist results and stats, downl
     try {
         for (let index = 0; index < 3; index++) {
             const account = await seedAccount();
-            const playerBrowser = await browser.browserType().launch({ channel: 'chromium',
+            const playerBrowser = await playwright.chromium.launch({ channel: 'chromium',
                 args: ['--mute-audio', '--unsafely-treat-insecure-origin-as-secure=http://web'] });
             playerBrowsers.push(playerBrowser);
             const isolated = await isolatedContext(playerBrowser, { width: 1280, height: 720 });
@@ -57,6 +57,7 @@ test('three member browsers complete two games, persist results and stats, downl
             clients.push({ ...isolated, account, page, frames, eventTypes, errors, headers, input });
         }
         expect(new Set(clients.map(client => client.account.id)).size).toBe(3);
+        const browser = playerBrowsers[0]!;
         const host = clients[0]!.page;
         expect(await host.evaluate(() => ({ secure: isSecureContext, webcrypto: !!crypto.subtle })),
             'isolated browser must provide the cryptography APIs available on production HTTPS').toEqual({ secure: true, webcrypto: true });
