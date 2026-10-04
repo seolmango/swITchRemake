@@ -25,6 +25,7 @@ for (const [name, args] of [
     ['audit-typecheck', ['node_modules/typescript/bin/tsc', '--project', 'e2e/audit.tsconfig.json']],
     ['lint', ['scripts/run-workspaces.cjs', 'lint', 'client']],
     ['unit', ['scripts/run-workspaces.cjs', 'test', 'shared', 'server-match', 'server-game', 'server-gateway', 'server-supervisor', 'client']],
+    ['environment-guard-unit', ['--test', 'scripts/audit-environment.test.cjs']],
     ['bots-unit', ['--test', 'scripts/audit-bots.test.cjs']],
     ['browser', ['node_modules/@playwright/test/cli.js', 'test', '--config', 'e2e/audit.config.ts', ...(process.env.AUDIT_MODE === 'core' ? ['multiplayer.spec.ts', 'security.spec.ts', 'ui.spec.ts', 'multitab.spec.ts'] : [])]],
 ]) {

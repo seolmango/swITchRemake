@@ -125,16 +125,26 @@ test('extended account succeeds through password, email MFA, trusted device, ses
         await devices.getByRole('button', { name: '다른 기기 모두 로그아웃', exact: true }).click();
         await expect(devices.locator('.session-list article')).toHaveCount(1);
         expect((await accountCounts(account.id))?.sessions).toBe(1);
+        await expect.poll(() => devices.evaluate(element => element.contains(document.activeElement)), {
+            message: 'completed device revocation keeps focus inside its modal',
+        }).toBe(true);
         const staleAfterRevoke = await other.context.request.post('/api/auth/refresh');
         expect(staleAfterRevoke.status(), 'revoked device cannot refresh').toBe(401);
         await page.keyboard.press('Escape'); await expect(devices).toHaveCount(0);
 
         await page.getByRole('button', { name: '회원 탈퇴', exact: true }).click();
         const deletion = page.getByRole('alertdialog', { name: '회원 탈퇴', exact: true });
+        const deleteCodeResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/users/me/delete-code');
         await deletion.getByRole('button', { name: '인증 코드 받기', exact: true }).click();
+        expect((await deleteCodeResponse).status(), 'synthetic account deletion sends its verification mail').toBe(201);
         const deleteMail = await localMail(page, account.email, '회원 탈퇴 인증 코드');
+        await expect(deletion.getByRole('button', { name: '탈퇴하기', exact: true })).toBeDisabled();
         await deletion.getByLabel('인증 코드', { exact: true }).fill(deleteMail.code);
+        const deletedResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/users/me' && response.request().method() === 'DELETE');
         await deletion.getByRole('button', { name: '탈퇴하기', exact: true }).click();
+        const deleted = await deletedResponse;
+        expect(deleted.status(), 'verified synthetic deletion succeeds').toBe(200);
+        expect((await deleted.json()).deleted === true).toBe(true);
         await expect(page).toHaveURL('http://web/');
         const db = database();
         try {

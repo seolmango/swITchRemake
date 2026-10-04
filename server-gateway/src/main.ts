@@ -53,7 +53,7 @@ const DEFAULT_PROXY_LIMITS: GatewayProxyLimits = {
     replayRequestsPerMinute: REPLAY_REQUESTS_PER_MINUTE,
 };
 
-type RegistrySource = Pick<RegistryView, 'servers'>;
+type RegistrySource = Pick<RegistryView, 'servers'> & Partial<Pick<RegistryView, 'ensureServer'>>;
 
 function portRanges(value: string): Array<{ min: number; max: number }> {
     return value.split(',').map((part) => {
@@ -103,12 +103,10 @@ async function main(): Promise<void> {
         }
     });
     server.on('upgrade', (req, socket, head) => {
-        try {
-            handleUpgrade(view, req, socket as Socket, head);
-        } catch (error: unknown) {
+        void handleUpgrade(view, req, socket as Socket, head).catch((error: unknown) => {
             log(`WebSocket upgrade 경계에서 오류를 막았습니다: ${String(error)}`);
             socket.destroy();
-        }
+        });
     });
 
     // 프록시가 먼저 끊으면 백엔드는 멀쩡한데 사용자만 튕긴다. 인게임 서버 쪽 타임아웃보다 길게 둔다.
@@ -241,14 +239,26 @@ export function handleRequest(
  * 해석할 이유가 없는 바이트 흐름이고, 게이트웨이가 프레임을 뜯어보기 시작하면 프로토콜 버전이
  * 하나 더 생긴다 — 인게임 서버와 클라이언트 사이의 계약에 제3자가 끼는 셈이다.
  */
-function handleUpgrade(view: RegistrySource, req: IncomingMessage, socket: Socket, head: Buffer): void {
+export async function handleUpgrade(view: RegistrySource, req: IncomingMessage, socket: Socket, head: Buffer): Promise<void> {
+    // The client can reset while an asynchronous registry lookup is pending,
+    // before the upstream and its error/close handlers exist.
+    socket.once('error', () => socket.destroy());
     const path = req.url ?? '/';
-    const resolution = resolveWebSocketRoute(path, view.servers);
+    let resolution = resolveWebSocketRoute(path, view.servers);
     if (resolution.kind === 'not-found') {
         socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
         return;
     }
-    if (resolution.kind === 'unavailable') {
+    if (resolution.kind === 'unavailable' && view.ensureServer) {
+        socket.pause();
+        const serverId = new URL(path, 'http://gateway.invalid').pathname.split('/')[2]!;
+        const server = await view.ensureServer(serverId);
+        if (socket.destroyed) return;
+        // Keep this request's validated lookup even if a periodic refresh
+        // concurrently replaces the cached map with an earlier snapshot.
+        if (server) resolution = resolveWebSocketRoute(path, new Map([[serverId, server]]));
+    }
+    if (resolution.kind !== 'route') {
         // 지금은 없는 서버다. 방이 옮겨 갔거나 막 사라진 것이므로 클라이언트가 매칭 서버에
         // 다시 물어보게 한다 — 그 경로가 새 주소를 알려 준다.
         socket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n');

@@ -98,7 +98,7 @@ test('real bots increase worker capacity, drain migrates a waiting room, and ano
         primaryFailure = true;
         await testInfo.attach('scaling-failure-phase', { body: JSON.stringify({ phase, evidence,
             bots: bots.bots.map((bot: any) => ({ index: bot.index, playing: bot.playing,
-                socketState: bot.socket?.readyState, resumes: bot.resumes,
+                socketState: bot.socket?.readyState, handshakeStatus: bot.handshakeStatus, resumes: bot.resumes,
                 events: [...new Set(bot.events.map((event: any) => event.type))] })) }), contentType: 'application/json' });
         throw error;
     } finally {

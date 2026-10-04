@@ -272,9 +272,8 @@ async function main(): Promise<void> {
      * 포트는 OS가 정하는데, 감독자가 프로세스를 늘릴 때 포트를 손으로 배정하지 않으려면 그 방식이
      * 필요하다.
      *
-     * 첫 heartbeat는 listen보다 먼저 나갈 수 있다. 그때는 빈 문자열을 준다 — 게이트웨이는 주소가
-     * 빈 서버를 후보에서 빼므로, 다음 heartbeat(2초)에 제대로 실릴 때까지 그 서버로 아무도
-     * 보내지 않는다. 여기서 던지면 서버가 아예 못 뜬다.
+     * 서버 ID 선점용 임시 기록은 listen 전이므로 빈 주소를 쓴다. 실제 alive 목록에 넣는
+     * 최초 heartbeat는 listen 뒤에 발행해 방 승인 직후에도 경로가 유효하게 한다.
      */
     const internalAddress = (): string => {
         try {
@@ -298,16 +297,18 @@ async function main(): Promise<void> {
             console.warn(`[swITch] DANGER: GAME_ALLOW_DUPLICATE_SERVER_ID=true; starting alongside the live GAME_SERVER_ID=${INFRA.SERVER_ID}`);
         }
         await consumer.start();
+        // A selectable worker's first advertised heartbeat must already carry
+        // its listening address; otherwise a just-issued grant cannot route.
+        await transport.listen(rooms);
         await registry.start();
         if (!registry.healthy) throw new Error('initial registry heartbeat was not written');
     } catch (error) {
+        await transport.close().catch(() => undefined);
         await consumer.stop().catch(() => undefined);
         await redis.close().catch(() => undefined);
         throw new Error(`Redis control plane is required at startup: ${error instanceof Error ? error.message : String(error)}`);
     }
     log('Redis control plane connected and initial heartbeat published');
-
-    await transport.listen(rooms);
     log(`  WebSocket      listening (${transport.boundPort()})`);
 
     // ── 시계 ──

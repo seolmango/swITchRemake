@@ -27,7 +27,17 @@ export const useModalFocusTrap = <T extends HTMLElement>(
         if (dialog && !dialog.contains(document.activeElement)) {
             (focusableChildren(dialog)[0] ?? dialog).focus();
         }
-        return () => returnFocus?.focus();
+        // Async actions may disable or remove the button that held focus. Browsers
+        // can then move focus to body, where the dialog's key handler cannot run.
+        const observer = dialog ? new MutationObserver(() => {
+            const current = document.activeElement;
+            if (current === document.body || (current instanceof HTMLElement
+                && dialog.contains(current) && current.matches(':disabled'))) {
+                (focusableChildren(dialog)[0] ?? dialog).focus();
+            }
+        }) : null;
+        if (dialog) observer?.observe(dialog, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+        return () => { observer?.disconnect(); returnFocus?.focus(); };
     }, [active]);
 
     const onDialogKeyDown = useCallback<KeyboardEventHandler<T>>((event) => {

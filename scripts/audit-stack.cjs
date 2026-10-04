@@ -3,11 +3,12 @@ const { spawnSync } = require('node:child_process');
 const { randomBytes, generateKeyPairSync, createPrivateKey, createPublicKey } = require('node:crypto');
 const { mkdirSync, existsSync, writeFileSync, readFileSync, unlinkSync, readdirSync } = require('node:fs');
 const { resolve } = require('node:path');
+const { assertNoInheritedDeploymentSettings } = require('./audit-environment.cjs');
 
 const root = resolve(__dirname, '..');
 const action = process.argv[2] || 'run';
 const mode = process.argv[3] || 'core';
-if (!['run', 'up', 'start', 'refresh', 'refresh-backend', 'rebuild', 'test', 'browser', 'browser-probe', 'bots', 'scaling', 'faults', 'down', 'status', 'progress'].includes(action) || !['core', 'extended'].includes(mode)) throw new Error('Usage: audit-stack.cjs run|up|start|refresh|refresh-backend|rebuild|test|browser|browser-probe|bots|scaling|faults|down|status|progress core|extended');
+if (!['run', 'up', 'start', 'refresh', 'refresh-web', 'refresh-backend', 'rebuild', 'test', 'browser', 'browser-probe', 'bots', 'scaling', 'stalled-worker', 'faults', 'down', 'status', 'progress'].includes(action) || !['core', 'extended'].includes(mode)) throw new Error('Usage: audit-stack.cjs run|up|start|refresh|refresh-web|refresh-backend|rebuild|test|browser|browser-probe|bots|scaling|stalled-worker|faults|down|status|progress core|extended');
 const runId = process.env.AUDIT_RUN_ID || `local-${Date.now().toString(36)}`;
 if (!/^[a-z0-9][a-z0-9-]{1,55}$/.test(runId)) throw new Error('AUDIT_RUN_ID must be a short lowercase disposable run identifier');
 const project = `switch-audit-${runId}`;
@@ -15,14 +16,9 @@ const directory = resolve(root, '.audit', runId);
 const envPath = resolve(directory, 'runtime.env');
 const evidence = resolve(root, 'e2e', 'artifacts', 'audit', runId);
 // No repository .env is parsed, and no credentials/destinations are inherited by containers.
-for (const name of Object.keys(process.env)) {
-    if (/^(AZURE_|AWS_|GOOGLE_APPLICATION_CREDENTIALS$|DATABASE_URL$|PGHOST$)/i.test(name) && process.env[name]) {
-        throw new Error(`Audit refused inherited cloud/database setting: ${name}`);
-    }
-}
-for (const name of ['DB_HOST', 'REDIS_HOST', 'SMTP_HOST', 'E2E_BASE_URL', 'REPLAY_STORE']) {
-    if (process.env[name]) throw new Error(`Audit refused inherited destination setting: ${name}`);
-}
+assertNoInheritedDeploymentSettings(process.env);
+const observations = { inheritedDeploymentSettings: 'passed', localDockerContext: 'not-run', runtimeEnvironment: 'not-run', startup: 'not-run' };
+let ownsCreatedRun = false;
 let sensitive = [];
 const sanitize = (input) => {
     let text = String(input || '');
@@ -74,6 +70,7 @@ function load() {
     if (!privatePem.startsWith('-----BEGIN PRIVATE KEY-----') || !publicPem.startsWith('-----BEGIN PUBLIC KEY-----')) throw new Error('Audit replay keys failed encoding validation');
     createPrivateKey(privatePem); createPublicKey(publicPem);
     sensitive = Object.entries(entries).filter(([name]) => /SECRET|PASSWORD|KEY/.test(name)).map(([, value]) => value);
+    observations.runtimeEnvironment = 'validated';
     return entries;
 }
 function prepare() {
@@ -111,7 +108,9 @@ function prepare() {
         REPLAY_SIGNING_PUBLIC_KEYS: `audit:${publicPem}`, BUILD_ID: project,
     };
     if (Object.values(values).some(value => /[\r\n]/.test(value))) throw new Error('Audit setting cannot contain a newline');
-    writeFileSync(envPath, Object.entries(values).map(([key, value]) => `${key}=${value}`).join('\n') + '\n', { mode: 0o600 });
+    // Exclusive creation prevents another launch from winning the identifier race.
+    writeFileSync(envPath, Object.entries(values).map(([key, value]) => `${key}=${value}`).join('\n') + '\n', { mode: 0o600, flag: 'wx' });
+    ownsCreatedRun = true;
     return load();
 }
 function build(values) {
@@ -129,7 +128,13 @@ function collect() {
     const id = compose(['ps', '-a', '-q', 'runner'], { quiet: true }).stdout.trim();
     if (id) docker(['cp', `${id}:/app/e2e/artifacts/.`, evidence], { allowFailure: true, quiet: true });
     const cluster = compose(['ps', '-q', 'cluster'], { quiet: true, allowFailure: true }).stdout.trim();
-    if (cluster) docker(['cp', `${cluster}:/tmp/audit-scaling-processes.json`, resolve(evidence, 'scaling-processes.json')], { allowFailure: true, quiet: true });
+    if (cluster) {
+        const available = compose(['exec', '-T', 'cluster', 'node', '-e', "const fs=require('node:fs');console.log(JSON.stringify(['audit-scaling-processes.json','audit-stalled-worker.json'].filter(name=>fs.existsSync('/tmp/'+name))))"], { quiet: true, allowFailure: true, timeoutMs: 10_000 });
+        if (available.status === 0) for (const report of JSON.parse(available.stdout)) {
+            if (!['audit-scaling-processes.json', 'audit-stalled-worker.json'].includes(report)) throw new Error('Unexpected audit report path');
+            docker(['cp', `${cluster}:/tmp/${report}`, resolve(evidence, report.replace(/^audit-/, ''))], { allowFailure: true, quiet: true });
+        }
+    }
     const scrub = (folder) => {
         for (const item of readdirSync(folder, { withFileTypes: true })) {
             const target = resolve(folder, item.name);
@@ -144,7 +149,15 @@ function collect() {
     const summary = compose(['ps', '-a', '--format', 'json'], { allowFailure: true, quiet: true });
     writeFileSync(resolve(evidence, 'stack-status.json'), sanitize(summary.stdout));
     // Logs are synthetic but can contain codes or cookies; keep only safe operation metadata.
-    writeFileSync(resolve(evidence, 'isolation.json'), JSON.stringify({ project, internalNetwork: true, syntheticDatabase: true, localSmtp: true, localReplayStorage: true, externalRoutes: 'disabled', credentialInheritance: 'refused' }, null, 2));
+    const network = docker(['network', 'inspect', `${project}_isolated`, '--format', '{{.Internal}}'], { quiet: true, allowFailure: true, timeoutMs: 15_000 });
+    const observedInternal = network.status === 0 && /^(true|false)$/.test(network.stdout.trim()) ? network.stdout.trim() === 'true' : null;
+    writeFileSync(resolve(evidence, 'isolation.json'), JSON.stringify({
+        project,
+        declaredDesign: { internalNetwork: true, syntheticDatabase: true, localSmtp: true, localReplayStorage: true,
+            externalRoutes: 'disabled', credentialInheritance: 'refused' },
+        observed: { internalNetwork: observedInternal, networkProbeStatus: observedInternal === null ? 'unknown' : 'observed' },
+        preflight: observations,
+    }, null, 2));
 }
 function cleanup() {
     load();
@@ -206,14 +219,25 @@ function verifyScaling() {
     collect();
     if (result.status !== 0) throw new Error('Scaling failed actual OS worker process gate');
 }
+function stalledWorker() {
+    // The probe independently validates idle audit-only PID identities and has a detached resume watchdog.
+    compose(['cp', 'scripts/audit-stalled-worker.cjs', 'cluster:/app/scripts/audit-stalled-worker.cjs'], { timeoutMs: 15_000 });
+    const result = compose(['exec', '-T', 'cluster', 'node', 'scripts/audit-stalled-worker.cjs'], { allowFailure: true, timeoutMs: 65_000 });
+    collect();
+    if (result.status !== 0) throw new Error('Audit stalled worker process-cap probe failed');
+}
 function startStack() {
     // A successful one-shot migration is Exited(0), not a long-running healthy service.
     // Waiting on a dependency graph containing it differs between Compose versions.
     // Enforce each boundary explicitly and never suppress the migration exit status.
-    compose(['up', '-d', '--wait', '--wait-timeout', '180', 'postgres', 'redis', 'mailpit'], { timeoutMs: 240_000 });
-    compose(['run', '--rm', '--no-deps', 'migrate'], { timeoutMs: 180_000 });
-    compose(['up', '-d', '--wait', '--wait-timeout', '180', '--no-deps', 'match', 'cluster'], { timeoutMs: 240_000 });
-    compose(['up', '-d', '--wait', '--wait-timeout', '180', '--no-deps', 'web'], { timeoutMs: 240_000 });
+    observations.startup = 'running';
+    try {
+        compose(['up', '-d', '--wait', '--wait-timeout', '180', 'postgres', 'redis', 'mailpit'], { timeoutMs: 240_000 });
+        compose(['run', '--rm', '--no-deps', 'migrate'], { timeoutMs: 180_000 });
+        compose(['up', '-d', '--wait', '--wait-timeout', '180', '--no-deps', 'match', 'cluster'], { timeoutMs: 240_000 });
+        compose(['up', '-d', '--wait', '--wait-timeout', '180', '--no-deps', 'web'], { timeoutMs: 240_000 });
+        observations.startup = 'passed';
+    } finally { if (observations.startup === 'running') observations.startup = 'failed'; }
 }
 function versions() {
     const engine = docker(['version', '--format', '{{json .}}'], { quiet: true, timeoutMs: 15_000 });
@@ -226,9 +250,15 @@ function versions() {
     }, null, 2));
 }
 let shouldCleanup = action === 'run';
+let mayAccessLocalDocker = false;
 try {
     const context = docker(['context', 'inspect', '--format', '{{.Endpoints.docker.Host}}'], { quiet: true });
-    if (context.status !== 0 || !/^(npipe:|unix:)/.test(context.stdout.trim())) throw new Error('Audit refuses non-local Docker contexts');
+    if (context.status !== 0 || !/^(npipe:|unix:)/.test(context.stdout.trim())) {
+        observations.localDockerContext = 'failed';
+        throw new Error('Audit refuses non-local Docker contexts');
+    }
+    observations.localDockerContext = 'passed';
+    mayAccessLocalDocker = true;
     if (action === 'run' || action === 'up' || action === 'rebuild' || action === 'start') {
         const values = action === 'rebuild' || action === 'start' ? load() : prepare();
         versions();
@@ -246,6 +276,11 @@ try {
         const values = load();
         docker(['build', '-f', 'deploy/audit/Dockerfile.refresh', '--build-arg', `AUDIT_RUNNER_IMAGE=${values.AUDIT_RUNNER_IMAGE}`, '-t', values.AUDIT_RUNNER_IMAGE, '.']);
     }
+    if (action === 'refresh-web') {
+        const values = load();
+        docker(['build', '-f', 'deploy/audit/Dockerfile.web', '--build-arg', `AUDIT_BACKEND_IMAGE=${values.AUDIT_BACKEND_IMAGE}`, '-t', values.AUDIT_WEB_IMAGE, '.']);
+        compose(['up', '-d', '--no-deps', '--wait', '--wait-timeout', '180', 'web'], { timeoutMs: 240_000 });
+    }
     if (action === 'refresh-backend') {
         const values = load();
         docker(['build', '-f', 'deploy/audit/Dockerfile.backend-refresh', '--build-arg', `AUDIT_BACKEND_IMAGE=${values.AUDIT_BACKEND_IMAGE}`, '-t', values.AUDIT_BACKEND_IMAGE, '.']);
@@ -259,9 +294,10 @@ try {
         const result = compose(['up', '--no-deps', '--abort-on-container-exit', '--exit-code-from', 'runner', 'runner'], { allowFailure: true });
         collect();
         if (result.status) process.exitCode = result.status;
-        else if (mode === 'extended') { verifyScaling(); faults(); }
+        else if (mode === 'extended') { verifyScaling(); faults(); stalledWorker(); }
     }
     if (action === 'faults') faults();
+    if (action === 'stalled-worker') stalledWorker();
     if (action === 'browser-probe') { compose(['run', '--rm', '--no-deps', 'runner', 'node', 'scripts/audit-browser-probe.cjs'], { timeoutMs: 60_000 }); collect(); }
     if (action === 'browser') {
         const browserArgs = process.argv.slice(4);
@@ -299,7 +335,7 @@ try {
     console.error(sanitize(error.message));
     process.exitCode = 1;
 } finally {
-    if (shouldCleanup && existsSync(envPath)) {
+    if (shouldCleanup && ownsCreatedRun && mayAccessLocalDocker && existsSync(envPath)) {
         try { collect(); cleanup(); } catch (error) { console.error(sanitize(`Audit cleanup failed: ${error.message}`)); process.exitCode = 1; }
     }
 }

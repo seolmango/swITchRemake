@@ -99,6 +99,10 @@ export class RegistryView {
     readonly #now: () => number;
     #servers: ReadonlyMap<string, GameServerHeartbeat> = new Map();
     #timer: NodeJS.Timeout | null = null;
+    readonly #lookups = new Map<string, Promise<GameServerHeartbeat | null>>();
+    readonly #pendingReads = new Set<Promise<string | null>>();
+    #lookupWindowAt = 0;
+    #lookupCount = 0;
 
     public constructor(options: RegistryViewOptions) {
         this.#options = options;
@@ -119,6 +123,47 @@ export class RegistryView {
     public stop(): void {
         if (this.#timer !== null) clearInterval(this.#timer);
         this.#timer = null;
+    }
+
+    /** A grant can reach the browser before the periodic routing-cache refresh. */
+    public async ensureServer(serverId: string): Promise<GameServerHeartbeat | null> {
+        if (!SERVER_ID.test(serverId)) return null;
+        const cached = this.#servers.get(serverId);
+        if (cached) return cached;
+        const pending = this.#lookups.get(serverId);
+        if (pending) return pending;
+        const now = this.#now();
+        if (now - this.#lookupWindowAt >= HEARTBEAT_INTERVAL_MS) {
+            this.#lookupWindowAt = now; this.#lookupCount = 0;
+        }
+        // Unauthenticated unknown paths must not turn upgrades into unlimited
+        // Redis work. Concurrent requests for one new worker share one lookup.
+        if (this.#lookupCount >= 16 || this.#pendingReads.size >= 16) return null;
+        this.#lookupCount++;
+        const lookup = this.#lookupServer(serverId);
+        this.#lookups.set(serverId, lookup);
+        try { return await lookup; }
+        finally { this.#lookups.delete(serverId); }
+    }
+
+    async #lookupServer(serverId: string): Promise<GameServerHeartbeat | null> {
+        let timer: NodeJS.Timeout | undefined;
+        try {
+            const read = this.#options.redis.get(this.#options.keys.gameServer(serverId));
+            this.#pendingReads.add(read);
+            // A caller timeout does not cancel ioredis. Keep that underlying
+            // operation in the concurrency budget until it actually settles.
+            void read.then(() => this.#pendingReads.delete(read), () => this.#pendingReads.delete(read));
+            const raw = await Promise.race([
+                read,
+                new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 1_000); }),
+            ]);
+            if (raw === null) return null;
+            const server = decodeHeartbeat(raw, serverId, this.#options.addressPolicy, this.#now());
+            this.#servers = new Map([...this.#servers, [serverId, server]]);
+            return server;
+        } catch { return null; }
+        finally { if (timer) clearTimeout(timer); }
     }
 
     /**

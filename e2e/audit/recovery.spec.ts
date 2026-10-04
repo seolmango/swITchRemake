@@ -56,15 +56,29 @@ test('local independent TOTP authenticator matches a public RFC test vector', ()
     expect(authenticatorCode('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', 59_000)).toBe('287082');
 });
 
-test('extended UI TOTP setup, login, SMTP password recovery and MFA removal succeed', async ({ browser }) => {
+test('extended UI TOTP setup, login, SMTP password recovery and MFA removal succeed', async ({ browser }, testInfo) => {
     test.setTimeout(360_000);
     await new Promise<void>(done => setTimeout(done, 61_000));
     const account = await seedAccount();
     const recovered = { ...account, password: `Re${randomBytes(6).toString('hex')}!` };
     const { context, external } = await isolatedContext(browser);
     const db = database();
+    const evidence: { path: string; status: number; code?: string; mfaRequired?: boolean; tokenIssued?: boolean }[] = [];
+    const observing: Promise<void>[] = [];
     try {
         const page = await context.newPage();
+        page.on('response', response => {
+            const path = new URL(response.url()).pathname;
+            if (!path.startsWith('/api/auth/')) return;
+            observing.push((async () => {
+                const data = await response.json().catch(() => ({}));
+                evidence.push({ path, status: response.status(),
+                    ...(typeof data.code === 'string' && /^[A-Z_]+$/.test(data.code) ? { code: data.code } : {}),
+                    ...(typeof data.mfaRequired === 'boolean' ? { mfaRequired: data.mfaRequired } : {}),
+                    tokenIssued: typeof data.accessToken === 'string',
+                });
+            })());
+        });
         await login(page, account);
         await security(page);
         await page.getByRole('radio').filter({ hasText: 'OTP' }).click();
@@ -91,7 +105,11 @@ test('extended UI TOTP setup, login, SMTP password recovery and MFA removal succ
             await page.goto('/login');
             await page.getByLabel('이메일', { exact: true }).fill(account.email);
             await page.getByLabel('비밀번호', { exact: true }).fill(password);
+            const submitted = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/login');
             await page.getByRole('button', { name: '로그인', exact: true }).click();
+            const response = await submitted;
+            expect(response.status(), 'synthetic TOTP password login succeeds').toBe(201);
+            expect((await response.json()).mfaRequired === true, 'TOTP password login requires its second factor').toBe(true);
             await expect(page.getByRole('heading', { name: '2차 인증', exact: true })).toBeVisible();
             await page.getByLabel('2차 인증 코드', { exact: true }).fill(await authenticator.nextCode());
             await page.getByRole('button', { name: '확인', exact: true }).click();
@@ -129,5 +147,9 @@ test('extended UI TOTP setup, login, SMTP password recovery and MFA removal succ
         const [disabled] = await db`select count(*)::int as totp from mfa_settings where user_id = ${account.id}`;
         expect(disabled?.totp).toBe(0);
         expect(external, 'TOTP registration and recovery use no external authenticator or QR service').toEqual([]);
-    } finally { await context.close(); await db.end(); }
+    } finally {
+        await Promise.allSettled(observing);
+        await testInfo.attach('public-recovery-http-state', { body: JSON.stringify(evidence), contentType: 'application/json' });
+        await context.close(); await db.end();
+    }
 });

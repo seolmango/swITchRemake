@@ -114,6 +114,8 @@ class AuditBots {
         bot.roomId = grant.roomId ?? bot.roomId;
         const socket = new WebSocket(`ws://web${grant.wsPath}`, { origin: 'http://web', handshakeTimeout: 3_000, maxPayload: 256_000 });
         bot.socket = socket;
+        bot.handshakeStatus = null;
+        let authenticated = false;
         socket.on('error', () => undefined);
         socket.on('message', (buffer, binary) => {
             if (binary) {
@@ -125,18 +127,22 @@ class AuditBots {
             }
             let event; try { event = JSON.parse(buffer.toString()); } catch { this.errors.push({ kind: 'invalid-event', bot: bot.index }); return; }
             if (bot.events.length >= 500) bot.events.shift(); bot.events.push(event);
-            if (event.type === 'auth.ok') { bot.playerId = event.payload.playerId; bot.playing = event.payload.roomState === 'PLAYING'; }
+            if (event.type === 'auth.ok') { authenticated = true; bot.playerId = event.payload.playerId; bot.playing = event.payload.roomState === 'PLAYING'; }
             if (event.type === 'game.started') bot.playing = true;
             if (event.type === 'game.ended') bot.playing = false;
         });
         socket.on('close', (code) => {
             clearInterval(bot.inputTimer); bot.inputTimer = null;
-            if (!this.closing && bot.roomId && bot.socket === socket && code !== 1000 && !bot.recovering) {
+            if (authenticated && !this.closing && bot.roomId && bot.socket === socket && code !== 1000 && !bot.recovering) {
                 void this.resume(bot).catch(() => this.errors.push({ kind: 'resume-failed', bot: bot.index }));
             }
         });
         await new Promise((resolve, reject) => {
-            socket.once('open', resolve); socket.once('error', () => reject(new Error('Audit socket handshake failed')));
+            socket.once('open', resolve); socket.once('error', error => {
+                const status = /^Unexpected server response: (\d{3})$/.exec(error.message);
+                bot.handshakeStatus = status ? Number(status[1]) : null;
+                reject(new Error(bot.handshakeStatus ? `Audit socket handshake failed (HTTP ${bot.handshakeStatus})` : 'Audit socket handshake failed'));
+            });
         });
         const cursor = bot.events.length;
         socket.send(JSON.stringify({ v: 1, type: 'auth', payload: { ticket: grant.ticket } }));

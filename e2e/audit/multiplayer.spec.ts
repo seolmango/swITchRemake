@@ -193,9 +193,28 @@ test('three member browsers complete two games, persist results and stats, downl
         expect([401, 403, 404]).toContain(repeated.status());
         await host.goto('/replay');
         await host.locator('input[type=file]').setInputFiles({ name: 'audit.switchreplay', mimeType: 'application/octet-stream', buffer: replay });
+        await expect(host.locator('.replay-verdict')).toContainText('검증됨');
+        await expect(host.locator('.replay-participants li')).toHaveCount(3);
+        await expect(host.locator('.replay-meta dl > div').filter({ has: host.getByText('길이', { exact: true }) }).locator('dd')).not.toHaveText('불러오는 중…');
+        await expect(host.locator('.replay-stage canvas')).toBeVisible();
         await expect(host.getByRole('button', { name: '재생', exact: true })).toBeEnabled();
+        const seek = host.getByRole('slider', { name: '재생 위치', exact: true });
+        const finalFrame = Number(await seek.getAttribute('max'));
+        expect(finalFrame, 'the actual completed match contains a replay timeline').toBeGreaterThan(10);
         await host.getByRole('button', { name: '재생', exact: true }).click();
-        await expect(host.getByRole('button', { name: '멈춤', exact: true })).toBeVisible();
+        await expect.poll(async () => Number(await seek.inputValue()), { message: 'replay advances actual recorded frames' }).toBeGreaterThan(0);
+        await host.getByRole('button', { name: '멈춤', exact: true }).click();
+        const pausedFrame = await seek.inputValue();
+        await host.waitForTimeout(500);
+        expect(await seek.inputValue(), 'pause retains the same recorded frame').toBe(pausedFrame);
+        await seek.focus(); await seek.press('End');
+        await expect(seek).toHaveValue(String(finalFrame));
+        await expect(host.locator('.replay-position')).toHaveText(`${finalFrame + 1} / ${finalFrame + 1}`);
+        await seek.press('Home');
+        await expect(seek).toHaveValue('0');
+        await expect(host.locator('.replay-position')).toHaveText(`1 / ${finalFrame + 1}`);
+        evidence.push({ replaySignatureVerified: true, replayParticipants: 3, replayFrames: finalFrame + 1,
+            playbackAdvanced: true, pauseHeld: true, seekForwardAndBackward: true });
         const denied = await owner.context.request.get('/api/admin/overview', { headers: owner.headers });
         expect(denied.status()).toBe(403);
         expect((await owner.context.request.get(`/api/admin/reports/${reportCaseId}`, { headers: owner.headers })).status()).toBe(403);
@@ -235,6 +254,18 @@ test('three member browsers complete two games, persist results and stats, downl
             const outsideHeaders = await apiLogin(outsider.context, await seedAccount());
             expect((await outsider.context.request.get(`/api/matches/${matchIds[1]}/result`, { headers: outsideHeaders })).status()).toBe(403);
             expect((await outsider.context.request.post(`/api/users/me/matches/${matchIds[1]}/replay-ticket`, { headers: outsideHeaders })).status()).toBe(403);
+            // The saved file is portable, while server downloads remain participant-only.
+            // Bound malformed input to 32 bytes, then prove the same page can recover.
+            const reader = await outsider.context.newPage();
+            await reader.goto('/replay');
+            await reader.locator('input[type=file]').setInputFiles({ name: 'invalid.swrp', mimeType: 'application/octet-stream', buffer: Buffer.alloc(32) });
+            await expect(reader.getByRole('alert')).toContainText('읽을 수 없는 파일');
+            await reader.locator('input[type=file]').setInputFiles({ name: 'valid.swrp', mimeType: 'application/octet-stream', buffer: replay });
+            await expect(reader.locator('.replay-verdict')).toContainText('검증됨');
+            await expect(reader.locator('.replay-participants li')).toHaveCount(3);
+            await expect(reader.getByRole('slider', { name: '재생 위치', exact: true })).toHaveAttribute('max', String(finalFrame));
+            expect(outsider.external).toEqual([]);
+            evidence.push({ malformedReplayBytes: 32, rejectedWithVisibleError: true, validFileRecovery: true });
         } finally { await outsider.context.close(); }
         const anonymous = await browser.newContext({ baseURL: 'http://web' });
         try { expect((await anonymous.request.get(`/api/matches/${matchIds[1]}/result`)).status()).toBe(401); }
