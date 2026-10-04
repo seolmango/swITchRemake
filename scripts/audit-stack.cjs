@@ -198,14 +198,34 @@ function verifyScaling() {
     collect();
     if (result.status !== 0) throw new Error('Scaling failed actual OS worker process gate');
 }
+function startStack() {
+    // A successful one-shot migration is Exited(0), not a long-running healthy service.
+    // Waiting on a dependency graph containing it differs between Compose versions.
+    // Enforce each boundary explicitly and never suppress the migration exit status.
+    compose(['up', '-d', '--wait', '--wait-timeout', '180', 'postgres', 'redis', 'mailpit'], { timeoutMs: 240_000 });
+    compose(['run', '--rm', '--no-deps', 'migrate'], { timeoutMs: 180_000 });
+    compose(['up', '-d', '--wait', '--wait-timeout', '180', '--no-deps', 'match', 'cluster'], { timeoutMs: 240_000 });
+    compose(['up', '-d', '--wait', '--wait-timeout', '180', '--no-deps', 'web'], { timeoutMs: 240_000 });
+}
+function versions() {
+    const engine = docker(['version', '--format', '{{json .}}'], { quiet: true, timeoutMs: 15_000 });
+    const composeVersion = docker(['compose', 'version', '--short'], { quiet: true, timeoutMs: 15_000 });
+    const parsed = JSON.parse(engine.stdout);
+    mkdirSync(evidence, { recursive: true });
+    writeFileSync(resolve(evidence, 'runtime-versions.json'), JSON.stringify({
+        dockerClient: parsed.Client.Version, dockerServer: parsed.Server.Version,
+        compose: composeVersion.stdout.trim(), nodeLauncher: process.version,
+    }, null, 2));
+}
 let shouldCleanup = action === 'run';
 try {
     const context = docker(['context', 'inspect', '--format', '{{.Endpoints.docker.Host}}'], { quiet: true });
     if (context.status !== 0 || !/^(npipe:|unix:)/.test(context.stdout.trim())) throw new Error('Audit refuses non-local Docker contexts');
     if (action === 'run' || action === 'up' || action === 'rebuild' || action === 'start') {
         const values = action === 'rebuild' || action === 'start' ? load() : prepare();
+        versions();
         if (action !== 'start') build(values);
-        compose(['up', '-d', '--wait', '--wait-timeout', '180', 'web']);
+        startStack();
         const network = docker(['network', 'inspect', `${project}_isolated`, '--format', '{{.Internal}}'], { quiet: true });
         if (network.stdout.trim() !== 'true') throw new Error('Audit refuses a network with external routing');
         const port = compose(['port', 'web', '80'], { quiet: true }).stdout.trim();
@@ -219,7 +239,8 @@ try {
     if (action === 'refresh-backend') {
         const values = load();
         docker(['build', '-f', 'deploy/audit/Dockerfile.backend-refresh', '--build-arg', `AUDIT_BACKEND_IMAGE=${values.AUDIT_BACKEND_IMAGE}`, '-t', values.AUDIT_BACKEND_IMAGE, '.']);
-        compose(['up', '-d', '--wait', '--wait-timeout', '180', 'web']);
+        versions();
+        startStack();
     }
     if (action === 'run' || action === 'test') {
         const current = readFileSync(envPath, 'utf8');
