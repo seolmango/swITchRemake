@@ -16,7 +16,8 @@ export interface LobbyViewPlayer {
     guest: boolean;
     role: PlayerRole;
     waitingForNextMatch?: boolean;
-    control: PlayerControl;
+    /** Only known for self: the wire protocol does not advertise other players' devices. */
+    control?: PlayerControl;
     skill: PlayerSkill;
     /** 게스트와 전적이 안 온 사람은 null이다. 계산은 매칭 서버가 한다. */
     stats: LobbyStats | null;

@@ -43,6 +43,8 @@ body, html {
   overflow: hidden;
   font-family: var(--font-ui);
   font-weight: 500;
+  background: var(--color-letterbox, #191919);
+  overscroll-behavior: none;
 }
 
 button, input {
@@ -144,6 +146,59 @@ html[lang='ko'] .page-title { top: 42px; }
   transform: translateX(-50%);
   display: grid;
   gap: 34px;
+}
+
+.password-change-stack { top: 210px; gap: 20px; }
+.auth-form-actions { display: flex; justify-content: center; gap: 28px; }
+
+/* Authentication forms remain readable in a portrait phone; the game keeps its fixed stage. */
+@media (max-width: 640px) and (orientation: portrait) {
+  .responsive-form-container { display: block !important; overflow: auto !important; background: var(--theme-canvas) !important; }
+  .responsive-form-container .game-stage {
+    width: 100% !important; height: auto !important; min-height: 100%; transform: none !important;
+    box-sizing: border-box; padding: 20px 18px max(24px, env(safe-area-inset-bottom));
+  }
+  .responsive-form-container .page-screen { position: relative; inset: auto; }
+  .responsive-form-container .page-screen > .round-box { display: none; }
+  .responsive-form-container .page-title {
+    position: relative; left: auto; top: auto !important; transform: none; min-height: 48px;
+    margin: 0 0 24px 64px; font-size: 28px; white-space: normal; display: flex; align-items: center;
+  }
+  .responsive-form-container .page-screen > .round-button {
+    left: 0 !important; top: 0 !important; transform: none !important; width: 48px !important; height: 48px !important;
+  }
+  .responsive-form-container .form-stack,
+  .responsive-form-container .signup-grid {
+    position: relative; left: auto; top: auto !important; width: 100%; transform: none; gap: 18px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .responsive-form-container .form-row { gap: 12px; grid-template-columns: minmax(0, 1fr) auto; }
+  .responsive-form-container .field-group { gap: 7px; min-width: 0; }
+  .responsive-form-container .field-label { font-size: 18px; }
+  .responsive-form-container .field-help { font-size: 13px; min-height: 16px; overflow-wrap: anywhere; }
+  .responsive-form-container .field-group input { height: 48px !important; font-size: 18px !important; padding-left: 12px !important; border-bottom-width: 3px !important; border-radius: 10px 10px 3px 3px !important; }
+  .responsive-form-container .field-group input[type='password'] { padding-right: 54px !important; }
+  .responsive-form-container .field-group input + button { width: 40px !important; height: 36px !important; right: 6px !important; top: 5px !important; }
+  .responsive-form-container .field-group input + button svg { width: 22px; height: 22px; }
+  .responsive-form-container .round-button { max-width: 100%; height: 56px !important; border-width: 3px !important; border-radius: 14px !important; }
+  .responsive-form-container .round-button svg text { font-size: 19px; }
+  .responsive-form-container .page-screen > .round-button svg { width: 28px; height: 28px; }
+  .responsive-form-container .form-row > .round-button { width: 106px !important; height: 48px !important; margin-bottom: 23px; }
+  .responsive-form-container .form-row > .round-button svg text { font-size: 14px; }
+  .responsive-form-container .inline-link { font-size: 17px !important; border-bottom-width: 2px !important; }
+  .responsive-form-container .status-message { font-size: 15px; line-height: 1.5; min-height: 24px; overflow-wrap: anywhere; }
+  .responsive-form-container .auth-form-actions,
+  .responsive-form-container .mfa-login-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .responsive-form-container .auth-form-actions .round-button,
+  .responsive-form-container .mfa-login-actions .round-button { width: 100% !important; }
+  .responsive-form-container .signup-consent-row { padding: 8px; border-width: 2px; border-radius: 12px; }
+  .responsive-form-container .signup-consent-row [role='checkbox'] { font-size: 14px !important; gap: 8px !important; }
+  .responsive-form-container .signup-consent-row [role='checkbox'] > span { width: 30px !important; height: 30px !important; border-width: 3px !important; }
+  .responsive-form-container .signup-consent-row [role='checkbox'] > span svg { width: 22px; height: 22px; }
+  .responsive-form-container .signup-consent-row > button:last-child { min-width: 68px; min-height: 40px; padding: 0 6px; font-size: 13px; border-width: 2px; }
+  .responsive-form-container .mfa-login-prompt { font-size: 17px; }
+  .responsive-form-container .mfa-login-meta { flex-wrap: wrap; gap: 12px; font-size: 15px; }
+  .responsive-form-container .mfa-login-stack > [role='checkbox'] { font-size: 16px !important; }
 }
 
 .form-row {

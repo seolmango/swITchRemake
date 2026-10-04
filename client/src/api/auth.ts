@@ -96,5 +96,10 @@ export const resetPassword = (input: { email: string; code: string; newPassword:
         method: 'POST', auth: false, retryAuth: false, body: input,
     });
 
-export const changePassword = (input: { currentPassword: string; newPassword: string }) =>
-    apiRequest<{ revokedCount: number }>('/users/me/password', { method: 'POST', body: input });
+export const changePassword = async (input: { currentPassword: string; newPassword: string }) => {
+    const result = await apiRequest<{ revokedCount: number; accessToken: string; nickname: string }>(
+        '/users/me/password', { method: 'POST', body: input },
+    );
+    replaceGuestWithAccount(result.accessToken, result.nickname);
+    return result;
+};

@@ -28,6 +28,7 @@ import type { TrainingPad } from 'shared';
 import { SettingsPage } from './SettingsPage.tsx';
 import { matchSfx, useMatchSfx } from '../audio/matchSfx.ts';
 import { canEnterRunningGame } from '../game/roomRole.ts';
+import { BufferedSnapshots } from '../game/BufferedSnapshots.ts';
 
 const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { iconUrl: string; labelKey: string }> = {
     [SkillId.Dash]: { iconUrl: dashIcon, labelKey: 'lobby.skills.dash' },
@@ -62,7 +63,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
     const engineRef = useRef<SwitchEngine | null>(null);
     const loadedMapId = useRef<string | null>(null);
     const mapReady = useRef(false);
-    const pendingSnapshot = useRef<ArrayBuffer | null>(null);
+    const pendingSnapshots = useRef(new BufferedSnapshots());
     const [mapError, setMapError] = useState<string | null>(null);
     const [mapRetry, setMapRetry] = useState(0);
     const [engineReady, setEngineReady] = useState(false);
@@ -134,8 +135,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
             loadedMapId.current = key;
             mapReady.current = true;
             setMapLoaded(true);
-            const latest = pendingSnapshot.current ?? gameSession.getLatestSnapshot();
-            pendingSnapshot.current = null;
+            const latest = pendingSnapshots.current.take() ?? gameSession.getLatestSnapshot();
             if (latest) applySnapshot(engine, latest);
         } catch (error) {
             setMapError(error instanceof Error ? error.message : String(error));
@@ -173,7 +173,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
 
     useEffect(() => gameSession.subscribeSnapshots((frame) => {
         if (!mapReady.current) {
-            pendingSnapshot.current = frame;
+            pendingSnapshots.current.push(frame);
             return;
         }
         try {
@@ -230,6 +230,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
                 : t('game.waitingSnapshot');
 
     const exitGame = useCallback(() => {
+        gameSession.send({ type: 'lobby.leave', payload: {} });
         gameSession.disconnect();
         navigate(training ? '/how-to-play' : '/rooms', { replace: true });
     }, [navigate, training]);

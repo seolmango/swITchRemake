@@ -10,12 +10,14 @@ interface GameContainerProps {
     fillFactor?: number;
     isPopup?: boolean;
     zIndex?: number;
+    responsiveForm?: boolean;
 }
 
 export const GameContainer: React.FC<GameContainerProps> = ({
                                                                 children,
                                                                 fillFactor = 1.0,
                                                                 isPopup = false,
+                                                                responsiveForm = false,
                                                                 zIndex = 1
                                                             }) => {
     const [scale, setScale] = useState(1);
@@ -23,19 +25,24 @@ export const GameContainer: React.FC<GameContainerProps> = ({
 
     useEffect(() => {
         const handleResize = () => {
-            setScale(gameCanvasScale(window.innerWidth, window.innerHeight, fillFactor));
+            const viewport = window.visualViewport;
+            setScale(gameCanvasScale(viewport?.width ?? window.innerWidth, viewport?.height ?? window.innerHeight, fillFactor));
         };
         window.addEventListener('resize', handleResize);
+        window.visualViewport?.addEventListener('resize', handleResize);
         handleResize();
-        return () => window.removeEventListener('resize', handleResize);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.visualViewport?.removeEventListener('resize', handleResize);
+        };
     }, [fillFactor]);
 
     const canvasBgColor = theme === 0 ? Color.white : Color.black;
 
     return (
-        <div style={{
+        <div className={responsiveForm ? 'game-container responsive-form-container' : 'game-container'} style={{
             width: '100vw',
-            height: '100vh',
+            height: '100dvh',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
@@ -47,7 +54,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({
             pointerEvents: isPopup ? 'none' : 'auto',
             overflow: 'clip'
         }}>
-            <div style={{
+            <div className="game-stage" style={{
                 width: `${GAME_DESIGN_WIDTH}px`,
                 height: `${GAME_DESIGN_HEIGHT}px`,
                 transform: `scale(${scale})`,

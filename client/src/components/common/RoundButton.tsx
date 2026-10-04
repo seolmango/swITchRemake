@@ -130,6 +130,7 @@ export const RoundButton = React.memo<RoundButtonProps>(({
 
     return (
         <button
+            className="round-button"
             type="button"
             disabled={disabled || isLoading}
             aria-busy={isLoading || undefined}

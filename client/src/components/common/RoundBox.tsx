@@ -19,7 +19,7 @@ export const RoundBox: React.FC<RoundBoxProps> = ({ width, height, type = 2, x, 
     const border = type === 0 ? 'var(--ui-red-border)' : type === 1 ? 'var(--ui-blue-border)' : 'var(--ui-neutral-border)';
     const absolute = x !== undefined && y !== undefined;
     return (
-        <div style={{
+        <div className="round-box" style={{
             width,
             height,
             boxSizing: 'border-box',

@@ -46,13 +46,15 @@ export const ChangePasswordPage: React.FC = () => {
     return (
         <PageLayout title={t('auth.changeTitle')} backTo="/profile">
             <RoundBox x={960} y={550} width={1240} height={800} type={2}/>
-            <div className="form-stack" style={{ top: 285 }}>
+            <div className="form-stack password-change-stack">
                 <TextField label={t('auth.currentPassword')} value={currentPassword} type="password" autoComplete="current-password" onChange={setCurrentPassword}/>
                 <TextField label={t('auth.newPassword')} placeholder={t('auth.passwordPlaceholder')} value={newPassword} type="password" autoComplete="new-password" onChange={setNewPassword}/>
                 <TextField label={t('auth.confirmNewPassword')} placeholder={t('auth.passwordPlaceholder')} value={newPasswordConfirmation} type="password" autoComplete="new-password" error={newPasswordConfirmation && newPassword !== newPasswordConfirmation ? t('auth.passwordMismatch') : undefined} onChange={setNewPasswordConfirmation}/>
                 <div className={`status-message${failed ? ' is-error' : ''}`} role="status" aria-live="polite" style={{ color: failed ? themeColors(theme).text : themeColors(theme).muted }}>{message}</div>
-                <RoundButton width={620} height={104} type={1} content={t('auth.changeTitle')} disabled={!valid || loading} isLoading={loading} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
-                <RoundButton width={360} height={86} type={2} content={t('nav.back')} onClick={() => navigate('/profile')} style={{ justifySelf: 'center' }}/>
+                <div className="auth-form-actions">
+                    <RoundButton width={620} height={104} type={1} content={t('auth.changeTitle')} disabled={!valid || loading} isLoading={loading} onClick={() => void submit()}/>
+                    <RoundButton width={280} height={104} type={2} content={t('nav.back')} onClick={() => navigate('/profile')}/>
+                </div>
             </div>
         </PageLayout>
     );

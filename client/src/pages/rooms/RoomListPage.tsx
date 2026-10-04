@@ -39,15 +39,33 @@ export const RoomListPage: React.FC = () => {
 
     useEffect(() => {
         let active = true;
-        void getRooms(page).then((result) => {
-            if (!active) return;
-            setRooms(result.rooms);
-            setTotalPages(result.totalPages);
-            setMessage('');
-        }).catch((error: unknown) => {
-            if (active) setMessage(roomErrorMessage(error, t));
-        });
-        return () => { active = false; };
+        let pending = false;
+        const refresh = () => {
+            if (pending || document.hidden) return;
+            pending = true;
+            void getRooms(page).then((result) => {
+                if (!active) return;
+                if (page > result.totalPages) {
+                    setPage(Math.max(1, result.totalPages));
+                    return;
+                }
+                setRooms(result.rooms);
+                setTotalPages(result.totalPages);
+                setMessage('');
+            }).catch((error: unknown) => {
+                if (active) setMessage(roomErrorMessage(error, t));
+            }).finally(() => { pending = false; });
+        };
+        refresh();
+        const timer = window.setInterval(refresh, 5_000);
+        document.addEventListener('visibilitychange', refresh);
+        window.addEventListener('focus', refresh);
+        return () => {
+            active = false;
+            window.clearInterval(timer);
+            document.removeEventListener('visibilitychange', refresh);
+            window.removeEventListener('focus', refresh);
+        };
     }, [page, t]);
 
     const handleQuickJoin = async () => {

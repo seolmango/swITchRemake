@@ -23,6 +23,7 @@ import { useAudioRuntime } from './audio/useAudio.ts';
 import { getServiceStatus, serviceRouteBypassesGate, serviceRouteRequiresServer, type ServiceStatus } from './api/health.ts';
 import { ServiceStatusPage } from './pages/ServiceStatusPage.tsx';
 import { applyAppearanceToDocument } from './theme/cssVariables.ts';
+import { AuthRecoveryPage } from './pages/AuthRecoveryPage.tsx';
 
 // Phaser는 게임·훈련·도움말·리플레이에서만 필요하다. 이 화면들을 방문하기 전까지 엔진과
 // 맵 렌더러를 받지 않게 해 제목/로그인/방 목록의 초기 번들을 작게 유지한다.
@@ -31,7 +32,11 @@ const TrainingPage = lazy(() => import('./pages/TrainingPage.tsx').then((module)
 const HowToPlayPage = lazy(() => import('./pages/HowToPlayPage.tsx').then((module) => ({ default: module.HowToPlayPage })));
 const ReplayPage = lazy(() => import('./pages/ReplayPage.tsx').then((module) => ({ default: module.ReplayPage })));
 
-const UiLayout = () => <GameContainer><Outlet/></GameContainer>;
+const UiLayout = () => {
+    const { pathname } = useLocation();
+    const responsiveForm = ['/login', '/signup', '/reset-password', '/change-password'].includes(pathname);
+    return <GameContainer responsiveForm={responsiveForm}><Outlet/></GameContainer>;
+};
 
 type GateStatus = ServiceStatus | { kind: 'checking' };
 
@@ -42,6 +47,7 @@ const ServiceAwareApplication: React.FC<{
     const location = useLocation();
     const bootstrapAuth = useAuthStore((state) => state.bootstrap);
     const bootstrapped = useAuthStore((state) => state.bootstrapped);
+    const authStatus = useAuthStore((state) => state.status);
     const activeRoomId = sessionStorage.getItem('switch-active-room');
     const bypassGate = serviceRouteBypassesGate(location.pathname, activeRoomId);
     const gateApplies = serviceRouteRequiresServer(location.pathname) && !bypassGate;
@@ -60,8 +66,9 @@ const ServiceAwareApplication: React.FC<{
         return <ServiceStatusPage status={serviceStatus} checking={false} onRetry={retryServiceStatus}/>;
     }
 
-    if (!bootstrapped) {
-        return <div style={{ width: '100vw', height: '100vh' }} aria-busy="true"/>;
+    if (authStatus === 'error') return <AuthRecoveryPage/>;
+    if (!bootstrapped || authStatus === 'booting') {
+        return <div style={{ width: '100vw', height: '100dvh' }} aria-busy="true"/>;
     }
 
     const announcement = serviceStatus.kind === 'available' ? serviceStatus.announcement : null;
@@ -134,7 +141,7 @@ function App() {
     }, [refreshServiceStatus]);
 
     return (
-        <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
+        <div style={{ position: "relative", width: "100vw", height: "100dvh" }}>
             <BrowserRouter>
                 <ServiceAwareApplication serviceStatus={serviceStatus} retryServiceStatus={retryServiceStatus}/>
             </BrowserRouter>

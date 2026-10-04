@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { completeMfaLogin, loginUser, logoutAndCreateGuest } = vi.hoisted(() => ({
+const { bootstrapApiIdentity, completeMfaLogin, loginUser, logoutAndCreateGuest } = vi.hoisted(() => ({
+    bootstrapApiIdentity: vi.fn(),
     completeMfaLogin: vi.fn(),
     loginUser: vi.fn(),
     logoutAndCreateGuest: vi.fn(),
@@ -8,7 +9,7 @@ const { completeMfaLogin, loginUser, logoutAndCreateGuest } = vi.hoisted(() => (
 
 vi.mock('../api/auth.ts', () => ({ completeMfaLogin, loginUser }));
 vi.mock('../api/http.ts', () => ({
-    bootstrapApiIdentity: vi.fn(),
+    bootstrapApiIdentity,
     logoutAndCreateGuest,
     setApiAccessTokenListener: vi.fn(),
 }));
@@ -40,6 +41,15 @@ describe('auth action progress', () => {
         request.resolve({ mfaRequired: false, accessToken: 'new-token', nickname: 'Alice' });
         await action;
         expect(useAuthStore.getState()).toMatchObject({ status: 'account', pending: false, accessToken: 'new-token' });
+    });
+
+    it('offers bootstrap recovery without clearing existing account identity', async () => {
+        useAuthStore.setState({ status: 'error' });
+        bootstrapApiIdentity.mockRejectedValueOnce(new TypeError('temporary connection failure'));
+        await useAuthStore.getState().bootstrap();
+        expect(useAuthStore.getState()).toMatchObject({
+            accessToken: 'old-token', nickname: 'Alice', identity: 'account', status: 'error', bootstrapped: true,
+        });
     });
 
     it('restores the previous identity after login fails', async () => {

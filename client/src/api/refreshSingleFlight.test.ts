@@ -73,4 +73,41 @@ describe('토큰 재발급 단일 비행', () => {
         expect(calls.filter((url) => url.endsWith('/auth/refresh'))).toHaveLength(0);
         expect(calls.filter((url) => url.endsWith('/users/me/mfa'))).toHaveLength(1);
     });
+
+    it.each([403, 500])('재발급 후 요청이 %s로 실패해도 계정 신원을 보존한다', async (status) => {
+        let requests = 0;
+        vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+            if (url.endsWith('/auth/refresh')) return new Response(JSON.stringify({ accessToken: 'fresh', nickname: 'nick' }));
+            return new Response('{}', { status: ++requests === 1 ? 401 : status });
+        }));
+        const http = await import('./http.ts');
+        const identities: unknown[] = [];
+        http.setApiAccessTokenListener((next) => identities.push(next));
+        http.setApiAccessToken('stale-token', 'nick');
+        await expect(http.apiRequest('/rooms')).rejects.toMatchObject({ status });
+        expect(identities.at(-1)).toEqual({ accessToken: 'fresh', kind: 'account', nickname: 'nick' });
+    });
+
+    it('일시적인 재발급 네트워크 실패는 계정을 로그아웃시키지 않는다', async () => {
+        vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+            if (url.endsWith('/auth/refresh')) throw new TypeError('network unavailable');
+            return new Response('{}', { status: 401 });
+        }));
+        const http = await import('./http.ts');
+        const identities: unknown[] = [];
+        http.setApiAccessTokenListener((next) => identities.push(next));
+        http.setApiAccessToken('stale-token', 'nick');
+        await expect(http.apiRequest('/rooms')).rejects.toThrow('network unavailable');
+        expect(identities.at(-1)).toEqual({ accessToken: 'stale-token', kind: 'account', nickname: 'nick' });
+    });
+
+    it('재발급 토큰이 거부된 경우에는 만료된 신원을 지운다', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 401 })));
+        const http = await import('./http.ts');
+        const identities: unknown[] = [];
+        http.setApiAccessTokenListener((next) => identities.push(next));
+        http.setApiAccessToken('stale-token', 'nick');
+        await expect(http.apiRequest('/rooms')).rejects.toMatchObject({ status: 401 });
+        expect(identities.at(-1)).toEqual({ accessToken: null, kind: 'anonymous', nickname: null });
+    });
 });

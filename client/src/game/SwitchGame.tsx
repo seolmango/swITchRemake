@@ -103,6 +103,7 @@ export const SwitchGame: React.FC<SwitchGameProps> = ({
                     hud={hud}
                     colorVision={colorVision}
                     showControlHints={showControlHints}
+                    keyboardControls={!touchVisible}
                     matchReady={matchReady}
                     inputEnabled={inputEnabled}
                     training={Boolean(trainingHud)}

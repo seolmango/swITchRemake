@@ -14,6 +14,7 @@ import {
 import { resumeRoom, type RoomSeatGrant } from '../api/rooms.ts';
 import { reconnectDelayMs } from './reconnectPolicy.ts';
 import { roleFromLobby } from './roomRole.ts';
+import { BufferedSnapshots } from './BufferedSnapshots.ts';
 
 type AuthOkMessage = Extract<ServerMessage, { type: 'auth.ok' }>;
 type LobbyStateMessage = Extract<ServerMessage, { type: 'lobby.state' }>;
@@ -124,6 +125,7 @@ class GameSession {
     private socket: WebSocket | null = null;
     private requestId = 0;
     private latestSnapshot: ArrayBuffer | null = null;
+    private readonly startupSnapshots = new BufferedSnapshots();
     private readonly listeners = new Set<() => void>();
     private readonly snapshotListeners = new Set<(frame: ArrayBuffer) => void>();
     private readonly blinkListeners = new Set<(payload: PlayerBlinkedMessage['payload']) => void>();
@@ -154,6 +156,8 @@ class GameSession {
 
     subscribeSnapshots = (listener: (frame: ArrayBuffer) => void): (() => void) => {
         this.snapshotListeners.add(listener);
+        const startup = this.startupSnapshots.take();
+        if (startup) listener(startup);
         return () => this.snapshotListeners.delete(listener);
     };
 
@@ -262,6 +266,7 @@ class GameSession {
         this.closeSocket();
         this.requestId = 0;
         this.latestSnapshot = null;
+        this.startupSnapshots.clear();
         this.resetTelemetry();
         this.setState({
             ...INITIAL_STATE,
@@ -315,6 +320,7 @@ class GameSession {
                 if (socket !== this.socket) return;
                 if (event.data instanceof ArrayBuffer) {
                     this.latestSnapshot = event.data;
+                    if (this.snapshotListeners.size === 0) this.startupSnapshots.push(event.data);
                     for (const listener of this.snapshotListeners) listener(event.data);
                     return;
                 }
@@ -359,7 +365,8 @@ class GameSession {
     }
 
     sendInput(input: InputState): boolean {
-        if (this.socket?.readyState !== WebSocket.OPEN || this.state.roomState !== RoomState.Playing) return false;
+        if (this.socket?.readyState !== WebSocket.OPEN || this.state.status !== 'connected'
+            || this.state.roomState !== RoomState.Playing || this.state.role !== 'player') return false;
         this.socket.send(encodeInput(input));
         return true;
     }
@@ -369,6 +376,7 @@ class GameSession {
         this.cancelReconnect();
         this.closeSocket();
         this.latestSnapshot = null;
+        this.startupSnapshots.clear();
         this.setState(INITIAL_STATE);
         sessionStorage.removeItem(ACTIVE_ROOM_KEY);
     }
@@ -397,10 +405,17 @@ class GameSession {
                 });
                 break;
             case 'game.starting':
+                this.latestSnapshot = null;
+                this.startupSnapshots.clear();
                 this.setState({ roomState: RoomState.Countdown, starting: message.payload, ended: null });
                 break;
             case 'game.started':
                 this.setState({ roomState: RoomState.Playing, started: message.payload, taggerId: message.payload.taggerId });
+                break;
+            case 'player.tagged':
+                // Identity is public; unlike position, a hidden new tagger is still announced by
+                // this authoritative event. Snapshot visibility must not erase that transition.
+                this.setState({ taggerId: message.payload.playerId });
                 break;
             case 'game.ended':
                 this.setState({ roomState: RoomState.PostGame, starting: null, started: null, taggerId: null, ended: message.payload });

@@ -21,6 +21,7 @@ import dashIcon from '../../assets/images/skill_dash.svg';
 import flashIcon from '../../assets/images/skill_flash.svg';
 import exhaustIcon from '../../assets/images/skill_exhaust.svg';
 import { canEnterRunningGame } from '../../game/roomRole.ts';
+import { useTouchControlsVisible } from '../../game/hud/touch/useTouchControls.ts';
 
 const MIN_PLAYERS_TO_START = 3;
 const SKILLS: Array<{ id: PlayerSkill; icon: string }> = [
@@ -38,6 +39,7 @@ export const LobbyPage: React.FC = () => {
     const theme = useSettingsStore((state) => state.theme);
     const colors = themeColors(theme);
     const session = useGameSession();
+    const touchVisible = useTouchControlsVisible();
     const live = session.roomId === currentRoomId;
     const resumeAttempted = useRef(false);
     const leavingRoom = useRef(false);
@@ -81,7 +83,7 @@ export const LobbyPage: React.FC = () => {
                 guest: player.guest,
                 role: player.role,
                 waitingForNextMatch: session.roomState === RoomState.Playing,
-                control: 'keyboard',
+                control: player.playerId === session.selfId ? (touchVisible ? 'touch' : 'keyboard') : undefined,
                 // `skills` is the shared lobby contract; this view has one movement-skill badge today.
                 skill: player.skills.find(
                     (candidate): candidate is PlayerSkill => isLoadoutSkill(candidate) && candidate !== SkillId.Switch,
@@ -89,7 +91,7 @@ export const LobbyPage: React.FC = () => {
                 stats: player.stats,
             })),
         };
-    }, [currentRoomId, live, liveLockElapsedMs, session.isPrivate, session.lobby, session.selfId, session.roomState]);
+    }, [currentRoomId, live, liveLockElapsedMs, session.isPrivate, session.lobby, session.selfId, session.roomState, touchVisible]);
     const room = liveRoom;
     const displayCode = session.roomCode ?? currentRoomId;
 

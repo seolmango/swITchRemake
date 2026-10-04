@@ -19,6 +19,7 @@ interface Props {
     colorVision: ColorVisionMode;
     /** 설정의 '조작 힌트 표시'. 끄면 좌하단 키 안내 패널이 사라진다. */
     showControlHints: boolean;
+    keyboardControls?: boolean;
     matchReady: boolean;
     inputEnabled?: boolean;
     training?: boolean;
@@ -41,7 +42,7 @@ interface Props {
  * the controls reference, play is the full set.
  */
 export const GameHud: React.FC<Props> = ({
-    theme, mode, hud, colorVision, showControlHints, matchReady, inputEnabled = true, training = false, onUseMovementSkill, onSwitchTarget, onSpectate, onEmoji,
+    theme, mode, hud, colorVision, showControlHints, keyboardControls = true, matchReady, inputEnabled = true, training = false, onUseMovementSkill, onSwitchTarget, onSpectate, onEmoji,
 }) => {
     const { t } = useTranslation();
     const [shiftHeld, setShiftHeld] = useState(false);
@@ -163,7 +164,7 @@ export const GameHud: React.FC<Props> = ({
 
             {/* 도움말 모드에서만 띄우던 것을 설정으로 옮겼다 — 문구가 "경기 중"을 약속하므로 인게임에서도 뜬다.
                 좁은 화면에서는 여전히 접는다(좌하단이 다른 패널과 겹친다). */}
-            {!training && (showControlHints || showIntroHints) && !compact && (
+            {!training && keyboardControls && (showControlHints || showIntroHints) && !compact && (
                 <ControlsGuide theme={theme} movementSkillLabel={hud.movementSkill?.label ?? null} />
             )}
 

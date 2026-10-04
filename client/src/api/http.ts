@@ -139,6 +139,9 @@ const refreshAccount = (): Promise<string> => singleFlight('account', async () =
 const refreshCurrentIdentity = (): Promise<string> =>
     identity.kind === 'guest' ? refreshGuest() : refreshAccount();
 
+const isAuthenticationRejection = (error: unknown): error is ApiError =>
+    error instanceof ApiError && (error.status === 401 || error.status === 403);
+
 export const apiRequest = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
     try {
         return await rawRequest<T>(path, options);
@@ -154,25 +157,29 @@ export const apiRequest = async <T>(path: string, options: RequestOptions = {}):
         if (!canRefresh) throw error;
         try {
             await refreshCurrentIdentity();
-            return await rawRequest<T>(path, { ...options, retryAuth: false });
         } catch (refreshError) {
-            if (identity.kind === 'guest') sessionStorage.removeItem(GUEST_REFRESH_KEY);
-            setApiIdentity({ accessToken: null, kind: 'anonymous', nickname: null });
+            // Only an explicit authentication rejection invalidates the identity. Network/server
+            // failures can be temporary, and failures of the retried business request are unrelated.
+            if (isAuthenticationRejection(refreshError)) {
+                if (identity.kind === 'guest') sessionStorage.removeItem(GUEST_REFRESH_KEY);
+                setApiIdentity({ accessToken: null, kind: 'anonymous', nickname: null });
+            }
             throw refreshError;
         }
+        return await rawRequest<T>(path, { ...options, retryAuth: false });
     }
 };
 
 export const bootstrapApiIdentity = async (): Promise<ApiIdentity> => {
     if (sessionStorage.getItem(GUEST_REFRESH_KEY)) {
-        try { await refreshGuest(); return identity; } catch {
-            if (sessionStorage.getItem(ACTIVE_ROOM_KEY)) {
-                throw new ApiError(401, { message: 'Guest session expired during an active room' });
-            }
+        try { await refreshGuest(); return identity; } catch (error) {
+            if (!isAuthenticationRejection(error) || sessionStorage.getItem(ACTIVE_ROOM_KEY)) throw error;
             sessionStorage.removeItem(GUEST_REFRESH_KEY);
         }
     }
-    try { await refreshAccount(); return identity; } catch { /* no active account cookie */ }
+    try { await refreshAccount(); return identity; } catch (error) {
+        if (!isAuthenticationRejection(error)) throw error;
+    }
     await issueGuest();
     return identity;
 };

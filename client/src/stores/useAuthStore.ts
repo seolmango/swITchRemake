@@ -48,6 +48,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     admin: false,
     bootstrap: async () => {
         if (get().status !== 'idle' && get().status !== 'error') return;
+        const previous = get();
         set({ status: 'booting', pending: false });
         try {
             const next = await bootstrapApiIdentity();
@@ -62,7 +63,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             // 첫 화면을 관리자 조회 때문에 붙잡아 두지 않는다. 버튼 하나가 조금 늦게 나올 뿐이다.
             void readAdminAccess(next.kind).then((admin) => set({ admin }));
         } catch {
-            set({ accessToken: null, identity: 'anonymous', status: 'error', bootstrapped: true, admin: false });
+            // Bootstrap interruptions are retryable. Keep any existing identity and credentials
+            // rather than making a temporary network/rate-limit failure look like a logout.
+            set({ ...previous, status: 'error', pending: false, bootstrapped: true });
         }
     },
     login: async (email, password, humanProof) => {

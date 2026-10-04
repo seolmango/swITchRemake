@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { JSON_MESSAGE_VERSION, RoomMode, RoomState, type Snapshot, type SnapshotPlayer } from 'shared';
+import { decodeSnapshot, encodeSnapshot, JSON_MESSAGE_VERSION, RoomMode, RoomState, type Snapshot, type SnapshotPlayer } from 'shared';
 import { gameSession } from './GameSession.ts';
 
 class TestSocket extends EventTarget {
@@ -66,5 +66,34 @@ describe('training session authoritative snapshot transitions', () => {
         gameSession.updateHudSnapshot(snapshot({ players: [], cooldowns: [] }));
         expect(gameSession.getSnapshot().taggerId).toBe(1);
         expect(gameSession.getSnapshot().cooldowns).toEqual([]);
+    });
+
+    it('retains initial roster until the lazy game page subscribes', () => {
+        const socket = TestSocket.current;
+        socket.dispatchEvent(new MessageEvent('message', { data: encodeSnapshot(snapshot({ full: true, roster: [{ id: 1, nickname: 'self' }], players: [player(1, false)] })) }));
+        socket.dispatchEvent(new MessageEvent('message', { data: encodeSnapshot(snapshot({ tick: 2, players: [player(1, true)] })) }));
+        const received = vi.fn();
+        const unsubscribe = gameSession.subscribeSnapshots(received);
+        expect(received).toHaveBeenCalledTimes(1);
+        const initial = decodeSnapshot(received.mock.calls[0]![0] as ArrayBuffer);
+        expect(initial.roster).toEqual([{ id: 1, nickname: 'self' }]);
+        expect(initial.players?.[0]?.isTagger).toBe(true);
+        unsubscribe();
+    });
+
+    it('blocks movement after elimination changes the client role to spectator', () => {
+        const input = { sequence: 1, left: false, right: true, up: false, down: false, heldActions: 0 };
+        expect(gameSession.sendInput(input)).toBe(true);
+        TestSocket.current.message('lobby.state', lobby('spectator'));
+        expect(gameSession.sendInput(input)).toBe(false);
+    });
+
+    it('keeps the publicly announced new tagger even when its position is hidden', () => {
+        TestSocket.current.message('game.started', { startTick: 1, taggerId: 1 });
+        TestSocket.current.message('player.tagged', { playerId: 2, by: 3 });
+        gameSession.updateHudSnapshot(snapshot({ players: [player(1, false)] }));
+        expect(gameSession.getSnapshot().taggerId).toBe(2);
+        gameSession.updateHudSnapshot(snapshot({ players: [player(1, false)] }));
+        expect(gameSession.getSnapshot().taggerId).toBe(2);
     });
 });

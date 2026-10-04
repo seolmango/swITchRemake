@@ -15,7 +15,7 @@ const skillIcons: Record<PlayerSkill, string> = {
     exhaust: exhaustIcon,
 };
 
-const controlIcons: Record<LobbyViewPlayer['control'], IconName> = {
+const controlIcons: Record<NonNullable<LobbyViewPlayer['control']>, IconName> = {
     keyboard: 'keyboard',
     touch: 'touch',
     gamepad: 'gamepad',
@@ -80,7 +80,7 @@ export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, 
                 slot,
                 nickname: player.nickname,
                 role: player.isHost ? t('lobby.owner') : player.waitingForNextMatch ? t('lobby.waitingNextMatch') : player.guest ? t('lobby.guest') : t('lobby.players'),
-                control: t(`lobby.controls.${player.control}`),
+                control: player.control ? t(`lobby.controls.${player.control}`) : '',
                 skill: t(`lobby.skills.${player.skill}`),
             })}
             style={{
@@ -108,10 +108,10 @@ export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, 
                 {(player.guest || player.waitingForNextMatch) && <span className="lobby-player-role">{player.waitingForNextMatch ? t('lobby.waitingNextMatch') : t('lobby.guest')}</span>}
             </div>
             <div className="lobby-player-loadout">
-                <span title={t(`lobby.controls.${player.control}`)}>
+                {player.control && <span title={t(`lobby.controls.${player.control}`)}>
                     <Icon name={controlIcons[player.control]} size={30}/>
                     <small>{t(`lobby.controls.${player.control}`)}</small>
-                </span>
+                </span>}
                 {player.isSelf ? (
                     <button type="button" className="lobby-skill-button" disabled={!canChangeSkill} title={t('lobby.changeSkill')} aria-label={t('lobby.changeSkillLabel', { skill: t(`lobby.skills.${player.skill}`) })} onClick={onChangeSkill}>
                         <img src={skillIcons[player.skill]} alt=""/>

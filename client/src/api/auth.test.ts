@@ -5,6 +5,7 @@ vi.mock('./http.ts', () => ({ apiRequest, replaceGuestWithAccount }));
 
 import {
     completeMfaLogin,
+    changePassword,
     issueHumanChallenge,
     loginUser,
     registerUser,
@@ -14,6 +15,15 @@ import {
     verifyHumanChallenge,
     type RegistrationRequest,
 } from './auth.ts';
+
+describe('password change session', () => {
+    it('installs the access token for the new security epoch', async () => {
+        vi.clearAllMocks();
+        apiRequest.mockResolvedValueOnce({ revokedCount: 2, accessToken: 'new-epoch', nickname: 'tester' });
+        await changePassword({ currentPassword: 'OldExample1!', newPassword: 'NewExample1!' });
+        expect(replaceGuestWithAccount).toHaveBeenCalledWith('new-epoch', 'tester');
+    });
+});
 
 describe('human challenge requests', () => {
     beforeEach(() => vi.clearAllMocks());

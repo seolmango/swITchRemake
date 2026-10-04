@@ -155,7 +155,7 @@ export const PlayerList: React.FC<Props> = ({
                                 <span style={{
                                     ...surface(theme, 'blue', true),
                                     flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
-                                }}>{playerLabel(p.id)}</span>
+                                }}>{t('game.hud.switchAction', { player: playerLabel(p.id) })}</span>
                             ) : watching ? (
                                 <span style={{
                                     flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
