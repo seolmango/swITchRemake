@@ -41,8 +41,16 @@ dockerEnv.DOCKER_BUILDKIT = '1';
 function docker(args, { allowFailure = false, quiet = false, timeoutMs = 1_200_000 } = {}) {
     const result = spawnSync('docker', args, { cwd: root, env: dockerEnv, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs });
     if (!quiet) process.stdout.write(sanitize(result.stdout) + sanitize(result.stderr));
+    const operation = args[0] === 'compose'
+        ? `compose ${args.find(value => ['up', 'run', 'exec', 'build', 'port', 'version', 'logs', 'ps', 'cp', 'start', 'stop', 'restart', 'down'].includes(value)) || 'command'}`
+        : args[0];
+    // Quiet successes avoid noisy/raw metadata; failures must remain diagnosable.
+    // Never echo argv: it may contain synthetic credential values.
+    if (quiet && (result.status || result.error)) {
+        process.stderr.write(sanitize(`Docker ${operation} failed (${result.status ?? 'spawn'}).\n${result.stderr || ''}`));
+    }
     if (result.error) throw result.error;
-    if (result.status && !allowFailure) throw new Error(`Docker operation failed (${result.status}): ${args[0]}`);
+    if (result.status && !allowFailure) throw new Error(`Docker operation failed (${result.status}): ${operation}`);
     return result;
 }
 const composeArgs = ['compose', '--project-name', project, '--env-file', envPath, '-f', 'deploy/audit/compose.yml'];
@@ -228,7 +236,9 @@ try {
         startStack();
         const network = docker(['network', 'inspect', `${project}_isolated`, '--format', '{{.Internal}}'], { quiet: true });
         if (network.stdout.trim() !== 'true') throw new Error('Audit refuses a network with external routing');
-        const port = compose(['port', 'web', '80'], { quiet: true }).stdout.trim();
+        // Optional display metadata: internal-only Docker networks may have no host binding.
+        // Service readiness and network isolation above are mandatory regardless of this lookup.
+        const port = compose(['port', 'web', '80'], { quiet: true, allowFailure: true, timeoutMs: 15_000 }).stdout.trim();
         console.log(`Audit stack ${project} ready at internal http://web${port.startsWith('127.0.0.1:') ? ` (host http://${port})` : ''}. Runtime env path: .audit/${runId}/runtime.env (do not print contents).`);
         if (action === 'up' || action === 'rebuild') shouldCleanup = false;
     } else load();

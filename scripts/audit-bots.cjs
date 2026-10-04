@@ -177,6 +177,9 @@ class AuditBots {
             if (response?.type === 'game.started') return response;
             if (response?.type === 'game.starting') return this.waitEvent(bot, 'game.started', cursor, 15_000);
             if (response?.type === 'error' && !['START_LOCKED', 'RESULT_BACKLOG'].includes(response.payload.code)) throw new Error(`Start rejected (${response.payload.code})`);
+            // A quick START_LOCKED reply must not turn this into a busy retry
+            // loop and exceed the real 20 JSON commands/second contract.
+            if (response?.type === 'error') { this.assertTime(1_000); await sleep(1_000); }
         }
     }
     async resume(bot) {
@@ -236,12 +239,15 @@ class AuditBots {
     async logout(bot) {
         // Leave completion and active-claim release can straddle a heartbeat.
         const deadline = Date.now() + 6_000;
+        let lastStatus = null;
         while (Date.now() < deadline) {
             const response = await this.request('/api/auth/logout', bot, 'POST', undefined, 2_000).catch(() => null);
+            lastStatus = response?.status ?? null;
             if (response?.status === 201 || response?.status === 401) return true;
-            if (response && response.status !== 409) return false;
+            if (response && response.status !== 409) break;
             await sleep(250);
         }
+        this.errors.push({ kind: 'logout-response', bot: bot.index, status: lastStatus });
         return false;
     }
     async cleanup({ preservePool = false } = {}) {

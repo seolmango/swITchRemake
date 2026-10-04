@@ -1,6 +1,10 @@
 import { defineConfig } from '@playwright/test';
 import { resolve } from 'node:path';
 
+// Playwright's automatic failure prompt can include live form/OTP DOM data.
+// Do not create that attachment, even temporarily; retain explicit safe evidence.
+process.env.PLAYWRIGHT_NO_COPY_PROMPT = '1';
+
 // Deliberately no dotenv, webServer reuse, or production default.
 if (process.env.AUDIT_STACK !== 'true' || process.env.E2E_BASE_URL !== 'http://web'
     || process.env.DB_HOST !== 'postgres' || process.env.REDIS_HOST !== 'redis'

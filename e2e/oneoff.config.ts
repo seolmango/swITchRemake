@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+process.env.PLAYWRIGHT_NO_COPY_PROMPT = '1';
 if (process.env.AUDIT_LIVE_ONCE !== 'owner-authorized-2026-10-04') throw new Error('One-off live audit must be explicitly enabled; never run in CI');
 if (process.env.CI) throw new Error('Azure access is prohibited in CI');
 export default defineConfig({ testDir: './oneoff', workers: 1, retries: 0,

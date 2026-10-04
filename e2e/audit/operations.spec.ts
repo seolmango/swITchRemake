@@ -30,7 +30,16 @@ test('operator announcement and maintenance reach browsers, block new entry and 
         expect((await admin.context.request.get('/api/admin/maintenance', { headers: adminHeaders })).status()).toBe(200);
         expect((await admin.context.request.post('/api/admin/maintenance', { headers: adminHeaders, data: { status: 'ready', reason } })).status()).toBe(201);
         await newcomer.reload();
-        await expect(newcomer.locator('.room-grid')).toBeVisible();
+        await expect(newcomer.locator('.room-pagination')).toBeVisible();
+        // An empty grid has zero height. Prove recovery by completing admission,
+        // not by requiring an empty container to occupy screen space.
+        await page.goto('/rooms/create');
+        await page.getByRole('textbox', { name: '방 이름', exact: true }).fill('점검복구정상입장');
+        await page.getByRole('button', { name: '방 만들기', exact: true }).click();
+        await page.waitForURL('**/lobby');
+        await expect(page.locator('.lobby-player-card:not(.is-empty)')).toHaveCount(1);
+        await page.getByRole('button', { name: '방 나가기', exact: true }).click();
+        await page.waitForURL('**/rooms');
         await page.goto('/');
         await expect(page.getByRole('button', { name: '게임 시작', exact: true })).toBeVisible();
         await expect(page.locator('.title-announcement')).toHaveCount(0);
@@ -39,7 +48,7 @@ test('operator announcement and maintenance reach browsers, block new entry and 
         expect(audit.every(row => row.action === 'service-state.update')).toBe(true);
         expect([...admin.external, ...member.external, ...visitor.external]).toEqual([]);
         await testInfo.attach('operator-state-evidence', { body: JSON.stringify({ announcementsVisible: true, maintenanceAdmissionDenied: true,
-            recoveryVisible: true, auditRows: audit.length, environment: 'disposable-only' }), contentType: 'application/json' });
+            recoveryVisible: true, recoveredAdmissionAndLeave: true, auditRows: audit.length, environment: 'disposable-only' }), contentType: 'application/json' });
     } finally {
         if (adminHeaders) {
             const restored = await admin.context.request.post('/api/admin/maintenance', { headers: adminHeaders,
