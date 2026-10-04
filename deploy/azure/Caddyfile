@@ -1,0 +1,23 @@
+{
+    admin off
+    servers {
+        protocols h1 h2
+    }
+}
+
+switch-dev-193234.koreacentral.cloudapp.azure.com {
+    @api path /api/*
+    handle @api {
+        uri strip_prefix /api
+        reverse_proxy match:3000
+    }
+
+    @game path /game-ws* /map-bundles/* /replays/*
+    handle @game {
+        reverse_proxy cluster:4100
+    }
+
+    handle {
+        reverse_proxy web:80
+    }
+}

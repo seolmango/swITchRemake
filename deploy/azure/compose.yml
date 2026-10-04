@@ -1,0 +1,119 @@
+name: switch-azure
+
+x-backend: &backend
+  image: switch-azure-backend:local
+  pull_policy: never
+  init: true
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    env_file:
+      - path: .env.redis
+        format: raw
+    command: ["sh", "-c", "exec redis-server --appendonly yes --appendfsync everysec --maxmemory 64mb --maxmemory-policy noeviction --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  migrate:
+    <<: *backend
+    env_file:
+      - path: .env.match
+        format: raw
+    command: ["node", "azure-migrate.cjs"]
+    volumes:
+      - ./migrate.cjs:/app/azure-migrate.cjs:ro
+    mem_limit: 384m
+    restart: "no"
+
+  match:
+    <<: *backend
+    env_file:
+      - path: .env.match
+        format: raw
+    command: ["node", "server-match/dist/main.js"]
+    environment:
+      NODE_OPTIONS: --max-old-space-size=160
+    mem_limit: 280m
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 45s
+      retries: 10
+
+  cluster:
+    <<: *backend
+    env_file:
+      - path: .env.cluster
+        format: raw
+    command: ["node", "docker-cluster.cjs"]
+    environment:
+      NODE_OPTIONS: --max-old-space-size=80
+    mem_limit: 384m
+    restart: unless-stopped
+    volumes:
+      - replay_data:/app/replays
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4100/healthz').then(r=>r.json()).then(v=>{if(!v.ok||v.servers<1)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 45s
+      retries: 10
+    stop_grace_period: 15s
+
+  web:
+    image: switch-azure-web:local
+    pull_policy: never
+    restart: unless-stopped
+    mem_limit: 64m
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      match:
+        condition: service_healthy
+      cluster:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.29.241.0/24
+
+volumes:
+  redis_data:
+  replay_data:
+  caddy_data:
+  caddy_config:

@@ -8,6 +8,7 @@ import postgres from 'postgres';
 import { MATCH_RESULT_VERSION, matchXp, type MatchResultMessage } from 'shared';
 import { auditContext } from '../admin/audit-log';
 import * as schema from '../database/schema';
+import { databaseConnectionOptions } from '../database/connection-options';
 import { MatchesService } from '../matches/matches.service';
 import { ResultService } from './result.service';
 
@@ -17,9 +18,7 @@ const runIntegration = Boolean(process.env.DB_HOST && process.env.DB_NAME && pro
 
 test('stores one idempotent result transaction and excludes guest stats', { skip: !runIntegration }, async () => {
     loadEnv({ path: path.resolve(process.cwd(), '../.env') });
-    const connection = postgres(
-        `postgres://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`,
-    );
+    const connection = postgres(databaseConnectionOptions((name) => process.env[name]));
     const db = drizzle(connection, { schema });
     const service = new ResultService(db);
     const suffix = Date.now().toString(36);
