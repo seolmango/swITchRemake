@@ -448,6 +448,26 @@ test('넘겨받은 방의 사람들은 재접속으로 돌아올 수 있다', ()
     assert.equal(room?.state, RoomState.Waiting);
 });
 
+test('인계된 완료 방은 다음 발급으로만 시작하고 이전 경기 id를 재사용하지 않는다', () => {
+    for (const grantedMatchId of [null, 'match-successor']) {
+        const fixture = managerFixture();
+        const payload = migrationPayload({ playedGames: 1, grantedMatchId, locked: true });
+        payload.members.push({ ...payload.members[1]!, userId: 13, playerId: 3, slot: 3, joinedOrder: 2 });
+        assert.equal(fixture.manager.adoptRoom(payload).ok, true);
+        const room = fixture.manager.get(payload.roomId)!;
+        assert.equal(room.isLocked, true);
+        assert.equal(room.reserveJoin({ ...seat(14), roomId: payload.roomId }, null), 'ROOM_LOCKED');
+        for (const member of payload.members) {
+            const reservation = { ...seat(member.userId as number, true), roomId: payload.roomId };
+            const admission = fixture.manager.admitReservation(reservation)!;
+            fixture.manager.onConnect(new FakeConnection(member.playerId, member.userId as number,
+                member.nickname, payload.roomId, admission.playerId, true));
+        }
+        assert.equal(room.requestStart(11), grantedMatchId === null ? ErrorCode.ResultBacklog : null);
+        assert.equal(room.matchId, grantedMatchId ?? 'match-moved');
+    }
+});
+
 test('넘겨받은 방은 방장과 로드아웃을 그대로 유지한다', () => {
     const fixture = managerFixture();
     fixture.manager.adoptRoom(migrationPayload());

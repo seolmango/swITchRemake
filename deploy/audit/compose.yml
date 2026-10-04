@@ -1,0 +1,118 @@
+x-app: &app
+  image: ${AUDIT_BACKEND_IMAGE:?audit launcher required}
+  env_file: ${AUDIT_ENV_FILE:?audit launcher required}
+  init: true
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  cpus: 1.0
+  mem_limit: 768m
+  pids_limit: 256
+  networks: [isolated]
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
+    cpus: 1.0
+    mem_limit: 512m
+    pids_limit: 128
+    environment:
+      POSTGRES_USER: audit
+      POSTGRES_DB: ${DB_NAME:?}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [isolated]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U audit -d "$$POSTGRES_DB"']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+    cpus: 0.5
+    mem_limit: 256m
+    pids_limit: 64
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+    command: [sh, -c, 'exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes']
+    volumes: [redis_data:/data]
+    networks: [isolated]
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  mailpit:
+    image: axllent/mailpit:v1.27.8@sha256:6abc8e633df15eaf785cfcf38bae48e66f64beecdc03121e249d0f9ec15f0707
+    cpus: 0.5
+    mem_limit: 128m
+    pids_limit: 64
+    environment:
+      MP_MAX_MESSAGES: '100'
+      MP_DISABLE_VERSION_CHECK: 'true'
+    networks: [isolated]
+  migrate:
+    <<: *app
+    command: [npm, run, 'db:migrate', -w, server-match]
+    depends_on:
+      postgres: {condition: service_healthy}
+  match:
+    <<: *app
+    command: [node, server-match/dist/main.js]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+      mailpit: {condition: service_started}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  cluster:
+    <<: *app
+    command: [node, docker-cluster.cjs]
+    mem_limit: 1g
+    volumes: [replay_data:/app/replays]
+    depends_on:
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4100/healthz').then(r=>r.json()).then(v=>{if(!v.ok||v.servers<1)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    stop_grace_period: 15s
+  web:
+    image: ${AUDIT_WEB_IMAGE:?}
+    cpus: 0.5
+    mem_limit: 128m
+    pids_limit: 64
+    ports: ['127.0.0.1::80']
+    networks: [isolated]
+    depends_on:
+      match: {condition: service_healthy}
+      cluster: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1/healthz']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  runner:
+    <<: *app
+    image: ${AUDIT_RUNNER_IMAGE:?}
+    user: root
+    shm_size: 1gb
+    cpus: 2.0
+    mem_limit: 3g
+    pids_limit: 512
+    volumes: [evidence:/app/e2e/artifacts]
+    command: [node, scripts/audit-runner.cjs]
+    depends_on:
+      web: {condition: service_healthy}
+
+networks:
+  isolated:
+    internal: true
+volumes:
+  postgres_data:
+  redis_data:
+  replay_data:
+  evidence:

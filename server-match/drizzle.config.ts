@@ -3,7 +3,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { databaseConnectionOptions } from './src/database/connection-options';
 
-dotenv.config({
+if (process.env.SWITCH_SKIP_ENV_FILE !== 'true') dotenv.config({
     path: path.resolve(__dirname, '../.env')
 })
 

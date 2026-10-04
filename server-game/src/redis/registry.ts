@@ -165,11 +165,19 @@ export class GameRegistry {
             }
             throw error;
         }
+        // Only register renewal after every claim was successfully transferred.
+        for (const userId of userIds) {
+            this.trackSeat(roomId, userId, `adopt:${this.#options.heartbeat.serverId}:${roomId}`);
+        }
     }
 
     public forgetRoom(roomId: string): void {
         this.#lastProjectedRooms.delete(roomId);
         this.#lastProjectedRoomCodes.delete(roomId);
+        this.#trackedSeats.delete(roomId);
+        for (const [key, release] of this.#pendingReleases) {
+            if (release.roomId === roomId) this.#pendingReleases.delete(key);
+        }
     }
 
     public requestPublish(): void {
@@ -437,16 +445,22 @@ export class GameRegistry {
         const raw = await this.#options.redis.get(key);
         if (raw === null) return;
         let assignedRoomId: unknown;
+        let assignedServerId: unknown;
         try {
             const parsed = JSON.parse(raw) as unknown;
             assignedRoomId = parsed !== null && typeof parsed === 'object'
                 ? (parsed as Record<string, unknown>)['roomId']
                 : undefined;
+            assignedServerId = parsed !== null && typeof parsed === 'object'
+                ? (parsed as Record<string, unknown>)['serverId']
+                : undefined;
         } catch {
             return;
         }
         // reservation 단계에는 roomId가 없고, 다른 방의 새 claim일 수도 있으므로 건드리지 않는다.
-        if (assignedRoomId === roomId) await this.#options.redis.compareAndDelete(key, raw);
+        if (assignedRoomId === roomId && assignedServerId === this.#options.heartbeat.serverId) {
+            await this.#options.redis.compareAndDelete(key, raw);
+        }
     }
 
     async #publishKickMarkers(): Promise<void> {

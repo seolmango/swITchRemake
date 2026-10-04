@@ -142,6 +142,11 @@ function adoptRoomPayload(payload: unknown): boolean {
         if (!text(payload[field])) return false;
     }
     if (typeof payload['capacity'] !== 'number') return false;
+    if (payload['playedGames'] !== undefined
+        && (!Number.isSafeInteger(payload['playedGames']) || (payload['playedGames'] as number) < 0)) return false;
+    if (payload['grantedMatchId'] !== undefined && payload['grantedMatchId'] !== null
+        && !text(payload['grantedMatchId'])) return false;
+    if (payload['locked'] !== undefined && typeof payload['locked'] !== 'boolean') return false;
     if (payload['password'] !== null && !text(payload['password'])) return false;
     const members = payload['members'];
     if (!Array.isArray(members) || members.length === 0 || members.length > MAX_PLAYERS_PER_ROOM) return false;

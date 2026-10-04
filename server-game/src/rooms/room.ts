@@ -88,6 +88,9 @@ export interface RoomOptions {
     readonly ownerReservation?: Readonly<SeatReservation>;
     /** 넘겨받는 방의 명단. `ownerReservation`과 둘 중 하나만 온다. */
     readonly adopted?: readonly AdoptedRoomMember[];
+    readonly playedGames?: number;
+    readonly grantedMatchId?: string | null;
+    readonly locked?: boolean;
     readonly minPlayersToStart: number;
     /**
      * 지금 새 경기를 시작해도 되는가. 결과 outbox가 가득 차면 false다.
@@ -97,6 +100,7 @@ export interface RoomOptions {
      * 생략하면 항상 시작할 수 있다(테스트 기본값).
      */
     readonly canStartGame?: () => boolean;
+    readonly isDraining?: () => boolean;
     readonly simulationHz: number;
     readonly rules: Readonly<Record<string, number | string | boolean>>;
     readonly hudGameplay: Readonly<Record<string, number>>;
@@ -128,6 +132,8 @@ export interface RoomProjection {
     readonly roomId: string;
     readonly roomCode: string;
     readonly matchId: string;
+    /** Unplayed issuance only; completed matches keep their original result authority. */
+    readonly pendingMatchId: string | null;
     readonly name: string;
     readonly ownerName: string;
     readonly mapId: string;
@@ -202,6 +208,9 @@ export class Room {
         this.id = options.id;
         this.roomCode = options.roomCode;
         this.#matchId = options.matchId;
+        this.#playedGames = options.playedGames ?? 0;
+        this.#grantedMatchId = options.grantedMatchId ?? null;
+        this.#locked = options.locked ?? false;
         this.mode = options.mode;
         this.name = options.name;
         this.#password = options.password;
@@ -260,6 +269,7 @@ export class Room {
             roomId: this.id,
             roomCode: this.roomCode,
             matchId: this.matchId,
+            pendingMatchId: this.#playedGames === 0 ? this.#matchId : this.#grantedMatchId,
             name: this.name,
             ownerName: hostId === null ? '' : (this.#roster.getByPlayerId(hostId)?.nickname ?? ''),
             mapId: this.#mapId,
@@ -388,6 +398,9 @@ export class Room {
             roomId: this.id,
             roomCode: this.roomCode,
             matchId: this.matchId,
+            playedGames: this.#playedGames,
+            grantedMatchId: this.#grantedMatchId,
+            locked: this.#locked,
             name: this.name,
             password: this.#password,
             capacity: this.#roster.capacity,
@@ -588,6 +601,9 @@ export class Room {
         const now = this.#now();
         if (this.state !== RoomState.Waiting) return ErrorCode.BadState;
         if (!this.#roster.isHost(requester)) return ErrorCode.NotHost;
+        // Draining workers retain running games, but must never begin a new one
+        // while an awaited handoff transfers this waiting room to a peer.
+        if (this.#options.isDraining?.() === true) return ErrorCode.ServerDraining;
         if (this.#startLock.remainingMs(now) > 0) return ErrorCode.StartLocked;
         const participants = this.#roster.members().filter((member) => member.connection !== null);
         if (participants.length < this.#options.minPlayersToStart) return ErrorCode.BadState;

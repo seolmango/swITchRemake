@@ -49,6 +49,7 @@ export interface RoomManagerOptions {
     readonly isKnownMap: (mapId: string, mode: RoomMode) => boolean;
     /** 결과 outbox가 가득 차면 새 경기를 시작하지 않는다. 생략하면 항상 시작할 수 있다. */
     readonly canStartGame?: () => boolean;
+    readonly isDraining?: () => boolean;
     readonly getServerTick: () => number;
     readonly violationSink: (signal: ViolationSignal) => void;
     /** resume 인증 직후 full snapshot을 보낼 외부 publisher 경계. */
@@ -142,6 +143,7 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 lifecycle: this.#options.lifecycle,
                 isKnownMap: this.#options.isKnownMap,
                 ...(this.#options.canStartGame === undefined ? {} : { canStartGame: this.#options.canStartGame }),
+                ...(this.#options.isDraining === undefined ? {} : { isDraining: this.#options.isDraining }),
                 getServerTick: this.#options.getServerTick,
                 ...(this.#options.onDirectoryChanged === undefined
                     ? {}
@@ -190,6 +192,9 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 mode: payload.mode,
                 // 넘겨받는 방에는 방장이 이미 정해져 있다. 좌석 예약은 명단을 앉힌 뒤 필요 없다.
                 adopted: payload.members,
+                playedGames: payload.playedGames ?? 0,
+                grantedMatchId: payload.grantedMatchId ?? null,
+                locked: payload.locked ?? false,
                 minPlayersToStart: payload.mode === RoomMode.Training ? 1 : GAMEPLAY.MIN_PLAYERS_TO_START,
                 simulationHz: NETWORK.SIMULATION_HZ,
                 rules: gameplayRules(),
@@ -201,6 +206,7 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 isKnownMap: this.#options.isKnownMap,
                 getServerTick: this.#options.getServerTick,
                 ...(this.#options.canStartGame === undefined ? {} : { canStartGame: this.#options.canStartGame }),
+                ...(this.#options.isDraining === undefined ? {} : { isDraining: this.#options.isDraining }),
                 ...(this.#options.onDirectoryChanged === undefined
                     ? {}
                     : { onDirectoryChanged: this.#options.onDirectoryChanged }),

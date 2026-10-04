@@ -37,10 +37,8 @@ export class EmailService implements OnModuleInit {
             throw new Error('EMAIL_TRANSPORT=sink is not allowed when APP_ENV=prod. Use EMAIL_TRANSPORT=smtp.');
         }
         this.transport = transport;
-        this.smtpConfigured = Boolean(
-            configService.get<string>('SMTP_USER')?.trim()
-            && configService.get<string>('SMTP_PASSWORD')?.trim(),
-        );
+        this.smtpConfigured = Boolean(configService.get<string>('SMTP_HOST')?.trim()
+            || (configService.get<string>('SMTP_USER')?.trim() && configService.get<string>('SMTP_PASSWORD')?.trim()));
     }
 
     onModuleInit(): void {
@@ -49,7 +47,7 @@ export class EmailService implements OnModuleInit {
         // verify()는 SMTP가 닿지 않으면 nodemailer의 connectionTimeout(기본 2분)까지 매달린다.
         // 네트워크가 없는 CI나 방화벽 뒤에서 서버가 몇 분씩 안 뜨게 된다. 헬스 프로브는
         // 부팅 조건이 아니라 관측값이므로 결과가 나오는 대로 상태만 갈아끼운다.
-        if (!this.smtpConfigured) return;
+        if (this.transport !== 'smtp' || !this.smtpConfigured) return;
         this.healthStatus = 'checking';
         void this.transporter.verify().then(
             () => { this.healthStatus = 'ok'; },

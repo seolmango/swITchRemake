@@ -28,3 +28,19 @@ export function matchesKeyBinding(event: KeyboardEvent, binding: string | null):
         && parts.includes('Shift') === event.shiftKey
         && parts.includes('Meta') === event.metaKey;
 }
+
+/** Movement allows extra modifiers (e.g. Shift+emoji while walking), preferring a more
+ * specific configured chord when several directions share one physical key. */
+export function matchesHeldKeyBinding(pressed: ReadonlySet<string>, binding: string | null, alternatives: readonly (string | null)[] = []): boolean {
+    if (!binding) return false;
+    const parts = binding.split('+');
+    const code = parts.at(-1);
+    if (!code || !pressed.has(code)) return false;
+    const requiredHeld = (!parts.includes('Ctrl') || pressed.has('ControlLeft') || pressed.has('ControlRight'))
+        && (!parts.includes('Alt') || pressed.has('AltLeft') || pressed.has('AltRight'))
+        && (!parts.includes('Shift') || pressed.has('ShiftLeft') || pressed.has('ShiftRight'))
+        && (!parts.includes('Meta') || pressed.has('MetaLeft') || pressed.has('MetaRight'));
+    return requiredHeld && !alternatives.some(candidate => candidate !== null
+        && candidate.endsWith(`+${code}`) && candidate.split('+').length > parts.length
+        && matchesHeldKeyBinding(pressed, candidate));
+}

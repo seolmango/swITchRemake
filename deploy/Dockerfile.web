@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS build
+FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
 WORKDIR /app
 
 # Keep the complete workspace manifest graph available to npm's lockfile resolver.
@@ -10,7 +10,7 @@ COPY server-game/package.json ./server-game/package.json
 COPY server-gateway/package.json ./server-gateway/package.json
 COPY server-supervisor/package.json ./server-supervisor/package.json
 COPY server-match/package.json ./server-match/package.json
-RUN npm ci --no-audit --no-fund
+RUN npm install --global npm@11.21.0 && npm ci --no-audit --no-fund
 
 COPY . .
 RUN npm run build -w shared && npm run build -w client

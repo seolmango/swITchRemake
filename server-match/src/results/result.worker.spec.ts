@@ -20,7 +20,7 @@ test('acknowledges only after result transaction resolves', async () => {
     const events: string[] = [];
     let release!: () => void;
     const committed = new Promise<void>((resolve) => { release = resolve; });
-    const redis = { acknowledge: async () => { events.push('ack'); } };
+    const redis = { get: async () => null, acknowledge: async () => { events.push('ack'); } };
     const results = { record: async () => { await committed; events.push('commit'); return 'stored' as const; }, issueNextMatch: async () => null };
     const worker = new ResultWorker(redis as never, results as never);
     const processing = worker.processEntry({ id: '1-0', fields: { [RESULT_STREAM_FIELD]: JSON.stringify(result) } });
@@ -58,6 +58,7 @@ test('a failed next-match delivery stays pending and a committed duplicate retri
     let acknowledgements = 0;
     const sent: string[] = [];
     const redis = {
+        get: async () => null,
         acknowledge: async () => { acknowledgements++; },
         addStreamEntry: async (_stream: string, _field: string, command: string) => {
             const { payload } = JSON.parse(command);
@@ -68,6 +69,7 @@ test('a failed next-match delivery stays pending and a committed duplicate retri
     const results = {
         record: async () => { if (stored) return 'duplicate' as const; stored = true; records++; return 'stored' as const; },
         issueNextMatch: async () => '22222222-2222-4222-8222-222222222222',
+        reassignPendingMatch: async () => undefined,
     };
     const entry = { id: '4-0', fields: { [RESULT_STREAM_FIELD]: JSON.stringify(result) } };
     await assert.rejects(new ResultWorker(redis as never, results as never).processEntry(entry), /injected Redis/);
@@ -82,7 +84,7 @@ test('a failed next-match delivery stays pending and a committed duplicate retri
 test('a next-match database failure stays pending and invalid results never issue grants', async () => {
     let acknowledgements = 0;
     let grants = 0;
-    const redis = { acknowledge: async () => { acknowledgements++; } };
+    const redis = { get: async () => null, acknowledge: async () => { acknowledgements++; } };
     const results = { record: async () => 'stored' as const, issueNextMatch: async () => { grants++; throw new Error('injected grant database failure'); } };
     const entry = { id: '5-0', fields: { [RESULT_STREAM_FIELD]: JSON.stringify(result) } };
     await assert.rejects(new ResultWorker(redis as never, results as never).processEntry(entry), /injected grant database/);
@@ -91,4 +93,22 @@ test('a next-match database failure stays pending and invalid results never issu
     await new ResultWorker(redis as never, invalid as never).processEntry(entry);
     assert.equal(acknowledgements, 1);
     assert.equal(grants, 1);
+});
+
+test('a delayed result grants its successor to the private directory current owner', async () => {
+    const streams: string[] = [];
+    const owners: string[] = [];
+    const redis = {
+        get: async () => JSON.stringify({ roomId: result.roomId, serverId: 'adopter' }),
+        acknowledge: async () => undefined,
+        addStreamEntry: async (stream: string) => { streams.push(stream); },
+    };
+    const results = {
+        record: async () => 'stored' as const,
+        issueNextMatch: async (_result: unknown, owner: string) => { owners.push(owner); return '22222222-2222-4222-8222-222222222222'; },
+        reassignPendingMatch: async (_match: string, _room: string, owner: string) => { owners.push(owner); },
+    };
+    await new ResultWorker(redis as never, results as never).processEntry({ id: '6-0', fields: { [RESULT_STREAM_FIELD]: JSON.stringify(result) } });
+    assert.deepEqual(owners, ['adopter', 'adopter']);
+    assert.ok(streams[0]?.endsWith(':adopter:commands'));
 });

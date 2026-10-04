@@ -196,6 +196,10 @@ export interface AdoptRoomPayload {
     roomId: string;
     roomCode: string;
     matchId: string;
+    /** Preserve match issuance across worker migration. Legacy payloads have no history. */
+    playedGames?: number;
+    grantedMatchId?: string | null;
+    locked?: boolean;
     name: string;
     password: string | null;
     capacity: number;

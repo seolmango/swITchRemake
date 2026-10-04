@@ -96,6 +96,13 @@ export class ResultService {
         ));
     }
 
+    async reassignPendingMatch(matchId: string, roomId: string, serverId: string): Promise<void> {
+        await this.db.update(schema.matches).set({ serverId }).where(and(
+            eq(schema.matches.matchId, matchId), eq(schema.matches.roomId, roomId),
+            isNull(schema.matches.resultRecordedAt),
+        ));
+    }
+
     /**
      * 배정은 "이 방에 들여보낸 사람"이라 방이 치르는 경기보다 오래 산다. 아직 결과가 안 들어온 행을
      * 먼저 보되, 직전 경기가 이미 기록된 뒤(= 재경기 대기 중)라면 가장 최근 행에 붙인다. 예전에는
@@ -236,7 +243,7 @@ export class ResultService {
      * 발급된 id가 안 쓰이고 남을 수 있다 — 사람들이 그냥 나가면 그렇다. 결과가 없는 행이라
      * 전적에도 통계에도 잡히지 않고, 보관 정리가 걷어 간다.
      */
-    async issueNextMatch(finished: MatchResultMessage): Promise<string | null> {
+    async issueNextMatch(finished: MatchResultMessage, ownerServerId = finished.serverId): Promise<string | null> {
         return this.db.transaction(async (tx) => {
             // Serialize attempts on the completed result, including delivery retries.
             const [source] = await tx.select().from(schema.matches)
@@ -247,14 +254,14 @@ export class ResultService {
                 .where(eq(schema.matches.matchId, matchId));
             // Never overwrite a room's future grant with a match already played.
             if (existing) return existing.resultRecordedAt
-                || existing.roomId !== source.roomId || existing.serverId !== source.serverId ? null : matchId;
+                || existing.roomId !== source.roomId ? null : matchId;
             const assignments = await tx.select().from(schema.matchAssignments)
                 .where(eq(schema.matchAssignments.matchId, finished.matchId));
             if (!assignments.length) return null;
 
             const [created] = await tx.insert(schema.matches).values({
                 matchId,
-                serverId: finished.serverId,
+                serverId: ownerServerId,
                 roomId: finished.roomId,
                 mapId: source.mapId,
             }).onConflictDoNothing().returning({ matchId: schema.matches.matchId });

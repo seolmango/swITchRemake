@@ -188,3 +188,25 @@ test('방 인계 중 새 방으로 옮긴 사용자의 claim을 덮지 않고 �
     assert.equal(h.redis.values.get(h.keys.userActiveRoom(1)), firstOldClaim, '부분 인계는 원래 claim으로 롤백한다');
     assert.equal(h.redis.values.get(h.keys.userActiveRoom(2)), secondNewClaim, '새 방 배정은 보존한다');
 });
+
+test('source registry forgets transferred seat cleanup and preserves the adopter same-room claim', async () => {
+    const h = harness();
+    h.redis.values.set(h.keys.userActiveRoom(1), activeClaim('room-1', 1));
+    h.registry.trackSeat('room-1', 1, 'request-1');
+    await h.registry.publish();
+    const adopted = JSON.stringify({ state: 'assigned', roomId: 'room-1', serverId: 'game-peer', requestId: 'adopt:peer:room-1' });
+    h.redis.values.set(h.keys.userActiveRoom(1), adopted);
+    h.registry.forgetRoom('room-1');
+    h.rooms.get('room-1')!.releaseAfterHandOff(); h.rooms.sweep();
+    await h.registry.publish();
+    assert.equal(h.redis.values.get(h.keys.userActiveRoom(1)), adopted);
+});
+
+test('adopter heartbeat renews the transferred actor claim after admission', async () => {
+    const h = harness();
+    h.redis.values.set(h.keys.userActiveRoom(1), activeClaim('room-1', 1));
+    await h.registry.claimAdoptedRoom('room-1', [1]);
+    h.redis.ttls.set(h.keys.userActiveRoom(1), 1);
+    await h.registry.publish();
+    assert.equal(h.redis.ttls.get(h.keys.userActiveRoom(1)), 30_000);
+});

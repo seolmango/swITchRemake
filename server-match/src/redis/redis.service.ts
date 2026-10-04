@@ -10,6 +10,7 @@ export interface StreamEntry {
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
     private client!: Redis;
+    private rateClient?: Redis;
     // XREADGROUP with BLOCK must never share a socket with regular commands,
     // or with another blocking reader. The key identifies one reader loop.
     private readonly blockingClients = new Map<string, Redis>();
@@ -31,6 +32,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         this.client.on('error', (err) => {
             this.logger.error('Redis Connection Failed', err);
         });
+        // HTTP counters must never accumulate offline writes or resend an
+        // unacknowledged increment after recovery. Blocking streams retain
+        // their independent connection/retry policy.
+        this.rateClient = this.client.duplicate({
+            enableOfflineQueue: false, maxRetriesPerRequest: 1,
+            commandTimeout: 2_000, connectTimeout: 3_000,
+            autoResendUnfulfilledCommands: false,
+        });
+        this.rateClient.on('error', () => { /* HTTP guards report bounded 503. */ });
     }
 
     onModuleDestroy() {
@@ -38,6 +48,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
             client.disconnect();
         }
         this.blockingClients.clear();
+        this.rateClient?.disconnect();
         this.client.disconnect();
     }
 
@@ -137,11 +148,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
 
     async ttlMilliseconds(key: string): Promise<number> {
-        return this.client.pttl(key);
+        return (this.rateClient ?? this.client).pttl(key);
     }
 
     async incrementWithTtl(key: string, ttlSeconds: number): Promise<number> {
-        const result = await this.client.eval(
+        const result = await (this.rateClient ?? this.client).eval(
             'local n = redis.call("INCR", KEYS[1]); if n == 1 then redis.call("EXPIRE", KEYS[1], ARGV[1]) end; return n',
             1,
             key,

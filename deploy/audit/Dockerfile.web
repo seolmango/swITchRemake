@@ -1,0 +1,11 @@
+ARG AUDIT_BACKEND_IMAGE
+FROM ${AUDIT_BACKEND_IMAGE} AS build
+USER root
+COPY client ./client
+COPY legal ./legal
+RUN npm run build -w client
+
+FROM nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/client/dist /usr/share/nginx/html
+EXPOSE 80

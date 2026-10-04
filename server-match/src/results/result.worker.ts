@@ -78,8 +78,21 @@ export class ResultWorker implements OnModuleInit, OnModuleDestroy {
      */
     private async grantNextMatch(result: MatchResultMessage): Promise<void> {
         try {
-            const matchId = await this.results.issueNextMatch(result);
+            let ownerServerId = result.serverId;
+            const rawRoom = await this.redis.get(this.keys.room(result.roomId));
+            if (rawRoom !== null) {
+                try {
+                    const directory: unknown = JSON.parse(rawRoom);
+                    if (directory !== null && typeof directory === 'object' && !Array.isArray(directory)) {
+                        const fields = directory as Record<string, unknown>;
+                        if (fields['roomId'] === result.roomId && typeof fields['serverId'] === 'string'
+                            && /^[A-Za-z0-9_-]{1,128}$/u.test(fields['serverId'])) ownerServerId = fields['serverId'];
+                    }
+                } catch { /* malformed directory does not authorize a different server */ }
+            }
+            const matchId = await this.results.issueNextMatch(result, ownerServerId);
             if (!matchId) return;
+            await this.results.reassignPendingMatch(matchId, result.roomId, ownerServerId);
             const command: ControlCommand<GrantMatchPayload> = {
                 v: CONTROL_VERSION,
                 requestId: randomUUID(),
@@ -92,7 +105,7 @@ export class ResultWorker implements OnModuleInit, OnModuleDestroy {
                 payload: { roomId: result.roomId, matchId },
             };
             await this.redis.addStreamEntry(
-                this.keys.commands(result.serverId),
+                this.keys.commands(ownerServerId),
                 CONTROL_STREAM_FIELDS.command,
                 encodeCommand(command),
             );

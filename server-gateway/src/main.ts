@@ -196,6 +196,11 @@ export function handleRequest(
         },
         (upstream) => {
             clearTimeout(responseTimer);
+            // The response stream has its own error boundary after headers. A short
+            // body must close the client socket: ending it would claim success with
+            // a mismatched Content-Length and leave the download waiting forever.
+            upstream.on('error', () => res.destroy());
+            upstream.on('aborted', () => res.destroy());
             // 헤더 뒤에 본문이 멎는 경우도 소켓을 영원히 점유하지 못하게 한다.
             upstream.setTimeout(limits.responseTimeoutMs, () => upstream.destroy(new Error('upstream response timeout')));
             res.writeHead(upstream.statusCode ?? 502, filterHttpResponseHeaders(upstream.headers));
@@ -214,8 +219,17 @@ export function handleRequest(
     proxied.on('error', (error: unknown) => {
         clearTimeout(responseTimer);
         log(`${backend.serverId}로 넘기지 못했습니다: ${String(error)}`);
-        if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
-        res.end('bad gateway');
+        if (res.headersSent) {
+            res.destroy();
+        } else {
+            res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
+            res.end('bad gateway');
+        }
+    });
+    req.on('aborted', () => proxied.destroy());
+    res.on('close', () => {
+        clearTimeout(responseTimer);
+        if (!res.writableFinished) proxied.destroy();
     });
     req.pipe(proxied);
 }

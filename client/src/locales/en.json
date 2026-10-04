@@ -165,6 +165,7 @@
     "liveData": "Game server connected",
     "commandFailed": "The request could not be completed. ({{code}})",
     "errorCodes": {
+      "SERVER_DRAINING": "The server is moving this room. Start after reconnecting.",
       "RESULT_BACKLOG": "The server is still saving the last match's results. Try starting again in a moment."
     },
     "reconnecting": "Reconnecting to the game server…",
@@ -909,7 +910,7 @@
     "title": "Replay player",
     "about": "About this replay",
     "dropHint": "Drop a replay file here, or click to choose one",
-    "dropSub": "No server and no sign-in needed. Just the file.",
+    "dropSub": "Open a file without signing in. Loading the map and verifying its signature require a server connection.",
     "reading": "Reading the file…",
     "recordedAt": "Recorded",
     "recordedAtUnknown": "Unknown (older format)",

@@ -28,3 +28,5 @@ __pycache__
 .claude
 .idea
 .vscode
+.audit
+docs/audit-2026-10-04

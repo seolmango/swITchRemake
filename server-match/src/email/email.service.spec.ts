@@ -68,7 +68,7 @@ test('startup does not wait for the SMTP probe', () => {
     // verify()가 영영 안 끝나도 부팅은 즉시 끝나야 한다. onModuleInit이 Promise를 반환하면
     // Nest가 그것을 기다리고, SMTP가 막힌 환경에서 서버가 몇 분씩 안 뜬다.
     const fixture = createService(
-        { EMAIL_TRANSPORT: 'sink', SMTP_USER: 'ops@example.com', SMTP_PASSWORD: 'secret' },
+        { EMAIL_TRANSPORT: 'smtp', SMTP_USER: 'ops@example.com', SMTP_PASSWORD: 'secret' },
         undefined,
         () => new Promise(() => {}),
     );
@@ -84,6 +84,16 @@ test('credentials that are absent stay unconfigured without probing', () => {
         () => { throw new Error('verify must not run without credentials'); },
     );
 
+    fixture.service.onModuleInit();
+    assert.equal(fixture.service.getHealthStatus(), 'unconfigured');
+});
+
+test('sink never probes SMTP even when credentials are configured', () => {
+    const fixture = createService(
+        { EMAIL_TRANSPORT: 'sink', SMTP_USER: 'synthetic@switch.test', SMTP_PASSWORD: 'synthetic' },
+        undefined,
+        () => { throw new Error('sink must never open an SMTP connection'); },
+    );
     fixture.service.onModuleInit();
     assert.equal(fixture.service.getHealthStatus(), 'unconfigured');
 });

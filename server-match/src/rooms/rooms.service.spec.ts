@@ -69,6 +69,7 @@ function makeService(redis = new FakeRedis(), stats: unknown = null): RoomsServi
         issueMatch: async () => undefined,
         confirmRoom: async () => undefined,
         discardIssuedMatch: async () => undefined,
+        reassignPendingMatch: async () => undefined,
     };
     const sessionSecurity = { hmacIp: (ip: string) => `hmac:${ip}` };
     return new RoomsService(db as never, redis as never, sanctions as never, results as never, sessionSecurity as never);

@@ -18,7 +18,7 @@ import dashIcon from '../assets/images/skill_dash.svg';
 import flashIcon from '../assets/images/skill_flash.svg';
 import exhaustIcon from '../assets/images/skill_exhaust.svg';
 import switchIcon from '../assets/images/skill_switch.svg';
-import { formatKeyBindings, matchesKeyBinding } from '../utils/keyBinding.ts';
+import { formatKeyBindings, matchesHeldKeyBinding, matchesKeyBinding } from '../utils/keyBinding.ts';
 import { cooldownTotalMs, getSwitchTargets, skillRejectionMessageKey, toCooldownDisplay } from '../utils/skillHud.ts';
 import { switchTargetPlayerIdForMatch } from '../utils/switchTarget.ts';
 import { GameLoadingOverlay } from '../game/hud/GameLoadingOverlay.tsx';
@@ -29,6 +29,7 @@ import { SettingsPage } from './SettingsPage.tsx';
 import { matchSfx, useMatchSfx } from '../audio/matchSfx.ts';
 import { canEnterRunningGame } from '../game/roomRole.ts';
 import { BufferedSnapshots } from '../game/BufferedSnapshots.ts';
+import { useModalFocusTrap } from '../components/common/useModalFocusTrap.ts';
 
 const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { iconUrl: string; labelKey: string }> = {
     [SkillId.Dash]: { iconUrl: dashIcon, labelKey: 'lobby.skills.dash' },
@@ -73,6 +74,9 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
     const recoveryAttempted = useRef(false);
     const inputSequence = useRef(0);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const { dialogRef: settingsDialogRef, onDialogKeyDown: onSettingsDialogKeyDown } = useModalFocusTrap<HTMLDivElement>(
+        () => setSettingsOpen(false), settingsOpen,
+    );
     const [trainingMap, setTrainingMap] = useState<MapView | null>(null);
     const [trainingPads, setTrainingPads] = useState<readonly TrainingPad[]>([]);
     const [spectatingId, setSpectatingId] = useState<number | null>(null);
@@ -266,8 +270,12 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
         };
         const onKeyUp = (event: KeyboardEvent) => pressed.delete(event.code);
         const onBlur = () => pressed.clear();
-        const active = (action: 'moveUp' | 'moveDown' | 'moveLeft' | 'moveRight') =>
-            useSettingsStore.getState().keyBindings[action].some((code) => code !== null && pressed.has(code));
+        const movementActions = ['moveUp', 'moveDown', 'moveLeft', 'moveRight'] as const;
+        const active = (action: (typeof movementActions)[number]) => {
+            const bindings = useSettingsStore.getState().keyBindings;
+            const alternatives = movementActions.flatMap(direction => bindings[direction]);
+            return bindings[action].some(binding => matchesHeldKeyBinding(pressed, binding, alternatives));
+        };
         const timer = window.setInterval(() => {
             // 키보드와 조이스틱을 합친다. 한쪽이 다른 쪽을 끄면 태블릿에 키보드를 붙인 사람처럼
             // 둘 다 쓰는 조합에서 조작이 죽는다. 조이스틱을 안 잡고 있으면 전부 false다.
@@ -380,7 +388,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
                 {training && matchReady && (
                     <>
                         {settingsOpen && (
-                            <div className="training-settings-overlay" role="dialog" aria-modal="true" aria-label={t('settings.title')}>
+                            <div ref={settingsDialogRef} className="training-settings-overlay" role="dialog" aria-modal="true" aria-label={t('settings.title')} tabIndex={-1} onKeyDown={onSettingsDialogKeyDown}>
                                 <SettingsPage embedded />
                                 <button type="button" className="training-settings-close" onClick={() => setSettingsOpen(false)}>
                                     {t('training.closeSettings')}

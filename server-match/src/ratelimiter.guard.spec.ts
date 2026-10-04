@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { HttpException } from '@nestjs/common';
+import { HttpException, ServiceUnavailableException } from '@nestjs/common';
 import { AGGREGATE_ACTOR_LIMIT, AGGREGATE_IP_LIMIT, PreAuthIpRateLimiterGuard, RateLimiterGuard, assertRateLimitPolicy, rateLimitRelaxed } from './ratelimiter.guard';
 import { createHash } from 'node:crypto';
 
@@ -59,6 +59,7 @@ function guardHarness(request: Record<string, any>, limit = 2) {
         switchToHttp: () => ({ getRequest: () => request }),
     };
     return {
+        redis,
         counts,
         options,
         context,
@@ -67,6 +68,25 @@ function guardHarness(request: Record<string, any>, limit = 2) {
         anotherActor: new RateLimiterGuard(reflector as never, redis as never),
     };
 }
+
+test('unavailable rate store fails closed with 503 and admits normal requests after recovery', async () => {
+    const harness = guardHarness({ ip: '203.0.113.15' });
+    const normal = harness.redis.incrementWithTtl;
+    harness.redis.incrementWithTtl = async () => { throw new Error('store disconnected'); };
+    await assert.rejects(harness.pre.canActivate(harness.context as never), ServiceUnavailableException);
+    assert.equal(harness.counts.size, 0);
+    harness.redis.incrementWithTtl = normal;
+    assert.equal(await harness.pre.canActivate(harness.context as never), true);
+});
+
+test('a stalled rate counter rejects with 503 within the HTTP dependency deadline', async () => {
+    const harness = guardHarness({ ip: '203.0.113.16' });
+    harness.redis.incrementWithTtl = () => new Promise<number>(() => {});
+    const started = Date.now();
+    await assert.rejects(harness.pre.canActivate(harness.context as never), ServiceUnavailableException);
+    assert.ok(Date.now() - started < 3_000);
+    assert.equal(harness.counts.size, 0);
+});
 
 test('인증 요청은 IP, actor, 정규화한 대상 이메일 버킷을 모두 쓴다', async () => {
     const harness = guardHarness({

@@ -17,12 +17,13 @@ import {
     CONTROL_VERSION,
     CommandType,
     HEARTBEAT_INTERVAL_MS,
+    HEARTBEAT_TTL_MS,
     makeKeys,
     type ControlCommand,
     type GameServerHeartbeat,
     type RedisKeys,
 } from 'shared';
-import { DEFAULT_POLICY, decideScaling, serverLoad, type ScalingPolicy } from './policy';
+import { DEFAULT_POLICY, decideScaling, serverLoad, type ScalingPolicy, type ScalingInput, type ScalingAction } from './policy';
 
 const log = (message: string): void => { console.log(`[supervisor] ${message}`); };
 
@@ -39,13 +40,41 @@ const GAME_ENTRY = resolve(REPO_ROOT, 'server-game', 'dist', 'main.js');
 /** 부하를 다시 재는 주기. heartbeat보다 촘촘할 이유가 없다. */
 const TICK_MS = HEARTBEAT_INTERVAL_MS * 2;
 
-const POLICY: ScalingPolicy = {
-    minServers: num('SUPERVISOR_MIN_SERVERS', DEFAULT_POLICY.minServers),
-    maxServers: num('SUPERVISOR_MAX_SERVERS', DEFAULT_POLICY.maxServers),
-    scaleUpLoad: num('SUPERVISOR_SCALE_UP_LOAD', DEFAULT_POLICY.scaleUpLoad),
-    scaleDownLoad: num('SUPERVISOR_SCALE_DOWN_LOAD', DEFAULT_POLICY.scaleDownLoad),
-    cooldownMs: num('SUPERVISOR_COOLDOWN_MS', DEFAULT_POLICY.cooldownMs),
-};
+export function readScalingPolicy(values: NodeJS.ProcessEnv): ScalingPolicy {
+    const read = (name: string, fallback: number): number => {
+        const raw = values[name]?.trim();
+        const value = raw === undefined || raw === '' ? fallback : Number(raw);
+        if (!Number.isFinite(value)) throw new Error(`Invalid scaling policy: ${name}`);
+        return value;
+    };
+    const policy = {
+        minServers: read('SUPERVISOR_MIN_SERVERS', DEFAULT_POLICY.minServers),
+        maxServers: read('SUPERVISOR_MAX_SERVERS', DEFAULT_POLICY.maxServers),
+        scaleUpLoad: read('SUPERVISOR_SCALE_UP_LOAD', DEFAULT_POLICY.scaleUpLoad),
+        scaleDownLoad: read('SUPERVISOR_SCALE_DOWN_LOAD', DEFAULT_POLICY.scaleDownLoad),
+        cooldownMs: read('SUPERVISOR_COOLDOWN_MS', DEFAULT_POLICY.cooldownMs),
+    };
+    if (!Number.isSafeInteger(policy.minServers) || policy.minServers < 1
+        || !Number.isSafeInteger(policy.maxServers) || policy.maxServers < policy.minServers || policy.maxServers > 64
+        || policy.scaleDownLoad < 0 || policy.scaleUpLoad <= policy.scaleDownLoad
+        || !Number.isSafeInteger(policy.cooldownMs) || policy.cooldownMs < 1_000 || policy.cooldownMs > 3_600_000) {
+        throw new Error('Invalid scaling policy bounds or hysteresis');
+    }
+    return policy;
+}
+
+const POLICY: ScalingPolicy = readScalingPolicy(process.env);
+
+export function decideLocalScaling(input: ScalingInput, liveChildren: number): ScalingAction {
+    // Registry capacity and local OS processes are separate sources of truth.
+    const action = decideScaling(input);
+    // The map contains starting and draining children until their OS exit event.
+    // Stale heartbeats cannot authorize spawning beyond this hard process cap.
+    if (action.kind === 'up' && liveChildren >= input.policy.maxServers) {
+        return { kind: 'hold', reason: '살아 있는 로컬 프로세스가 최대 대수에 도달했습니다' };
+    }
+    return action;
+}
 
 interface Child {
     readonly serverId: string;
@@ -73,9 +102,18 @@ async function main(): Promise<void> {
     log(`시작. 최소 ${POLICY.minServers}대 / 최대 ${POLICY.maxServers}대, `
         + `증설 문턱 ${POLICY.scaleUpLoad} / 축소 문턱 ${POLICY.scaleDownLoad}`);
 
-    const timer = setInterval(() => { void tick(redis, keys); }, TICK_MS);
+    // Never overlap registry reads/actions when Redis takes longer than one tick.
+    let ticking = false;
+    const runTick = async (): Promise<void> => {
+        if (ticking || stopping) return;
+        ticking = true;
+        try { await tick(redis, keys); }
+        catch (error: unknown) { log(`용량 판정을 보류합니다: ${String(error)}`); }
+        finally { ticking = false; }
+    };
+    const timer = setInterval(() => { void runTick(); }, TICK_MS);
     timer.unref();
-    await tick(redis, keys);
+    await runTick();
 
     const shutdown = (signal: string): void => {
         if (stopping) process.exit(0);
@@ -96,6 +134,9 @@ async function main(): Promise<void> {
 async function tick(redis: Redis, keys: RedisKeys): Promise<void> {
     if (stopping) return;
     const servers = await readServers(redis, keys);
+    // A failed read does not establish that workers vanished. Replacing a healthy
+    // fleet on every outage tick can grow child processes without a bound.
+    if (servers === null) return;
     const alive = new Set(servers.map((server) => server.serverId));
 
     // heartbeat가 보이면 기동이 끝난 것이다. 이 표시가 있어야 '기동 중'과 '한가한 서버'를
@@ -106,7 +147,7 @@ async function tick(redis: Redis, keys: RedisKeys): Promise<void> {
     }
 
     const starting = [...children.values()].filter((child) => !child.seen).length;
-    const action = decideScaling({ servers, starting, now: Date.now(), lastActionAt, policy: POLICY });
+    const action = decideLocalScaling({ servers, starting, now: Date.now(), lastActionAt, policy: POLICY }, children.size);
 
     if (action.kind === 'up') {
         lastActionAt = Date.now();
@@ -129,22 +170,41 @@ async function tick(redis: Redis, keys: RedisKeys): Promise<void> {
     if (summary.length > 0) log(`유지: ${action.reason} | ${summary}`);
 }
 
-async function readServers(redis: Redis, keys: RedisKeys): Promise<GameServerHeartbeat[]> {
+export async function readServers(redis: Pick<Redis, 'zrange' | 'get'>, keys: RedisKeys): Promise<GameServerHeartbeat[] | null> {
     try {
         const ids = await redis.zrange(keys.gameServersAlive(), 0, -1);
         const raw = await Promise.all(ids.map((id) => redis.get(keys.gameServer(id))));
-        return raw.flatMap((value) => {
+        return raw.flatMap((value, index) => {
             if (value === null) return [];
             try {
-                return [JSON.parse(value) as GameServerHeartbeat];
+                const heartbeat: unknown = JSON.parse(value);
+                if (!validScalingHeartbeat(heartbeat, ids[index]!)) return [];
+                return [heartbeat];
             } catch {
                 return [];
             }
         });
     } catch (error: unknown) {
         log(`서버 목록을 읽지 못했습니다: ${String(error)}`);
-        return [];
+        return null;
     }
+}
+
+function validScalingHeartbeat(value: unknown, expectedId: string): value is GameServerHeartbeat {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+    const fields = value as Record<string, unknown>;
+    const count = (name: string, max: number): boolean => typeof fields[name] === 'number'
+        && Number.isSafeInteger(fields[name]) && (fields[name] as number) >= 0 && (fields[name] as number) <= max;
+    return fields['serverId'] === expectedId && /^[A-Za-z0-9_-]{1,128}$/u.test(expectedId)
+        && count('maxRooms', 100_000) && (fields['maxRooms'] as number) > 0
+        && count('waitingRooms', fields['maxRooms'] as number) && count('playingRooms', fields['maxRooms'] as number)
+        && (fields['waitingRooms'] as number) + (fields['playingRooms'] as number) <= (fields['maxRooms'] as number)
+        && count('connections', 1_000_000) && typeof fields['draining'] === 'boolean'
+        && typeof fields['loopLagMs'] === 'number' && Number.isFinite(fields['loopLagMs'])
+        && fields['loopLagMs'] >= 0 && fields['loopLagMs'] <= 60_000
+        && typeof fields['updatedAt'] === 'number' && Number.isSafeInteger(fields['updatedAt'])
+        && fields['updatedAt'] >= Date.now() - HEARTBEAT_TTL_MS
+        && fields['updatedAt'] <= Date.now() + HEARTBEAT_INTERVAL_MS;
 }
 
 /**
@@ -186,6 +246,10 @@ function spawnServer(): void {
         if (code === 0) log(`${serverId} 종료 (재우기 완료)`);
         else log(`! ${serverId}가 예기치 않게 종료했습니다 (code=${String(code)})`);
     });
+    child.on('error', (error: Error) => {
+        children.delete(serverId);
+        log(`${serverId} 기동 실패: ${error.name}`);
+    });
 
     log(`${serverId} 기동 중`);
 }
@@ -215,7 +279,9 @@ async function sendDrain(redis: Redis, keys: RedisKeys, serverId: string): Promi
     }
 }
 
-main().catch((error: unknown) => {
-    console.error('[supervisor] 기동 실패', error);
-    process.exit(1);
-});
+if (require.main === module) {
+    main().catch((error: unknown) => {
+        console.error('[supervisor] 기동 실패', error);
+        process.exit(1);
+    });
+}

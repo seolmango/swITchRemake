@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageLayout } from '../../components/layout/PageLayout.tsx';
@@ -24,49 +24,49 @@ export const RoomListPage: React.FC = () => {
     const handoff = (useLocation().state as { message?: string } | null)?.message ?? '';
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
+    const requestId = useRef(0);
 
     const loadRooms = useCallback(async () => {
+        const currentRequest = ++requestId.current;
         setLoading(true);
         try {
             const result = await getRooms(page);
+            if (currentRequest !== requestId.current) return;
+            const lastPage = Math.max(1, result.totalPages);
+            if (page > lastPage) {
+                setTotalPages(lastPage);
+                setPage(lastPage);
+                return;
+            }
             setRooms(result.rooms);
-            setTotalPages(result.totalPages);
+            setTotalPages(lastPage);
             setMessage('');
         } catch (error) {
-            setMessage(roomErrorMessage(error, t));
-        } finally { setLoading(false); }
+            if (currentRequest === requestId.current) setMessage(roomErrorMessage(error, t));
+        } finally {
+            if (currentRequest === requestId.current) setLoading(false);
+        }
     }, [page, t]);
 
     useEffect(() => {
-        let active = true;
         let pending = false;
         const refresh = () => {
             if (pending || document.hidden) return;
             pending = true;
-            void getRooms(page).then((result) => {
-                if (!active) return;
-                if (page > result.totalPages) {
-                    setPage(Math.max(1, result.totalPages));
-                    return;
-                }
-                setRooms(result.rooms);
-                setTotalPages(result.totalPages);
-                setMessage('');
-            }).catch((error: unknown) => {
-                if (active) setMessage(roomErrorMessage(error, t));
-            }).finally(() => { pending = false; });
+            void loadRooms().finally(() => { pending = false; });
         };
         refresh();
         const timer = window.setInterval(refresh, 5_000);
         document.addEventListener('visibilitychange', refresh);
         window.addEventListener('focus', refresh);
         return () => {
-            active = false;
+            // Page changes/unmount invalidate both automatic and manual requests.
+            requestId.current += 1;
             window.clearInterval(timer);
             document.removeEventListener('visibilitychange', refresh);
             window.removeEventListener('focus', refresh);
         };
-    }, [page, t]);
+    }, [loadRooms]);
 
     const handleQuickJoin = async () => {
         try {

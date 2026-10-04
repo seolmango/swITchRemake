@@ -71,6 +71,7 @@ export const ErrorCode = {
      * 누르면 되는 상태다 — outbox는 Redis가 살아나면 스스로 비워진다.
      */
     ResultBacklog: 'RESULT_BACKLOG',
+    ServerDraining: 'SERVER_DRAINING',
     ServerShutdown: 'SERVER_SHUTDOWN',
     Internal: 'INTERNAL',
 } as const;

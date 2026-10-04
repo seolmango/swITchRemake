@@ -128,6 +128,7 @@ async function main(): Promise<void> {
         maxRooms: INFRA.MAX_ROOMS,
         isKnownMap: (mapId, mode) => isPlayableMap(bundle, mapId, mode),
         canStartGame: () => outbox.canStartNewGame(),
+        isDraining: () => draining,
         getServerTick: () => serverTick,
         violationSink,
         skillSink: (roomId, request) => lifecycle.queueSkill(roomId, request),

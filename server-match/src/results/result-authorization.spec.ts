@@ -46,7 +46,9 @@ function nextMatchHarness(emptyAssignments = false) {
     };
     const db = { transaction: async (run: (value: typeof tx) => unknown) => run(tx) };
     const service = new ResultService(db as never);
-    return { service, insertedMatches, insertedAssignments, source, markNextStored: () => { if (next) next['resultRecordedAt'] = new Date(3); } };
+    return { service, insertedMatches, insertedAssignments, source,
+        migrateNext: () => { if (next) next['serverId'] = 'adopter'; },
+        markNextStored: () => { if (next) next['resultRecordedAt'] = new Date(3); } };
 }
 
 test('다음 경기는 매칭 서버가 만들고, 배정은 방금 끝난 경기에서 옮겨 붙는다', async () => {
@@ -84,6 +86,13 @@ test('retry identity remains a protocol UUID and normalizes PostgreSQL UUID case
     assert.match(next, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     assert.equal(nextMatchId(id.toUpperCase()), next);
     assert.notEqual(nextMatchId(next), next);
+});
+
+test('retrying a result after pending issuance migrated preserves the same next grant', async () => {
+    const { service, migrateNext } = nextMatchHarness();
+    const next = await service.issueNextMatch(result);
+    migrateNext();
+    assert.equal(await service.issueNextMatch(result), next);
 });
 
 test('다음 경기 발급은 완료된 source의 방/서버 권한을 다시 확인한다', async () => {

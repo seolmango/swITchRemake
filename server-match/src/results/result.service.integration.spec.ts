@@ -16,8 +16,18 @@ import { ResultService } from './result.service';
 // Run directly with: node --env-file=../.env --test <compiled file>.
 const runIntegration = Boolean(process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER);
 
+function appendOnlyViolation(error: unknown): boolean {
+    let current = error;
+    for (let depth = 0; depth < 4 && current && typeof current === 'object'; depth += 1) {
+        const candidate = current as { code?: string; message?: string; cause?: unknown };
+        if (candidate.code === 'P0001' && candidate.message === 'admin_audit_log is append only') return true;
+        current = candidate.cause;
+    }
+    return false;
+}
+
 test('stores one idempotent result transaction and excludes guest stats', { skip: !runIntegration }, async () => {
-    loadEnv({ path: path.resolve(process.cwd(), '../.env') });
+    if (process.env.SWITCH_SKIP_ENV_FILE !== 'true') loadEnv({ path: path.resolve(process.cwd(), '../.env') });
     const connection = postgres(databaseConnectionOptions((name) => process.env[name]));
     const db = drizzle(connection, { schema });
     const service = new ResultService(db);
@@ -41,7 +51,7 @@ test('stores one idempotent result transaction and excludes guest stats', { skip
         await assert.rejects(
             db.update(schema.adminAuditLog).set({ ipEncrypted: null })
                 .where(eq(schema.adminAuditLog.id, scrubAuditId)),
-            /admin_audit_log is append only/,
+            appendOnlyViolation,
         );
         await db.transaction(async (tx) => {
             await tx.execute(sql`SELECT set_config('switch.audit_retention', 'on', true)`);
@@ -64,7 +74,7 @@ test('stores one idempotent result transaction and excludes guest stats', { skip
 
         await assert.rejects(
             db.delete(schema.adminAuditLog).where(eq(schema.adminAuditLog.id, deleteAuditId)),
-            /admin_audit_log is append only/,
+            appendOnlyViolation,
         );
         await assert.rejects(
             db.transaction(async (tx) => {
@@ -72,7 +82,7 @@ test('stores one idempotent result transaction and excludes guest stats', { skip
                 await tx.update(schema.adminAuditLog).set({ reason: 'not a retention mutation' })
                     .where(eq(schema.adminAuditLog.id, deleteAuditId!));
             }),
-            /admin_audit_log is append only/,
+            appendOnlyViolation,
         );
         await db.transaction(async (tx) => {
             await tx.execute(sql`SELECT set_config('switch.audit_retention', 'on', true)`);
@@ -138,7 +148,7 @@ test('stores one idempotent result transaction and excludes guest stats', { skip
             { games: 1, wins: 1, sw_try: 4, sw_su: 3, kill: 2 },
         );
         // XP는 결과에서 오른다. 레벨은 저장하지 않는다 — 읽을 때 XP에서 센다.
-        assert.equal(stats.xp, matchXp({ won: true, tagCount: 2, switchSuccess: 3 }));
+        assert.equal(stats.xp, matchXp({ won: true, tagCount: 2, switchSuccess: 3, survivedMs: 60_000 }));
     } finally {
         const auditIds = [scrubAuditId, deleteAuditId].filter((id): id is number => id !== null);
         if (auditIds.length > 0) {

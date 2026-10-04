@@ -4,6 +4,7 @@ import {
     HttpException,
     HttpStatus,
     Injectable,
+    ServiceUnavailableException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { RATE_LIMIT_KEY, RateLimitOptions } from './ratelimiter.decorator';
@@ -69,14 +70,30 @@ abstract class RedisRateGuard {
         if (limit <= 0) {
             throw new HttpException('Too many requests', HttpStatus.TOO_MANY_REQUESTS);
         }
-        const count = await this.redis.incrementWithTtl(key, Math.max(1, Math.ceil(ttlMs / 1000)));
+        const count = await this.dependency(() => this.redis.incrementWithTtl(key, Math.max(1, Math.ceil(ttlMs / 1000))));
         if (count > this.scaled(limit)) {
             throw new HttpException({
                 statusCode: HttpStatus.TOO_MANY_REQUESTS,
                 message: 'Too many requests',
-                retryAfterMs: Math.max(0, await this.redis.ttlMilliseconds(key)),
+                retryAfterMs: Math.max(0, await this.dependency(() => this.redis.ttlMilliseconds(key))),
             }, HttpStatus.TOO_MANY_REQUESTS);
         }
+    }
+
+    private async dependency<T>(operation: () => Promise<T>): Promise<T> {
+        // Guards run before readiness and authentication. A disconnected Redis
+        // must reject promptly, never admit an unmetered request or hang probes.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            return await Promise.race([
+                operation(),
+                new Promise<never>((_, reject) => {
+                    timer = setTimeout(() => reject(new Error('Rate store unavailable')), 2_000);
+                }),
+            ]);
+        } catch {
+            throw new ServiceUnavailableException('Rate limit store unavailable');
+        } finally { if (timer) clearTimeout(timer); }
     }
 }
 

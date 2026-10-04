@@ -666,6 +666,50 @@ test('아무도 안 붙어 있는 방은 넘기지 않는다', () => {
     assert.equal(context.room.canHandOff(), false);
 });
 
+test('drain은 대기실 새 시작을 막고 이미 시작한 경기 상태는 계속 진행한다', () => {
+    let draining = false;
+    const source = setup({ isDraining: () => draining });
+    source.connect(source.owner);
+    for (const userId of [2, 3]) {
+        const reservation = seat(userId, 0);
+        source.room.reserveJoin(reservation, 'secret'); source.connect(reservation);
+    }
+    source.setNow(5_001);
+    draining = true;
+    assert.equal(source.room.requestStart(1), ErrorCode.ServerDraining);
+    assert.equal(source.room.state, RoomState.Waiting);
+    draining = false;
+    assert.equal(source.room.requestStart(1), null);
+    draining = true;
+    source.setNow(8_001); source.room.advance();
+    assert.equal(source.room.state, RoomState.Playing);
+    assert.equal(source.room.finishGame([1]), true);
+});
+
+test('대기실 인계는 완료한 경기와 발급받은 다음 경기 id를 보존한다', () => {
+    const source = setup();
+    source.connect(source.owner);
+    for (const userId of [2, 3]) {
+        const reservation = seat(userId, 0);
+        assert.equal(source.room.reserveJoin(reservation, 'secret'), null);
+        source.connect(reservation);
+    }
+    source.setNow(5_001);
+    assert.equal(source.room.requestStart(1), null);
+    source.setNow(8_001);
+    source.room.advance();
+    assert.equal(source.room.finishGame([1]), true);
+    source.room.grantMatchId('match-next');
+    source.setNow(18_002);
+    source.room.advance();
+    assert.equal(source.room.setLocked(1, true), null);
+    const exported = source.room.exportForHandOff('game-2');
+    const history = exported as unknown as Record<string, unknown>;
+    assert.equal(history['playedGames'], 1);
+    assert.equal(history['grantedMatchId'], 'match-next');
+    assert.equal(exported.locked, true);
+});
+
 
 
 test('경기 중에는 즉시 탈락하고 5초가 지나면 자리와 재접속 권한을 함께 놓는다', async () => {

@@ -88,6 +88,7 @@ interface RoomDirectoryEntry {
     roomId?: string;
     id?: string;
     serverId: string;
+    pendingMatchId?: string | null;
     name?: string;
     roomName?: string;
     roomCode?: string;
@@ -412,6 +413,12 @@ export class RoomsService implements OnModuleInit, OnModuleDestroy {
         const room = await this.readLiveRoom(roomId);
         if (!room || room.serverId !== claim.serverId) {
             throw new ConflictException({ code: 'ROOM_UNAVAILABLE', message: 'Room is no longer available' });
+        }
+        // Only the private directory and this actor's matching assignment authorize
+        // moving an unplayed issuance. A delayed completed result keeps its server.
+        if (typeof room.pendingMatchId === 'string'
+            && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(room.pendingMatchId)) {
+            await this.results.reassignPendingMatch(room.pendingMatchId, roomId, room.serverId);
         }
         const reply = await this.sendCommand<SeatGrant>(room.serverId, {
             v: CONTROL_VERSION,
