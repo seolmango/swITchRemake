@@ -191,6 +191,43 @@ test('재경기는 매칭 서버가 발급한 다음 경기 id로만 시작한�
     assert.equal(context.room.requestStart(1), ErrorCode.ResultBacklog);
 });
 
+test('a rematch accepts restarted input sequences on the existing connection', async () => {
+    const { context, c2 } = await playingRoom();
+    const input = (sequence: number): InputState => ({
+        sequence, left: false, right: true, up: false, down: false, heldActions: 0,
+    });
+    assert.equal(context.room.acceptInput(c2, input(1000)), true);
+    assert.equal(context.room.acceptInput(c2, input(999)), false, 'same-round stale packets stay rejected');
+    context.room.finishGame([1, 3]);
+    context.setNow(context.getNow() + 10_001);
+    context.room.advance();
+    context.room.grantMatchId('match-2');
+    assert.equal(context.room.requestStart(1), null);
+    context.setNow(context.getNow() + 3_001);
+    context.room.advance();
+    assert.equal(context.room.acceptInput(c2, input(0)), true, 'a newly mounted game page starts sequence at zero');
+    assert.equal(context.room.resolvedInputs()[0]?.moveX, 1);
+    assert.equal(context.room.acceptInput(c2, input(65535)), false, 'same-round wrap-aware ordering remains enforced');
+});
+
+test('a replayed grant cannot reuse the current match id or overwrite its successor', async () => {
+    const { context } = await playingRoom();
+    context.room.finishGame([1, 3]);
+    context.setNow(context.getNow() + 10_001);
+    context.room.advance();
+    context.room.grantMatchId('match-2');
+    assert.equal(context.room.requestStart(1), null);
+    context.setNow(context.getNow() + 3_001);
+    context.room.advance();
+    context.room.grantMatchId('match-3');
+    context.room.grantMatchId('match-2');
+    context.room.finishGame([1, 3]);
+    context.setNow(context.getNow() + 10_001);
+    context.room.advance();
+    assert.equal(context.room.requestStart(1), null);
+    assert.equal(context.room.matchId, 'match-3');
+});
+
 test('경기 종료 메시지는 한 명 승자를 그대로 보내고 승자 계약을 경계에서 검증한다', async () => {
     const { context, c2 } = await playingRoom();
 

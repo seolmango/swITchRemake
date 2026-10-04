@@ -6,11 +6,12 @@ import { SanctionModule } from '../sanction/sanction.module';
 import { SessionModule } from '../session/session.module';
 import { RoomsModule } from '../rooms/rooms.module';
 import { MfaModule } from '../mfa/mfa.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
     controllers: [UserController],
     providers: [UserService, ReplayDownloadService],
     exports: [UserService],
-    imports: [SanctionModule, SessionModule, RoomsModule, MfaModule],
+    imports: [SanctionModule, SessionModule, RoomsModule, MfaModule, AuthModule],
 })
 export class UserModule {}

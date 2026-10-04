@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { HttpException } from '@nestjs/common';
-import { PreAuthIpRateLimiterGuard, RateLimiterGuard, assertRateLimitPolicy, rateLimitRelaxed } from './ratelimiter.guard';
+import { AGGREGATE_ACTOR_LIMIT, AGGREGATE_IP_LIMIT, PreAuthIpRateLimiterGuard, RateLimiterGuard, assertRateLimitPolicy, rateLimitRelaxed } from './ratelimiter.guard';
 import { createHash } from 'node:crypto';
 
 /** 이 플래그는 환경변수 하나로 한도를 50배로 벌린다. 실수로 운영에 딸려 가면 안 된다. */
@@ -50,15 +50,17 @@ function guardHarness(request: Record<string, any>, limit = 2) {
         },
         ttlMilliseconds: async () => 60_000,
     };
-    const reflector = { get: () => ({ limit, ttl: 60_000 }) };
+    const options = { limit, ttl: 60_000 };
+    const reflector = { get: () => options };
     const security = { hmacIp: (ip: string) => `hmac:${ip}` };
     const context = {
-        getHandler: () => null,
-        getClass: () => null,
+        getHandler: () => request.handler ?? function testRoute() {},
+        getClass: () => class TestController {},
         switchToHttp: () => ({ getRequest: () => request }),
     };
     return {
         counts,
+        options,
         context,
         pre: new PreAuthIpRateLimiterGuard(reflector as never, redis as never, security as never),
         actor: new RateLimiterGuard(reflector as never, redis as never),
@@ -78,13 +80,15 @@ test('인증 요청은 IP, actor, 정규화한 대상 이메일 버킷을 모두
     assert.deepEqual([...harness.counts.keys()].sort(), [
         'auth-rate:actor:guest:g:one',
         'auth-rate:ip:hmac:203.0.113.7',
+        'auth-rate:route:TestController.testRoute:actor:guest:g:one',
+        'auth-rate:route:TestController.testRoute:ip:hmac:203.0.113.7',
         'auth-rate:target:victim@example.com',
     ]);
 });
 
 test('서로 다른 가드 인스턴스도 같은 Redis 대상 버킷의 총 한도를 공유한다', async () => {
     const harness = guardHarness({ ip: '203.0.113.7', headers: {}, body: { email: 'victim@example.com' } }, 1);
-    await harness.actor.canActivate(harness.context as never);
+    for (let attempt = 0; attempt < 5; attempt++) await harness.actor.canActivate(harness.context as never);
     await assert.rejects(harness.anotherActor.canActivate(harness.context as never), HttpException);
 });
 
@@ -127,6 +131,85 @@ test('로그인 뒤 2차 설정 변경은 actor와 대상 계정 버킷을 별�
     await harness.actor.canActivate(harness.context as never);
     assert.deepEqual([...harness.counts.keys()].sort(), [
         'auth-rate:actor:account:7',
+        'auth-rate:route:TestController.testRoute:actor:account:7',
         'auth-rate:target:account:7',
     ]);
+});
+
+test('room/admin reads do not exhaust the first authentication refresh for the same NAT or actor', async () => {
+    const request = { ip: '203.0.113.20', user: { id: 7, guest: false }, handler: function readOverview() {}, method: 'GET' };
+    const harness = guardHarness(request, 60);
+    for (let count = 0; count < 30; count++) {
+        await harness.pre.canActivate(harness.context as never);
+        await harness.actor.canActivate(harness.context as never);
+    }
+    request.handler = function refresh() {};
+    request.method = 'POST';
+    harness.options.limit = 5;
+    assert.equal(await harness.pre.canActivate(harness.context as never), true);
+    assert.equal(await harness.actor.canActivate(harness.context as never), true);
+});
+
+test('account profile reads do not exhaust a later password-change actor bucket', async () => {
+    const request = { ip: '203.0.113.26', user: { id: 7, guest: false }, handler: function readProfile() {} };
+    const harness = guardHarness(request, 60);
+    for (let count = 0; count < 30; count++) await harness.actor.canActivate(harness.context as never);
+    request.handler = function changePassword() {};
+    harness.options.limit = 5;
+    assert.equal(await harness.actor.canActivate(harness.context as never), true);
+});
+
+test('route limits remain enforced and concrete match IDs do not create new buckets', async () => {
+    const request = { ip: '203.0.113.21', user: { id: 7, guest: false }, handler: function getMatch() {}, url: '/matches/first', routeOptions: { url: '/matches/:id' } };
+    const harness = guardHarness(request, 1);
+    await harness.pre.canActivate(harness.context as never);
+    await harness.actor.canActivate(harness.context as never);
+    request.url = '/matches/second';
+    await assert.rejects(harness.actor.canActivate(harness.context as never), HttpException);
+    for (let count = 0; count < 3; count++) {
+        request.url = `/matches/rotated-${count}`;
+        await harness.pre.canActivate(harness.context as never);
+    }
+    request.url = '/matches/still-same-handler';
+    await assert.rejects(harness.pre.canActivate(harness.context as never), HttpException);
+});
+
+test('fixed aggregate IP and actor caps remain enforced when requests spread across handlers', async () => {
+    const request = { ip: '203.0.113.22', user: { id: 7, guest: false }, handler: function first() {} };
+    const harness = guardHarness(request, 60);
+    harness.counts.set('auth-rate:ip:hmac:203.0.113.22', AGGREGATE_IP_LIMIT);
+    await assert.rejects(harness.pre.canActivate(harness.context as never), HttpException);
+    harness.counts.set('auth-rate:actor:account:7', AGGREGATE_ACTOR_LIMIT);
+    request.handler = function second() {};
+    await assert.rejects(harness.actor.canActivate(harness.context as never), HttpException);
+});
+
+test('MFA status reads do not spend the shared second-factor attempt budget', async () => {
+    const request = { ip: '203.0.113.23', user: { id: 7, guest: false }, method: 'GET', handler: function mfaStatus() {}, routeOptions: { url: '/users/me/mfa' }, body: {} };
+    const harness = guardHarness(request, 60);
+    for (let count = 0; count < 30; count++) await harness.actor.canActivate(harness.context as never);
+    assert.equal(harness.counts.has('auth-rate:target:account:7'), false);
+    request.method = 'DELETE';
+    request.handler = function disableMfa() {};
+    harness.options.limit = 5;
+    await harness.actor.canActivate(harness.context as never);
+    assert.equal(harness.counts.get('auth-rate:target:account:7'), 1);
+});
+
+test('changing authentication route or MFA challenge does not reset attack-target caps', async () => {
+    const request = { ip: '203.0.113.24', handler: function login() {}, body: { email: 'victim@example.com', challengeToken: '' } };
+    const harness = guardHarness(request, 60);
+    for (let count = 0; count < 5; count++) await harness.actor.canActivate(harness.context as never);
+    request.handler = function resetPassword() {};
+    request.body.email = ' Victim@EXAMPLE.com ';
+    await assert.rejects(harness.actor.canActivate(harness.context as never), HttpException);
+    const mfaRequest = { ip: '203.0.113.25', handler: function loginMfa() {}, body: { challengeToken: '' } };
+    const mfa = guardHarness(mfaRequest, 60);
+    for (let count = 0; count < 5; count++) {
+        mfaRequest.body.challengeToken = `${'a'.repeat(64)}.${String(count).repeat(43)}`;
+        await mfa.actor.canActivate(mfa.context as never);
+    }
+    mfaRequest.handler = function resendMfa() {};
+    mfaRequest.body.challengeToken = `${'a'.repeat(64)}.${'B'.repeat(43)}`;
+    await assert.rejects(mfa.actor.canActivate(mfa.context as never), HttpException);
 });

@@ -38,8 +38,11 @@ export class UserController {
     async changePassword(
         @Body() dto: ChangePasswordDto,
         @Req() req: AccountRequest,
+        @Res({ passthrough: true }) res: FastifyReply,
     ) {
-        return this.userService.changePassword(req.user.id, req.user.sessionId, dto);
+        const result = await this.userService.changePassword(req.user.id, req.user.sessionId, dto);
+        res.setCookie('refreshToken', result.refreshToken, refreshCookieOptions(this.configService));
+        return { revokedCount: result.revokedCount, accessToken: result.accessToken, nickname: result.nickname };
     }
 
     @Get('me/stats')

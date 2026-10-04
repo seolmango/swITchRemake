@@ -153,6 +153,21 @@ function startFixtureGame(fixture: ReturnType<typeof managerFixture>): FakeConne
     return connections;
 }
 
+test('a playing participant can explicitly leave without keeping a reconnect seat', () => {
+    const fixture = managerFixture();
+    const [owner, second] = startFixtureGame(fixture);
+    fixture.manager.onJson(owner!, {
+        v: JSON_MESSAGE_VERSION, type: 'lobby.leave', requestId: 70, payload: {},
+    });
+    const room = fixture.manager.get('room')!;
+    assert.equal(room.memberByUser(1), null, 'explicit departure is immediate, not reconnect grace');
+    assert.equal(room.playerCount, 2);
+    assert.equal(room.hostId, second!.playerId, 'a remaining participant becomes host');
+    assert.ok(second!.messages.some((message) => message.type === 'player.left' && message.payload.playerId === owner!.playerId));
+    fixture.manager.onDisconnect(owner!, 'delayed close callback');
+    assert.equal(room.playerCount, 2, 'close cleanup is idempotent after release');
+});
+
 test('lobby.setLoadout accepts one loadout skill and broadcasts it', () => {
     const fixture = managerFixture();
     fixture.owner.messages.length = 0;

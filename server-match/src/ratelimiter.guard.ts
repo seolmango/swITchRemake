@@ -23,6 +23,12 @@ import { createHash } from 'node:crypto';
  */
 export const RATE_LIMIT_RELAXED_FACTOR = 50;
 const NAT_IP_FACTOR = 4;
+// A fixed aggregate protects JWT/DB work when callers spread requests across routes.
+// Route limits below remain strict; ten players sharing one NAT can poll and refresh independently.
+export const AGGREGATE_IP_LIMIT = 1_200;
+export const AGGREGATE_ACTOR_LIMIT = 300;
+const AGGREGATE_WINDOW_MS = 60_000;
+const AUTH_TARGET_LIMIT = 5;
 
 export function rateLimitRelaxed(): boolean {
     return process.env.RATE_LIMIT_RELAXED === 'true';
@@ -51,6 +57,12 @@ abstract class RedisRateGuard {
 
     protected scaled(limit: number): number {
         return limit > 0 && rateLimitRelaxed() ? limit * RATE_LIMIT_RELAXED_FACTOR : limit;
+    }
+
+    protected routeScope(context: ExecutionContext): string {
+        // Controller/handler identity is stable for /matches/:id and other parameterized routes.
+        // Never include req.url or concrete path IDs: changing an ID must not reset a bucket.
+        return `${context.getClass()?.name ?? 'unknown'}.${context.getHandler()?.name ?? 'unknown'}`;
     }
 
     protected async consume(key: string, limit: number, ttlMs: number): Promise<void> {
@@ -85,8 +97,14 @@ export class PreAuthIpRateLimiterGuard extends RedisRateGuard {
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const req = context.switchToHttp().getRequest<Record<string, any>>();
         const options = this.options(context);
+        const ip = this.security.hmacIp(String(req.ip));
         await this.consume(
-            `auth-rate:ip:${this.security.hmacIp(String(req.ip))}`,
+            `auth-rate:ip:${ip}`,
+            AGGREGATE_IP_LIMIT,
+            AGGREGATE_WINDOW_MS,
+        );
+        await this.consume(
+            `auth-rate:route:${this.routeScope(context)}:ip:${ip}`,
             options.limit * NAT_IP_FACTOR,
             options.ttl,
         );
@@ -112,15 +130,17 @@ export class RateLimiterGuard extends RedisRateGuard {
         const options = this.options(context);
         if (req.user) {
             const kind = req.user.guest ? 'guest' : 'account';
-            await this.consume(`auth-rate:actor:${kind}:${req.user.id}`, options.limit, options.ttl);
+            const actor = `${kind}:${req.user.id}`;
+            await this.consume(`auth-rate:actor:${actor}`, AGGREGATE_ACTOR_LIMIT, AGGREGATE_WINDOW_MS);
+            await this.consume(`auth-rate:route:${this.routeScope(context)}:actor:${actor}`, options.limit, options.ttl);
         }
 
         const target = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
         if (target) {
             await this.consume(
                 `auth-rate:target:${target}`,
-                options.limit,
-                options.ttl,
+                AUTH_TARGET_LIMIT,
+                AGGREGATE_WINDOW_MS,
             );
         }
 
@@ -137,18 +157,18 @@ export class RateLimiterGuard extends RedisRateGuard {
                 options.limit,
                 options.ttl,
             );
-            await this.consume(`auth-rate:target:mfa:${challengeTarget}`, options.limit, options.ttl);
+            await this.consume(`auth-rate:target:mfa:${challengeTarget}`, AUTH_TARGET_LIMIT, AGGREGATE_WINDOW_MS);
         }
 
         // 로그인 뒤의 2차 코드 시도도 actor 버킷과 별개의 대상 계정 버킷을 함께 센다.
         const route = String(req.routeOptions?.url ?? req.routerPath ?? req.url ?? '');
         const accountMfaTarget = req.user && !req.user.guest && (
-            route.startsWith('/users/me/mfa')
+            (req.method !== 'GET' && req.method !== 'HEAD' && route.startsWith('/users/me/mfa'))
             || typeof req.body?.secondFactorCode === 'string'
             || (req.method === 'DELETE' && route === '/users/me')
         );
         if (accountMfaTarget) {
-            await this.consume(`auth-rate:target:account:${req.user.id}`, options.limit, options.ttl);
+            await this.consume(`auth-rate:target:account:${req.user.id}`, AUTH_TARGET_LIMIT, AGGREGATE_WINDOW_MS);
         }
         return true;
     }

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MATCH_RESULT_VERSION, type MatchResultMessage } from 'shared';
-import { ResultService } from './result.service';
+import { nextMatchId, ResultService } from './result.service';
+import * as schema from '../database/schema';
 
 const result: MatchResultMessage = {
     v: MATCH_RESULT_VERSION,
@@ -18,30 +19,38 @@ const result: MatchResultMessage = {
     }],
 };
 
-test('다음 경기는 매칭 서버가 만들고, 배정은 방금 끝난 경기에서 옮겨 붙는다', async () => {
-    const assignments = [
+function nextMatchHarness(emptyAssignments = false) {
+    const assignments = emptyAssignments ? [] : [
         { matchId: result.matchId, actorId: '1', userId: 1, nickname: 'A', isGuest: false },
         { matchId: result.matchId, actorId: 'g:x', userId: null, nickname: 'Guest_7KPW2M', isGuest: true },
     ];
     const insertedMatches: Record<string, unknown>[] = [];
     const insertedAssignments: Record<string, unknown>[] = [];
-    let table = 0;
+    let next: Record<string, unknown> | undefined;
+    const source: Record<string, unknown> = { ...result, resultRecordedAt: new Date(2) };
     const tx = {
-        select: () => ({ from: () => ({ where: async () => assignments }) }),
-        insert: () => {
-            table += 1;
-            const target = table === 1 ? insertedMatches : insertedAssignments;
+        select: () => ({ from: (table: unknown) => ({ where: () => table === schema.matchAssignments
+            ? Promise.resolve(assignments)
+            : Object.assign(Promise.resolve(next ? [next] : []), { for: async () => [source] }) }) }),
+        insert: (table: unknown) => {
+            const target = table === schema.matches ? insertedMatches : insertedAssignments;
             return {
                 values: (rows: Record<string, unknown> | Record<string, unknown>[]) => {
                     target.push(...(Array.isArray(rows) ? rows : [rows]));
-                    return { returning: async () => [{ matchId: target[0]?.['matchId'] }] };
+                    if (table === schema.matches) next = { ...rows, resultRecordedAt: null };
+                    const returning = { returning: async () => [{ matchId: target[0]?.['matchId'] }] };
+                    return { ...returning, onConflictDoNothing: () => returning };
                 },
             };
         },
     };
     const db = { transaction: async (run: (value: typeof tx) => unknown) => run(tx) };
     const service = new ResultService(db as never);
+    return { service, insertedMatches, insertedAssignments, source, markNextStored: () => { if (next) next['resultRecordedAt'] = new Date(3); } };
+}
 
+test('다음 경기는 매칭 서버가 만들고, 배정은 방금 끝난 경기에서 옮겨 붙는다', async () => {
+    const { service, insertedMatches, insertedAssignments } = nextMatchHarness();
     const next = await service.issueNextMatch(result);
     assert.ok(next, '다음 경기 id가 나와야 한다');
     assert.notEqual(next, result.matchId, '끝난 경기의 id를 재사용하지 않는다');
@@ -53,13 +62,37 @@ test('다음 경기는 매칭 서버가 만들고, 배정은 방금 끝난 경�
 });
 
 test('배정이 남아 있지 않은 경기는 다음 경기를 발급하지 않는다', async () => {
-    const tx = {
-        select: () => ({ from: () => ({ where: async () => [] }) }),
-        insert: () => ({ values: () => { throw new Error('발급하면 안 된다'); } }),
-    };
-    const db = { transaction: async (run: (value: typeof tx) => unknown) => run(tx) };
-    const service = new ResultService(db as never);
+    const { service, insertedMatches } = nextMatchHarness(true);
     assert.equal(await service.issueNextMatch(result), null);
+    assert.equal(insertedMatches.length, 0);
+});
+
+test('다음 경기 전달 재시도는 동일 발급을 재사용하고 참가자 배정을 중복하지 않는다', async () => {
+    const { service, insertedMatches, insertedAssignments, markNextStored } = nextMatchHarness();
+    const first = await service.issueNextMatch(result);
+    assert.equal(await service.issueNextMatch(result), first);
+    assert.equal(first, nextMatchId(result.matchId));
+    assert.equal(insertedMatches.length, 1);
+    assert.equal(insertedAssignments.length, 2);
+    markNextStored();
+    assert.equal(await service.issueNextMatch(result), null, 'a previously consumed grant must not replace a later match');
+});
+
+test('retry identity remains a protocol UUID and normalizes PostgreSQL UUID case', () => {
+    const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const next = nextMatchId(id);
+    assert.match(next, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    assert.equal(nextMatchId(id.toUpperCase()), next);
+    assert.notEqual(nextMatchId(next), next);
+});
+
+test('다음 경기 발급은 완료된 source의 방/서버 권한을 다시 확인한다', async () => {
+    const { service, source, insertedMatches } = nextMatchHarness();
+    assert.equal(await service.issueNextMatch({ ...result, roomId: 'other-room' }), null);
+    assert.equal(await service.issueNextMatch({ ...result, serverId: 'other-server' }), null);
+    source['resultRecordedAt'] = null;
+    assert.equal(await service.issueNextMatch(result), null);
+    assert.equal(insertedMatches.length, 0);
 });
 
 test('같은 room/server의 과거 경기가 있어도 선발급되지 않은 matchId 결과는 만들지 않는다', async () => {

@@ -668,10 +668,13 @@ export class Room {
     /**
      * 매칭 서버가 내려준 다음 경기 id를 받아 둔다.
      *
-     * 같은 발급이 두 번 와도 안전하다 — 명령은 재전달될 수 있고, 덮어써도 둘 다 매칭 서버가
-     * 만든 값이라 어느 쪽을 쓰든 발급된 경기다. 이미 시작한 경기의 id는 건드리지 않는다.
+     * 같은 발급이 두 번 와도 안전하다. 이미 시작한 id의 재전달은 다음 발급을 덮어쓰거나
+     * 동일 경기 id를 다시 사용하지 않도록 무시한다.
      */
     public grantMatchId(matchId: string): void {
+        // Redis can replay a grant after that id has already started. It must
+        // neither become a second game with the same id nor replace a successor.
+        if (matchId === this.#matchId) return;
         this.#grantedMatchId = matchId;
     }
 
@@ -915,6 +918,7 @@ export class Room {
                 member.role = member.inCurrentGame ? PlayerRole.Player : PlayerRole.Waiting;
                 member.spectatorEligible = false;
                 member.latestInput = null;
+                member.lastInputSequence = null;
             }
             this.#countdownEndsAt = null;
             this.#stateMachine.transition(RoomState.Playing, now);
@@ -929,6 +933,7 @@ export class Room {
                 member.spectatorEligible = false;
                 member.inCurrentGame = false;
                 member.latestInput = null;
+                member.lastInputSequence = null;
             }
             this.#postGameEndsAt = null;
             this.#startSnapshot = null;

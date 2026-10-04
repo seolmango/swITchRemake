@@ -13,7 +13,7 @@ interface PlayerRow {
     nickname: string;
     accountStatus: string;
     role: string;
-    createdAt: Date;
+    createdAt: Date | string;
     activeSessions: number;
     reportsAgainst: number;
     reportsFiled: number;
@@ -25,11 +25,11 @@ interface SanctionRow {
     id: string;
     type: string;
     scope: string;
-    startsAt: Date;
-    expiresAt: Date | null;
+    startsAt: Date | string;
+    expiresAt: Date | string | null;
     reason: string;
     createdBy: string;
-    revokedAt: Date | null;
+    revokedAt: Date | string | null;
 }
 
 interface AuditRow {
@@ -40,7 +40,7 @@ interface AuditRow {
     targetType: string;
     targetId: string;
     reason: string;
-    createdAt: Date;
+    createdAt: Date | string;
 }
 
 /**
@@ -119,7 +119,7 @@ export class PlayerLookupService {
                 nickname: player.nickname,
                 accountStatus: player.accountStatus,
                 role: player.role,
-                createdAt: player.createdAt.toISOString(),
+                createdAt: new Date(player.createdAt).toISOString(),
                 activeSessions: player.activeSessions,
                 reportsAgainst: player.reportsAgainst,
                 reportsFiled: player.reportsFiled,
@@ -129,11 +129,11 @@ export class PlayerLookupService {
                 id: row.id,
                 type: row.type,
                 scope: row.scope,
-                startsAt: row.startsAt.toISOString(),
-                expiresAt: row.expiresAt?.toISOString() ?? null,
+                startsAt: new Date(row.startsAt).toISOString(),
+                expiresAt: row.expiresAt === null ? null : new Date(row.expiresAt).toISOString(),
                 reason: row.reason,
                 createdBy: row.createdBy,
-                revokedAt: row.revokedAt?.toISOString() ?? null,
+                revokedAt: row.revokedAt === null ? null : new Date(row.revokedAt).toISOString(),
             })),
         };
     }
@@ -160,7 +160,7 @@ export class PlayerLookupService {
                 action: row.action,
                 target: `${row.targetType}:${row.targetId}`,
                 reason: row.reason,
-                createdAt: row.createdAt.toISOString(),
+                createdAt: new Date(row.createdAt).toISOString(),
             })),
             nextBefore: hasMore ? page.at(-1)?.id ?? null : null,
         };

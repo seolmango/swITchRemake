@@ -21,7 +21,7 @@ test('acknowledges only after result transaction resolves', async () => {
     let release!: () => void;
     const committed = new Promise<void>((resolve) => { release = resolve; });
     const redis = { acknowledge: async () => { events.push('ack'); } };
-    const results = { record: async () => { await committed; events.push('commit'); return 'stored' as const; } };
+    const results = { record: async () => { await committed; events.push('commit'); return 'stored' as const; }, issueNextMatch: async () => null };
     const worker = new ResultWorker(redis as never, results as never);
     const processing = worker.processEntry({ id: '1-0', fields: { [RESULT_STREAM_FIELD]: JSON.stringify(result) } });
     await Promise.resolve();
@@ -49,4 +49,46 @@ test('acknowledges malformed poison entries without calling storage', async () =
     await worker.processEntry({ id: '3-0', fields: { [RESULT_STREAM_FIELD]: '{bad json' } });
     assert.equal(records, 0);
     assert.equal(acknowledgements, 1);
+});
+
+test('a failed next-match delivery stays pending and a committed duplicate retries the same grant', async () => {
+    let stored = false;
+    let records = 0;
+    let sends = 0;
+    let acknowledgements = 0;
+    const sent: string[] = [];
+    const redis = {
+        acknowledge: async () => { acknowledgements++; },
+        addStreamEntry: async (_stream: string, _field: string, command: string) => {
+            const { payload } = JSON.parse(command);
+            sent.push(payload.matchId);
+            if (++sends === 1) throw new Error('injected Redis delivery failure');
+        },
+    };
+    const results = {
+        record: async () => { if (stored) return 'duplicate' as const; stored = true; records++; return 'stored' as const; },
+        issueNextMatch: async () => '22222222-2222-4222-8222-222222222222',
+    };
+    const entry = { id: '4-0', fields: { [RESULT_STREAM_FIELD]: JSON.stringify(result) } };
+    await assert.rejects(new ResultWorker(redis as never, results as never).processEntry(entry), /injected Redis/);
+    assert.equal(acknowledgements, 0, 'the already committed result must remain pending until grant delivery succeeds');
+    // A new worker simulates a process restart, so in-memory retry state cannot hide a loss.
+    await new ResultWorker(redis as never, results as never).processEntry(entry);
+    assert.equal(records, 1);
+    assert.equal(acknowledgements, 1);
+    assert.deepEqual(sent, ['22222222-2222-4222-8222-222222222222', '22222222-2222-4222-8222-222222222222']);
+});
+
+test('a next-match database failure stays pending and invalid results never issue grants', async () => {
+    let acknowledgements = 0;
+    let grants = 0;
+    const redis = { acknowledge: async () => { acknowledgements++; } };
+    const results = { record: async () => 'stored' as const, issueNextMatch: async () => { grants++; throw new Error('injected grant database failure'); } };
+    const entry = { id: '5-0', fields: { [RESULT_STREAM_FIELD]: JSON.stringify(result) } };
+    await assert.rejects(new ResultWorker(redis as never, results as never).processEntry(entry), /injected grant database/);
+    assert.equal(acknowledgements, 0);
+    const invalid = { ...results, record: async () => 'invalid' as const };
+    await new ResultWorker(redis as never, invalid as never).processEntry(entry);
+    assert.equal(acknowledgements, 1);
+    assert.equal(grants, 1);
 });

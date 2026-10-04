@@ -21,7 +21,7 @@ function createService(passwordHash: string, updateSucceeds = true) {
                 writes.push(value);
                 return {
                     where: () => ({
-                        returning: async () => updateSucceeds ? [{ id: 1 }] : [],
+                        returning: async () => updateSucceeds ? [{ id: 1, email: 'player@example.invalid', nickname: 'Player', securityEpoch: 3 }] : [],
                     }),
                 };
             },
@@ -31,8 +31,13 @@ function createService(passwordHash: string, updateSucceeds = true) {
         select: () => ({ from: () => ({ where: async () => [{ passwordHash }] }) }),
         transaction: async (callback: (value: unknown) => Promise<unknown>) => callback(tx),
     };
-    const service = new UserService(db as never, {} as never, {} as never, sessions as never, {} as never, {} as never, {} as never);
-    return { service, writes, sessions, tx };
+    const renewals: unknown[] = [];
+    const auth = { renewPasswordSession: async (receivedTx: unknown, user: unknown, retainedSessionId: string) => {
+        renewals.push({ receivedTx, user, retainedSessionId });
+        return { accessToken: 'next-access', refreshToken: 'next-refresh', nickname: 'Player' };
+    } };
+    const service = new UserService(db as never, {} as never, {} as never, sessions as never, {} as never, {} as never, {} as never, auth as never);
+    return { service, writes, sessions, tx, renewals };
 }
 
 const sessionId = '11111111-1111-4111-8111-111111111111';
@@ -41,7 +46,8 @@ test('password changes reject an incorrect current password with 401', async () 
     const { service, writes } = createService(await bcrypt.hash('Correct1', 4));
     await assert.rejects(
         service.changePassword(1, sessionId, { currentPassword: 'Wrong111', newPassword: 'Different1' }),
-        UnauthorizedException,
+        (error: unknown) => error instanceof UnauthorizedException
+            && (error.getResponse() as { code?: string }).code === 'CURRENT_PASSWORD_INCORRECT',
     );
     assert.equal(writes.length, 0);
 });
@@ -56,7 +62,7 @@ test('password changes reject a new password equal to the current password', asy
 });
 
 test('password changes update the hash and revoke other sessions', async () => {
-    const { service, writes, sessions, tx } = createService(await bcrypt.hash('Correct1', 4));
+    const { service, writes, sessions, tx, renewals } = createService(await bcrypt.hash('Correct1', 4));
     let revokeArguments: [number, string] | undefined;
     sessions.revokeOthers = async (userId: number, currentSessionId: string, receivedTx?: unknown) => {
         revokeArguments = [userId, currentSessionId];
@@ -67,7 +73,8 @@ test('password changes update the hash and revoke other sessions', async () => {
     };
 
     const result = await service.changePassword(1, sessionId, { currentPassword: 'Correct1', newPassword: 'Different1' });
-    assert.deepEqual(result, { revokedCount: 2 });
+    assert.deepEqual(result, { revokedCount: 2, accessToken: 'next-access', refreshToken: 'next-refresh', nickname: 'Player' });
+    assert.deepEqual(renewals, [{ receivedTx: tx, user: { id: 1, email: 'player@example.invalid', nickname: 'Player', securityEpoch: 3 }, retainedSessionId: sessionId }]);
     assert.equal(writes.length, 1);
     assert.equal(await bcrypt.compare('Different1', writes[0]!.passwordHash), true);
     assert.equal(await bcrypt.compare('Correct1', writes[0]!.passwordHash), false);

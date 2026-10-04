@@ -334,10 +334,7 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 error = room.requestStart(connection.userId);
                 break;
             case 'lobby.leave': {
-                const member = room.memberByUser(connection.userId);
-                const waitingForNextGame = room.state === RoomState.Playing
-                    && member !== null && !member.inCurrentGame;
-                if (room.state !== RoomState.Waiting && room.state !== RoomState.PostGame && !waitingForNextGame) {
+                if (room.state !== RoomState.Waiting && room.state !== RoomState.PostGame && room.state !== RoomState.Playing) {
                     error = ErrorCode.BadState;
                 } else {
                     room.releaseSeat(connection.userId, 'left');

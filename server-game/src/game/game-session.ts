@@ -24,7 +24,7 @@ import { NullReplayRecorder, type ReplayMeta, type ReplayRecorder } from '../rep
 import type { Room } from '../rooms/room';
 import type { SchedulerTarget } from '../simulation/scheduler';
 import { isFinished, stepWorld, type EmojiRequest } from '../simulation/step';
-import type { SkillRequest } from '../simulation/skills';
+import { grantTaggerFrenzy, rotationCandidates, type SkillRequest } from '../simulation/skills';
 import { toVisibilityWorld, type AuthoritativeFrame, type World, type WorldEvent } from '../simulation/world';
 import type { TrainingGround } from '../training/training-ground';
 import { SessionReplayRecorder } from './session-recorder';
@@ -102,6 +102,11 @@ export class GameSession implements SchedulerTarget {
         this.#maxDurationTicks = maxDurationTicks;
 
         this.#identities = new Map(options.room.participants().map((p) => [p.playerId, p]));
+
+        // Publication follows the process-wide scheduler phase. A new session's
+        // first published frame can be tick 2, so tick <= 1 cannot initialize it.
+        // Every participant needs MAP/ROSTER before receiving delta snapshots.
+        for (const player of this.world.players) this.#needsFullSnapshot.add(player.playerId);
 
         this.#replay = new SessionReplayRecorder({
             recorder: options.recorder ?? new NullReplayRecorder(),
@@ -215,6 +220,21 @@ export class GameSession implements SchedulerTarget {
         player.alive = false;
         player.stats.eliminatedAtTick = this.world.tick;
         const events: WorldEvent[] = [{ kind: 'eliminated', playerId }];
+
+        if (this.#options.mode === RoomMode.Match && !this.#matchHasEnded()
+            && !this.world.players.some((candidate) => candidate.alive && candidate.isTagger)) {
+            // A departed tagger cannot leave three or more runners waiting for
+            // the ordinary rotation cooldown. Preserve seeded replay semantics.
+            const runners = rotationCandidates(this.world);
+            const replacement = runners[this.world.nextRandomInt(runners.length)];
+            if (replacement !== undefined) {
+                for (const candidate of this.world.players) candidate.isTagger = candidate === replacement;
+                this.world.taggerChangedAtTick = this.world.tick;
+                grantTaggerFrenzy(this.world, replacement);
+                events.push({ kind: 'tagged', playerId: replacement.playerId });
+                this.#room.broadcastTagged(replacement.playerId, null);
+            }
+        }
         this.#replay.recordEvents(this.world.tick, events);
 
         if (this.#options.mode === RoomMode.Match && this.#matchHasEnded()) {

@@ -62,7 +62,7 @@ export class ResultWorker implements OnModuleInit, OnModuleDestroy {
         if (outcome === 'invalid') {
             this.logger.warn(`Discarding unauthorized or inconsistent result ${result.matchId}`);
         }
-        if (outcome === 'stored') await this.grantNextMatch(result);
+        if (outcome === 'stored' || outcome === 'duplicate') await this.grantNextMatch(result);
         await this.ack(entry.id);
     }
 
@@ -73,8 +73,8 @@ export class ResultWorker implements OnModuleInit, OnModuleDestroy {
      * 응답을 기다리지 않는다 — 명령 stream은 소비자가 처리한 뒤 ack하므로 잠깐 늦을 수는 있어도
      * 그냥 사라지지 않고, 기다려 봐야 이 worker가 다음 결과를 못 읽을 뿐이다.
      *
-     * 발급이나 전달이 실패해도 결과 저장은 이미 끝났다. 되돌리지 않고 로그만 남긴다. 그 방은
-     * 다음 경기를 시작하지 못한 채 남는데, 이미 저장된 전적을 지우는 것보다는 낫다.
+     * 발급이나 전달이 실패하면 결과 항목을 pending으로 남긴다. 이미 저장한 결과는 다시 쓰지
+     * 않고 같은 다음 경기 ID의 전달을 재시도하므로 전적과 발급 행이 중복되지 않는다.
      */
     private async grantNextMatch(result: MatchResultMessage): Promise<void> {
         try {
@@ -98,6 +98,7 @@ export class ResultWorker implements OnModuleInit, OnModuleDestroy {
             );
         } catch (error) {
             this.logger.error(`Failed to grant the next match for room ${result.roomId}`, error);
+            throw error;
         }
     }
 

@@ -3,13 +3,103 @@ import { test } from 'node:test';
 
 import { decodeSnapshot, RoomMode, SkillId, SkillRejection, SkillSlot, TilePhysics, ViolationKind, type ViolationSignal } from 'shared';
 import { EMOJI_DISPLAY_MS } from '../config/gameplay';
-import { NETWORK } from '../config/network';
+import { NETWORK, SIMULATION_STEP_MS, SNAPSHOT_INTERVAL_TICKS } from '../config/network';
 import type { ReplayRecorder } from '../replay/recorder';
 import { msToTicks } from '../simulation/effects';
 import type { Room } from '../rooms/room';
 import { stepWorld } from '../simulation/step';
+import { Scheduler } from '../simulation/scheduler';
 import { mapFromRows, makePlayer, makeWorld } from '../simulation/testing';
 import { GameSession } from './game-session';
+
+test('all three players receive an initial full snapshot at every scheduler phase', () => {
+    for (let phase = 0; phase < SNAPSHOT_INTERVAL_TICKS; phase += 1) {
+        let now = 0;
+        const scheduler = new Scheduler(() => now);
+        scheduler.advance();
+        for (let tick = 0; tick < phase; tick += 1) {
+            now += SIMULATION_STEP_MS;
+            scheduler.advance();
+        }
+        const sent = new Map([1, 2, 3].map((id) => [id, [] as ArrayBuffer[]]));
+        const roster = [1, 2, 3].map((playerId) => ({ playerId, nickname: `P${playerId}` }));
+        const room = {
+            id: 'room',
+            participants: () => [],
+            resolvedInputs: () => [],
+            sendSkillRejected: () => undefined,
+            markEliminated: () => true,
+            broadcastTagged: () => undefined,
+            broadcastBlinked: () => undefined,
+            broadcastSkillArea: () => undefined,
+            finishGame: () => true,
+            snapshotTargets: () => roster.map(({ playerId }) => ({
+                playerId,
+                access: 'filtered' as const,
+                connection: {
+                    bufferedBytes: () => 0,
+                    sendBinary: (payload: ArrayBuffer) => sent.get(playerId)!.push(payload),
+                },
+            })),
+        } as unknown as Room;
+        const world = makeWorld(mapFromRows([
+            '############', '#..........#', '#..........#', '#..........#', '############',
+        ]), [makePlayer(1, 1, 1), makePlayer(2, 5, 1), makePlayer(3, 9, 3)]);
+        const session = new GameSession({
+            room, world, roster, matchId: `match-phase-${phase}`, mode: RoomMode.Match,
+            violationSink: () => undefined,
+            meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' },
+            onFinished: () => undefined,
+        });
+        scheduler.add(session);
+        for (let tick = 0; tick < SNAPSHOT_INTERVAL_TICKS * 2; tick += 1) {
+            now += SIMULATION_STEP_MS;
+            scheduler.advance();
+        }
+        for (const [playerId, frames] of sent) {
+            assert.equal(frames.length, 2, `phase ${phase}, player ${playerId}`);
+            const first = decodeSnapshot(frames[0]!);
+            assert.equal(first.full, true, `phase ${phase}, player ${playerId} must initialize before deltas`);
+            assert.ok(first.map);
+            assert.deepEqual(first.roster, roster.map(({ playerId: id, nickname }) => ({ id, nickname })));
+            assert.equal(first.selfId, playerId);
+            assert.ok(first.players?.some((player) => player.id === playerId));
+            assert.equal(decodeSnapshot(frames[1]!).full, false, 'subsequent snapshots retain delta encoding');
+        }
+    }
+});
+
+test('a four-player match immediately replaces a disconnected tagger', () => {
+    const tagged: number[] = [];
+    const replayEvents: { kind: string; playerId: number }[] = [];
+    const room = {
+        id: 'room',
+        participants: () => [1, 2, 3, 4].map((playerId) => ({ playerId, userId: playerId, nickname: `P${playerId}`, guest: false, colorIndex: playerId - 1 })),
+        broadcastTagged: (playerId: number) => tagged.push(playerId),
+        finishGame: () => { throw new Error('three survivors must continue playing'); },
+    } as unknown as Room;
+    const world = makeWorld(mapFromRows([
+        '############', '#..........#', '#..........#', '#..........#', '############',
+    ]), [makePlayer(1, 1, 1, { isTagger: true }), makePlayer(2, 4, 1), makePlayer(3, 7, 1), makePlayer(4, 10, 3)]);
+    world.tick = 50;
+    const session = new GameSession({
+        room, world, matchId: 'four-player', mode: RoomMode.Match,
+        roster: [1, 2, 3, 4].map((playerId) => ({ playerId, nickname: `P${playerId}` })),
+        violationSink: () => undefined,
+        recorder: { begin: () => undefined, writeFrame: () => undefined, writeVisibility: () => undefined, writeEvent: (_tick, event) => replayEvents.push(event), finish: async () => null, abort: () => undefined },
+        meta: { serverId: 'game', buildId: 'test', mapId: 'test', mapBundleHash: 'hash' }, onFinished: () => undefined,
+    });
+    assert.equal(session.eliminateDisconnected(1), true);
+    const livingTaggers = world.players.filter((player) => player.alive && player.isTagger);
+    assert.equal(livingTaggers.length, 1, 'an active match cannot wait through the rotation cooldown without a tagger');
+    assert.equal(world.players.filter((player) => player.isTagger).length, 1, 'the departed tagger flag is cleared');
+    assert.deepEqual(tagged, [livingTaggers[0]!.playerId]);
+    assert.equal(world.taggerChangedAtTick, 50);
+    assert.ok(livingTaggers[0]!.effects.frenzy);
+    assert.deepEqual(replayEvents.map((event) => event.kind), ['eliminated', 'tagged']);
+    session.eliminateDisconnected(1);
+    assert.equal(tagged.length, 1, 'duplicate disconnect cannot rotate the tagger again');
+});
 
 test('a failed queued skill is returned to its requester at the tick boundary', () => {
     const rejected: { playerId: number; slot: number; reason: string }[] = [];

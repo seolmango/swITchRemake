@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import {
@@ -19,6 +19,15 @@ export interface AssignedActor {
 }
 
 export type RecordResult = 'stored' | 'duplicate' | 'invalid';
+
+/** One stable UUID per completed match makes a failed Redis delivery retryable after a restart. */
+export function nextMatchId(finishedMatchId: string): string {
+    const bytes = createHash('sha256').update(`switch:next-match:v1:${finishedMatchId.toLowerCase()}`).digest().subarray(0, 16);
+    bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+    bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+    const hex = bytes.toString('hex');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 export interface AccountStatsDelta {
     userId: number;
@@ -229,17 +238,26 @@ export class ResultService {
      */
     async issueNextMatch(finished: MatchResultMessage): Promise<string | null> {
         return this.db.transaction(async (tx) => {
+            // Serialize attempts on the completed result, including delivery retries.
+            const [source] = await tx.select().from(schema.matches)
+                .where(eq(schema.matches.matchId, finished.matchId)).for('update');
+            if (!source?.resultRecordedAt || source.roomId !== finished.roomId || source.serverId !== finished.serverId) return null;
+            const matchId = nextMatchId(finished.matchId);
+            const [existing] = await tx.select().from(schema.matches)
+                .where(eq(schema.matches.matchId, matchId));
+            // Never overwrite a room's future grant with a match already played.
+            if (existing) return existing.resultRecordedAt
+                || existing.roomId !== source.roomId || existing.serverId !== source.serverId ? null : matchId;
             const assignments = await tx.select().from(schema.matchAssignments)
                 .where(eq(schema.matchAssignments.matchId, finished.matchId));
             if (!assignments.length) return null;
 
-            const matchId = randomUUID();
             const [created] = await tx.insert(schema.matches).values({
                 matchId,
                 serverId: finished.serverId,
                 roomId: finished.roomId,
-                mapId: finished.mapId,
-            }).returning({ matchId: schema.matches.matchId });
+                mapId: source.mapId,
+            }).onConflictDoNothing().returning({ matchId: schema.matches.matchId });
             if (!created) return null;
 
             await tx.insert(schema.matchAssignments).values(assignments.map((assignment) => ({

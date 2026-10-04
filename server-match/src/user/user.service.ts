@@ -25,6 +25,7 @@ import type { AuditContext } from '../admin/audit-log';
 import { LEGAL_DOCUMENT_VERSIONS } from '../config/legal.settings';
 import type { LegalConsentDto } from './dto/legal-consent.dto';
 import { MfaService } from '../mfa/mfa.service';
+import { AuthService } from '../auth/auth.service';
 
 export interface UserStatsResponse {
     /** 누적 XP에서 센 값. 저장된 값이 아니다 — `shared`의 `levelFromXp`가 유일한 정의다. */
@@ -100,6 +101,7 @@ export class UserService {
         private readonly emailService: EmailService,
         private readonly rooms: RoomsService,
         private readonly mfaService: MfaService,
+        private readonly authService: AuthService,
     ) {}
 
     /**
@@ -260,7 +262,7 @@ export class UserService {
         if (!user) throw new NotFoundException('User not found');
 
         if (!await bcrypt.compare(dto.currentPassword, user.passwordHash)) {
-            throw new UnauthorizedException('Current password is incorrect');
+            throw new UnauthorizedException({ code: 'CURRENT_PASSWORD_INCORRECT', message: 'Current password is incorrect' });
         }
         if (await bcrypt.compare(dto.newPassword, user.passwordHash)) {
             throw new BadRequestException('New password must differ from the current password');
@@ -280,7 +282,7 @@ export class UserService {
             }).where(and(
                 eq(schema.users.id, userId),
                 eq(schema.users.passwordHash, user.passwordHash),
-            )).returning({ id: schema.users.id });
+            )).returning({ id: schema.users.id, email: schema.users.email, nickname: schema.users.nickname, securityEpoch: schema.users.securityEpoch });
             if (!updated) {
                 throw new ConflictException({
                     code: 'PASSWORD_CHANGED_CONCURRENTLY',
@@ -288,7 +290,8 @@ export class UserService {
                 });
             }
             const revokedCount = await this.sessionService.revokeOthers(userId, currentSessionId, tx);
-            return { revokedCount };
+            const tokens = await this.authService.renewPasswordSession(tx, updated, currentSessionId);
+            return { revokedCount, ...tokens };
         });
     }
 

@@ -24,6 +24,7 @@ import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SessionSecurityService } from '../session/session-security.service';
 import { SessionService } from '../session/session.service';
+import type { SessionTransaction } from '../session/session.service';
 import { SanctionService } from '../sanction/sanction.service';
 import {
     claimVerificationCode,
@@ -559,8 +560,33 @@ export class AuthService {
         };
     }
 
-    private buildTokens(userId: number, email: string, familyId: string, generation: number, securityEpoch: number) {
-        const sessionId = randomUUID();
+    /** Re-sign the retained password-change session inside the password transaction. */
+    async renewPasswordSession(
+        tx: SessionTransaction,
+        user: { id: number; email: string; nickname: string; securityEpoch: number },
+        sessionId: string,
+    ) {
+        const now = new Date();
+        const [session] = await tx.select().from(schema.sessions).where(and(
+            eq(schema.sessions.id, sessionId),
+            eq(schema.sessions.userId, user.id),
+            isNull(schema.sessions.revokedAt),
+        )).for('update');
+        if (!session || session.expiresAt <= now) {
+            throw new UnauthorizedException('Current session is no longer active');
+        }
+        const generation = session.generation + 1;
+        const tokens = this.buildTokens(user.id, user.email, session.familyId, generation, user.securityEpoch, sessionId);
+        await tx.update(schema.sessions).set({
+            refreshTokenHash: this.sessionSecurity.hashRefreshToken(tokens.refreshToken),
+            generation,
+            lastUsedAt: now,
+            expiresAt: tokens.expiresAt,
+        }).where(eq(schema.sessions.id, sessionId));
+        return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, nickname: user.nickname };
+    }
+
+    private buildTokens(userId: number, email: string, familyId: string, generation: number, securityEpoch: number, sessionId: string = randomUUID()) {
         const refreshTtlSeconds = Number(this.configService.get('JWT_REFRESH_EXPIRATION'));
         const accessToken = this.jwtService.sign({
             sub: userId,
