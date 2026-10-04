@@ -6,7 +6,8 @@ import { Icon } from '../components/common/Icon.tsx';
 import { SwitchGame } from '../game/SwitchGame.tsx';
 import { EngineMode, type SwitchEngine } from '../game/index.ts';
 import { verifiedMapView } from '../game/mapBundle.ts';
-import { PROTOCOL_VERSION, type RecordedFrame } from 'shared';
+import { decodeSnapshot, PROTOCOL_VERSION, type RecordedFrame } from 'shared';
+import { EMPTY_HUD, type HudState } from '../game/hud/hudTypes.ts';
 import { useSettingsStore } from '../stores/useSettingsStore.ts';
 import { themeColors } from '../theme/color.ts';
 import { frameBuffer, loadFrames, openReplay, readReplayFile, ReplayOpenError, type OpenedReplay, type ReplayVerification } from '../replay/replayFile.ts';
@@ -35,7 +36,10 @@ export const ReplayPage: React.FC = () => {
     const [playing, setPlaying] = useState(false);
     const [position, setPosition] = useState(0);
     const engineRef = useRef<SwitchEngine | null>(null);
-    const verifierRef = useRef(loadReplayVerifier());
+    const [engine, setEngine] = useState<SwitchEngine | null>(null);
+    const [simulationHz, setSimulationHz] = useState<number | null>(null);
+    const [spectatingId, setSpectatingId] = useState<number | null>(null);
+    const [verifier] = useState(loadReplayVerifier);
     const mapReady = useRef(false);
     const positionRef = useRef(0);
 
@@ -48,10 +52,13 @@ export const ReplayPage: React.FC = () => {
         setPosition(0);
         positionRef.current = 0;
         mapReady.current = false;
+        setSimulationHz(null);
+        setMapError(null);
+        setSpectatingId(null);
         try {
             const bytes = await readReplayFile(file);
             // 공개키는 파일마다 다시 받지 않는다. 못 받아도 재생은 되고 '확인할 수 없음'이 된다.
-            const opened = await openReplay(bytes, await verifierRef.current);
+            const opened = await openReplay(bytes, await verifier);
             // 프레임은 전부 미리 푼다. 경기가 10분을 넘지 않아서 메모리가 감당되고,
             // 그 대신 어디로든 즉시 되감을 수 있다.
             const all: RecordedFrame[] = [];
@@ -65,46 +72,46 @@ export const ReplayPage: React.FC = () => {
                 verification: error instanceof ReplayOpenError ? error.verification : 'unsupported',
             });
         }
-    }, []);
+    }, [verifier]);
 
     /** 델타 프레임이라 아무 데서나 시작할 수 없다. 앞선 full 프레임부터 훑어 와야 그 tick이 완성된다. */
     const applyUpTo = useCallback((target: number) => {
         const engine = engineRef.current;
-        if (!engine || !frames || !replay || !mapReady.current) return;
+        if (!engine || !frames || !replay || !mapReady.current || simulationHz === null) return;
         let start = target;
         while (start > 0 && !frames[start]!.full) start -= 1;
         for (let i = start; i <= target; i++) {
-            engine.applySnapshot(frameBuffer(frames[i]!), replay.manifest.snapshotHz);
+            engine.applySnapshot(frameBuffer(frames[i]!), simulationHz);
         }
-    }, [frames, replay]);
+    }, [frames, replay, simulationHz]);
 
     const handleEngine = useCallback((engine: SwitchEngine | null) => {
         engineRef.current = engine;
         mapReady.current = false;
+        setEngine(engine);
     }, []);
 
     // 맵은 manifest의 해시로 받는다. 그때 쓰던 번들을 그대로 가져오므로 규칙이 바뀐 뒤에도
     // 그 경기의 지형이 나온다. 서버가 그 번들을 더 이상 안 갖고 있으면 재생할 수 없다.
     useEffect(() => {
-        const engine = engineRef.current;
         if (!engine || !replay) return;
         let cancelled = false;
-        setMapError(null);
         void (async () => {
             try {
-                const { view } = await verifiedMapView(replay.manifest.mapId, replay.manifest.mapBundleHash, gameHttpOrigin());
+                const { view, simulationHz: mapHz } = await verifiedMapView(replay.manifest.mapId, replay.manifest.mapBundleHash, gameHttpOrigin());
                 if (cancelled || engineRef.current !== engine) return;
                 engine.map.load(view);
                 await engine.whenReady();
                 if (cancelled || engineRef.current !== engine) return;
                 mapReady.current = true;
-                applyUpTo(0);
+                engine.camera.fitMap(64);
+                setSimulationHz(mapHz);
             } catch (error) {
                 if (!cancelled) setMapError(error instanceof Error ? error.message : String(error));
             }
         })();
         return () => { cancelled = true; };
-    }, [replay, applyUpTo]);
+    }, [engine, replay]);
 
     useEffect(() => {
         if (!playing || !frames || !replay) return;
@@ -124,18 +131,37 @@ export const ReplayPage: React.FC = () => {
 
     useEffect(() => { applyUpTo(position); }, [position, applyUpTo]);
 
+    const hud = useMemo<HudState>(() => {
+        if (!frames || !replay || !frames[position]) return EMPTY_HUD;
+        // Recorded spectator snapshots contain every living player, unlike a player's
+        // visibility-filtered live stream. Seek backwards to the latest player block.
+        let index = position;
+        let snapshot = decodeSnapshot(frameBuffer(frames[index]!));
+        while (snapshot.players === undefined && index > 0) snapshot = decodeSnapshot(frameBuffer(frames[--index]!));
+        const living = new Map(snapshot.players?.map(player => [player.id, player]) ?? []);
+        return {
+            ...EMPTY_HUD,
+            players: replay.manifest.participants.map(player => ({
+                id: player.playerId, nickname: player.nickname, colorIndex: player.colorIndex,
+                alive: living.has(player.playerId), isTagger: living.get(player.playerId)?.isTagger ?? false,
+            })),
+            elapsedSec: simulationHz === null ? null : frames[position]!.tick / simulationHz,
+            spectatingId,
+        };
+    }, [frames, replay, position, simulationHz, spectatingId]);
+
     const meta = useMemo(() => {
         if (!replay) return null;
         const manifest = replay.manifest;
-        const seconds = Math.round(manifest.durationTicks / Math.max(1, manifest.snapshotHz));
+        const seconds = simulationHz === null ? null : Math.round(manifest.durationTicks / simulationHz);
         return {
             recordedAt: manifest.recordedAt
                 ? new Date(manifest.recordedAt).toLocaleString(i18n.language)
                 : null,
-            duration: `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`,
+            duration: seconds === null ? t('common.loading') : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`,
             protocolMismatch: manifest.protocolVersion !== PROTOCOL_VERSION,
         };
-    }, [replay, i18n.language]);
+    }, [replay, simulationHz, i18n.language, t]);
 
     return (
         <PageLayout title={t('replay.title')}>
@@ -199,7 +225,7 @@ export const ReplayPage: React.FC = () => {
                         </section>
 
                         <div className="replay-stage">
-                            <SwitchGame mode={EngineMode.Spectate} onEngine={handleEngine} matchReady/>
+                            <SwitchGame mode={EngineMode.Spectate} onEngine={handleEngine} hud={hud} onSpectate={setSpectatingId} matchReady/>
                             {mapError && <p className="replay-error" role="alert">{t('replay.mapFailed')}<small>{mapError}</small></p>}
                         </div>
 

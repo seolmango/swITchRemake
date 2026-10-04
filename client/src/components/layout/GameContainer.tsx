@@ -26,7 +26,8 @@ export const GameContainer: React.FC<GameContainerProps> = ({
     useEffect(() => {
         const handleResize = () => {
             const viewport = window.visualViewport;
-            setScale(gameCanvasScale(viewport?.width ?? window.innerWidth, viewport?.height ?? window.innerHeight, fillFactor));
+            const portraitMenu = responsiveForm && window.matchMedia('(max-width: 640px) and (orientation: portrait)').matches;
+            setScale(portraitMenu ? 1 : gameCanvasScale(viewport?.width ?? window.innerWidth, viewport?.height ?? window.innerHeight, fillFactor));
         };
         window.addEventListener('resize', handleResize);
         window.visualViewport?.addEventListener('resize', handleResize);
@@ -35,7 +36,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({
             window.removeEventListener('resize', handleResize);
             window.visualViewport?.removeEventListener('resize', handleResize);
         };
-    }, [fillFactor]);
+    }, [fillFactor, responsiveForm]);
 
     const canvasBgColor = theme === 0 ? Color.white : Color.black;
 

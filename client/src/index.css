@@ -149,6 +149,7 @@ html[lang='ko'] .page-title { top: 42px; }
 }
 
 .password-change-stack { top: 210px; gap: 20px; }
+.login-form-stack { gap: 26px; }
 .auth-form-actions { display: flex; justify-content: center; gap: 28px; }
 
 /* Authentication forms remain readable in a portrait phone; the game keeps its fixed stage. */
@@ -510,7 +511,7 @@ html[lang='ko'] .page-title { top: 42px; }
   transform: translateX(-50%);
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px 38px;
+  gap: 12px 38px;
   align-items: end;
 }
 
@@ -2699,7 +2700,7 @@ html[data-motion='reduced'] .human-challenge-scanner { animation: none !importan
 .result-retention-notice { font-size: 15px; }
 
 /* ───────────────────────── 리플레이 재생기 ───────────────────────── */
-.replay-shell { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 20px; }
+.replay-shell { position: absolute; inset: 150px 110px 65px; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 20px; }
 .replay-dropzone {
   min-height: 320px;
   display: grid;

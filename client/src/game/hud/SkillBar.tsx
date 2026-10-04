@@ -10,6 +10,7 @@ interface Props {
     movementSkill: HudSkill | null;
     switchSkill: HudSkill | null;
     onUseMovement: () => void;
+    keyboardControls?: boolean;
     /** Why switch can't be used at all right now (e.g. you're the tagger) — distinct from cooldown. */
     switchBlockedReason: string | null;
 }
@@ -22,7 +23,8 @@ const SkillSlot: React.FC<{
     /** Switch has no button of its own — it fires by picking a target in the roster. */
     passive?: boolean;
     blockedReason?: string | null;
-}> = ({ theme, size, skill, onClick, passive, blockedReason }) => {
+    keyboardControls: boolean;
+}> = ({ theme, size, skill, onClick, passive, blockedReason, keyboardControls }) => {
     const ready = skill.cooldown <= 0 && !skill.unavailable && !blockedReason;
     const ratio = skill.cooldownTotal > 0 ? Math.max(0, Math.min(1, skill.cooldown / skill.cooldownTotal)) : 0;
     const statusInk = statusInkColors(theme);
@@ -32,7 +34,7 @@ const SkillSlot: React.FC<{
             <button
                 onClick={() => ready && !passive && onClick?.()}
                 disabled={!ready || passive}
-                title={`${skill.label} (${skill.key})`}
+                title={keyboardControls ? `${skill.label} (${skill.key})` : skill.label}
                 style={{
                     position: 'relative', width: size, height: size, borderRadius: HUD_METRICS.controlRadius, padding: 0,
                     cursor: ready && !passive ? 'pointer' : 'default',
@@ -92,7 +94,7 @@ const SkillSlot: React.FC<{
  * 쿨다운은 버튼 전체의 투명도가 아니라 줄어드는 부채꼴이다. 투명도만으로는 "1초 남음"과
  * "방금 눌렀음"이 거의 같아 보였다.
  */
-export const SkillBar: React.FC<Props> = ({ theme, compact, movementSkill, switchSkill, onUseMovement, switchBlockedReason }) => {
+export const SkillBar: React.FC<Props> = ({ theme, compact, movementSkill, switchSkill, onUseMovement, switchBlockedReason, keyboardControls = true }) => {
     const size = compact ? HUD_METRICS.skillSizeCompact : HUD_METRICS.skillSize;
     return (
         <div style={{
@@ -102,8 +104,8 @@ export const SkillBar: React.FC<Props> = ({ theme, compact, movementSkill, switc
             display: 'flex', gap: compact ? HUD_METRICS.panelGapCompact : HUD_METRICS.panelGap,
             alignItems: 'flex-end', fontFamily: HUD_FONT,
         }}>
-            {movementSkill && <SkillSlot theme={theme} size={size} skill={movementSkill} onClick={onUseMovement} />}
-            {switchSkill && <SkillSlot theme={theme} size={size} skill={switchSkill} passive blockedReason={switchBlockedReason} />}
+            {movementSkill && <SkillSlot theme={theme} size={size} skill={movementSkill} onClick={onUseMovement} keyboardControls={keyboardControls} />}
+            {switchSkill && <SkillSlot theme={theme} size={size} skill={switchSkill} passive blockedReason={switchBlockedReason} keyboardControls={keyboardControls} />}
         </div>
     );
 };

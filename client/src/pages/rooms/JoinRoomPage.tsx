@@ -18,21 +18,25 @@ export const JoinRoomPage: React.FC = () => {
     const [params] = useSearchParams();
     const theme = useSettingsStore((state) => state.theme);
     const [roomId, setRoomId] = useState((params.get('room_code') ?? '').toUpperCase());
-    const passwordNeeded = params.get('pw') === 'true';
+    // A selected private room requires a password. Manual codes can be either
+    // public or private, so keep an optional password field available for both.
+    const passwordNeeded = params.get('pw') === 'true'
+        && roomId === (params.get('room_code') ?? '').toUpperCase();
     const [password, setPassword] = useState('');
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
-    const valid = isRoomId(roomId) && (!passwordNeeded || isRoomPassword(password));
+    const valid = isRoomId(roomId) && (password.length > 0 ? isRoomPassword(password) : !passwordNeeded);
 
     const submit = async () => {
+        if (!valid || loading) return;
         setLoading(true);
         try {
-            const result = await joinRoom(roomId, passwordNeeded ? password : undefined);
+            const result = await joinRoom(roomId, password || undefined);
             if (isAlreadyAssigned(result)) {
                 navigate(getAlreadyAssignedLobbyPath(result));
                 return;
             }
-            await gameSession.connect(result, { isPrivate: passwordNeeded });
+            await gameSession.connect(result, { isPrivate: passwordNeeded || password.length > 0 });
             navigate(`/rooms/${encodeURIComponent(result.roomId)}/lobby`);
         } catch (error) { setMessage(roomErrorMessage(error, t)); } finally { setLoading(false); }
     };
@@ -42,7 +46,7 @@ export const JoinRoomPage: React.FC = () => {
             <RoundBox x={960} y={550} width={1180} height={820} type={2}/>
             <div className="form-stack" style={{ top: 295 }}>
                 <TextField label={t('rooms.roomId')} placeholder={t('rooms.roomIdPlaceholder')} value={roomId} maxLength={6} autoCapitalize="characters" onChange={(value) => setRoomId(value.toUpperCase())}/>
-                <TextField label={t('rooms.password')} placeholder={passwordNeeded ? t('rooms.passwordPlaceholder') : '—'} value={password} minLength={4} maxLength={8} inputMode="numeric" type="password" disabled={!passwordNeeded} onChange={setPassword}/>
+                <TextField label={t('rooms.password')} placeholder={t(passwordNeeded ? 'rooms.passwordPlaceholder' : 'rooms.passwordOptionalPlaceholder')} value={password} minLength={4} maxLength={8} inputMode="numeric" type="password" onChange={setPassword}/>
                 <div className="status-message" role="status" aria-live="polite" style={{ color: themeColors(theme).muted }}>{message}</div>
                 <RoundButton width={540} height={106} type={1} content={t('rooms.join')} disabled={!valid} isLoading={loading} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
             </div>

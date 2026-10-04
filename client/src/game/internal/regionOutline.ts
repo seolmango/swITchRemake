@@ -13,32 +13,53 @@ type Point = readonly [number, number];
  * Returns loops in TILE-INDEX space (not px) — scale by TILE_SIZE before drawing.
  */
 export function traceRegionOutlines(tiles: readonly (readonly [number, number])[]): Point[][] {
-    const set = new Set(tiles.map(([x, y]) => `${x},${y}`));
-    const has = (x: number, y: number): boolean => set.has(`${x},${y}`);
-
-    const edgesByStart = new Map<string, Point>();
-    for (const [x, y] of tiles) {
-        if (!has(x, y - 1)) edgesByStart.set(`${x},${y}`, [x + 1, y]);
-        if (!has(x + 1, y)) edgesByStart.set(`${x + 1},${y}`, [x + 1, y + 1]);
-        if (!has(x, y + 1)) edgesByStart.set(`${x + 1},${y + 1}`, [x, y + 1]);
-        if (!has(x - 1, y)) edgesByStart.set(`${x},${y + 1}`, [x, y]);
+    const cells = new Map(tiles.map((tile) => [`${tile[0]},${tile[1]}`, tile]));
+    const has = (x: number, y: number): boolean => cells.has(`${x},${y}`);
+    interface Edge { from: Point; to: Point; direction: number }
+    const edges: Edge[] = [];
+    const edgesByStart = new Map<string, number[]>();
+    const addEdge = (from: Point, to: Point, direction: number): void => {
+        const key = `${from[0]},${from[1]}`;
+        const outgoing = edgesByStart.get(key) ?? [];
+        outgoing.push(edges.length);
+        edgesByStart.set(key, outgoing);
+        edges.push({ from, to, direction });
+    };
+    for (const [x, y] of cells.values()) {
+        if (!has(x, y - 1)) addEdge([x, y], [x + 1, y], 0);
+        if (!has(x + 1, y)) addEdge([x + 1, y], [x + 1, y + 1], 1);
+        if (!has(x, y + 1)) addEdge([x + 1, y + 1], [x, y + 1], 2);
+        if (!has(x - 1, y)) addEdge([x, y + 1], [x, y], 3);
     }
 
     const loops: Point[][] = [];
-    const consumed = new Set<string>();
-    for (const startKey of edgesByStart.keys()) {
-        if (consumed.has(startKey)) continue;
+    const consumed = new Set<number>();
+    // Two diagonally touching cells have two outgoing edges at their shared vertex.
+    // Keep both, and turn right first to stay on the same silhouette. A single-edge
+    // map overwrote one branch and could enter a cycle that never reached its start.
+    const turnPriority = [1, 0, 3, 2]; // clockwise directions: right, straight, left, back
+    for (let initial = 0; initial < edges.length; initial++) {
+        if (consumed.has(initial)) continue;
+        const start = edges[initial]!.from;
         const loop: Point[] = [];
-        let key = startKey;
-        do {
-            consumed.add(key);
-            const parts = key.split(',');
-            loop.push([Number(parts[0]), Number(parts[1])]);
-            const next = edgesByStart.get(key);
-            if (!next) break;
-            key = `${next[0]},${next[1]}`;
-        } while (key !== startKey);
-        if (loop.length >= 3) loops.push(simplifyCollinear(loop));
+        let current = initial;
+        let closed = false;
+        while (!consumed.has(current)) {
+            consumed.add(current);
+            const edge = edges[current]!;
+            loop.push(edge.from);
+            if (edge.to[0] === start[0] && edge.to[1] === start[1]) {
+                closed = true;
+                break;
+            }
+            const next = (edgesByStart.get(`${edge.to[0]},${edge.to[1]}`) ?? [])
+                .filter((candidate) => !consumed.has(candidate))
+                .sort((a, b) => turnPriority.indexOf((edges[a]!.direction - edge.direction + 4) % 4)
+                    - turnPriority.indexOf((edges[b]!.direction - edge.direction + 4) % 4))[0];
+            if (next === undefined) break;
+            current = next;
+        }
+        if (closed && loop.length >= 3) loops.push(simplifyCollinear(loop));
     }
     return loops;
 }

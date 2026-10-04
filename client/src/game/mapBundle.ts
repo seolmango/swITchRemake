@@ -68,6 +68,7 @@ export function verifiedMapBundle(expectedHash: string, gameOrigin: string): Pro
 }
 
 export interface VerifiedMap {
+    simulationHz: number;
     view: MapView;
     /**
      * 밟으면 무슨 일이 일어나는 자리. 서버가 판정에 쓰는 것과 **같은 데이터**다 —
@@ -86,6 +87,7 @@ export async function verifiedMapView(mapId: string, expectedHash: string, gameO
         throw new Error('map tile data is malformed');
     }
     return {
+        simulationHz: bundle.simulationHz,
         view: { cols: map.size, rows: map.size, tiles: map.initial_map as MapView['tiles'] },
         markers: map.markers ?? [],
         zones: map.zones ?? [],

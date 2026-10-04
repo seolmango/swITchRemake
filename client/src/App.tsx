@@ -24,6 +24,8 @@ import { getServiceStatus, serviceRouteBypassesGate, serviceRouteRequiresServer,
 import { ServiceStatusPage } from './pages/ServiceStatusPage.tsx';
 import { applyAppearanceToDocument } from './theme/cssVariables.ts';
 import { AuthRecoveryPage } from './pages/AuthRecoveryPage.tsx';
+import { supportsPortraitMenu } from './components/layout/responsiveMenu.ts';
+import './components/layout/responsiveMenu.css';
 
 // Phaser는 게임·훈련·도움말·리플레이에서만 필요하다. 이 화면들을 방문하기 전까지 엔진과
 // 맵 렌더러를 받지 않게 해 제목/로그인/방 목록의 초기 번들을 작게 유지한다.
@@ -34,7 +36,7 @@ const ReplayPage = lazy(() => import('./pages/ReplayPage.tsx').then((module) => 
 
 const UiLayout = () => {
     const { pathname } = useLocation();
-    const responsiveForm = ['/login', '/signup', '/reset-password', '/change-password'].includes(pathname);
+    const responsiveForm = supportsPortraitMenu(pathname);
     return <GameContainer responsiveForm={responsiveForm}><Outlet/></GameContainer>;
 };
 

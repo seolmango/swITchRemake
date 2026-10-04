@@ -16,9 +16,9 @@ export const TitlePage: React.FC<{ announcement?: ServiceAnnouncement | null }> 
     const colors = themeColors(theme);
     useEffect(() => { document.title = 'swITch'; }, []);
     return (
-        <main className="page-screen">
+        <main className="page-screen title-screen">
             <h1 className="visually-hidden">swITch</h1>
-            <TitleLogo x={960} y={300} width={1080}/>
+            <TitleLogo className="title-logo" x={960} y={300} width={1080}/>
 
             {announcement && (
                 <section

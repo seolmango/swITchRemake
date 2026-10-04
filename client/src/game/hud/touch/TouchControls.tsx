@@ -101,7 +101,7 @@ export const TouchControls: React.FC<Props> = ({
             {hud.movementSkill && (
                 <div style={{
                     position: 'absolute',
-                    left: action.x - size * 0.72,
+                    left: action.x - size * 0.95,
                     top: action.y - size * 0.72,
                     transform: 'translate(-50%, -50%)', pointerEvents: 'auto',
                 }}>

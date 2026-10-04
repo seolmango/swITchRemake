@@ -85,7 +85,7 @@ export const SignUpPage: React.FC = () => {
 
     return (
         <PageLayout title={t('auth.signup')} home settingsDock={false}>
-            <RoundBox x={960} y={540} width={1360} height={950} type={2}/>
+            <RoundBox x={960} y={580} width={1360} height={900} type={2}/>
             <div className="signup-grid">
                 <InlineLink onClick={() => navigate('/login')} style={{ gridColumn: '1 / -1', justifySelf: 'center' }}>{t('auth.goLogin')}</InlineLink>
                 <div className="form-row" style={{ gridColumn: '1 / -1' }}>

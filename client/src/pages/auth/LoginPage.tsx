@@ -118,7 +118,7 @@ export const LoginPage: React.FC = () => {
         <PageLayout title={t(challenge ? 'auth.mfaTitle' : 'auth.login')} home>
             <RoundBox x={960} y={550} width={1280} height={820} type={2}/>
             {!challenge ? (
-                <div className="form-stack" style={{ top: 235 }}>
+                <div className="form-stack login-form-stack" style={{ top: 235 }}>
                     <InlineLink onClick={() => navigate('/signup')} style={{ justifySelf: 'center' }}>{t('auth.goSignup')}</InlineLink>
                     <TextField ref={emailRef} label={t('auth.email')} placeholder={t('auth.emailPlaceholder')} autoComplete="email" inputMode="email" value={email} error={touched && !isEmail(email) ? t('auth.invalidEmail') : undefined} onChange={setEmail}/>
                     <TextField label={t('auth.password')} placeholder={t('auth.passwordPlaceholder')} autoComplete="current-password" type="password" value={password} error={touched && !isPassword(password) ? t('auth.invalidPassword') : undefined} onChange={setPassword}/>

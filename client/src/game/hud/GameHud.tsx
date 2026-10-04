@@ -168,7 +168,7 @@ export const GameHud: React.FC<Props> = ({
                 <ControlsGuide theme={theme} movementSkillLabel={hud.movementSkill?.label ?? null} />
             )}
 
-            {canAct && (hud.movementSkill || hud.switchSkill) && (
+            {canAct && keyboardControls && (hud.movementSkill || hud.switchSkill) && (
                 <div style={{ pointerEvents: 'auto' }}>
                     <SkillBar
                         theme={theme}
@@ -176,6 +176,7 @@ export const GameHud: React.FC<Props> = ({
                         movementSkill={hud.movementSkill}
                         switchSkill={hud.switchSkill}
                         onUseMovement={onUseMovementSkill}
+                        keyboardControls={keyboardControls}
                         switchBlockedReason={self?.isTagger ? t('game.hud.taggerCannotSwitch') : null}
                     />
                 </div>

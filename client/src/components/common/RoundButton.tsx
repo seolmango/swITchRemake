@@ -96,6 +96,8 @@ export const RoundButton = React.memo<RoundButtonProps>(({
         border: `7px solid ${currentStroke}`,
         borderRadius: "25px",
         boxSizing: "border-box",
+        // The invisible 100px measuring span must not widen a scrollable mobile menu.
+        overflow: 'hidden',
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -147,6 +149,7 @@ export const RoundButton = React.memo<RoundButtonProps>(({
             {typeof content === 'string' ? (
                 <>
                     <span
+                        aria-hidden="true"
                         ref={measureRef}
                         style={{
                             position: 'absolute',
