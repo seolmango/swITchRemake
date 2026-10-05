@@ -40,9 +40,16 @@ async function main() {
                 const password = `${randomBytes(6).toString('hex')}!Au`;
                 const hash = await bcrypt.hash(password, 10);
                 const [user] = await db`insert into users (email,password_hash,nickname) values (${email},${hash},${`fault${suffix}`}) returning id`;
-                const response = await fetch('http://web/api/auth/login', {
-                    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password }), signal: AbortSignal.timeout(5_000),
+                // 로그인은 시도마다 사람 확인 증명이 필요하다. 새 계정은 충전(작업 증명)만으로 받는다.
+                const { searchPow } = require('shared');
+                const post = (path, body) => fetch(`http://web/api${path}`, {
+                    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000),
                 });
+                const issued = await (await post('/auth/human-challenge', { purpose: 'login', subject: email })).json();
+                assert.equal(issued.round, null, 'fresh synthetic account needs only the charge');
+                const powCounter = searchPow(issued.pow.nonce, issued.pow.bits, 0, 1 << 26);
+                const verified = await (await post('/auth/human-challenge/verify', { challengeToken: issued.challengeToken, powCounter })).json();
+                const response = await post('/auth/login', { email, password, humanProof: verified.proofToken });
                 assert.equal(response.status, 201, 'fault synthetic login');
                 const login = await response.json();
                 assert.equal(typeof login.accessToken, 'string');
