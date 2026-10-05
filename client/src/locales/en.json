@@ -406,7 +406,7 @@
       "general": "General",
       "sound": "Sound",
       "game": "In-game",
-      "keymap": "Key mapping",
+      "keymap": "Controls",
       "security": "Account security"
     },
     "general": {
@@ -549,13 +549,6 @@
       "touchAuto": "Auto",
       "touchOn": "Always on",
       "touchOff": "Always off",
-      "touchScale": "Joystick size",
-      "touchScaleDescription": "Fit the joystick size to your hand and screen.",
-      "touchLayout": "Joystick position",
-      "touchLayoutDescription": "A scaled-down copy of your screen. Drag each stick where you want it.",
-      "touchLayoutHint": "The switch/emoji picker opens in the center. Sticks always stay on screen.",
-      "touchMove": "Move",
-      "touchAction": "Action",
       "showControlHints": "Always show control hints",
       "showControlHintsDescription": "Keep the controls guide after the start hint fades.",
       "showLatency": "Show latency",
@@ -604,6 +597,26 @@
         "toggleMinimap": "Show/hide minimap"
       },
       "viewGroup": "View"
+    },
+    "controls": {
+      "keyboard": "Keyboard",
+      "touch": "Touch joystick",
+      "editLayout": "Joystick layout",
+      "editLayoutDescription": "Move and resize the buttons on a game screen.",
+      "openEditor": "Edit layout",
+      "resetLayout": "Default layout",
+      "editorTitle": "Joystick layout",
+      "editorHint": "Drag a button to move it, then resize the selected one.",
+      "size": "Size",
+      "smaller": "smaller",
+      "larger": "larger",
+      "done": "Done",
+      "elements": {
+        "move": "Move",
+        "action": "swITch · emoji",
+        "skill": "Movement skill",
+        "mode": "Mode toggle"
+      }
     }
   },
   "game": {

@@ -1,148 +1,155 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Color } from '../../../theme/color.ts';
-import { useSettingsStore, type TouchAnchor } from '../../../stores/useSettingsStore.ts';
-import { TOUCH_BASE_SIZE, actionWheelReach, anchorFromPoint, placeAnchor } from './touchLayout.ts';
-import { useViewportSize } from './useViewportSize.ts';
-
-type Puck = 'move' | 'action';
-
-interface Props {
-    label: { move: string; action: string; hint: string };
-}
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
+import {
+    TOUCH_ELEMENTS,
+    TOUCH_SCALE_RANGE,
+    useSettingsStore,
+    type TouchElement,
+} from '../../../stores/useSettingsStore.ts';
+import { ROTATED_STYLE, shouldForceLandscape } from '../../../components/layout/forcedLandscape.ts';
+import { useModalFocusTrap } from '../../../components/common/useModalFocusTrap.ts';
+import { useSkillIcons } from '../../../theme/skillIcons.ts';
+import { anchorFromPoint, placeElement } from './touchLayout.ts';
 
 /**
- * 조이스틱 배치 화면. 실제 화면 비율을 그대로 줄인 판 위에서 끌어다 놓는다.
+ * 조이스틱 배치 편집기. 실제 게임 화면처럼 화면 전체를 쓰고, 폰을 세워 들었으면 게임처럼 가로로
+ * 돌려 그린다. 네 요소를 끌어 옮기고, 고른 요소의 크기를 바꾼다.
  *
- * 슬라이더 두 쌍(가로/세로 × 조이스틱 둘)으로 만들지 않은 이유는, 위치를 정할 때 사람이 보는
- * 것이 숫자가 아니라 **손이 닿는 자리**이기 때문이다. 화면 비율이 기기마다 다르므로 판도 지금
- * 화면의 비율을 따라간다.
- *
- * 가두는 규칙(`placeAnchor`)을 인게임과 같이 쓴다. 다르면 "설정에서 둔 자리와 실제 자리가
- * 다르다"가 되고, 사용자는 자기가 뭘 잘못했는지 알 수 없다.
+ * 자리는 인게임 조작과 **같은 `placeElement`**로 계산한다. 축소한 미리보기 판을 쓰던 예전 방식은
+ * 손가락 크기 감각이 맞지 않았다 — 여기서는 실제 크기 그대로 보고 실제 엄지로 대 본다.
  */
-export const TouchLayoutEditor: React.FC<Props> = ({ label }) => {
-    const scale = useSettingsStore((state) => state.touchScale);
-    const moveAnchor = useSettingsStore((state) => state.touchMoveAnchor);
-    const actionAnchor = useSettingsStore((state) => state.touchActionAnchor);
-    const setGameSetting = useSettingsStore((state) => state.setGameSetting);
-    const viewport = useViewportSize();
-
-    const boardRef = useRef<HTMLDivElement | null>(null);
-    const dragging = useRef<Puck | null>(null);
-    const [active, setActive] = useState<Puck | null>(null);
-    // 손잡이 자리를 렌더 중에 계산해야 하는데, ref는 첫 렌더에 비어 있다. 측정값을 state로 든다.
-    const [board, setBoard] = useState({ width: 0, height: 0 });
+export const TouchLayoutEditor: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const { t } = useTranslation();
+    const layout = useSettingsStore((state) => state.touchLayout);
+    const theme = useSettingsStore((state) => state.theme);
+    const setTouchElement = useSettingsStore((state) => state.setTouchElement);
+    const resetTouchLayout = useSettingsStore((state) => state.resetTouchLayout);
+    const icons = useSkillIcons();
+    const { dialogRef, onDialogKeyDown } = useModalFocusTrap<HTMLDivElement>(onClose);
+    const [selected, setSelected] = useState<TouchElement>('action');
+    const [screen, setScreen] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+    const drag = useRef<{ element: TouchElement; dx: number; dy: number; pointerId: number } | null>(null);
 
     useEffect(() => {
-        const element = boardRef.current;
-        if (!element) return;
-        const observer = new ResizeObserver(([entry]) => {
-            if (entry) setBoard({ width: entry.contentRect.width, height: entry.contentRect.height });
-        });
-        observer.observe(element);
-        return () => observer.disconnect();
+        const update = () => setScreen({ width: window.innerWidth, height: window.innerHeight });
+        window.addEventListener('resize', update);
+        return () => window.removeEventListener('resize', update);
     }, []);
 
-    const aspect = viewport.height > 0 ? viewport.width / viewport.height : 16 / 9;
+    const rotated = shouldForceLandscape(screen.width, screen.height);
+    const viewport = rotated ? { width: screen.height, height: screen.width } : screen;
 
-    const drag = (event: React.PointerEvent<HTMLDivElement>) => {
-        const board = boardRef.current;
-        const puck = dragging.current;
-        if (!board || puck === null) return;
-        const rect = board.getBoundingClientRect();
-        const anchor = anchorFromPoint(
-            { x: event.clientX - rect.left, y: event.clientY - rect.top },
-            { width: rect.width, height: rect.height },
-        );
-        setGameSetting(puck === 'move' ? 'touchMoveAnchor' : 'touchActionAnchor', anchor);
+    /** 화면 좌표를 편집 화면(돌렸으면 돌린 기준) 좌표로. 시계 방향 90°의 역변환이다. */
+    const toContent = useCallback((clientX: number, clientY: number) => (rotated
+        ? { x: clientY, y: screen.width - clientX }
+        : { x: clientX, y: clientY }), [rotated, screen.width]);
+
+    const begin = (element: TouchElement) => (event: React.PointerEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        setSelected(element);
+        const place = placeElement(element, layout, viewport);
+        const point = toContent(event.clientX, event.clientY);
+        drag.current = { element, dx: point.x - place.x, dy: point.y - place.y, pointerId: event.pointerId };
+        event.currentTarget.setPointerCapture(event.pointerId);
     };
 
-    const stop = () => { dragging.current = null; setActive(null); };
+    const move = (event: React.PointerEvent<HTMLButtonElement>) => {
+        const active = drag.current;
+        if (!active || active.pointerId !== event.pointerId) return;
+        const point = toContent(event.clientX, event.clientY);
+        setTouchElement(active.element, anchorFromPoint({ x: point.x - active.dx, y: point.y - active.dy }, viewport));
+    };
 
-    return (
-        <div style={{ display: 'grid', gap: 12, justifyItems: 'stretch', width: '100%' }}>
-            <div
-                ref={boardRef}
-                onPointerMove={drag}
-                onPointerUp={stop}
-                onPointerLeave={stop}
-                onPointerCancel={stop}
-                style={{
-                    position: 'relative', width: '100%', aspectRatio: String(aspect),
-                    borderRadius: 'var(--radius-md)', overflow: 'hidden', touchAction: 'none',
-                    background: 'var(--settings-preview-bg, rgba(120,120,120,0.16))',
-                    border: `3px solid ${Color.gray[1]}`,
-                }}
-            >
-                <Handle
-                    board={board}
-                    viewportWidth={viewport.width}
-                    anchor={moveAnchor}
-                    scale={scale}
-                    reachRatio={0.5}
-                    label={label.move}
-                    active={active === 'move'}
-                    onGrab={(event) => { dragging.current = 'move'; setActive('move'); drag(event); }}
-                />
-                <Handle
-                    board={board}
-                    viewportWidth={viewport.width}
-                    anchor={actionAnchor}
-                    scale={scale}
-                    reachRatio={actionWheelReach(1)}
-                    label={label.action}
-                    active={active === 'action'}
-                    onGrab={(event) => { dragging.current = 'action'; setActive('action'); drag(event); }}
-                />
-            </div>
-            <small style={{ opacity: 0.75 }}>{label.hint}</small>
-        </div>
-    );
-};
+    const end = () => { drag.current = null; };
 
-/**
- * 판 위의 손잡이 하나.
- *
- * 크기를 판 기준으로 다시 계산한다 — 판은 실제 화면을 줄인 것이므로, 같은 비율로 줄여야
- * "이만큼 자리를 차지한다"가 눈에 맞는다. 액션 쪽은 선택기가 열리는 반경까지 그린다.
- */
-const Handle: React.FC<{
-    board: { width: number; height: number };
-    /** 진짜 화면 폭. 판이 그 몇 분의 1인지로 조이스틱 크기를 줄인다. */
-    viewportWidth: number;
-    anchor: TouchAnchor;
-    scale: number;
-    /** 조이스틱 지름 대비 차지 반경. 이동은 0.5(자기 원), 액션은 선택기까지. */
-    reachRatio: number;
-    label: string;
-    active: boolean;
-    onGrab: (event: React.PointerEvent<HTMLDivElement>) => void;
-}> = ({ board, viewportWidth, anchor, scale, reachRatio, label, active, onGrab }) => {
-    // 판이 실제 화면의 몇 분의 1인지. 조이스틱도 같은 비율로 줄여야 크기 감각이 맞는다.
-    const shrink = viewportWidth > 0 ? board.width / viewportWidth : 0;
-    const size = TOUCH_BASE_SIZE * scale * shrink;
-    const reach = size * reachRatio;
-    const place = placeAnchor(anchor, board, reach);
+    const nudge = (element: TouchElement, dx: number, dy: number) => {
+        const current = layout[element];
+        setTouchElement(element, { x: current.x + dx, y: current.y + dy });
+    };
 
-    return (
+    const onElementKey = (element: TouchElement) => (event: React.KeyboardEvent<HTMLButtonElement>) => {
+        const step = event.shiftKey ? 0.05 : 0.01;
+        const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+        if (moves[event.key]) {
+            event.preventDefault();
+            nudge(element, ...moves[event.key]!);
+        } else if (event.key === '+' || event.key === '=') {
+            setTouchElement(element, { scale: layout[element].scale + 0.05 });
+        } else if (event.key === '-') {
+            setTouchElement(element, { scale: layout[element].scale - 0.05 });
+        }
+    };
+
+    const names: Record<TouchElement, string> = {
+        move: t('settings.controls.elements.move'),
+        action: t('settings.controls.elements.action'),
+        skill: t('settings.controls.elements.skill'),
+        mode: t('settings.controls.elements.mode'),
+    };
+    const scalePercent = Math.round(layout[selected].scale * 100);
+
+    return createPortal(
         <div
-            onPointerDown={(event) => { event.preventDefault(); onGrab(event); }}
-            style={{
-                position: 'absolute', left: place.x, top: place.y,
-                transform: 'translate(-50%, -50%)',
-                width: Math.max(28, size), height: Math.max(28, size), borderRadius: '50%',
-                display: 'grid', placeItems: 'center', cursor: 'grab', touchAction: 'none',
-                background: active ? Color.blue[2] : `color-mix(in srgb, ${Color.blue[2]} 34%, transparent)`,
-                border: `3px solid ${Color.blue[2]}`,
-                // 선택기까지 포함한 자리를 옅게 그린다. 서로 겹치는지 여기서 보인다.
-                boxShadow: reach > size / 2
-                    ? `0 0 0 ${Math.max(0, reach - size / 2)}px color-mix(in srgb, ${Color.blue[2]} 12%, transparent)`
-                    : 'none',
-                color: Color.white, fontWeight: 800, fontSize: Math.max(10, size * 0.22),
-                userSelect: 'none', WebkitUserSelect: 'none',
-            }}
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('settings.controls.editorTitle')}
+            tabIndex={-1}
+            onKeyDown={onDialogKeyDown}
+            className={`touch-editor${theme === 1 ? ' is-dark' : ''}`}
+            style={rotated ? { ...ROTATED_STYLE, zIndex: 1100 } : { position: 'fixed', inset: 0, zIndex: 1100 }}
         >
-            {label}
-        </div>
+            <div className="touch-editor-toolbar">
+                <strong>{t('settings.controls.editorTitle')}</strong>
+                <span className="touch-editor-selected">{names[selected]}</span>
+                <label className="touch-editor-size">
+                    <span>{t('settings.controls.size')}</span>
+                    <button type="button" className="ui-button" aria-label={`${names[selected]} ${t('settings.controls.smaller')}`}
+                        onClick={() => setTouchElement(selected, { scale: layout[selected].scale - 0.05 })}>−</button>
+                    <input
+                        type="range"
+                        min={TOUCH_SCALE_RANGE.min * 100}
+                        max={TOUCH_SCALE_RANGE.max * 100}
+                        step={5}
+                        value={scalePercent}
+                        aria-label={`${names[selected]} ${t('settings.controls.size')}`}
+                        onChange={(event) => setTouchElement(selected, { scale: Number(event.target.value) / 100 })}
+                    />
+                    <button type="button" className="ui-button" aria-label={`${names[selected]} ${t('settings.controls.larger')}`}
+                        onClick={() => setTouchElement(selected, { scale: layout[selected].scale + 0.05 })}>+</button>
+                    <output>{scalePercent}%</output>
+                </label>
+                <button type="button" className="ui-button is-quiet" onClick={resetTouchLayout}>{t('settings.controls.resetLayout')}</button>
+                <button type="button" className="ui-button is-primary" onClick={onClose}>{t('settings.controls.done')}</button>
+            </div>
+            <p className="touch-editor-hint">{t('settings.controls.editorHint')}</p>
+
+            {TOUCH_ELEMENTS.map((element) => {
+                const place = placeElement(element, layout, viewport);
+                return (
+                    <button
+                        key={element}
+                        type="button"
+                        className={`touch-editor-element is-${element}${selected === element ? ' is-selected' : ''}`}
+                        aria-label={`${names[element]} · ${Math.round(place.scale * 100)}%`}
+                        aria-pressed={selected === element}
+                        onPointerDown={begin(element)}
+                        onPointerMove={move}
+                        onPointerUp={end}
+                        onPointerCancel={end}
+                        onFocus={() => setSelected(element)}
+                        onKeyDown={onElementKey(element)}
+                        style={{ left: place.x, top: place.y, width: place.width, height: place.height }}
+                    >
+                        {element === 'skill' && <img src={icons.dash} alt=""/>}
+                        {element === 'mode' && <><span>{t('game.hud.touch.switch')}</span><span>{t('game.hud.touch.emoji')}</span></>}
+                        {(element === 'move' || element === 'action') && <i aria-hidden="true"/>}
+                        <small>{names[element]}</small>
+                    </button>
+                );
+            })}
+        </div>,
+        document.body,
     );
 };

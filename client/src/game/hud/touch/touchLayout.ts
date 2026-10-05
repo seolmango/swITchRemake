@@ -1,4 +1,4 @@
-import type { TouchAnchor } from '../../../stores/useSettingsStore.ts';
+import type { TouchAnchor, TouchElement, TouchLayout } from '../../../stores/useSettingsStore.ts';
 
 /**
  * 터치 조작이 쓰는 쌓임 순서.
@@ -35,13 +35,39 @@ export interface Placement {
  * 조금 안쪽에 있는 편이 낫다. 설정의 배치 화면도 같은 함수를 쓴다 — 다르면 "설정에서 둔 자리와
  * 실제 자리가 다르다"가 된다.
  */
-export function placeAnchor(anchor: TouchAnchor, viewport: { width: number; height: number }, reach: number): Placement {
-    const clamp = (value: number, span: number) => {
+export function placeAnchor(anchor: TouchAnchor, viewport: { width: number; height: number }, reach: number, reachY = reach): Placement {
+    const clamp = (value: number, span: number, edge: number) => {
         // 컨트롤이 화면보다 크면 가운데가 최선이다.
-        if (reach * 2 > span) return span / 2;
-        return Math.min(Math.max(value * span, reach), span - reach);
+        if (edge * 2 > span) return span / 2;
+        return Math.min(Math.max(value * span, edge), span - edge);
     };
-    return { x: clamp(anchor.x, viewport.width), y: clamp(anchor.y, viewport.height) };
+    return { x: clamp(anchor.x, viewport.width, reach), y: clamp(anchor.y, viewport.height, reachY) };
+}
+
+/** 배율 1일 때 각 요소의 크기(px). 전환 버튼만 가로로 긴 알약형이 아니라 두 칸짜리 상자다. */
+export const TOUCH_ELEMENT_SIZE: Record<TouchElement, { width: number; height: number }> = {
+    move: { width: TOUCH_BASE_SIZE, height: TOUCH_BASE_SIZE },
+    action: { width: TOUCH_BASE_SIZE, height: TOUCH_BASE_SIZE },
+    skill: { width: TOUCH_BASE_SIZE * 0.74, height: TOUCH_BASE_SIZE * 0.74 },
+    mode: { width: 176, height: 48 },
+};
+
+export interface ElementPlacement extends Placement {
+    width: number;
+    height: number;
+    scale: number;
+}
+
+/**
+ * 요소 하나의 실제 자리와 크기. 인게임 조작과 배치 편집기가 **같은 이 함수**를 쓴다 — 다르면
+ * 편집기에서 둔 자리와 실제 자리가 어긋나고, 사용자는 무엇이 틀렸는지 알 수 없다.
+ */
+export function placeElement(element: TouchElement, layout: TouchLayout, viewport: { width: number; height: number }): ElementPlacement {
+    const { scale } = layout[element];
+    const width = TOUCH_ELEMENT_SIZE[element].width * scale;
+    const height = TOUCH_ELEMENT_SIZE[element].height * scale;
+    const reach = element === 'action' ? actionWheelReach(width) : width / 2;
+    return { ...placeAnchor(layout[element], viewport, reach, height / 2), width, height, scale };
 }
 
 /** 화면 좌표를 정규화된 위치로 되돌린다. 배치 화면에서 끌어다 놓을 때 쓴다. */

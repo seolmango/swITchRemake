@@ -11,7 +11,7 @@ import { HUD_FONT } from '../hudTheme.ts';
 import { ActionJoystick } from './ActionJoystick.tsx';
 import type { ActionMode } from './actionMode.ts';
 import { MoveJoystick } from './MoveJoystick.tsx';
-import { TOUCH_BASE_SIZE, TOUCH_Z, actionWheelReach, placeAnchor } from './touchLayout.ts';
+import { TOUCH_Z, placeElement } from './touchLayout.ts';
 import { useViewportSize } from './useViewportSize.ts';
 
 interface Props {
@@ -34,19 +34,19 @@ export const TouchControls: React.FC<Props> = ({
     theme, colorVision, hud, onUseMovementSkill, onSwitchTarget, onEmoji,
 }) => {
     const { t } = useTranslation();
-    const scale = useSettingsStore((state) => state.touchScale);
-    const moveAnchor = useSettingsStore((state) => state.touchMoveAnchor);
-    const actionAnchor = useSettingsStore((state) => state.touchActionAnchor);
+    const layout = useSettingsStore((state) => state.touchLayout);
     const viewport = useViewportSize();
     const switchCooldown = hud.switchSkill?.cooldown ?? 0;
     const switchRatio = hud.switchSkill && hud.switchSkill.cooldownTotal > 0
         ? Math.max(0, Math.min(1, switchCooldown / hud.switchSkill.cooldownTotal)) : 0;
     const [mode, setMode] = useState<ActionMode>('switch');
 
-    const size = TOUCH_BASE_SIZE * scale;
-    const reach = actionWheelReach(size);
-    const move = placeAnchor(moveAnchor, viewport, size / 2);
-    const action = placeAnchor(actionAnchor, viewport, reach);
+    // 네 요소를 각자의 자리·크기로 놓는다. 배치 편집기와 같은 함수라 설정에서 본 그대로 나온다.
+    const move = placeElement('move', layout, viewport);
+    const action = placeElement('action', layout, viewport);
+    const skillPlace = placeElement('skill', layout, viewport);
+    const modePlace = placeElement('mode', layout, viewport);
+    const size = action.width;
 
     const self = hud.players.find((player) => player.id === hud.selfId) ?? null;
     // 죽었거나 관전 중이면 조작할 것이 없다. 눌리지 않는 컨트롤이 화면을 가리기만 한다.
@@ -66,7 +66,7 @@ export const TouchControls: React.FC<Props> = ({
                 position: 'absolute', left: move.x, top: move.y,
                 transform: 'translate(-50%, -50%)', pointerEvents: 'auto',
             }}>
-                <MoveJoystick theme={theme} size={size} label={t('game.hud.touch.moveJoystick')} />
+                <MoveJoystick theme={theme} size={move.width} label={t('game.hud.touch.moveJoystick')} />
             </div>
 
             {/* 선택기가 다른 컨트롤 위에 그려지도록 z를 올린다. 아래 깔리면 무엇을 고르는지 안 보인다. */}
@@ -94,15 +94,15 @@ export const TouchControls: React.FC<Props> = ({
                 )}
             </div>
 
-            {/* 조이스틱 바로 위. 자주 누르는 것이 아니라 엄지 자리를 양보해도 된다. */}
+            {/* 기본 자리는 조이스틱 바로 위. 자주 누르는 것이 아니라 엄지 자리를 양보해도 된다. */}
             <div style={{
-                position: 'absolute', left: action.x, top: action.y - size * 0.78,
+                position: 'absolute', left: modePlace.x, top: modePlace.y,
                 transform: 'translate(-50%, -50%)', pointerEvents: 'auto',
             }}>
                 <ModeToggle
                     theme={theme}
                     mode={mode}
-                    scale={scale}
+                    scale={modePlace.scale}
                     // 이모지 쪽을 보고 있어도 스위치가 언제 다시 되는지 알 수 있게 탭에도 남은 초를 붙인다.
                     labels={{ switch: switchCooldown > 0 ? `${t('game.hud.touch.switch')} ${Math.ceil(switchCooldown)}` : t('game.hud.touch.switch'), emoji: t('game.hud.touch.emoji') }}
                     onChange={setMode}
@@ -113,11 +113,11 @@ export const TouchControls: React.FC<Props> = ({
             {hud.movementSkill && (
                 <div style={{
                     position: 'absolute',
-                    left: action.x - size * 0.95,
-                    top: action.y - size * 0.72,
+                    left: skillPlace.x,
+                    top: skillPlace.y,
                     transform: 'translate(-50%, -50%)', pointerEvents: 'auto',
                 }}>
-                    <SkillButton theme={theme} skill={hud.movementSkill} size={size * 0.74} onUse={onUseMovementSkill} />
+                    <SkillButton theme={theme} skill={hud.movementSkill} size={skillPlace.width} onUse={onUseMovementSkill} />
                 </div>
             )}
         </div>,

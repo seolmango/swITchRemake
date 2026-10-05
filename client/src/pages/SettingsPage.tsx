@@ -10,6 +10,7 @@ import { colorVisionPalette } from '../theme/cvd.ts';
 import { Color, statusInkColors, themeColors } from '../theme/color.ts';
 import { formatKeyBinding } from '../utils/keyBinding.ts';
 import { TouchLayoutEditor } from '../game/hud/touch/TouchLayoutEditor.tsx';
+import { useTouchControlsVisible } from '../game/hud/touch/useTouchControls.ts';
 import { BgmCard } from '../components/settings/BgmCard.tsx';
 import { MfaSettings } from '../components/settings/MfaSettings.tsx';
 import { CreditsDialog, LegalDocumentDialog } from '../components/legal/LegalDialogs.tsx';
@@ -104,6 +105,9 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
     const [editing, setEditing] = useState<{ action: KeyAction; slot: 0 | 1 } | null>(null);
     const [bindingError, setBindingError] = useState('');
     const [generalDialog, setGeneralDialog] = useState<'privacy' | 'credits' | null>(null);
+    const touchVisible = useTouchControlsVisible();
+    const [controlView, setControlView] = useState<'keyboard' | 'touch'>(touchVisible ? 'touch' : 'keyboard');
+    const [editingLayout, setEditingLayout] = useState(false);
     const settings = useSettingsStore();
     const colors = themeColors(settings.theme);
     const statusInk = statusInkColors(settings.theme);
@@ -294,36 +298,6 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                     <span style={{ background: Color.blue[0] }}>{label('◇ 유체화', '◇ Phase')}</span>
                 </div>
             </figure>
-            <h3 className="settings-group-heading">{label('터치 조작', 'Touch controls')}</h3>
-            <SettingRow title={t('settings.game.touchControls')} description={t('settings.game.touchControlsDescription')}>
-                <SegmentedControl value={settings.touchControls} options={[
-                    { value: 'auto', label: t('settings.game.touchAuto') },
-                    { value: 'on', label: t('settings.game.touchOn') },
-                    { value: 'off', label: t('settings.game.touchOff') },
-                ]} onChange={(value) => settings.setGameSetting('touchControls', value)} />
-            </SettingRow>
-            <SettingRow title={t('settings.game.touchScale')} description={t('settings.game.touchScaleDescription')}>
-                <div className="settings-volume-control">
-                    <input
-                        type="range"
-                        min="70"
-                        max="140"
-                        step="5"
-                        value={Math.round(settings.touchScale * 100)}
-                        aria-label={t('settings.game.touchScale')}
-                        style={{ '--range-progress': `${((settings.touchScale * 100 - 70) / 70) * 100}%` } as React.CSSProperties}
-                        onChange={(event) => settings.setGameSetting('touchScale', Number(event.target.value) / 100)}
-                    />
-                    <output>{Math.round(settings.touchScale * 100)}%</output>
-                </div>
-            </SettingRow>
-            <SettingRow title={t('settings.game.touchLayout')} description={t('settings.game.touchLayoutDescription')}>
-                <TouchLayoutEditor label={{
-                    move: t('settings.game.touchMove'),
-                    action: t('settings.game.touchAction'),
-                    hint: t('settings.game.touchLayoutHint'),
-                }} />
-            </SettingRow>
             <h3 className="settings-group-heading">{label('움직임 · 시각 효과', 'Motion & effects')}</h3>
             <SettingRow title={t('settings.game.motion')} description={t('settings.game.motionDescription')}>
                 <SegmentedControl value={settings.motionLevel} options={[
@@ -375,6 +349,40 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                 </div>
             ))}
         </section>
+    );
+
+    /*
+     * 조작 설정. 키보드와 터치 조이스틱을 한 탭에 두고 위에서 고른다 — 예전에는 키 지정은 "키 맵핑",
+     * 조이스틱은 "인게임 설정" 깊숙이 있어서 폰 사용자가 찾지 못했다. 처음 보이는 쪽은 지금 기기 기준이다.
+     */
+    const renderControls = () => (
+        <>
+            <div className="settings-control-switch">
+                <SegmentedControl value={controlView} options={[
+                    { value: 'keyboard', label: t('settings.controls.keyboard') },
+                    { value: 'touch', label: t('settings.controls.touch') },
+                ]} onChange={setControlView} />
+            </div>
+            {controlView === 'keyboard' ? renderKeymap() : renderTouch()}
+        </>
+    );
+
+    const renderTouch = () => (
+        <>
+            <SettingRow title={t('settings.game.touchControls')} description={t('settings.game.touchControlsDescription')}>
+                <SegmentedControl value={settings.touchControls} options={[
+                    { value: 'auto', label: t('settings.game.touchAuto') },
+                    { value: 'on', label: t('settings.game.touchOn') },
+                    { value: 'off', label: t('settings.game.touchOff') },
+                ]} onChange={(value) => settings.setGameSetting('touchControls', value)} />
+            </SettingRow>
+            <SettingRow title={t('settings.controls.editLayout')} description={t('settings.controls.editLayoutDescription')}>
+                <div className="settings-control-actions">
+                    <button type="button" className="ui-button is-primary" onClick={() => setEditingLayout(true)}>{t('settings.controls.openEditor')}</button>
+                    <button type="button" className="ui-button is-quiet" onClick={settings.resetTouchLayout}>{t('settings.controls.resetLayout')}</button>
+                </div>
+            </SettingRow>
+        </>
     );
 
     const renderKeymap = () => (
@@ -461,7 +469,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                         {section === 'general' && renderGeneral()}
                         {section === 'sound' && renderSound()}
                         {section === 'game' && renderGame()}
-                        {section === 'keymap' && renderKeymap()}
+                        {section === 'keymap' && renderControls()}
                         {section === 'security' && <MfaSettings/>}
                     </div>
                 </section>
@@ -472,6 +480,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
         <>
             {generalDialog === 'privacy' && <LegalDocumentDialog document={PRIVACY_POLICY} onClose={() => setGeneralDialog(null)}/>}
             {generalDialog === 'credits' && <CreditsDialog onClose={() => setGeneralDialog(null)}/>}
+            {editingLayout && <TouchLayoutEditor onClose={() => setEditingLayout(false)}/>}
         </>
     );
     if (embedded) return <>{panel}{dialogs}</>;

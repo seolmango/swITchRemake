@@ -21,6 +21,27 @@ export interface TouchAnchor {
     x: number;
     y: number;
 }
+
+/** 터치 화면의 조작 요소. 배치 편집기에서 하나씩 옮기고 크기를 바꾼다. */
+export const TOUCH_ELEMENTS = ['move', 'action', 'skill', 'mode'] as const;
+export type TouchElement = (typeof TOUCH_ELEMENTS)[number];
+/** 요소 하나의 자리(중심, 0~1)와 크기 배율. */
+export interface TouchElementLayout extends TouchAnchor {
+    scale: number;
+}
+export type TouchLayout = Record<TouchElement, TouchElementLayout>;
+export const TOUCH_SCALE_RANGE = { min: 0.6, max: 1.6 } as const;
+
+/**
+ * 기본 배치. 이동은 왼쪽 아래, 스위치·이모지는 오른쪽 아래(엄지가 닿는 자리), 이동 스킬은 그
+ * 왼쪽 위, 전환 버튼은 액션 조이스틱 바로 위 — 예전 고정 배치를 가로 폰(844×390) 기준으로 옮긴 값이다.
+ */
+export const createDefaultTouchLayout = (): TouchLayout => ({
+    move: { x: 0.15, y: 0.74, scale: 1 },
+    action: { x: 0.85, y: 0.74, scale: 1 },
+    skill: { x: 0.69, y: 0.5, scale: 1 },
+    mode: { x: 0.85, y: 0.44, scale: 1 },
+});
 // 색각 보조 모드의 정의는 팔레트가 있는 곳(theme/cvd.ts)에 둔다 — 값이 늘어나면 팔레트도 같이 늘어야 하므로.
 export type { ColorVisionMode };
 
@@ -52,10 +73,8 @@ interface GameSettings {
     showFps: boolean;
     showTps: boolean;
     touchControls: TouchControlsMode;
-    /** 조이스틱 지름 배율. 손 크기와 화면 크기가 사람마다 다르다. */
-    touchScale: number;
-    touchMoveAnchor: TouchAnchor;
-    touchActionAnchor: TouchAnchor;
+    /** 요소별 자리와 크기. 손 크기와 화면 크기, 잡는 방식이 사람마다 다르다. */
+    touchLayout: TouchLayout;
 }
 
 interface SettingsState extends GameSettings {
@@ -80,6 +99,8 @@ interface SettingsState extends GameSettings {
     setBgmEnabled: (enabled: boolean) => void;
     setGameSetting: <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => void;
     setKeyBinding: (action: KeyAction, slot: 0 | 1, binding: string | null) => void;
+    setTouchElement: (element: TouchElement, patch: Partial<TouchElementLayout>) => void;
+    resetTouchLayout: () => void;
     resetSection: (section: SettingsSection) => void;
     resetSettings: () => void;
 }
@@ -116,11 +137,32 @@ const GAME_DEFAULTS: GameSettings = {
     showFps: false,
     showTps: false,
     touchControls: 'auto',
-    touchScale: 1,
-    // 화면 아래쪽 양 끝. 엄지가 자연스럽게 닿는 자리이면서 시야를 가장 덜 가린다.
-    touchMoveAnchor: { x: 0.15, y: 0.74 },
-    touchActionAnchor: { x: 0.85, y: 0.74 },
+    touchLayout: createDefaultTouchLayout(),
 };
+
+/** 요소별 배치가 생기기 전의 저장 형식. 조이스틱 둘의 자리와 공통 배율 하나였다. */
+interface LegacyTouchSettings {
+    touchScale?: number;
+    touchMoveAnchor?: TouchAnchor;
+    touchActionAnchor?: TouchAnchor;
+}
+
+/**
+ * 예전 사용자의 배치를 새 형식으로 옮긴다. 공통 배율은 네 요소에 똑같이 나눠 준다 — 쓰던 크기
+ * 그대로 시작해야 업데이트 뒤에 "조이스틱이 갑자기 작아졌다"가 안 된다.
+ */
+export function migrateTouchLayout(saved: Partial<TouchLayout> | undefined, legacy: LegacyTouchSettings): TouchLayout {
+    const base = createDefaultTouchLayout();
+    if (saved) {
+        for (const element of TOUCH_ELEMENTS) if (saved[element]) base[element] = { ...base[element], ...saved[element] };
+        return base;
+    }
+    const scale = typeof legacy.touchScale === 'number' ? legacy.touchScale : 1;
+    for (const element of TOUCH_ELEMENTS) base[element].scale = scale;
+    if (legacy.touchMoveAnchor) base.move = { ...legacy.touchMoveAnchor, scale };
+    if (legacy.touchActionAnchor) base.action = { ...legacy.touchActionAnchor, scale };
+    return base;
+}
 
 const createDefaults = () => ({
     ...GENERAL_DEFAULTS,
@@ -139,6 +181,15 @@ export const useSettingsStore = create<SettingsState>()(
             setVolume: (channel, value) => set({ [`${channel}Volume`]: Math.max(0, Math.min(100, value)) }),
             setBgmEnabled: (bgmEnabled) => set({ bgmEnabled }),
             setGameSetting: (key, value) => set({ [key]: value }),
+            setTouchElement: (element, patch) => set((state) => {
+                const current = state.touchLayout[element];
+                const next = { ...current, ...patch };
+                next.scale = Math.min(TOUCH_SCALE_RANGE.max, Math.max(TOUCH_SCALE_RANGE.min, next.scale));
+                next.x = Math.min(1, Math.max(0, next.x));
+                next.y = Math.min(1, Math.max(0, next.y));
+                return { touchLayout: { ...state.touchLayout, [element]: next } };
+            }),
+            resetTouchLayout: () => set({ touchLayout: createDefaultTouchLayout() }),
             setKeyBinding: (action, slot, binding) => set((state) => ({
                 keyBindings: {
                     ...state.keyBindings,
@@ -148,8 +199,14 @@ export const useSettingsStore = create<SettingsState>()(
             resetSection: (section) => set(() => {
                 if (section === 'general') return GENERAL_DEFAULTS;
                 if (section === 'sound') return SOUND_DEFAULTS;
-                if (section === 'game') return GAME_DEFAULTS;
-                if (section === 'keymap') return { keyBindings: createDefaultKeyBindings() };
+                // 터치 조작은 '조작 설정' 탭으로 옮겼다. 인게임 탭을 초기화해도 배치는 지킨다.
+                if (section === 'game') {
+                    const rest: Partial<GameSettings> = { ...GAME_DEFAULTS };
+                    delete rest.touchControls;
+                    delete rest.touchLayout;
+                    return rest;
+                }
+                if (section === 'keymap') return { keyBindings: createDefaultKeyBindings(), touchControls: GAME_DEFAULTS.touchControls, touchLayout: createDefaultTouchLayout() };
                 return {};
             }),
             resetSettings: () => set(createDefaults()),
@@ -163,8 +220,14 @@ export const useSettingsStore = create<SettingsState>()(
              * 예전 사용자에게는 빠져 undefined가 되고 그 동작이 영영 안 먹는다.
              */
             merge: (persisted, current) => {
-                const saved = (persisted ?? {}) as Partial<SettingsState>;
-                return { ...current, ...saved, keyBindings: { ...current.keyBindings, ...saved.keyBindings } };
+                const saved = (persisted ?? {}) as Partial<SettingsState> & LegacyTouchSettings;
+                const { touchScale, touchMoveAnchor, touchActionAnchor, ...rest } = saved;
+                return {
+                    ...current,
+                    ...rest,
+                    keyBindings: { ...current.keyBindings, ...saved.keyBindings },
+                    touchLayout: migrateTouchLayout(saved.touchLayout, { touchScale, touchMoveAnchor, touchActionAnchor }),
+                };
             },
         },
     ),

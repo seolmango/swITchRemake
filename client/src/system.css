@@ -139,3 +139,105 @@ button.settings-install-card:hover,
   .responsive-form-container .room-empty strong { font-size: 20px; }
   .responsive-form-container .room-empty span { font-size: 15px; }
 }
+
+/* ── 조이스틱 배치 편집기 ─────────────────────────────────── */
+/* 바닥은 게임 화면과 같은 색과 격자다. 실제 경기 위에 조작을 올렸을 때의 느낌을 그대로 본다. */
+.touch-editor {
+  --editor-floor: #E4F1FF;
+  --editor-grid: var(--color-white);
+  overflow: hidden;
+  touch-action: none;
+  background-color: var(--editor-floor);
+  background-image:
+    linear-gradient(var(--editor-grid) 2px, transparent 2px),
+    linear-gradient(90deg, var(--editor-grid) 2px, transparent 2px);
+  background-size: 64px 64px;
+  color: var(--theme-text);
+  font-family: var(--font-ui);
+}
+.touch-editor.is-dark { --editor-floor: var(--color-black); --editor-grid: color-mix(in srgb, var(--color-blue-2) 22%, transparent); }
+.touch-editor:focus { outline: none; }
+/* left:50% + translate로 가운데 두면 폭이 화면 절반으로 묶여 여러 줄로 접힌다. 양쪽을 잡고 내용 폭만큼만 쓴다. */
+.touch-editor-toolbar {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  right: var(--space-2);
+  width: fit-content;
+  margin: 0 auto;
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-3);
+  box-sizing: border-box;
+  border: var(--border) solid var(--theme-border);
+  border-radius: var(--radius-md);
+  background: var(--theme-panel);
+  z-index: 2;
+}
+.touch-editor-toolbar strong { font: normal 18px/1.2 var(--font-display); }
+.touch-editor-selected { padding: 2px var(--space-2); border-radius: var(--radius-sm); background: var(--ui-blue-fill); color: var(--ui-on-fill); font-weight: 700; }
+.touch-editor-size { display: flex; align-items: center; gap: var(--space-1); }
+.touch-editor-size .ui-button { min-height: 36px; min-width: 36px; padding: 0; font-size: 20px; }
+.touch-editor-size input { width: 110px; }
+.touch-editor-size > span { color: var(--theme-muted); font-size: 13px; }
+.touch-editor-size output { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.touch-editor-toolbar > .ui-button { min-height: 36px; }
+.touch-editor-hint {
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  width: fit-content;
+  margin: 0 auto;
+  /* 아래쪽은 이동·액션 조이스틱의 기본 자리라 도구막대 바로 아래에 둔다. */
+  top: calc(var(--space-2) + 64px);
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--theme-panel);
+  color: var(--theme-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.touch-editor-element {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 0;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  border: 4px solid var(--color-smoke-2);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--theme-canvas) 62%, transparent);
+  color: var(--theme-text);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.touch-editor-element:active { cursor: grabbing; }
+.touch-editor-element.is-selected { border-color: var(--semantic-info); outline: 3px solid var(--theme-focus); outline-offset: 3px; }
+.touch-editor-element > i { width: 42%; height: 42%; border-radius: 50%; border: 3px solid var(--color-smoke-2); background: var(--theme-canvas); }
+.touch-editor-element.is-action > i { border-color: var(--semantic-info); }
+.touch-editor-element > img { width: 72%; height: 72%; object-fit: contain; }
+.touch-editor-element > small {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--theme-panel);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.touch-editor-element.is-mode { border-radius: var(--radius-sm); grid-auto-flow: column; grid-auto-columns: 1fr; overflow: visible; }
+.touch-editor-element.is-mode > span { font-size: 14px; font-weight: 800; }
+.touch-editor-element.is-mode > span:first-child { align-self: stretch; display: grid; place-items: center; background: var(--semantic-info); color: var(--theme-canvas); }
+
+/* 조작 설정 탭: 키보드/터치 전환과 배치 버튼 */
+.settings-control-switch { padding: var(--space-3) 0; }
+.settings-control-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }

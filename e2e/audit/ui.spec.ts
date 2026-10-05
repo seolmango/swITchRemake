@@ -112,7 +112,7 @@ test('training applies saved modifier movement and provides keyboard modal closu
         const dialog = page.getByRole('dialog', { name: '설정', exact: true });
         await expect(dialog).toBeVisible();
         expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
-        await dialog.getByRole('tab', { name: /^04\s*키 맵핑$/ }).click();
+        await dialog.getByRole('tab', { name: /^04\s*조작 설정$/ }).click();
         await dialog.getByRole('button', { name: '위로 이동 · 첫 번째 키 · 현재 W', exact: true }).click();
         await page.keyboard.press('Shift+KeyW');
         await expect(dialog.getByRole('button', { name: '위로 이동 · 첫 번째 키 · 현재 Shift+W', exact: true })).toBeVisible();

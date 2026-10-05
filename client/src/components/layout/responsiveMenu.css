@@ -132,10 +132,12 @@
   .responsive-form-container .result-return-timer strong { font-size: 16px; }
   .responsive-form-container .result-return-timer span { font-size: 13px; white-space: normal; }
 
-  .responsive-form-container .settings-shell { position: relative; inset: auto; grid-template-columns: minmax(0, 1fr); border-width: var(--border); border-radius: var(--radius-md); overflow: visible; }
+  .responsive-form-container .settings-shell { position: relative; inset: auto; grid-template-columns: minmax(0, 1fr); border-width: var(--border); border-radius: var(--radius-md); overflow: clip; }
   .responsive-form-container .settings-tabs { padding: 12px; border-right: 0; border-bottom: var(--border-thin) solid var(--settings-border); gap: 10px; }
   .responsive-form-container .settings-tablist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .responsive-form-container .settings-tablist > button { min-width: 0; height: auto; min-height: 48px; padding: 8px; gap: 8px; border-width: var(--border-thin); border-radius: var(--radius-md); }
+  /* 데스크톱 세로 목록의 '오른쪽으로 밀기'는 2열 격자에서 상자를 테두리에 붙인다. 터치는 hover가 남기도 한다. */
+  .responsive-form-container .settings-tablist > button:hover { transform: none; }
   .responsive-form-container .settings-tablist span { font-size: 17px; }
   .responsive-form-container .settings-tablist small { font-size: 12px; }
   .responsive-form-container .settings-tabs > p { margin: 0; font-size: 13px; }
@@ -161,7 +163,7 @@
   .responsive-form-container .settings-info-card p { font-size: 14px; }
   .responsive-form-container .settings-info-card small,
   .responsive-form-container .settings-card-kicker { font-size: 13px; }
-  .responsive-form-container .settings-group-heading { font-size: 21px; padding: 16px 0 8px; }
+  .responsive-form-container .settings-group-heading { font-size: 21px; padding: 12px 14px; }
   .responsive-form-container .settings-now-playing { padding: 16px; grid-template-columns: minmax(0, 1fr); gap: 16px; border-width: var(--border-thin); }
   .responsive-form-container .settings-album-art { width: 88px; height: 88px; border-radius: var(--radius-md); }
   .responsive-form-container .settings-album-art span { font-size: 42px; }
