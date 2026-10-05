@@ -121,16 +121,21 @@ async function fixture(authTimeoutMs = 200, rateLimiter?: AbuseRateLimiter, fixt
             if (fixtureOptions.throwDisconnect) throw new Error('disconnect exploded');
         },
     });
-    const issue = (userId = 9) => tickets.issue({
-        userId,
-        nickname: `user-${userId}`,
-        lobbyStats: null,
-        roomId: 'room-1',
-        serverId: 'game-test',
-        issuedAt: Date.now(),
-        expiresAt: Date.now() + 15_000,
-        resume: true,
-    });
+    // 시각은 한 번만 읽는다. 두 번 읽으면 그 사이 1ms가 넘어갈 때 수명이 15001ms가 되어 허용치를
+    // 넘고, CPU가 바쁜 감사 러너에서만 드물게 깨지는 테스트가 된다(2026-10-05에 실제로 깨졌다).
+    const issue = (userId = 9) => {
+        const now = Date.now();
+        return tickets.issue({
+            userId,
+            nickname: `user-${userId}`,
+            lobbyStats: null,
+            roomId: 'room-1',
+            serverId: 'game-test',
+            issuedAt: now,
+            expiresAt: now + 15_000,
+            resume: true,
+        });
+    };
     return {
         transport, connected, jsonTypes, jsonReceived, inputUsers, issue, violations,
         waitForInputCount: (target: number) => inputUsers.length >= target
