@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { getAdminAccess } from '../api/admin.ts';
 import { completeMfaLogin, loginUser, type LoginMfaChallenge } from '../api/auth.ts';
 import {
-    ApiError,
     abandonSessionAndCreateGuest,
     bootstrapApiIdentity,
     logoutAndCreateGuest,
@@ -108,25 +107,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
     },
     logout: async () => {
-        const previous = get();
         set({ pending: true });
         try {
             const next = await logoutAndCreateGuest();
             set({ accessToken: next.accessToken, nickname: next.nickname, identity: 'guest', status: 'guest', pending: false, admin: false });
         } catch (error) {
-            /*
-             * 서버가 로그아웃을 **거절**하는 경우가 있다 — 진행 중인 방에 아직 남아 있을 때
-             * (`IDENTITY_SWITCH_DURING_ROOM`). 그때까지 신원을 지워 버리면 화면은 "아직 로그인하지
-             * 않았어요"가 되는데 서버에서는 여전히 로그인 상태다. 사용자는 로그아웃된 줄 알고
-             * 자리를 뜨고, 방은 그대로 남는다.
-             *
-             * 거절은 그대로 알린다. 화면이 이유를 보여 줄 수 있어야 한다.
-             */
-            if (error instanceof ApiError && error.status === 409) {
-                set({ ...previous, pending: false });
-                throw error;
-            }
-            set({ accessToken: null, nickname: null, identity: 'anonymous', status: 'error', pending: false, admin: false });
+            // The API changes identity only after logout succeeds or refresh
+            // authoritatively rejects it. Keep that current state (including a
+            // renewed access token), and let the caller show failure/retry.
+            set({ pending: false });
+            throw error;
         }
     },
 }));

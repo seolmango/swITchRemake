@@ -41,7 +41,7 @@ test('reused run identifier refuses cleanup of another launch', { timeout: 3_000
     assert.match(result.stderr, /Run identifier already exists/);
 });
 
-test('failed build still cleans the run exclusively created by this launch', { timeout: 3_000 }, () => {
+for (const collectionFails of [false, true]) test(`failed build cleans its own run with collection ${collectionFails ? 'failed' : 'successful'}`, { timeout: 3_000 }, () => {
     const script = `
         const cp=require('node:child_process'),fs=require('node:fs');
         const read=fs.readFileSync,exists=fs.existsSync;let runtime,downs=0,exclusive=false;
@@ -56,6 +56,7 @@ test('failed build still cleans the run exclusively created by this launch', { t
             if(args[0]==='context')stdout='unix:///var/run/docker.sock\\n';
             else if(args[0]==='version')stdout=JSON.stringify({Client:{Version:'test'},Server:{Version:'test'}});
             else if(args[0]==='build')return {status:1,stdout:'',stderr:'synthetic build failure\\n'};
+            else if(${collectionFails}&&args[0]==='compose'&&args.includes('ps'))return {status:1,stdout:'',stderr:'synthetic collection failure\\n'};
             else if(args[0]==='network'&&args[1]==='inspect')stdout='true';
             else if(args.includes('down'))downs++;
             return {status:0,stdout,stderr:''};
@@ -66,4 +67,5 @@ test('failed build still cleans the run exclusively created by this launch', { t
     assert.equal(result.status, 1);
     assert.deepEqual(JSON.parse(result.stdout.trim().split('\n').at(-1)), { downs: 1, fileRemoved: true, exclusive: true });
     assert.match(result.stderr, /Docker operation failed \(1\): build/);
+    if (collectionFails) assert.match(result.stderr, /Audit evidence collection failed/);
 });

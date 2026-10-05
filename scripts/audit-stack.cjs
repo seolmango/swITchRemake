@@ -1,14 +1,15 @@
 'use strict';
 const { spawnSync } = require('node:child_process');
-const { randomBytes, generateKeyPairSync, createPrivateKey, createPublicKey } = require('node:crypto');
+const { randomBytes } = require('node:crypto');
 const { mkdirSync, existsSync, writeFileSync, readFileSync, unlinkSync, readdirSync } = require('node:fs');
 const { resolve } = require('node:path');
 const { assertNoInheritedDeploymentSettings } = require('./audit-environment.cjs');
+const { createReplaySigningSettings, validateReplaySigningSettings, normalizeLegacyPublicSetting } = require('./audit-replay-keys.cjs');
 
 const root = resolve(__dirname, '..');
 const action = process.argv[2] || 'run';
 const mode = process.argv[3] || 'core';
-if (!['run', 'up', 'start', 'refresh', 'refresh-web', 'refresh-backend', 'rebuild', 'test', 'browser', 'browser-probe', 'bots', 'scaling', 'stalled-worker', 'faults', 'down', 'status', 'progress'].includes(action) || !['core', 'extended'].includes(mode)) throw new Error('Usage: audit-stack.cjs run|up|start|refresh|refresh-web|refresh-backend|rebuild|test|browser|browser-probe|bots|scaling|stalled-worker|faults|down|status|progress core|extended');
+if (!['run', 'up', 'start', 'normalize-keys', 'refresh', 'refresh-web', 'refresh-backend', 'rebuild', 'test', 'browser', 'browser-probe', 'bots', 'scaling', 'stalled-worker', 'faults', 'down', 'status', 'progress'].includes(action) || !['core', 'extended'].includes(mode)) throw new Error('Usage: audit-stack.cjs run|up|start|normalize-keys|refresh|refresh-web|refresh-backend|rebuild|test|browser|browser-probe|bots|scaling|stalled-worker|faults|down|status|progress core|extended');
 const runId = process.env.AUDIT_RUN_ID || `local-${Date.now().toString(36)}`;
 if (!/^[a-z0-9][a-z0-9-]{1,55}$/.test(runId)) throw new Error('AUDIT_RUN_ID must be a short lowercase disposable run identifier');
 const project = `switch-audit-${runId}`;
@@ -51,7 +52,7 @@ function docker(args, { allowFailure = false, quiet = false, timeoutMs = 1_200_0
 }
 const composeArgs = ['compose', '--project-name', project, '--env-file', envPath, '-f', 'deploy/audit/compose.yml'];
 const compose = (args, options) => docker([...composeArgs, ...args], options);
-function load() {
+function load({ normalizeLegacyKey = false } = {}) {
     if (!existsSync(envPath)) throw new Error('Run-scoped environment missing; use up/run with the same AUDIT_RUN_ID first');
     const lines = readFileSync(envPath, 'utf8').trim().split('\n');
     if (lines.some(line => !/^[A-Z][A-Z0-9_]*=[^\r\n]*$/.test(line))) throw new Error('Malformed audit environment; values must fit on one line');
@@ -65,10 +66,14 @@ function load() {
         || entries.AUDIT_BACKEND_IMAGE !== `${project}-backend:local` || entries.AUDIT_WEB_IMAGE !== `${project}-web:local` || entries.AUDIT_RUNNER_IMAGE !== `${project}-runner:local`
         || entries.AUDIT_ENV_FILE !== envPath.replaceAll('\\', '/')) throw new Error('Refusing altered audit environment');
     if (Object.keys(entries).some(name => /^(AZURE_|AWS_|GOOGLE_APPLICATION_CREDENTIALS$|DATABASE_URL$)/i.test(name))) throw new Error('Audit refused cloud settings in runtime file');
-    const privatePem = Buffer.from(entries.REPLAY_SIGNING_KEY || '', 'base64').toString('utf8');
-    const publicPem = Buffer.from((entries.REPLAY_SIGNING_PUBLIC_KEYS || '').replace(/^audit:/, ''), 'base64').toString('utf8');
-    if (!privatePem.startsWith('-----BEGIN PRIVATE KEY-----') || !publicPem.startsWith('-----BEGIN PUBLIC KEY-----')) throw new Error('Audit replay keys failed encoding validation');
-    createPrivateKey(privatePem); createPublicKey(publicPem);
+    if (normalizeLegacyKey) {
+        const normalized = normalizeLegacyPublicSetting(entries.REPLAY_SIGNING_KEY, entries.REPLAY_SIGNING_PUBLIC_KEYS);
+        if (normalized !== entries.REPLAY_SIGNING_PUBLIC_KEYS) {
+            entries.REPLAY_SIGNING_PUBLIC_KEYS = normalized;
+            writeFileSync(envPath, Object.entries(entries).map(([key, value]) => `${key}=${value}`).join('\n') + '\n', { mode: 0o600 });
+        }
+    }
+    validateReplaySigningSettings(entries.REPLAY_SIGNING_KEY, entries.REPLAY_SIGNING_PUBLIC_KEYS);
     sensitive = Object.entries(entries).filter(([name]) => /SECRET|PASSWORD|KEY/.test(name)).map(([, value]) => value);
     observations.runtimeEnvironment = 'validated';
     return entries;
@@ -84,8 +89,7 @@ function prepare() {
     mkdirSync(directory, { recursive: true });
     mkdirSync(evidence, { recursive: true });
     const secret = () => randomBytes(36).toString('base64url');
-    const { privateKey, publicKey } = generateKeyPairSync('ed25519');
-    const publicPem = Buffer.from(publicKey.export({ format: 'pem', type: 'spki' })).toString('base64');
+    const replayKeys = createReplaySigningSettings();
     const values = {
         AUDIT_PROJECT: project, AUDIT_RUN_ID: runId, AUDIT_MODE: mode, AUDIT_STACK: 'true', APP_ENV: 'audit',
         AUDIT_ENV_FILE: envPath.replaceAll('\\', '/'), AUDIT_BACKEND_IMAGE: `${project}-backend:local`,
@@ -104,8 +108,8 @@ function prepare() {
         SUPERVISOR_MIN_SERVERS: '1', SUPERVISOR_MAX_SERVERS: '2',
         SUPERVISOR_SCALE_UP_LOAD: '3', SUPERVISOR_SCALE_DOWN_LOAD: '1.3', SUPERVISOR_COOLDOWN_MS: '5000',
         REPLAY_ENABLED: 'true', REPLAY_STORE: 'local', REPLAY_LOCAL_DIR: '/app/replays', REPLAY_SIGNING_KEY_ID: 'audit',
-        REPLAY_SIGNING_KEY: Buffer.from(privateKey.export({ format: 'pem', type: 'pkcs8' })).toString('base64'),
-        REPLAY_SIGNING_PUBLIC_KEYS: `audit:${publicPem}`, BUILD_ID: project,
+        REPLAY_SIGNING_KEY: replayKeys.privateEncoded,
+        REPLAY_SIGNING_PUBLIC_KEYS: replayKeys.publicSetting, BUILD_ID: project,
     };
     if (Object.values(values).some(value => /[\r\n]/.test(value))) throw new Error('Audit setting cannot contain a newline');
     // Exclusive creation prevents another launch from winning the identifier race.
@@ -271,7 +275,11 @@ try {
         const port = compose(['port', 'web', '80'], { quiet: true, allowFailure: true, timeoutMs: 15_000 }).stdout.trim();
         console.log(`Audit stack ${project} ready at internal http://web${port.startsWith('127.0.0.1:') ? ` (host http://${port})` : ''}. Runtime env path: .audit/${runId}/runtime.env (do not print contents).`);
         if (action === 'up' || action === 'rebuild') shouldCleanup = false;
-    } else load();
+    } else load({ normalizeLegacyKey: action === 'normalize-keys' });
+    if (action === 'normalize-keys') {
+        compose(['up', '-d', '--no-deps', '--wait', '--wait-timeout', '180', 'match'], { timeoutMs: 240_000 });
+        console.log('Audit replay public key validated as matching Ed25519 raw32; matching service ready. Key values omitted.');
+    }
     if (action === 'refresh') {
         const values = load();
         docker(['build', '-f', 'deploy/audit/Dockerfile.refresh', '--build-arg', `AUDIT_RUNNER_IMAGE=${values.AUDIT_RUNNER_IMAGE}`, '-t', values.AUDIT_RUNNER_IMAGE, '.']);
@@ -336,6 +344,8 @@ try {
     process.exitCode = 1;
 } finally {
     if (shouldCleanup && ownsCreatedRun && mayAccessLocalDocker && existsSync(envPath)) {
-        try { collect(); cleanup(); } catch (error) { console.error(sanitize(`Audit cleanup failed: ${error.message}`)); process.exitCode = 1; }
+        try { collect(); } catch (error) { console.error(sanitize(`Audit evidence collection failed: ${error.message}`)); process.exitCode = 1; }
+        // Evidence failure must never prevent cleanup of this launch's own resources.
+        try { cleanup(); } catch (error) { console.error(sanitize(`Audit cleanup failed: ${error.message}`)); process.exitCode = 1; }
     }
 }

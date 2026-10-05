@@ -204,13 +204,16 @@ export const abandonSessionAndCreateGuest = async (): Promise<ApiIdentity> => {
 };
 
 export const logoutAndCreateGuest = async (): Promise<ApiIdentity> => {
-    if (identity.kind !== 'anonymous') {
-        try {
-            await rawRequest('/auth/logout', { method: 'POST', retryAuth: false });
-        } catch (error) {
-            if (error instanceof ApiError && error.status === 409) throw error;
-            // A network failure must not resurrect an account from a refresh cookie in this tab.
+    try {
+        if (identity.kind !== 'anonymous') {
+            // Expired access alone does not prove the refresh session is gone.
+            // Refresh once on authentication rejection, then obtain logout's acknowledgment.
+            await apiRequest('/auth/logout', { method: 'POST' });
         }
+    } catch (error) {
+        // A rejected refresh already invalidated the identity and cleared the
+        // account cookie server-side. Temporary failures preserve the old identity.
+        if (!isAuthenticationRejection(error) || identity.kind !== 'anonymous') throw error;
     }
     sessionStorage.removeItem(GUEST_REFRESH_KEY);
     setApiIdentity({ accessToken: null, kind: 'anonymous', nickname: null });

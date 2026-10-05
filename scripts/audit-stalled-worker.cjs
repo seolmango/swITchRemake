@@ -12,15 +12,14 @@ const gameEntry = path.join(root, 'server-game/dist/main.js');
 const supervisorEntry = path.join(root, 'server-supervisor/dist/main.js');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function guard() {
-    assert.equal(process.platform, 'linux');
-    assert.ok(fs.existsSync('/.dockerenv'));
-    assert.equal(process.env.AUDIT_STACK, 'true');
-    assert.equal(process.env.APP_ENV, 'audit');
-    assert.equal(process.env.REDIS_HOST, 'redis');
-    assert.equal(process.env.DB_HOST, 'postgres');
-    assert.match(process.env.DB_NAME || '', /^audit_[a-z0-9_]+$/);
-    assert.equal(Number(process.env.SUPERVISOR_MIN_SERVERS), 1);
-    assert.equal(Number(process.env.SUPERVISOR_MAX_SERVERS), 2);
+    if (process.platform !== 'linux' || !fs.existsSync('/.dockerenv')
+        || process.env.AUDIT_STACK !== 'true' || process.env.APP_ENV !== 'audit'
+        || process.env.REDIS_HOST !== 'redis' || process.env.DB_HOST !== 'postgres'
+        || !/^audit_[a-z0-9_]+$/.test(process.env.DB_NAME || '')
+        || Number(process.env.SUPERVISOR_MIN_SERVERS) !== 1
+        || Number(process.env.SUPERVISOR_MAX_SERVERS) !== 2) {
+        throw new Error('Probe requires a disposable internal audit cluster with min1/max2');
+    }
 }
 function command(pid) { return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0'); }
 function identity(pid) {
@@ -28,7 +27,9 @@ function identity(pid) {
     assert.equal(command(pid)[1], gameEntry);
     const status = fs.readFileSync(`/proc/${pid}/status`, 'utf8');
     const parentPid = Number(status.match(/^PPid:\s+(\d+)$/m)?.[1]);
-    assert.equal(command(parentPid)[1], supervisorEntry);
+    const parentCwd = fs.readlinkSync(`/proc/${parentPid}/cwd`);
+    assert.equal(parentCwd, root);
+    assert.equal(path.resolve(parentCwd, command(parentPid)[1] || ''), supervisorEntry);
     const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
     const startTime = stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19];
     assert.match(startTime, /^\d+$/);
@@ -72,7 +73,7 @@ async function watchdog(recordPath) {
 }
 async function main() {
     const startedAt = Date.now();
-    const activeDeadline = startedAt + 38_000;
+    const activeDeadline = startedAt + 42_000;
     const recordPath = `/tmp/audit-stalled-${randomUUID()}.json`;
     const stopped = [];
     const evidence = [];
@@ -124,6 +125,10 @@ async function main() {
         await until(async () => children().length === 1 && (await fleet()).length === 1,
             Math.min(activeDeadline, Date.now() + 10_000));
         const original = children()[0];
+        // A supervisor tick is four seconds. Let it observe each fresh child
+        // before pausing, so the test exercises the hard-cap path rather than
+        // the separate "still starting" capacity protection.
+        await sleep(4_500);
         await pause(original);
         await until(async () => {
             assert.ok(children().length <= 2, 'OS child cap includes stalled and starting workers');
@@ -131,6 +136,7 @@ async function main() {
         });
         const replacement = children().find(target => target.pid !== original.pid);
         assert.ok(replacement);
+        await sleep(4_500);
         await pause(replacement);
         await until(async () => (await fleet()).length === 0);
         const observedUntil = Date.now() + 12_000;
@@ -140,10 +146,13 @@ async function main() {
             assert.equal(children().length, 2, 'Two stalled live OS children must never authorize a third');
             assert.equal((await fleet()).length, 0, 'Both worker heartbeats are stale');
             assert.ok(stopped.every(sameChild), 'Stopped child identities remain unchanged');
+            assert.ok(stopped.every(target => /^State:\s+T/m.test(fs.readFileSync(`/proc/${target.pid}/status`, 'utf8'))),
+                'Both exact children remain stopped throughout the observation');
             await sleep(250);
         }
         evidence.push({ phase: 'healthy-redis-stale-heartbeats', aliveOsChildren: 2,
-            freshHeartbeats: 0, maxServers: 2, observationMs: 12_000, passed: true });
+            freshHeartbeats: 0, maxServers: 2, observationMs: 12_000,
+            independentWatchdogReady: true, pausedChildIdentities: stopped.length, passed: true });
     } finally {
         resume(stopped);
         try {

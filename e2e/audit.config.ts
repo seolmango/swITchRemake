@@ -2,7 +2,8 @@ import { defineConfig } from '@playwright/test';
 import { resolve } from 'node:path';
 
 // Playwright's automatic failure prompt can include live form/OTP DOM data.
-// Do not create that attachment, even temporarily; retain explicit safe evidence.
+// Disable the automatic DOM snapshot. Playwright may still emit an error-context
+// file from assertion/source text; the collector removes that file before export.
 process.env.PLAYWRIGHT_NO_COPY_PROMPT = '1';
 
 // Deliberately no dotenv, webServer reuse, or production default.
