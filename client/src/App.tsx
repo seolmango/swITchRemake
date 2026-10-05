@@ -24,7 +24,7 @@ import { getServiceStatus, serviceRouteBypassesGate, serviceRouteRequiresServer,
 import { ServiceStatusPage } from './pages/ServiceStatusPage.tsx';
 import { applyAppearanceToDocument } from './theme/cssVariables.ts';
 import { AuthRecoveryPage } from './pages/AuthRecoveryPage.tsx';
-import { supportsPortraitMenu } from './components/layout/responsiveMenu.ts';
+import { forcesLandscape, supportsPortraitMenu } from './components/layout/responsiveMenu.ts';
 import './components/layout/responsiveMenu.css';
 
 // Phaser는 게임·훈련·도움말·리플레이에서만 필요하다. 이 화면들을 방문하기 전까지 엔진과
@@ -36,8 +36,7 @@ const ReplayPage = lazy(() => import('./pages/ReplayPage.tsx').then((module) => 
 
 const UiLayout = () => {
     const { pathname } = useLocation();
-    const responsiveForm = supportsPortraitMenu(pathname);
-    return <GameContainer responsiveForm={responsiveForm}><Outlet/></GameContainer>;
+    return <GameContainer responsiveForm={supportsPortraitMenu(pathname)} forceLandscape={forcesLandscape(pathname)}><Outlet/></GameContainer>;
 };
 
 type GateStatus = ServiceStatus | { kind: 'checking' };

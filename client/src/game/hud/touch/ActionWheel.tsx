@@ -1,4 +1,5 @@
 import React from 'react';
+import { overlayRoot } from '../../../components/layout/forcedLandscape.ts';
 import { createPortal } from 'react-dom';
 import type { Theme } from '../../types.ts';
 import type { HudPlayer } from '../hudTypes.ts';
@@ -104,6 +105,6 @@ export const ActionWheel: React.FC<Props> = ({ theme, colorVision, mode, players
                 </div>
             </div>
         </div>,
-        document.body,
+        overlayRoot(),
     );
 };

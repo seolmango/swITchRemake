@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useModalFocusTrap } from '../../components/common/useModalFocusTrap.ts';
 import { isMobileDevice } from '../../utils/mobileDevice.ts';
+import { useRotated } from '../../components/layout/forcedLandscape.ts';
 
 const portraitNow = (): boolean =>
     typeof window !== 'undefined'
@@ -15,7 +16,9 @@ export const MobileOrientationSuggestion: React.FC = () => {
     const [portrait, setPortrait] = useState(portraitNow);
     const [dismissed, setDismissed] = useState(false);
     const dismiss = useCallback(() => setDismissed(true), []);
-    const visible = mobile && portrait && !dismissed;
+    // 화면을 이미 가로로 돌려 그리고 있으면 돌려 달라고 할 이유가 없다.
+    const rotated = useRotated();
+    const visible = mobile && portrait && !dismissed && !rotated;
     const { dialogRef, onDialogKeyDown } = useModalFocusTrap<HTMLDivElement>(dismiss, visible);
 
     useEffect(() => {

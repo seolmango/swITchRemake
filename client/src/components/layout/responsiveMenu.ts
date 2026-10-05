@@ -8,6 +8,16 @@
  */
 const CANVAS_ROUTES = ['/game', '/training'];
 
+/**
+ * 대기실에 들어가는 순간부터 경기·결과까지는 폰을 세워 들어도 가로로 돌려 그린다(forcedLandscape.ts).
+ * 이 흐름 안에서 방향이 바뀌면 조작 위치를 다시 익혀야 하므로, 한 번 가로가 되면 끝까지 가로다.
+ */
+export function forcesLandscape(pathname: string): boolean {
+    return CANVAS_ROUTES.includes(pathname)
+        || /^\/rooms\/[^/]+\/lobby$/u.test(pathname)
+        || /^\/matches\/[^/]+\/result$/u.test(pathname);
+}
+
 export function supportsPortraitMenu(pathname: string): boolean {
-    return !CANVAS_ROUTES.includes(pathname);
+    return !forcesLandscape(pathname);
 }

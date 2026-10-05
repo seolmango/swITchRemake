@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { overlayRoot } from '../../../components/layout/forcedLandscape.ts';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types.ts';
@@ -109,7 +110,7 @@ export const TouchControls: React.FC<Props> = ({
                 </div>
             )}
         </div>,
-        document.body,
+        overlayRoot(),
     );
 };
 
@@ -126,7 +127,7 @@ const ModeToggle: React.FC<{
 
     return (
         <div style={{
-            display: 'flex', borderRadius: 999, overflow: 'hidden', touchAction: 'none',
+            display: 'flex', borderRadius: 'var(--radius-sm)', overflow: 'hidden', touchAction: 'none',
             border: `3px solid ${Color.smoke[2]}`,
             background: `color-mix(in srgb, ${theme === 1 ? Color.black : Color.white} 62%, transparent)`,
             backdropFilter: 'blur(2px)',

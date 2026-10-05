@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { contentViewport, useRotated } from '../../../components/layout/forcedLandscape.ts';
 
 export interface ViewportSize {
     width: number;
@@ -31,5 +32,7 @@ export function useViewportSize(): ViewportSize {
         };
     }, []);
 
-    return size;
+    // 화면을 가로로 돌려 그리는 중이면 폭과 높이를 바꿔 읽는다. useRotated가 그 전환에 다시 그리게 한다.
+    useRotated();
+    return contentViewport(size.width, size.height);
 }

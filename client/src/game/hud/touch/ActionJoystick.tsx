@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
+import { toContentDelta } from '../../../components/layout/forcedLandscape.ts';
 import type { Theme } from '../../types.ts';
 import type { HudPlayer } from '../hudTypes.ts';
 import { Color, statusInkColors } from '../../../theme/color.ts';
@@ -46,8 +47,11 @@ export const ActionJoystick: React.FC<Props> = ({
         const base = baseRef.current;
         if (!base) return;
         const rect = base.getBoundingClientRect();
-        const dx = event.clientX - (rect.left + rect.width / 2);
-        const dy = event.clientY - (rect.top + rect.height / 2);
+        // 돌린 화면에서는 화면 좌표의 이동을 게임 화면 안의 방향으로 바꾼다. 중심점은 회전과 무관하다.
+        const { x: dx, y: dy } = toContentDelta(
+            event.clientX - (rect.left + rect.width / 2),
+            event.clientY - (rect.top + rect.height / 2),
+        );
         setHover(slotFromOffset(dx, dy, (size / 2) * DEAD_ZONE_RATIO, WHEEL_SLOTS));
     }, [size]);
 

@@ -1,4 +1,5 @@
 import { SnapshotEmojiTracker } from './SnapshotEmojiTracker.ts';
+import { toContentDelta } from '../../components/layout/forcedLandscape.ts';
 import Phaser from 'phaser';
 import { MapLayer } from './MapLayer.ts';
 import { PlayerSprite, type PlayerVisualState } from './PlayerSprite.ts';
@@ -248,8 +249,10 @@ export class WorldScene extends Phaser.Scene {
         this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
             if (!this.freeCamera || !pointer.isDown) return;
             const cam = this.cameras.main;
-            cam.scrollX -= (pointer.x - pointer.prevPosition.x) / cam.zoom;
-            cam.scrollY -= (pointer.y - pointer.prevPosition.y) / cam.zoom;
+            // 폰에서 화면을 가로로 돌려 그리는 중이면 Phaser가 읽은 이동량의 축이 돌아가 있다.
+            const delta = toContentDelta(pointer.x - pointer.prevPosition.x, pointer.y - pointer.prevPosition.y);
+            cam.scrollX -= delta.x / cam.zoom;
+            cam.scrollY -= delta.y / cam.zoom;
         });
         this.input.on(
             'wheel',

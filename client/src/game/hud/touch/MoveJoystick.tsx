@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
+import { toContentDelta } from '../../../components/layout/forcedLandscape.ts';
 import type { Theme } from '../../types.ts';
 import { Color, statusInkColors } from '../../../theme/color.ts';
 import { clearTouchDirection, directionFromOffset, setTouchDirection } from '../../touchInput.ts';
@@ -36,8 +37,11 @@ export const MoveJoystick: React.FC<Props> = ({ theme, size, label }) => {
         const base = baseRef.current;
         if (!base) return;
         const rect = base.getBoundingClientRect();
-        const dx = event.clientX - (rect.left + rect.width / 2);
-        const dy = event.clientY - (rect.top + rect.height / 2);
+        // 돌린 화면에서는 화면 좌표의 이동을 게임 화면 안의 방향으로 바꾼다. 중심점은 회전과 무관하다.
+        const { x: dx, y: dy } = toContentDelta(
+            event.clientX - (rect.left + rect.width / 2),
+            event.clientY - (rect.top + rect.height / 2),
+        );
         // 손잡이는 원 안에 가둔다. 손가락이 밖으로 나가도 조작은 계속 먹어야 하므로 방향은 그대로 읽는다.
         const distance = Math.hypot(dx, dy);
         const clamp = distance > radius ? radius / distance : 1;
