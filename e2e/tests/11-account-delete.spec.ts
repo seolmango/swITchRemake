@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { T, button, gotoHome, logIn, newAccount, signUp } from '../support/app';
+import { T, button, gotoHome, logIn, newAccount, signUp, completeHumanChallenge, watchHumanCheck } from '../support/app';
 import { clearMail, waitForMail, waitForMailReissue } from '../support/mail';
 
 test.describe('탈퇴', () => {
@@ -35,7 +35,9 @@ test.describe('탈퇴', () => {
         await page.goto('/login');
         await page.getByLabel(T.auth.email, { exact: true }).fill(account.email);
         await page.getByLabel(T.auth.password, { exact: true }).fill(account.password);
+        const loginCheck6 = watchHumanCheck(page);
         await button(page, T.auth.login).click();
+        await completeHumanChallenge(page, loginCheck6);
         await expect(page.getByText(T.auth.invalidCredentials)).toBeVisible();
 
         // 다른 기기의 세션도 같이 끊겼어야 한다.

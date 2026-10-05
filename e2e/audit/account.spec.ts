@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { database, isolatedContext, login, seedAccount } from './helpers';
+import { database, isolatedContext, login, seedAccount, completeHumanChallenge, watchHumanCheck } from './helpers';
 
 async function logout(page: Page) {
     await page.goto('/profile');
@@ -85,7 +85,9 @@ test('extended account succeeds through password, email MFA, trusted device, ses
         await page.goto('/login');
         await page.getByLabel('이메일', { exact: true }).fill(account.email);
         await page.getByLabel('비밀번호', { exact: true }).fill(changed.password);
+        const loginCheck1 = watchHumanCheck(page);
         await page.getByRole('button', { name: '로그인', exact: true }).click();
+        await completeHumanChallenge(page, loginCheck1);
         await expect(page.getByRole('heading', { name: '2차 인증', exact: true })).toBeVisible();
         const loginMail = await localMail(page, account.email, '2차 인증 코드');
         await page.getByLabel('2차 인증 코드', { exact: true }).fill(loginMail.code);

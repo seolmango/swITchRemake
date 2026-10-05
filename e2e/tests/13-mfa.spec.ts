@@ -39,7 +39,9 @@ const beginMfaLogin = async (page: Page, email: string, password: string): Promi
     await page.goto('/login');
     await page.getByLabel(T.auth.email, { exact: true }).fill(email);
     await page.getByLabel(T.auth.password, { exact: true }).fill(password);
+    const loginCheck7 = watchHumanCheck(page);
     await button(page, T.auth.login).click();
+    await completeHumanChallenge(page, loginCheck7);
     await expect(page.getByRole('heading', { name: T.auth.mfaTitle })).toBeVisible();
     await expect(page.getByLabel(T.auth.secondFactorCode, { exact: true })).toBeVisible();
 };

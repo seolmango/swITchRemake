@@ -1,5 +1,5 @@
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { buildSwitchRound } from 'shared';
+import { buildSwitchRound, searchPow } from 'shared';
 import postgres from 'postgres';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
@@ -51,7 +51,9 @@ export async function login(page: Page, account: { email: string; password: stri
     await page.getByRole('textbox', { name: '이메일', exact: true }).fill(account.email);
     await page.getByLabel('비밀번호', { exact: true }).fill(account.password);
     const responsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/login');
+    const check = watchHumanCheck(page);
     await page.getByRole('button', { name: '로그인', exact: true }).click();
+    await completeHumanChallenge(page, check);
     const response = await responsePromise;
     await expect(page.getByRole('button', { name: '게임 시작', exact: true })).toBeVisible();
     const data = await response.json();
@@ -68,23 +70,45 @@ export async function login(page: Page, account: { email: string; password: stri
 }
 // Tokens stay in memory, never assertions, console output, traces, or artifacts.
 export async function apiLogin(context: BrowserContext, account: { email: string; password: string }) {
-    const response = await context.request.post('/api/auth/login', { data: { email: account.email, password: account.password } });
+    // 로그인은 시도마다 사람 확인 증명이 필요하다. 새 계정은 충전(작업 증명)만으로 받는다.
+    const issued = await (await context.request.post('/api/auth/human-challenge', { data: { purpose: 'login', subject: account.email } })).json();
+    const powCounter = searchPow(issued.pow.nonce, issued.pow.bits, 0, 1 << 26);
+    // 한 IP에서 로그인이 몰리면 서버가 장면을 요구한다(학교·공유기 뒤의 여러 사람과 같은 상황).
+    // 그때는 장면이 실제로 그 시각까지 흐른 뒤에 정답을 낸다.
+    let answer: { slot: number; atMs: number } | undefined;
+    if (issued.round?.kind === 'switch') {
+        const round = buildSwitchRound(issued.round.seed);
+        await new Promise((resolve) => setTimeout(resolve, round.openAt + 300));
+        answer = { slot: round.target, atMs: round.openAt + 200 };
+    }
+    const verified = await context.request.post('/api/auth/human-challenge/verify', { data: { challengeToken: issued.challengeToken, powCounter, ...(answer ? { answer } : {}) } });
+    expect(verified.status(), 'human check verifies').toBe(201);
+    const { proofToken } = await verified.json();
+    const response = await context.request.post('/api/auth/login', { data: { email: account.email, password: account.password, humanProof: proofToken } });
     expect(response.status(), 'synthetic account login').toBe(201);
     const data = await response.json();
     if (typeof data.accessToken !== 'string') throw new Error('Login did not issue access');
     return { Authorization: `Bearer ${data.accessToken}` };
 }
 
-/** 사람 확인 발급 응답을 붙잡는다. 클릭하기 전에 부른다 — e2e/support/app.ts의 같은 이름 함수 참고. */
-export function watchHumanCheck(page: Page): Promise<{ round: { kind: 'switch' | 'radio'; seed: number } | null }> {
-    return page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/auth/human-challenge')
-        && response.request().method() === 'POST').then((response) => response.json());
+export interface HumanCheckWatch {
+    issued: Promise<{ round: { kind: 'switch' | 'radio'; seed: number } | null }>;
+    verified: Promise<import('@playwright/test').Response>;
 }
 
-/** 충전만이면 브라우저가 알아서 끝낸다. 장면이 오면 같은 시드로 풀어 술래가 온 뒤 정답을 누른다. */
-export async function completeHumanChallenge(page: Page, check: ReturnType<typeof watchHumanCheck>): Promise<void> {
-    const issued = await check;
+/**
+ * 발급과 검증 응답을 **둘 다 클릭 전에** 붙잡는다. 새 계정은 충전이 0.1초 안에 끝나서, 발급 응답을
+ * 받은 뒤에 검증 대기를 걸면 검증 요청이 이미 지나가 버린다(2026-10-05 감사에서 실제로 놓쳤다).
+ */
+export function watchHumanCheck(page: Page): HumanCheckWatch {
+    const issued = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/auth/human-challenge')
+        && response.request().method() === 'POST').then((response) => response.json());
     const verified = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/auth/human-challenge/verify'));
+    return { issued, verified };
+}
+
+export async function completeHumanChallenge(page: Page, check: HumanCheckWatch): Promise<void> {
+    const issued = await check.issued;
     if (issued.round?.kind === 'switch') {
         const dialog = page.getByRole('dialog', { name: '스위치 판정', exact: true });
         await expect(dialog).toBeVisible();
@@ -93,5 +117,5 @@ export async function completeHumanChallenge(page: Page, check: ReturnType<typeo
         await page.waitForTimeout(round.openAt + 250);
         await page.keyboard.press(`Digit${round.target}`);
     }
-    expect((await verified).ok(), 'human check verifies').toBe(true);
+    expect((await check.verified).ok(), 'human check verifies').toBe(true);
 }

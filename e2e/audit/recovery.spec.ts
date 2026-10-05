@@ -84,7 +84,9 @@ test('extended UI TOTP setup, login, SMTP password recovery and MFA removal succ
             await page.getByLabel('이메일', { exact: true }).fill(account.email);
             await page.getByLabel('비밀번호', { exact: true }).fill(password);
             const submitted = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/login');
+            const loginCheck2 = watchHumanCheck(page);
             await page.getByRole('button', { name: '로그인', exact: true }).click();
+            await completeHumanChallenge(page, loginCheck2);
             const response = await submitted;
             expect(response.status(), 'synthetic TOTP password login succeeds').toBe(201);
             expect((await response.json()).mfaRequired === true, 'TOTP password login requires its second factor').toBe(true);

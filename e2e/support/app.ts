@@ -37,35 +37,33 @@ export async function gotoHome(page: Page): Promise<void> {
     await expect(button(page, T.titlePage.button.gameStart)).toBeVisible();
 }
 
-/**
- * 사람 확인을 통과한다. 클릭하기 **전에** 불러 발급 응답을 붙잡아 둔다:
- *
- *     const check = watchHumanCheck(page);
- *     await button(page, T.auth.sendCode).click();
- *     await completeHumanChallenge(page, check);
- *
- * 새 계정은 보통 충전(작업 증명)만으로 지나간다 — 브라우저가 알아서 풀고 창은 뜨지 않는다.
- * 실패가 쌓인 상황이면 서버가 장면을 주고, 그때는 같은 시드로 장면을 다시 풀어 사람처럼
- * 술래가 온 뒤에 정답 번호를 누른다. 정답을 아는 이 점검이 곧 "전용 봇은 풀 수 있다"는 한계의
- * 증거이기도 하다 — 그 비용(시간·작업 증명·발급 한도)은 서버 단위 테스트가 고정한다.
- */
-export function watchHumanCheck(page: Page): Promise<{ round: { kind: 'switch' | 'radio'; seed: number } | null }> {
-    return page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/auth/human-challenge')
-        && response.request().method() === 'POST').then((response) => response.json());
+export interface HumanCheckWatch {
+    issued: Promise<{ round: { kind: 'switch' | 'radio'; seed: number } | null }>;
+    verified: Promise<import('@playwright/test').Response>;
 }
 
-export async function completeHumanChallenge(page: Page, check: ReturnType<typeof watchHumanCheck>): Promise<void> {
-    const issued = await check;
+/**
+ * 발급과 검증 응답을 **둘 다 클릭 전에** 붙잡는다. 새 계정은 충전이 0.1초 안에 끝나서, 발급 응답을
+ * 받은 뒤에 검증 대기를 걸면 검증 요청이 이미 지나가 버린다(2026-10-05 감사에서 실제로 놓쳤다).
+ */
+export function watchHumanCheck(page: Page): HumanCheckWatch {
+    const issued = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/auth/human-challenge')
+        && response.request().method() === 'POST').then((response) => response.json());
     const verified = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/auth/human-challenge/verify'));
+    return { issued, verified };
+}
+
+export async function completeHumanChallenge(page: Page, check: HumanCheckWatch): Promise<void> {
+    const issued = await check.issued;
     if (issued.round?.kind === 'switch') {
-        const dialog = page.getByRole('dialog', { name: T.auth.humanChallenge.title });
+        const dialog = page.getByRole('dialog', { name: T.auth.humanChallenge.title, exact: true });
         await expect(dialog).toBeVisible();
         const round = buildSwitchRound(issued.round.seed);
         await dialog.getByRole('button', { name: T.auth.humanChallenge.start, exact: true }).click();
         await page.waitForTimeout(round.openAt + 250);
         await page.keyboard.press(`Digit${round.target}`);
     }
-    expect((await verified).ok(), 'human check verifies').toBe(true);
+    expect((await check.verified).ok(), 'human check verifies').toBe(true);
 }
 
 /** 가입 화면을 처음부터 끝까지. 인증 코드는 sink에서 읽는다. */
@@ -94,7 +92,10 @@ export async function logIn(page: Page, account: Account): Promise<void> {
     await page.goto('/login');
     await page.getByLabel(T.auth.email, { exact: true }).fill(account.email);
     await page.getByLabel(T.auth.password, { exact: true }).fill(account.password);
+    // 로그인은 시도마다 사람 확인을 거친다. 보통은 충전만으로 지나가고, 몰리면 장면이 온다.
+    const check = watchHumanCheck(page);
     await button(page, T.auth.login).click();
+    await completeHumanChallenge(page, check);
     await page.waitForURL((url) => new URL(url).pathname === '/');
 }
 

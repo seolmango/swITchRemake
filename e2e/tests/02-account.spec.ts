@@ -106,7 +106,9 @@ test.describe('가입 · 로그인 · 로그아웃', () => {
         await page.goto('/login');
         await page.getByLabel(T.auth.email).fill(account.email);
         await page.getByLabel(T.auth.password).fill('WrongPass123!');
+        const loginCheck3 = watchHumanCheck(page);
         await button(page, T.auth.login).click();
+        await completeHumanChallenge(page, loginCheck3);
         // 이메일이 있는지 없는지를 응답으로 구분할 수 있으면 계정 조회기가 된다.
         await expect(page.getByText(T.auth.invalidCredentials)).toBeVisible();
 
@@ -123,7 +125,9 @@ test.describe('가입 · 로그인 · 로그아웃', () => {
         await page.goto('/login');
         await page.getByLabel(T.auth.email).fill(account.email);
         await page.getByLabel(T.auth.password).fill(account.password);
+        const loginCheck4 = watchHumanCheck(page);
         await button(page, T.auth.login).click();
+        await completeHumanChallenge(page, loginCheck4);
         await expect(page.getByText(T.auth.invalidCredentials)).toBeVisible();
     });
 });

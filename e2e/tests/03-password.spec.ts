@@ -27,7 +27,9 @@ test.describe('비밀번호 찾기와 변경', () => {
         // 옛 비밀번호는 더 이상 안 된다.
         await page.getByLabel(T.auth.email, { exact: true }).fill(account.email);
         await page.getByLabel(T.auth.password, { exact: true }).fill(account.password);
+        const loginCheck5 = watchHumanCheck(page);
         await button(page, T.auth.login).click();
+        await completeHumanChallenge(page, loginCheck5);
         await expect(page.getByText(T.auth.invalidCredentials)).toBeVisible();
 
         const reset = { ...account, password: newPassword };

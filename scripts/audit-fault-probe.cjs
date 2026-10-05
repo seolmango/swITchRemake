@@ -46,9 +46,16 @@ async function main() {
                     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000),
                 });
                 const issued = await (await post('/auth/human-challenge', { purpose: 'login', subject: email })).json();
-                assert.equal(issued.round, null, 'fresh synthetic account needs only the charge');
+                const { buildSwitchRound } = require('shared');
                 const powCounter = searchPow(issued.pow.nonce, issued.pow.bits, 0, 1 << 26);
-                const verified = await (await post('/auth/human-challenge/verify', { challengeToken: issued.challengeToken, powCounter })).json();
+                // 한 IP에서 시도가 몰리면 장면이 온다. 장면이 실제로 흐른 뒤 정답을 낸다.
+                let answer;
+                if (issued.round && issued.round.kind === 'switch') {
+                    const round = buildSwitchRound(issued.round.seed);
+                    await new Promise((resolve) => setTimeout(resolve, round.openAt + 300));
+                    answer = { slot: round.target, atMs: round.openAt + 200 };
+                }
+                const verified = await (await post('/auth/human-challenge/verify', { challengeToken: issued.challengeToken, powCounter, ...(answer ? { answer } : {}) })).json();
                 const response = await post('/auth/login', { email, password, humanProof: verified.proofToken });
                 assert.equal(response.status, 201, 'fault synthetic login');
                 const login = await response.json();
