@@ -389,12 +389,10 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
                     <>
                         {settingsOpen && (
                             <div ref={settingsDialogRef} className="training-settings-overlay" role="dialog" aria-modal="true" aria-label={t('settings.title')} tabIndex={-1} onKeyDown={onSettingsDialogKeyDown}>
-                                {/* 다른 화면의 "뒤로"와 같은 자리·모양. 아래쪽 글자 버튼만으로는 잘 안 보였다. */}
+                                {/* 다른 화면의 "뒤로"와 같은 자리·모양. 예전의 아래쪽 글자 버튼은 잘 안 보여서 이것으로 바꿨다 —
+                                    같은 이름의 닫기 버튼을 둘 두면 스크린리더가 두 번 읽는다. */}
                                 <RoundButton x={56} y={58} width={88} height={88} type={2} content={<Icon name="close"/>} ariaLabel={t('training.closeSettings')} onClick={() => setSettingsOpen(false)}/>
                                 <SettingsPage embedded />
-                                <button type="button" className="training-settings-close" onClick={() => setSettingsOpen(false)}>
-                                    {t('training.closeSettings')}
-                                </button>
                             </div>
                         )}
                     </>

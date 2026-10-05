@@ -1480,8 +1480,7 @@ html[data-motion='reduced'] .room-card {
 }
 
 .training-actions button,
-.training-respawn,
-.training-settings-close {
+.training-respawn {
   min-height: 54px;
   padding: 9px 17px;
   display: flex;
@@ -1496,8 +1495,7 @@ html[data-motion='reduced'] .room-card {
   cursor: pointer;
 }
 
-.training-actions button:hover,
-.training-settings-close:hover { border-color: var(--semantic-info); }
+.training-actions button:hover { border-color: var(--semantic-info); }
 
 .training-respawn {
   position: absolute;
@@ -1518,13 +1516,6 @@ html[data-motion='reduced'] .room-card {
   pointer-events: auto;
 }
 
-.training-settings-close {
-  position: absolute;
-  left: 50%;
-  bottom: 9px;
-  min-width: 220px;
-  transform: translateX(-50%);
-}
 
 .profile-panel {
   position: absolute;

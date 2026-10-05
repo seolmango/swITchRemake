@@ -105,7 +105,9 @@ describe('configured movement in the live game page', () => {
         const last = dialog.querySelectorAll<HTMLButtonElement>('button').item(1);
         last.focus();
         await act(async () => last.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })));
-        expect(document.activeElement?.textContent).toBe('settings.first');
+        // 왼쪽 위 닫기(×)가 대화상자의 첫 조작이다. 마지막에서 Tab을 누르면 거기로 돈다.
+        expect(document.activeElement?.getAttribute('aria-label')).toBe('training.closeSettings');
+        expect(dialog.querySelectorAll('button[aria-label="training.closeSettings"], button')).toHaveLength(2);
         await act(async () => document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
         expect(container.querySelector('[role=dialog]')).toBeNull();
         expect(document.activeElement).toBe(opener);
