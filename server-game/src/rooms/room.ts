@@ -20,8 +20,7 @@ import {
     type RoomState as RoomStateValue,
     type ServerMessage,
     type SkillId,
-    type SkillRejection,
-} from 'shared';
+    type SkillRejection, type PlayerControl } from 'shared';
 import type { SeatReservation } from '../gateway/ticket-store';
 import type { ResolvedInput } from '../simulation/world';
 import type { Connection } from '../transport/game-transport';
@@ -607,6 +606,17 @@ export class Room {
         return null;
     }
 
+    /** 조작 방식은 언제든 바뀔 수 있다(경기 중 키보드를 꽂는 것처럼). 바뀐 경우에만 다시 알린다. */
+    public setControl(userId: ActorId, control: PlayerControl): ErrorCodeValue | null {
+        const member = this.#roster.getByUser(userId);
+        if (member === null) return ErrorCode.BadState;
+        if (member.control !== control) {
+            member.control = control;
+            if (this.#lobbyEditable()) this.broadcastLobbyState();
+        }
+        return null;
+    }
+
     /** shared에 lobby.setSlot이 추가되기 전에도 검증 가능한 순수 roster 동작을 제공한다. */
     public moveSlot(userId: ActorId, slot: number): MoveSlotResult | 'bad-state' {
         if (!this.#lobbyEditable()) return 'bad-state';
@@ -893,6 +903,7 @@ export class Room {
             role: member.role,
             skills: [member.loadout],
             stats: member.stats,
+            control: member.control ?? null,
         }));
         for (const member of this.#roster.members()) member.connection?.sendJson({
             type: 'lobby.state',

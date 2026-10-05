@@ -6,8 +6,7 @@ import {
     type AdoptedRoomMember,
     type InputState,
     type LobbyStats,
-    type PlayerRole as PlayerRoleValue,
-} from 'shared';
+    type PlayerRole as PlayerRoleValue, type PlayerControl } from 'shared';
 import type { SeatReservation } from '../gateway/ticket-store';
 import type { Connection } from '../transport/game-transport';
 
@@ -37,6 +36,8 @@ export interface LobbyMember {
      * 여기로 옮겨, 로드아웃이 붙을 자리를 한 곳으로 모았다.
      */
     loadout: SkillId;
+    /** `lobby.setControl`로 받은 조작 방식. 알리기 전에는 null. */
+    control?: PlayerControl | null;
     readonly joinedOrder: number;
     colorIndex: number;
     role: PlayerRoleValue;

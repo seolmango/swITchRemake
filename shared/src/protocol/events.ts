@@ -138,6 +138,17 @@ export type LobbyStartMessage = ClientEnvelope<'lobby.start', Record<string, nev
 export type LobbyLeaveMessage = ClientEnvelope<'lobby.leave', Record<string, never>>;
 export type LobbySetLoadoutMessage = ClientEnvelope<'lobby.setLoadout', { skills: string[] }>;
 export type LobbySpectateMessage = ClientEnvelope<'lobby.spectate', { spectate: boolean }>;
+
+/** 이 사람이 조작하는 방식. 대기실 카드에 다른 사람도 볼 수 있게 표시한다. */
+export type PlayerControl = 'keyboard' | 'touch' | 'gamepad';
+export const PLAYER_CONTROLS: readonly PlayerControl[] = ['keyboard', 'touch', 'gamepad'];
+export const isPlayerControl = (value: unknown): value is PlayerControl =>
+    typeof value === 'string' && (PLAYER_CONTROLS as readonly string[]).includes(value);
+/**
+ * 자기 조작 방식을 알린다. 클라이언트만 아는 정보라(터치 화면인지, 조이스틱을 켰는지) 서버가 추측하지
+ * 않고 받아서 대기실 상태에 실어 돌려준다. 예전에는 자기 카드에만 보이고 상대 카드는 칸이 비었다.
+ */
+export type LobbySetControlMessage = ClientEnvelope<'lobby.setControl', { control: PlayerControl }>;
 /**
  * 슬롯 1은 스위치(러너 전용), 슬롯 2는 경기 전에 고른 스킬이다.
  * `targetPlayerId`는 스위치에만 쓴다 — 지목 대상은 맵 어디에 있어도 되므로 서버가 좌표로 추론할 수 없다.
@@ -176,6 +187,7 @@ export type ClientMessage =
     | LobbyLeaveMessage
     | LobbySetLoadoutMessage
     | LobbySpectateMessage
+    | LobbySetControlMessage
     | GameUseSkillMessage
     | GameEmojiMessage
     | TrainingRespawnMessage
@@ -233,6 +245,8 @@ export interface LobbyPlayer {
      * 돌려주는 것이다 — 인게임 서버가 직접 조회하면 로비를 그릴 때마다 DB를 두드리게 된다.
      */
     stats: LobbyStats | null;
+    /** 조작 방식. 아직 알리지 않은 사람(구버전 클라이언트, 연결 직후)은 `null`이다. */
+    control: PlayerControl | null;
 }
 
 export type AuthOkMessage = ServerEnvelope<'auth.ok', {

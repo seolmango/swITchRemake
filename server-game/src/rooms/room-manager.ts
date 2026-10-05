@@ -371,6 +371,9 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
             case 'lobby.spectate':
                 error = room.setSpectating(connection.userId, message.payload.spectate);
                 break;
+            case 'lobby.setControl':
+                error = room.setControl(connection.userId, message.payload.control);
+                break;
             case 'lobby.setLoadout':
                 // 상태 판정은 Room이 한다(경기 후 10초 동안도 로비에서 바꿀 수 있어야 한다).
                 // 여기서는 payload 모양만 본다.

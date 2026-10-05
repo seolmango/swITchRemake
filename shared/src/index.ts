@@ -102,6 +102,9 @@ export {
     isEmojiId,
     type LobbyStats,
     type LobbyPlayer,
+    type PlayerControl,
+    PLAYER_CONTROLS,
+    isPlayerControl,
     type SkillRejectedMessage,
     type ViolationSignal,
 } from './protocol/events';

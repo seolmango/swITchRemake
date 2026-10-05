@@ -18,6 +18,14 @@ it('validates commands at runtime and preserves requestId on rejection', () => {
     assert.equal(violations.length, 1);
 });
 
+it('accepts only a known control type for lobby.setControl', () => {
+    const context = { userId: 7, roomId: 'room', tick: 9 };
+    const signals: unknown[] = [];
+    assert.equal(parseClientMessage('{"v":1,"type":"lobby.setControl","requestId":1,"payload":{"control":"touch"}}', context, (s) => signals.push(s)).message?.type, 'lobby.setControl');
+    assert.equal(parseClientMessage('{"v":1,"type":"lobby.setControl","requestId":2,"payload":{"control":"mouse"}}', context, (s) => signals.push(s)).message, null);
+    assert.equal(parseClientMessage('{"v":1,"type":"lobby.setControl","requestId":3,"payload":{"control":"touch","x":1}}', context, (s) => signals.push(s)).message, null);
+});
+
 it('accepts only an integer slot for lobby.setSlot', () => {
     const context = { userId: 7, roomId: 'room', tick: 9 };
     const signals: unknown[] = [];

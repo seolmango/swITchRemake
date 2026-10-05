@@ -2,8 +2,7 @@ import {
     JSON_MESSAGE_VERSION,
     type ClientMessage,
     type ViolationSignal,
-    ViolationKind,
-} from 'shared';
+    ViolationKind, isPlayerControl } from 'shared';
 
 export type ViolationSink = (signal: ViolationSignal) => void;
 
@@ -47,6 +46,7 @@ function validPayload(type: string, payload: unknown): boolean {
         case 'lobby.setLocked': return exactKeys(payload, ['locked']) && typeof payload['locked'] === 'boolean';
         case 'lobby.start':
         case 'lobby.leave': return empty(payload);
+        case 'lobby.setControl': return exactKeys(payload, ['control']) && isPlayerControl(payload['control']);
         case 'lobby.setLoadout': return exactKeys(payload, ['skills']) && Array.isArray(payload['skills']) && payload['skills'].every(string);
         case 'lobby.spectate': return exactKeys(payload, ['spectate']) && typeof payload['spectate'] === 'boolean';
         case 'game.useSkill':

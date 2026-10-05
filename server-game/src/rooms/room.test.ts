@@ -422,6 +422,28 @@ test('lobby.state는 자리 예약에 실려 온 전적을 그대로 돌려준�
     assert.deepEqual(lobby?.payload.players[0]?.stats, context.owner.lobbyStats);
 });
 
+test('조작 방식을 알리면 대기실의 모든 사람에게 보이고, 알리기 전에는 null이다', () => {
+    const context = setup();
+    const owner = context.connect(context.owner);
+    const r2 = seat(2, context.getNow());
+    assert.equal(context.room.reserveJoin(r2, 'secret'), null);
+    const other = context.connect(r2);
+    context.room.broadcastLobbyState();
+    const before = other.messages.filter((message) => message.type === 'lobby.state').at(-1);
+    assert.equal(before?.payload.players.find((player) => player.playerId === 1)?.control, null);
+
+    assert.equal(context.room.setControl(context.owner.userId, 'touch'), null);
+    // 다른 사람 화면(PC)에서도 방장이 폰(터치)이라는 것이 보여야 한다 — 예전에는 자기 카드에만 보였다.
+    const after = other.messages.filter((message) => message.type === 'lobby.state').at(-1);
+    assert.equal(after?.payload.players.find((player) => player.playerId === 1)?.control, 'touch');
+    const self = owner.messages.filter((message) => message.type === 'lobby.state').at(-1);
+    assert.equal(self?.payload.players.find((player) => player.playerId === 1)?.control, 'touch');
+
+    const count = other.messages.length;
+    assert.equal(context.room.setControl(context.owner.userId, 'touch'), null);
+    assert.equal(other.messages.length, count, '같은 값이면 다시 보내지 않는다');
+});
+
 test('전적 없이 예약한 사람(게스트)은 lobby.state에서도 null이다', () => {
     const context = setup();
     context.connect(context.owner);
