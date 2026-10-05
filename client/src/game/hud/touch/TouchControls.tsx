@@ -38,6 +38,9 @@ export const TouchControls: React.FC<Props> = ({
     const moveAnchor = useSettingsStore((state) => state.touchMoveAnchor);
     const actionAnchor = useSettingsStore((state) => state.touchActionAnchor);
     const viewport = useViewportSize();
+    const switchCooldown = hud.switchSkill?.cooldown ?? 0;
+    const switchRatio = hud.switchSkill && hud.switchSkill.cooldownTotal > 0
+        ? Math.max(0, Math.min(1, switchCooldown / hud.switchSkill.cooldownTotal)) : 0;
     const [mode, setMode] = useState<ActionMode>('switch');
 
     const size = TOUCH_BASE_SIZE * scale;
@@ -82,6 +85,13 @@ export const TouchControls: React.FC<Props> = ({
                     wheelHint={t('game.hud.touch.pick')}
                     onPick={handlePick}
                 />
+                {/*
+                  * 스위치 재사용 대기. 키보드 화면은 스킬바가 보여 주지만 터치에서는 스킬바를 숨기므로,
+                  * 예전에는 폰에서 쿨타임을 볼 곳이 없었다. 조이스틱 위에 줄어드는 고리와 초를 겹친다.
+                  */}
+                {mode === 'switch' && switchCooldown > 0 && (
+                    <SwitchCooldown theme={theme} size={size} ratio={switchRatio} seconds={switchCooldown}/>
+                )}
             </div>
 
             {/* 조이스틱 바로 위. 자주 누르는 것이 아니라 엄지 자리를 양보해도 된다. */}
@@ -93,7 +103,8 @@ export const TouchControls: React.FC<Props> = ({
                     theme={theme}
                     mode={mode}
                     scale={scale}
-                    labels={{ switch: t('game.hud.touch.switch'), emoji: t('game.hud.touch.emoji') }}
+                    // 이모지 쪽을 보고 있어도 스위치가 언제 다시 되는지 알 수 있게 탭에도 남은 초를 붙인다.
+                    labels={{ switch: switchCooldown > 0 ? `${t('game.hud.touch.switch')} ${Math.ceil(switchCooldown)}` : t('game.hud.touch.switch'), emoji: t('game.hud.touch.emoji') }}
                     onChange={setMode}
                 />
             </div>
@@ -204,3 +215,18 @@ const SkillButton: React.FC<{
         </button>
     );
 };
+
+/** 스위치 조이스틱 위에 겹치는 재사용 대기 표시. 손가락 입력은 그대로 조이스틱이 받는다. */
+const SwitchCooldown: React.FC<{ theme: Theme; size: number; ratio: number; seconds: number }> = ({ theme, size, ratio, seconds }) => (
+    <div aria-hidden="true" style={{
+        position: 'absolute', left: '50%', top: '50%', width: size, height: size,
+        transform: 'translate(-50%, -50%)', borderRadius: '50%', pointerEvents: 'none',
+        background: `conic-gradient(color-mix(in srgb, ${Color.black} 50%, transparent) ${ratio * 360}deg, transparent 0deg)`,
+        display: 'grid', placeItems: 'center',
+    }}>
+        <span style={{
+            fontFamily: HUD_FONT, fontSize: size * 0.3, fontWeight: 800,
+            color: theme === 1 ? Color.white : Color.black,
+        }}>{Math.ceil(seconds)}</span>
+    </div>
+);

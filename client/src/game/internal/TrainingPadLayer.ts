@@ -1,15 +1,16 @@
 // 타입으로만 불러야 Node 테스트가 Phaser의 DOM 초기화를 실행하지 않는다.
 import type Phaser from 'phaser';
 import { TrainingPadKind, type TrainingPad } from 'shared';
-import { Palette } from '../palette.ts';
+import { Palette, currentColorVision } from '../palette.ts';
 import type { Theme } from '../types.ts';
-import { TRAINING_PAD_TEXTURE } from '../trainingPadTextures.ts';
+import { TRAINING_PAD_TEXTURE, trainingPadTextureKey } from '../trainingPadTextures.ts';
 import { DEPTH } from './depth.ts';
 
 const PAD_COLOR: Record<TrainingPadKind, () => number> = {
     [TrainingPadKind.Tagger]: () => Palette.red[2],
     [TrainingPadKind.SkillDash]: () => Palette.blue[2],
-    [TrainingPadKind.SkillFlash]: () => Palette.user[5]![1],
+    // 예전에는 6번 플레이어 색을 빌렸다. 그러면 그 번호가 스킬의 주인처럼 보인다 — 스킬 고유색을 쓴다.
+    [TrainingPadKind.SkillFlash]: () => Palette.skillFlash[1],
     [TrainingPadKind.SkillExhaust]: () => Palette.grass[2],
     [TrainingPadKind.Reset]: () => Palette.gray[2],
     // 추격 모드는 역할을 뒤집는 자리라 술래와 같은 붉은 계열로 묶는다.
@@ -45,6 +46,11 @@ export class TrainingPadLayer {
         this.redraw();
     }
 
+    /** 색각 모드가 바뀌면 테두리와 아이콘을 같은 모드로 다시 그린다. */
+    refreshColors(): void {
+        this.redraw();
+    }
+
     private redraw(): void {
         this.gfx.clear();
         for (const icon of this.icons) icon.destroy();
@@ -60,7 +66,7 @@ export class TrainingPadLayer {
             const texture = SKILL_TEXTURE[pad.kind];
             if (texture) {
                 const size = pad.radius * 0.92;
-                this.icons.push(this.scene.add.image(pad.x, pad.y, texture)
+                this.icons.push(this.scene.add.image(pad.x, pad.y, trainingPadTextureKey(texture, currentColorVision()))
                     .setDisplaySize(size, size)
                     .setDepth(DEPTH.trainingPadIcon)
                     .setAlpha(this.theme === 0 ? 0.9 : 1));

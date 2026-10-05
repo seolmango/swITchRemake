@@ -355,6 +355,7 @@ export class WorldScene extends Phaser.Scene {
         if (settings.colorVision !== prevColorVision && applyColorVision(settings.colorVision)) {
             // 플레이어/수풀/연막은 매 프레임 다시 그려지지만 바닥과 벽은 한 번 구워두므로 직접 무효화한다.
             this.mapLayer.refreshColors();
+            this.trainingPads.refreshColors();
         }
     }
 

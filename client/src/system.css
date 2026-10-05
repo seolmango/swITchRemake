@@ -18,9 +18,9 @@
   color: var(--ui-on-fill);
   font: 700 16px/1.2 var(--font-ui);
   cursor: pointer;
-  transition: background-color var(--motion-fast) ease-out, border-color var(--motion-fast) ease-out;
+  transition: background-color var(--motion-fast) ease-out, border-color var(--motion-fast) ease-out, transform var(--motion-fast) ease-out;
 }
-.ui-button:hover:not(:disabled) { border-color: var(--theme-text); }
+.ui-button:hover:not(:disabled) { border-color: var(--theme-text); transform: scale(var(--hover-scale-sm)); }
 .ui-button:disabled { opacity: .5; cursor: not-allowed; }
 .ui-button.is-primary { border-color: var(--ui-blue-border); background: var(--ui-blue-fill); }
 .ui-button.is-danger { border-color: var(--semantic-bad); background: var(--theme-canvas); color: var(--semantic-bad); }
@@ -97,4 +97,45 @@
 /* 손가락으로 누르는 기기는 번호 칸을 넉넉히. */
 @media (pointer: coarse) {
   .human-check-slot { min-width: 64px; min-height: 52px; }
+}
+
+/* ── 손이 가면 살짝 커지는 것들 ─────────────────────────── */
+/* 2026-10-05 디자인 정리 때 한 번 뺐다가 되살렸다. 배율은 design.css의 토큰 두 개뿐이다. */
+.round-checkbox:hover,
+.mfa-login-stack > [role='checkbox']:hover,
+.signup-consent-row [role='checkbox']:hover,
+.settings-reset:hover,
+.settings-segmented button:hover,
+.settings-link-grid > button:hover,
+button.settings-install-card:hover,
+.credits-dialog-content a:hover,
+.key-binding:hover,
+.mfa-backup-dialog button:hover,
+.mfa-backup-dialog > [role='checkbox']:hover,
+.server-status:hover { transform: scale(var(--hover-scale-sm)); }
+.signup-consent-row > button:last-child:hover,
+.legal-dialog-close:hover,
+.settings-toggle:hover { transform: scale(var(--hover-scale)); }
+
+/* ── 빈 방 목록 ─────────────────────────────────────────── */
+.room-empty {
+  grid-column: 1 / -1;
+  min-height: 420px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  border: var(--border) dashed var(--ui-neutral-border);
+  border-radius: var(--radius-lg);
+  color: var(--theme-muted);
+  text-align: center;
+}
+.room-empty svg { width: 88px; height: 88px; color: var(--ui-neutral-border); }
+.room-empty strong { color: var(--theme-text); font: normal 48px/1.2 var(--font-display); }
+.room-empty span { font-size: 30px; }
+@media (max-width: 640px) and (orientation: portrait) {
+  .responsive-form-container .room-empty { min-height: 180px; padding: var(--space-4); }
+  .responsive-form-container .room-empty svg { width: 44px; height: 44px; }
+  .responsive-form-container .room-empty strong { font-size: 20px; }
+  .responsive-form-container .room-empty span { font-size: 15px; }
 }

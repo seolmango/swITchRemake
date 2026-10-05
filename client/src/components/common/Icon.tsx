@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type IconName = 'home' | 'person' | 'settings' | 'back' | 'next' | 'refresh' | 'lock' | 'unlock' | 'users' | 'moon' | 'sun' | 'globe' | 'check' | 'keyboard' | 'touch' | 'gamepad' | 'trophy' | 'timer' | 'crown' | 'remove' | 'swap' | 'share' | 'external' | 'shield' | 'flag';
+export type IconName = 'home' | 'person' | 'settings' | 'back' | 'next' | 'refresh' | 'lock' | 'unlock' | 'users' | 'moon' | 'sun' | 'globe' | 'check' | 'keyboard' | 'touch' | 'gamepad' | 'trophy' | 'timer' | 'crown' | 'remove' | 'swap' | 'share' | 'external' | 'shield' | 'flag' | 'expand' | 'shrink' | 'close' | 'map';
 
 interface IconProps {
     name: IconName;
@@ -34,6 +34,11 @@ const paths: Record<IconName, React.ReactNode> = {
     swap: <><path d="M7 7h12l-3-3M19 7l-3 3M17 17H5l3 3M5 17l3-3"/></>,
     share: <><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.2M8.7 13.3l6.6 4.2"/></>,
     external: <><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v7H4V6h7"/></>,
+    // 네 모서리가 밖으로 = 크게, 안으로 = 작게. 화살표 하나(↗↙)는 '이동'처럼 읽혀서 바꿨다.
+    expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>,
+    shrink: <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>,
+    close: <path d="M6 6l12 12M18 6 6 18"/>,
+    map: <><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20Z"/><path d="M9 4v13.5M15 6.5V20"/></>,
 };
 
 export const Icon: React.FC<IconProps> = ({ name, size = 32, style }) => (

@@ -36,13 +36,14 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, onClick }) => {
             onMouseLeave={() => setHover(false)}
             style={{
             background: theme === 0 ? (hover ? Color.gray[1] : Color.gray[0]) : (hover ? 'color-mix(in srgb, var(--ui-neutral-border) 16%, var(--theme-canvas))' : 'var(--theme-canvas)'),
+            transform: hover ? 'scale(var(--hover-scale-sm))' : 'none',
             borderColor: hover && room.status === 'waiting' ? 'var(--ui-blue-border)' : 'var(--ui-neutral-border)',
             color: theme === 0 ? Color.black : (hover ? accent : colors.text),
             }}
         >
             <span className="room-card-heading">
                 <span className="room-card-name">{room.name}</span>
-                <span className="room-card-code">#{room.id}</span>
+                <span className="room-card-code">#{room.roomCode}</span>
             </span>
             <span className="room-card-meta">
                 <span>{room.ownerName}</span>

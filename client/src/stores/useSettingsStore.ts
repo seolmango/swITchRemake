@@ -28,6 +28,7 @@ export const KEY_ACTIONS = [
     'moveUp', 'moveDown', 'moveLeft', 'moveRight', 'movementSkill',
     'switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8',
     'emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8',
+    'toggleMinimap',
 ] as const;
 
 export type KeyAction = (typeof KEY_ACTIONS)[number];
@@ -93,6 +94,7 @@ const createDefaultKeyBindings = (): KeyBindings => ({
     switch5: ['Digit5', null], switch6: ['Digit6', null], switch7: ['Digit7', null], switch8: ['Digit8', null],
     emoji1: ['Shift+Digit1', null], emoji2: ['Shift+Digit2', null], emoji3: ['Shift+Digit3', null], emoji4: ['Shift+Digit4', null],
     emoji5: ['Shift+Digit5', null], emoji6: ['Shift+Digit6', null], emoji7: ['Shift+Digit7', null], emoji8: ['Shift+Digit8', null],
+    toggleMinimap: ['KeyM', null],
 });
 
 const GENERAL_DEFAULTS = { theme: 0 as const, language: 'ko' as const, highContrast: false };
@@ -156,7 +158,14 @@ export const useSettingsStore = create<SettingsState>()(
             name: 'switch-settings',
             version: 2,
             migrate: (persistedState) => persistedState as SettingsState,
-            merge: (persisted, current) => ({ ...current, ...(persisted as Partial<SettingsState>) }),
+            /*
+             * 키 지정은 동작 단위로 합친다. 저장된 값을 통째로 덮으면, 나중에 생긴 동작(예: 미니맵 켜고 끄기)이
+             * 예전 사용자에게는 빠져 undefined가 되고 그 동작이 영영 안 먹는다.
+             */
+            merge: (persisted, current) => {
+                const saved = (persisted ?? {}) as Partial<SettingsState>;
+                return { ...current, ...saved, keyBindings: { ...current.keyBindings, ...saved.keyBindings } };
+            },
         },
     ),
 );

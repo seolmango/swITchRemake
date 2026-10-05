@@ -41,6 +41,12 @@
   --focus-width: 3px;
   --focus-offset: 2px;
   --motion-fast: 120ms;
+  /*
+   * 손이 가면 살짝 커진다 — 누를 수 있다는 게임다운 손맛이다. 주요 버튼은 크게, 칸·체크박스처럼
+   * 촘촘한 것은 작게. 움직임 줄이기에서는 커지지 않고 채움·테두리 변화만 남는다.
+   */
+  --hover-scale: 1.05;
+  --hover-scale-sm: 1.025;
 }
 
 /* 1920×1080 무대 단위. 보통 0.5~0.75배로 축소돼 위 실제 값과 비슷하게 보인다. */
@@ -84,6 +90,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --motion-fast: 0ms; }
+  :root { --motion-fast: 0ms; --hover-scale: 1; --hover-scale-sm: 1; }
 }
-html[data-motion='reduced'] { --motion-fast: 0ms; }
+html[data-motion='reduced'] { --motion-fast: 0ms; --hover-scale: 1; --hover-scale-sm: 1; }

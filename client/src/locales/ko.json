@@ -83,7 +83,8 @@
       "rejoinCooldown": "나간 방에는 잠시 뒤 다시 참가할 수 있어요.",
       "kickedFromRoom": "강퇴된 방에는 다시 참가할 수 없어요.",
       "gameRestricted": "경기 참여가 제한된 계정이에요. 잘못된 조치라면 문의해 주세요."
-    }
+    },
+    "emptyHint": "방을 만들거나 빠른 참가로 바로 시작해 보세요."
   },
   "notFound": {
     "title": "페이지 없음",
@@ -599,8 +600,10 @@
         "emoji5": "이모지 5번 슬롯",
         "emoji6": "이모지 6번 슬롯",
         "emoji7": "이모지 7번 슬롯",
-        "emoji8": "이모지 8번 슬롯"
-      }
+        "emoji8": "이모지 8번 슬롯",
+        "toggleMinimap": "미니맵 켜기·끄기"
+      },
+      "viewGroup": "화면"
     }
   },
   "game": {
@@ -700,7 +703,9 @@
     "out": "잡혔어요",
     "controls": "조작 안내",
     "enlargeMap": "지도 확대",
-    "shrinkMap": "지도 축소"
+    "shrinkMap": "지도 축소",
+    "showMinimap": "미니맵 보기",
+    "hideMinimap": "미니맵 숨기기"
   },
   "guide": {
     "title": "게임 방법",

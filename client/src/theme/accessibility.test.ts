@@ -12,6 +12,7 @@ import { Color, statusInkColors, themeColors } from './color.ts';
 import { appearanceCssVariables } from './cssVariables.ts';
 import { colorVisionPalette, userColorsFor, type ColorVisionMode } from './cvd.ts';
 import { minPairDelta, visionDelta, type VisionKind } from './colorScience.ts';
+import { skillIconSvg } from './skillIcons.ts';
 
 const COLOR_VISION_MODES: ColorVisionMode[] = ['off', 'protanopia', 'deuteranopia', 'tritanopia'];
 
@@ -204,5 +205,37 @@ describe('HUD physical size', () => {
     it('caps portrait compensation so the HUD cannot consume the world', () => {
         const portraitScale = gameCanvasScale(390, 844);
         expect(hudScaleCompensation(portraitScale)).toBe(HUD_MAX_SCALE_COMPENSATION);
+    });
+});
+
+describe('skill icons follow the colour vision palette', () => {
+    const VISION: Record<ColorVisionMode, VisionKind> = { off: 'normal', protanopia: 'protanopia', deuteranopia: 'deuteranopia', tritanopia: 'tritanopia' };
+
+    it.each(COLOR_VISION_MODES)('%s gives Flash its own colour, apart from Dash blue, tagger red and the terrain', (mode) => {
+        const palette = colorVisionPalette(mode);
+        const [fill] = palette.skillFlash;
+        for (const other of [...Color.blue, ...Color.red, ...palette.grass]) {
+            expect(visionDelta(fill, other, VISION[mode])).toBeGreaterThanOrEqual(10);
+        }
+        // 스킬 색은 플레이어 색이 아니다 — 같으면 그 번호가 스킬의 주인처럼 보인다.
+        for (const [player] of palette.user) expect(fill).not.toBe(player);
+    });
+
+    it.each(COLOR_VISION_MODES.filter((mode) => mode !== 'off'))('%s repaints Flash and Exhaust icons so no default colour is left', (mode) => {
+        const palette = colorVisionPalette(mode);
+        const flash = skillIconSvg('flash', mode);
+        expect(flash).toContain(palette.skillFlash[0]);
+        expect(flash).toContain(palette.skillFlash[1]);
+        expect(flash).not.toContain(Color.skillFlash[0]);
+        const exhaust = skillIconSvg('exhaust', mode);
+        expect(exhaust).toContain(palette.grass[0]!);
+        if (palette.grass[0] !== Color.grass[0]) expect(exhaust).not.toContain(Color.grass[0]!);
+    });
+
+    it('the default icons are drawn in exactly the default palette', () => {
+        // 원본 SVG의 색이 곧 기본값이라야 다른 모드에서 바꿀 자리를 찾을 수 있다.
+        expect(skillIconSvg('flash', 'off')).toContain(Color.skillFlash[0]);
+        expect(skillIconSvg('flash', 'off')).toContain(Color.skillFlash[1]);
+        expect(skillIconSvg('exhaust', 'off')).toContain(Color.grass[0]!);
     });
 });

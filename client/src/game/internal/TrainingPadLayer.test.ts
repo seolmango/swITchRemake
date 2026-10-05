@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { TrainingPadKind } from 'shared';
 import { TrainingPadLayer } from './TrainingPadLayer.ts';
 import { DEPTH } from './depth.ts';
+import { Palette, applyColorVision } from '../palette.ts';
+import { colorVisionPalette } from '../../theme/cvd.ts';
 
 interface Call { fn: string; args: Array<number | string> }
 
@@ -61,8 +63,26 @@ describe('training pad layer', () => {
         ]);
 
         expect(calls.filter((call) => call.fn === 'image').map((call) => call.args[2])).toEqual([
-            'training-pad-dash', 'training-pad-flash', 'training-pad-exhaust',
+            'training-pad-dash@off', 'training-pad-flash@off', 'training-pad-exhaust@off',
         ]);
         expect(calls.filter((call) => call.fn === 'fillCircle')).toHaveLength(5);
+    });
+
+    it('repaints ring and icon together when the colour vision mode changes', () => {
+        const { scene, calls } = fakeScene();
+        const layer = new TrainingPadLayer(scene as never, 0);
+        layer.setPads([{ kind: TrainingPadKind.SkillFlash, x: 0, y: 0, radius: 80 }]);
+        try {
+            applyColorVision('deuteranopia');
+            calls.length = 0;
+            layer.refreshColors();
+            // 테두리는 점멸 고유색(플레이어 색이 아님), 아이콘은 같은 모드로 칠한 텍스처.
+            const ring = calls.find((call) => call.fn === 'lineStyle')?.args[1];
+            expect(ring).toBe(Number.parseInt(colorVisionPalette('deuteranopia').skillFlash[1].slice(1), 16));
+            expect(ring).toBe(Palette.skillFlash[1]);
+            expect(calls.find((call) => call.fn === 'image')?.args[2]).toBe('training-pad-flash@deuteranopia');
+        } finally {
+            applyColorVision('off');
+        }
     });
 });

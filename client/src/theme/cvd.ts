@@ -31,6 +31,8 @@ export interface ColorVisionPalette {
     grass: readonly string[];
     /** 광란 램프. */
     frenzy: readonly string[];
+    /** 점멸 스킬 [채움, 외곽선]. 유체화 파랑·술래 빨강·수풀과 그 색각에서 갈리게 고른다(skill-color-search.ts). */
+    skillFlash: readonly [string, string];
 }
 
 /**
@@ -53,6 +55,7 @@ const OVERRIDES: Record<Exclude<ColorVisionMode, 'off'>, ColorVisionPalette> = {
         ],
         grass: Color.grass,                              // 빨강과 이미 ΔE 21 — 그대로 둔다
         frenzy: ['#F1D6A4', '#E7A740', '#CD8400'],       // +18° : 수풀과 ΔE 8.3 → 분리
+        skillFlash: ['#DB90AA', '#A8617B'],
     },
     deuteranopia: {
         user: [
@@ -67,6 +70,7 @@ const OVERRIDES: Record<Exclude<ColorVisionMode, 'off'>, ColorVisionPalette> = {
         ],
         grass: ['#FDD5F5', '#EDB3DE', '#D589C2'],        // +198° : 빨강과 ΔE 2.1 → 11.3
         frenzy: Color.frenzy,
+        skillFlash: ['#54B6A1', '#188673'],
     },
     tritanopia: {
         user: [
@@ -81,6 +85,7 @@ const OVERRIDES: Record<Exclude<ColorVisionMode, 'off'>, ColorVisionPalette> = {
         ],
         grass: ['#E0DCFF', '#C7BDF7', '#A399E2'],        // +162° : 파랑과 ΔE 0.0 → 분리
         frenzy: ['#DADDA6', '#BEB73C', '#A09600'],       // +42°  : 빨강과 ΔE 7 → 13.4
+        skillFlash: ['#7EAE4B', '#4E7F1C'],
     },
 };
 
@@ -88,6 +93,7 @@ const BASE: ColorVisionPalette = {
     user: Color.user.map((pair) => [pair[0]!, pair[1]!] as const),
     grass: Color.grass,
     frenzy: Color.frenzy,
+    skillFlash: Color.skillFlash,
 };
 
 /** 해당 모드에서 쓸 팔레트. `off`면 기본 팔레트를 그대로 돌려준다. */

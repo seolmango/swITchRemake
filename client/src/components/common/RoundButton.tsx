@@ -107,11 +107,14 @@ export const RoundButton = React.memo<RoundButtonProps>(({
         opacity: (disabled || isLoading) ? 0.65 : 1,
         outline: isFocused ? `var(--focus-width) solid ${focusColor}` : 'var(--focus-width) solid transparent',
         outlineOffset: 'var(--focus-offset)',
-        transition: 'background-color var(--motion-fast) ease-out, border-color var(--motion-fast) ease-out',
+        transition: 'background-color var(--motion-fast) ease-out, border-color var(--motion-fast) ease-out, transform var(--motion-fast) ease-out',
         userSelect: 'none',
-        transform: x !== undefined && y !== undefined ? 'translate(-50%, -50%)' : 'none',
+        // 손이 가면 살짝 커진다(--hover-scale, 움직임 줄이기에서는 1).
+        transform: x !== undefined && y !== undefined
+            ? (isActive ? 'translate(-50%, -50%) scale(var(--hover-scale))' : 'translate(-50%, -50%)')
+            : (isActive ? 'scale(var(--hover-scale))' : 'none'),
         ...style
-    }), [x, y, width, height, currentBg, currentStroke, focusColor, disabled, isLoading, isFocused, style]);
+    }), [x, y, width, height, currentBg, currentStroke, focusColor, disabled, isLoading, isActive, isFocused, style]);
 
     // 눌린 버튼만 소리를 낸다. 막힌 버튼은 조용한 것이 맞다 — 아무 일도 안 일어났기 때문이다.
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLButtonElement>) => {

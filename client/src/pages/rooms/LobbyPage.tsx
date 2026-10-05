@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './lobby.css';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { RoomState, SkillId, isLoadoutSkill } from 'shared';
+import { RoomState, SkillId, isLoadoutSkill, type PlayerControl } from 'shared';
 import { PageLayout } from '../../components/layout/PageLayout.tsx';
 import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
@@ -17,21 +17,20 @@ import { useGameSession } from '../../game/useGameSession.ts';
 import { resumeRoom } from '../../api/rooms.ts';
 import { verifiedMapBundle } from '../../game/mapBundle.ts';
 import { cancelScheduledLobbyLeave, scheduleLobbyLeave } from './lobbyLeave.ts';
-import dashIcon from '../../assets/images/skill_dash.svg';
-import flashIcon from '../../assets/images/skill_flash.svg';
-import exhaustIcon from '../../assets/images/skill_exhaust.svg';
+import { useSkillIcons } from '../../theme/skillIcons.ts';
 import { canEnterRunningGame } from '../../game/roomRole.ts';
 import { useTouchControlsVisible } from '../../game/hud/touch/useTouchControls.ts';
 
 const MIN_PLAYERS_TO_START = 3;
-const SKILLS: Array<{ id: PlayerSkill; icon: string }> = [
-    { id: 'dash', icon: dashIcon },
-    { id: 'flash', icon: flashIcon },
-    { id: 'exhaust', icon: exhaustIcon },
+const SKILLS: Array<{ id: PlayerSkill }> = [
+    { id: 'dash' },
+    { id: 'flash' },
+    { id: 'exhaust' },
 ];
 type HostAction = { type: 'passHost' | 'kick'; playerId: string };
 
 export const LobbyPage: React.FC = () => {
+    const skillIcons = useSkillIcons();
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { roomId } = useParams();
@@ -40,6 +39,7 @@ export const LobbyPage: React.FC = () => {
     const colors = themeColors(theme);
     const session = useGameSession();
     const touchVisible = useTouchControlsVisible();
+    const localControl: PlayerControl = touchVisible ? 'touch' : 'keyboard';
     const live = session.roomId === currentRoomId;
     const resumeAttempted = useRef(false);
     const leavingRoom = useRef(false);
@@ -83,7 +83,8 @@ export const LobbyPage: React.FC = () => {
                 guest: player.guest,
                 role: player.role,
                 waitingForNextMatch: session.roomState === RoomState.Playing,
-                control: player.playerId === session.selfId ? (touchVisible ? 'touch' : 'keyboard') : undefined,
+                // 서버가 돌려준 각자의 조작 방식. 내 것은 알리기 전에도 바로 보이게 지금 값을 쓴다.
+                control: player.playerId === session.selfId ? localControl : player.control ?? undefined,
                 // `skills` is the shared lobby contract; this view has one movement-skill badge today.
                 skill: player.skills.find(
                     (candidate): candidate is PlayerSkill => isLoadoutSkill(candidate) && candidate !== SkillId.Switch,
@@ -91,7 +92,17 @@ export const LobbyPage: React.FC = () => {
                 stats: player.stats,
             })),
         };
-    }, [currentRoomId, live, liveLockElapsedMs, session.isPrivate, session.lobby, session.selfId, session.roomState, touchVisible]);
+    }, [currentRoomId, live, liveLockElapsedMs, session.isPrivate, session.lobby, session.selfId, session.roomState, localControl]);
+
+    /*
+     * 내 조작 방식을 서버에 알린다. 다른 사람 카드에도 보이려면 서버가 알아야 한다 — 예전에는 자기
+     * 카드에만 보였다. 서버가 기억하는 값과 다를 때만 보낸다(재접속·조이스틱 전환 포함).
+     */
+    const serverControl = session.lobby?.players.find((player) => player.playerId === session.selfId)?.control ?? null;
+    useEffect(() => {
+        if (!live || session.selfId === null || serverControl === localControl) return;
+        gameSession.send({ type: 'lobby.setControl', payload: { control: localControl } });
+    }, [live, session.selfId, serverControl, localControl]);
     const room = liveRoom;
     const displayCode = session.roomCode ?? currentRoomId;
 
@@ -386,7 +397,7 @@ export const LobbyPage: React.FC = () => {
                             <div className="lobby-skill-picker">
                                 {SKILLS.map((skill) => (
                                     <button key={skill.id} type="button" autoFocus={self.skill === skill.id} className={self.skill === skill.id ? 'is-current' : ''} aria-pressed={self.skill === skill.id} onClick={() => changeSkill(skill.id)}>
-                                        <img src={skill.icon} alt=""/>
+                                        <img src={skillIcons[skill.id]} alt=""/>
                                         <strong>{t(`lobby.skills.${skill.id}`)}</strong>
                                     </button>
                                 ))}

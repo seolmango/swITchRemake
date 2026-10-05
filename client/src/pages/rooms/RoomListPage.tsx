@@ -85,6 +85,14 @@ export const RoomListPage: React.FC = () => {
             <RoundBox x={960} y={505} width={1640} height={730} type={2}/>
             <section className="room-grid" aria-label={t('rooms.title')}>
                 {rooms.map((room) => <RoomCard key={room.id} room={room} onClick={() => navigate(`/rooms/join?room_code=${room.roomCode}&pw=${room.hasPassword}`)}/>) }
+                {/* 방이 없을 때도 자리를 비워 두지 않는다 — 특히 폰에서는 목록 칸이 통째로 사라져 화면이 텅 비어 보였다. */}
+                {rooms.length === 0 && !loading && (
+                    <div className="room-empty">
+                        <Icon name="users" size={44}/>
+                        <strong>{t('rooms.empty')}</strong>
+                        <span>{t('rooms.emptyHint')}</span>
+                    </div>
+                )}
             </section>
             <nav className="room-pagination" aria-label={t('rooms.pagination')}>
                 <RoundButton width={88} height={88} type={2} content={<Icon name="back"/>} disabled={page <= 1} ariaLabel={t('nav.previousPage')} onClick={() => setPage((value) => Math.max(1, value - 1))}/>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Icon } from '../components/common/Icon.tsx';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { RoomState, SkillId, SkillSlot, isLoadoutSkill, trainingPadsFromMarkers } from 'shared';
@@ -14,9 +15,7 @@ import { useGameSession } from '../game/useGameSession.ts';
 import { type KeyAction, useSettingsStore } from '../stores/useSettingsStore.ts';
 import { themeColors } from '../theme/color.ts';
 import { resumeRoom } from '../api/rooms.ts';
-import dashIcon from '../assets/images/skill_dash.svg';
-import flashIcon from '../assets/images/skill_flash.svg';
-import exhaustIcon from '../assets/images/skill_exhaust.svg';
+import { useSkillIcons } from '../theme/skillIcons.ts';
 import switchIcon from '../assets/images/skill_switch.svg';
 import { formatKeyBindings, matchesHeldKeyBinding, matchesKeyBinding } from '../utils/keyBinding.ts';
 import { cooldownTotalMs, getSwitchTargets, skillRejectionMessageKey, toCooldownDisplay } from '../utils/skillHud.ts';
@@ -31,10 +30,10 @@ import { canEnterRunningGame } from '../game/roomRole.ts';
 import { BufferedSnapshots } from '../game/BufferedSnapshots.ts';
 import { useModalFocusTrap } from '../components/common/useModalFocusTrap.ts';
 
-const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { iconUrl: string; labelKey: string }> = {
-    [SkillId.Dash]: { iconUrl: dashIcon, labelKey: 'lobby.skills.dash' },
-    [SkillId.Flash]: { iconUrl: flashIcon, labelKey: 'lobby.skills.flash' },
-    [SkillId.Exhaust]: { iconUrl: exhaustIcon, labelKey: 'lobby.skills.exhaust' },
+const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { icon: 'dash' | 'flash' | 'exhaust'; labelKey: string }> = {
+    [SkillId.Dash]: { icon: 'dash', labelKey: 'lobby.skills.dash' },
+    [SkillId.Flash]: { icon: 'flash', labelKey: 'lobby.skills.flash' },
+    [SkillId.Exhaust]: { icon: 'exhaust', labelKey: 'lobby.skills.exhaust' },
 };
 
 const SWITCH_ACTIONS: readonly KeyAction[] = ['switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8'];
@@ -53,6 +52,7 @@ function usePrefersReducedMotion(): boolean {
 }
 
 export const GamePage: React.FC<{ training?: boolean }> = ({ training = false }) => {
+    const skillIcons = useSkillIcons();
     const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -325,7 +325,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
             const presentation = SKILL_PRESENTATION[skill];
             const cooldown = toCooldownDisplay(session.cooldowns, SkillSlot.Movement, cooldownTotalMs(skill, session.starting?.gameplay));
             return {
-                id: skill, label: t(presentation.labelKey), iconUrl: presentation.iconUrl,
+                id: skill, label: t(presentation.labelKey), iconUrl: skillIcons[presentation.icon],
                 key: formatKeyBindings(keyBindings.movementSkill, t('game.noKeyBinding')),
                 cooldown: cooldown.remainingMs / 1000, cooldownTotal: cooldown.totalMs / 1000,
                 unavailable: !cooldown.available && cooldown.remainingMs === 0,
@@ -350,7 +350,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
             text: t(skillRejectionMessageKey(rejection.reason, training)),
             tone: 'danger' as const,
         })),
-    }), [hudPlayers, keyBindings, session.cooldowns, session.lobby, session.role, session.selfId, session.skillRejections, session.starting, session.trainingSkill, spectatingId, t, training]);
+    }), [hudPlayers, keyBindings, session.cooldowns, session.lobby, session.role, session.selfId, session.skillRejections, session.starting, session.trainingSkill, skillIcons, spectatingId, t, training]);
 
     const selfAlive = hudPlayers.find((player) => player.id === session.selfId)?.alive ?? false;
 
@@ -389,6 +389,8 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
                     <>
                         {settingsOpen && (
                             <div ref={settingsDialogRef} className="training-settings-overlay" role="dialog" aria-modal="true" aria-label={t('settings.title')} tabIndex={-1} onKeyDown={onSettingsDialogKeyDown}>
+                                {/* 다른 화면의 "뒤로"와 같은 자리·모양. 아래쪽 글자 버튼만으로는 잘 안 보였다. */}
+                                <RoundButton x={56} y={58} width={88} height={88} type={2} content={<Icon name="close"/>} ariaLabel={t('training.closeSettings')} onClick={() => setSettingsOpen(false)}/>
                                 <SettingsPage embedded />
                                 <button type="button" className="training-settings-close" onClick={() => setSettingsOpen(false)}>
                                     {t('training.closeSettings')}

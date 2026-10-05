@@ -94,6 +94,7 @@ const normalizeBinding = (event: KeyboardEvent): string | null => {
 };
 
 const MOVEMENT_ACTIONS: KeyAction[] = ['moveUp', 'moveDown', 'moveLeft', 'moveRight', 'movementSkill'];
+const VIEW_ACTIONS: KeyAction[] = ['toggleMinimap'];
 const SWITCH_ACTIONS: KeyAction[] = ['switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8'];
 const EMOJI_ACTIONS: KeyAction[] = ['emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8'];
 
@@ -386,6 +387,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
             {renderBindingGroup(t('settings.keymap.movementGroup'), MOVEMENT_ACTIONS)}
             {renderBindingGroup(t('settings.keymap.switchGroup'), SWITCH_ACTIONS)}
             {renderBindingGroup(t('settings.keymap.emojiGroup'), EMOJI_ACTIONS)}
+            {renderBindingGroup(t('settings.keymap.viewGroup'), VIEW_ACTIONS)}
         </>
     );
 

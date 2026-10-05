@@ -23,6 +23,8 @@ export const Palette = {
     smoke: toNumArray(Color.smoke) as [number, number, number],
     frenzy: toNumArray(Color.frenzy) as [number, number, number],
     user: Color.user.map(toNumArray) as [number, number][],
+    /** 점멸 스킬 [채움, 외곽선]. 플레이어 색이 아니라 스킬 고유색이다. */
+    skillFlash: toNumArray(Color.skillFlash) as [number, number],
 };
 
 let currentMode: ColorVisionMode = 'off';
@@ -39,8 +41,12 @@ export function applyColorVision(mode: ColorVisionMode): boolean {
     Palette.grass = toNumArray(next.grass) as [number, number, number];
     Palette.frenzy = toNumArray(next.frenzy) as [number, number, number];
     Palette.user = next.user.map((pair) => toNumArray(pair)) as [number, number][];
+    Palette.skillFlash = toNumArray(next.skillFlash) as [number, number];
     return true;
 }
+
+/** 지금 엔진이 쓰는 색각 모드. 미리 구운 텍스처(훈련 패드 아이콘) 중 어느 것을 쓸지 고를 때 본다. */
+export const currentColorVision = (): ColorVisionMode => currentMode;
 
 /** rgba(hex, alpha) as a Phaser fillStyle/strokeStyle-compatible {color, alpha} pair is usually simpler,
  * but some draw calls need a packed CSS-style string (e.g. gradient stops) — this covers that case. */

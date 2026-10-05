@@ -83,7 +83,8 @@
       "rejoinCooldown": "You can rejoin this room in a moment.",
       "kickedFromRoom": "You were kicked from this room and can’t rejoin.",
       "gameRestricted": "This account is restricted from playing. Contact us if you think this is a mistake."
-    }
+    },
+    "emptyHint": "Create a room or use quick join to start."
   },
   "notFound": {
     "title": "Page not found",
@@ -599,8 +600,10 @@
         "emoji5": "Emoji slot 5",
         "emoji6": "Emoji slot 6",
         "emoji7": "Emoji slot 7",
-        "emoji8": "Emoji slot 8"
-      }
+        "emoji8": "Emoji slot 8",
+        "toggleMinimap": "Show/hide minimap"
+      },
+      "viewGroup": "View"
     }
   },
   "game": {
@@ -700,7 +703,9 @@
     "out": "Tagged",
     "controls": "Controls",
     "enlargeMap": "Enlarge map",
-    "shrinkMap": "Shrink map"
+    "shrinkMap": "Shrink map",
+    "showMinimap": "Show minimap",
+    "hideMinimap": "Hide minimap"
   },
   "guide": {
     "title": "How to play",

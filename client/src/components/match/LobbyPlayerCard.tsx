@@ -5,15 +5,8 @@ import { Icon, type IconName } from '../common/Icon.tsx';
 import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { Color } from '../../theme/color.ts';
 import { userColorsFor } from '../../theme/cvd.ts';
-import dashIcon from '../../assets/images/skill_dash.svg';
-import flashIcon from '../../assets/images/skill_flash.svg';
-import exhaustIcon from '../../assets/images/skill_exhaust.svg';
+import { useSkillIcons } from '../../theme/skillIcons.ts';
 
-const skillIcons: Record<PlayerSkill, string> = {
-    dash: dashIcon,
-    flash: flashIcon,
-    exhaust: exhaustIcon,
-};
 
 const controlIcons: Record<NonNullable<LobbyViewPlayer['control']>, IconName> = {
     keyboard: 'keyboard',
@@ -34,6 +27,7 @@ interface LobbyPlayerCardProps {
 }
 
 export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, viewerIsHost = false, canSelectEmptySlot = false, canChangeSkill = true, onSelectEmptySlot, onChangeSkill, onPassHost, onKick }) => {
+    const skillIcons: Record<PlayerSkill, string> = useSkillIcons();
     const { t } = useTranslation();
     const theme = useSettingsStore((state) => state.theme);
     const colorVisionMode = useSettingsStore((state) => state.colorVisionMode);
