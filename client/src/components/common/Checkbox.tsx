@@ -19,7 +19,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({ checked, onChange, label }) 
         }}>
             <span style={{
                 width: 54, height: 54, display: 'grid', placeItems: 'center', boxSizing: 'border-box',
-                borderRadius: 13, border: `6px solid ${checked ? 'var(--ui-blue-border)' : 'var(--ui-neutral-border)'}`,
+                borderRadius: 'var(--radius-sm)', border: `var(--border) solid ${checked ? 'var(--ui-blue-border)' : 'var(--ui-neutral-border)'}`,
                 color: theme === 0 ? Color.black : infoInk, background: theme === 0 && checked ? Color.blue[0] : 'transparent',
             }}>{checked && <Icon name="check" size={38}/>}</span>
             {label}

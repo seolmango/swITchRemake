@@ -212,7 +212,7 @@ export const ProfilePage: React.FC = () => {
             <PageLayout title={t('profile.title')} home>
                 <RoundBox x={960} y={550} width={1280} height={800} type={2}/>
                 <section className="profile-panel">
-                    <div className="profile-avatar" style={{ borderColor: statusInkColors(theme).info, color: statusInkColors(theme).info, background: theme === 0 ? Color.blue[0] : 'transparent' }}><Icon name="person" size={130}/></div>
+                    <div className="profile-avatar" style={{ borderColor: statusInkColors(theme).info, color: statusInkColors(theme).info, background: theme === 0 ? Color.blue[0] : 'var(--theme-canvas)' }}><Icon name="person" size={130}/></div>
                     <h2>{t('profile.guestTitle')}</h2>
                     <p style={{ color: colors.muted }}>{t('profile.guestBody')}</p>
                     <RoundBox width={900} height={175} type={1} style={{ display: 'grid', placeItems: 'center', padding: 28, textAlign: 'center', color: colors.text, fontSize: 27, lineHeight: 1.45 }}>
@@ -232,7 +232,7 @@ export const ProfilePage: React.FC = () => {
             <RoundBox x={960} y={550} width={1540} height={800} type={2}/>
             <section className="profile-panel is-authenticated">
                 <div className="profile-summary">
-                    <div className="profile-avatar" style={{ borderColor: statusInkColors(theme).info, color: statusInkColors(theme).info, background: theme === 0 ? Color.blue[0] : 'transparent' }}><Icon name="person" size={115}/></div>
+                    <div className="profile-avatar" style={{ borderColor: statusInkColors(theme).info, color: statusInkColors(theme).info, background: theme === 0 ? Color.blue[0] : 'var(--theme-canvas)' }}><Icon name="person" size={115}/></div>
                     <h2>{nickname ?? 'swITch'}</h2>
                     <p style={{ color: colors.muted }}>{t('profile.loggedBody')}</p>
                     <section

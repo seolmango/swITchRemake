@@ -7,19 +7,19 @@
   .responsive-form-container .title-logo { position: relative !important; inset: auto !important; width: 100% !important; transform: none !important; margin-bottom: 16px; }
   .responsive-form-container .title-screen > .round-button { position: relative !important; inset: auto !important; transform: none !important; width: 100% !important; height: 60px !important; }
   .responsive-form-container .title-screen > .round-button svg { width: 100%; height: 100%; }
-  .responsive-form-container .title-announcement { position: relative; inset: auto; transform: none; width: 100%; padding: 12px; gap: 10px; min-height: 0; border-width: 3px; }
+  .responsive-form-container .title-announcement { position: relative; inset: auto; transform: none; width: 100%; padding: 12px; gap: 10px; min-height: 0; border-width: var(--border); }
   .responsive-form-container .title-announcement strong { font-size: 16px; }
   .responsive-form-container .title-announcement span { font-size: 14px; white-space: normal; }
   .responsive-form-container .settings-dock { position: relative; inset: auto; justify-content: center; flex-wrap: wrap; gap: 12px; }
   .responsive-form-container .settings-dock .round-button { width: 52px !important; height: 52px !important; }
   .responsive-form-container .settings-dock .round-button svg { width: 28px; height: 28px; }
-  .responsive-form-container .server-status { position: relative; inset: auto; width: 100%; height: 48px; min-width: 0; padding: 0 14px; gap: 12px; font-size: 16px; border-width: 3px; }
+  .responsive-form-container .server-status { position: relative; inset: auto; width: 100%; height: 48px; min-width: 0; padding: 0 14px; gap: 12px; font-size: 16px; border-width: var(--border); }
   .responsive-form-container [role='checkbox'] { font-size: 17px !important; gap: 10px !important; text-align: left; }
-  .responsive-form-container [role='checkbox'] > span { width: 34px !important; height: 34px !important; flex: 0 0 auto; border-width: 3px !important; }
+  .responsive-form-container [role='checkbox'] > span { width: 34px !important; height: 34px !important; flex: 0 0 auto; border-width: var(--border) !important; }
   .responsive-form-container [role='checkbox'] > span svg { width: 24px; height: 24px; }
 
   .responsive-form-container .room-grid { position: relative; inset: auto; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .responsive-form-container .room-card { width: 100%; min-height: 124px; height: auto; gap: 18px; padding: 16px; border-width: 3px; border-radius: 18px; }
+  .responsive-form-container .room-card { width: 100%; min-height: 124px; height: auto; gap: 18px; padding: 16px; border-width: var(--border); border-radius: var(--radius-md); }
   .responsive-form-container .room-card-heading,
   .responsive-form-container .room-card-meta { gap: 10px; min-width: 0; }
   .responsive-form-container .room-card-name { min-width: 0; max-width: 100%; font-size: 22px; }
@@ -35,14 +35,14 @@
   .responsive-form-container .room-actions .round-button { width: 100% !important; }
 
   .responsive-form-container .lobby-shell,
-  .responsive-form-container .result-shell { position: relative; inset: auto; width: 100%; border-width: 3px; border-radius: 18px; overflow: visible; grid-template-rows: auto; }
-  .responsive-form-container .lobby-toolbar { padding: 14px; grid-template-columns: minmax(0, 1fr); gap: 16px; border-bottom-width: 3px; }
+  .responsive-form-container .result-shell { position: relative; inset: auto; width: 100%; border-width: var(--border); border-radius: var(--radius-md); overflow: visible; grid-template-rows: auto; }
+  .responsive-form-container .lobby-toolbar { padding: 14px; grid-template-columns: minmax(0, 1fr); gap: 16px; border-bottom-width: var(--border); }
   .responsive-form-container .lobby-room-code { flex-wrap: wrap; justify-content: space-between; gap: 8px; }
   .responsive-form-container .lobby-room-code > span,
   .responsive-form-container .lobby-map-picker span,
   .responsive-form-container .lobby-room-meta > div > span { font-size: 14px; }
   .responsive-form-container .lobby-room-code strong { font-size: 23px; }
-  .responsive-form-container .lobby-room-code button { min-height: 44px; font-size: 14px; border-width: 2px; padding: 0 10px; }
+  .responsive-form-container .lobby-room-code button { min-height: 44px; font-size: 14px; border-width: var(--border-thin); padding: 0 10px; }
   .responsive-form-container .lobby-map-picker { gap: 12px; }
   .responsive-form-container .lobby-map-picker > div { min-width: 0; flex: 1; }
   .responsive-form-container .lobby-map-picker strong { font-size: 20px; overflow-wrap: anywhere; text-align: center; }
@@ -51,132 +51,132 @@
   .responsive-form-container .lobby-room-meta { justify-content: space-between; }
   .responsive-form-container .lobby-room-meta > div { justify-items: start; }
   .responsive-form-container .lobby-room-meta strong { font-size: 18px; }
-  .responsive-form-container .lobby-lock-button { min-height: 44px; border-width: 2px; font-size: 14px; }
+  .responsive-form-container .lobby-lock-button { min-height: 44px; border-width: var(--border-thin); font-size: 14px; }
   .responsive-form-container .lobby-player-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: auto; padding: 14px; gap: 12px; overflow: visible; }
-  .responsive-form-container .lobby-player-card { min-height: 180px; padding: 12px; border-width: 3px; border-radius: 16px; gap: 10px; }
+  .responsive-form-container .lobby-player-card { min-height: 180px; padding: 12px; border-width: var(--border); border-radius: var(--radius-md); gap: 10px; }
   .responsive-form-container .lobby-player-card.is-empty { min-height: 78px; }
-  .responsive-form-container .lobby-player-number { left: 10px; top: 10px; width: 36px; height: 36px; border-width: 2px; font-size: 18px; }
+  .responsive-form-container .lobby-player-number { left: 10px; top: 10px; width: 36px; height: 36px; border-width: var(--border-thin); font-size: 18px; }
   .responsive-form-container .lobby-player-main { min-height: 66px; padding-top: 38px; }
   .responsive-form-container .lobby-player-name-line strong { flex: 1 1 auto; font-size: 18px; white-space: normal; overflow-wrap: anywhere; }
   .responsive-form-container .lobby-you-badge,
   .responsive-form-container .lobby-owner-badge { padding: 3px 6px; font-size: 12px; }
   .responsive-form-container .lobby-player-role { font-size: 13px; }
   .responsive-form-container .lobby-player-loadout > span,
-  .responsive-form-container .lobby-player-loadout > button { min-height: 44px; height: auto; padding: 6px 8px; border-width: 2px; gap: 6px; }
+  .responsive-form-container .lobby-player-loadout > button { min-height: 44px; height: auto; padding: 6px 8px; border-width: var(--border-thin); gap: 6px; }
   .responsive-form-container .lobby-player-loadout small { font-size: 14px; }
   .responsive-form-container .lobby-player-loadout img,
   .responsive-form-container .lobby-player-loadout > span > svg { width: 26px; height: 26px; }
-  .responsive-form-container .lobby-player-stats { min-height: 44px; padding-top: 8px; border-top-width: 2px; }
+  .responsive-form-container .lobby-player-stats { min-height: 44px; padding-top: 8px; border-top-width: var(--border-thin); }
   .responsive-form-container .lobby-player-stats strong { font-size: 17px; }
   .responsive-form-container .lobby-player-stats small,
   .responsive-form-container .lobby-player-stats .lobby-no-stats { font-size: 12px; }
   .responsive-form-container .lobby-host-actions { top: 8px; right: 8px; }
-  .responsive-form-container .lobby-host-actions button { border-width: 2px; }
+  .responsive-form-container .lobby-host-actions button { border-width: var(--border-thin); }
   .responsive-form-container .lobby-empty-copy { padding-left: 46px; }
   .responsive-form-container .lobby-empty-copy strong { font-size: 17px; }
   .responsive-form-container .lobby-empty-copy span { font-size: 13px; }
-  .responsive-form-container .lobby-footer { padding: 14px; grid-template-columns: minmax(0, 1fr); gap: 12px; border-top-width: 3px; }
+  .responsive-form-container .lobby-footer { padding: 14px; grid-template-columns: minmax(0, 1fr); gap: 12px; border-top-width: var(--border); }
   .responsive-form-container .lobby-footer-status { font-size: 14px; line-height: 1.5; }
   .responsive-form-container .lobby-footer-actions { gap: 12px; overflow: visible; }
   .responsive-form-container .lobby-footer-actions .round-button { flex: 1; width: auto !important; min-width: 0; }
   .responsive-form-container .lobby-footer-actions .round-button svg text { font-size: 16px; }
   .responsive-form-container .lobby-dialog-backdrop { position: fixed; }
-  .responsive-form-container .lobby-dialog { width: calc(100% - 32px); padding: 22px 16px; border-width: 3px; max-height: calc(100dvh - 32px); overflow: auto; }
+  .responsive-form-container .lobby-dialog { width: calc(100% - 32px); padding: 22px 16px; border-width: var(--border); max-height: calc(100dvh - 32px); overflow: auto; }
   .responsive-form-container .lobby-dialog h2 { font-size: 24px; }
   .responsive-form-container .lobby-dialog p { font-size: 16px; }
   .responsive-form-container .lobby-skill-picker { gap: 10px; }
-  .responsive-form-container .lobby-skill-picker button { padding: 12px 8px; border-width: 2px; }
+  .responsive-form-container .lobby-skill-picker button { padding: 12px 8px; border-width: var(--border-thin); }
   .responsive-form-container .lobby-skill-picker img { width: 44px; height: 44px; }
   .responsive-form-container .lobby-skill-picker strong { font-size: 15px; }
   .responsive-form-container .lobby-dialog-actions { flex-wrap: wrap; justify-content: center; }
   .responsive-form-container .lobby-dialog-actions button,
-  .responsive-form-container .lobby-dialog-cancel { min-height: 44px; border-width: 2px; font-size: 16px; }
+  .responsive-form-container .lobby-dialog-cancel { min-height: 44px; border-width: var(--border-thin); font-size: 16px; }
 
   .responsive-form-container .result-main,
   .responsive-form-container .result-main.has-many-winners { padding: 12px; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; gap: 16px; overflow: visible; }
   .responsive-form-container .result-winner-panel,
-  .responsive-form-container .result-stats-panel { border-width: 3px; border-radius: 16px; min-width: 0; }
+  .responsive-form-container .result-stats-panel { border-width: var(--border); border-radius: var(--radius-md); min-width: 0; }
   .responsive-form-container .result-winner-panel { padding: 16px; grid-template-rows: auto; gap: 14px; }
   .responsive-form-container .result-kicker { font-size: 14px; }
-  .responsive-form-container .result-winners article { padding: 14px !important; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; border-width: 2px; }
+  .responsive-form-container .result-winners article { padding: 14px !important; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; border-width: var(--border-thin); }
   .responsive-form-container .result-winners[data-winner-count='1'] article { grid-template-columns: minmax(0, 1fr); }
   .responsive-form-container .result-winner-avatar,
-  .responsive-form-container .result-winners[data-winner-count='1'] .result-winner-avatar { width: 52px; height: 52px; font-size: 26px; border-width: 3px; }
+  .responsive-form-container .result-winners[data-winner-count='1'] .result-winner-avatar { width: 52px; height: 52px; font-size: 26px; border-width: var(--border); }
   .responsive-form-container .result-winners h2 { font-size: 21px; white-space: normal; overflow-wrap: anywhere; }
   .responsive-form-container .result-winners p { font-size: 14px; white-space: normal !important; }
   .responsive-form-container .result-winner-panel.has-many-winners .result-winners { grid-template-columns: minmax(0, 1fr); }
   .responsive-form-container .result-summary-grid span { font-size: 12px; }
   .responsive-form-container .result-summary-grid strong { font-size: 17px; }
-  .responsive-form-container .result-summary-grid div { padding: 10px 6px; border-width: 2px; }
+  .responsive-form-container .result-summary-grid div { padding: 10px 6px; border-width: var(--border-thin); }
   .responsive-form-container .result-stats-panel { grid-template-rows: auto; }
-  .responsive-form-container .result-stats-panel > header { padding: 14px; border-bottom-width: 2px; gap: 12px; flex-wrap: wrap; }
+  .responsive-form-container .result-stats-panel > header { padding: 14px; border-bottom-width: var(--border-thin); gap: 12px; flex-wrap: wrap; }
   .responsive-form-container .result-stats-panel h2 { font-size: 24px; }
   .responsive-form-container .result-stats-panel > header > span { font-size: 14px; }
   .responsive-form-container .result-table-wrap { width: 100%; overflow-x: auto; scrollbar-gutter: auto; }
   .responsive-form-container .result-table { min-width: 640px; font-size: 16px; }
   .responsive-form-container .result-table th { padding: 0 12px; height: 48px; font-size: 14px; }
-  .responsive-form-container .result-table td { padding: 10px 12px; height: 64px; border-top-width: 2px; }
+  .responsive-form-container .result-table td { padding: 10px 12px; height: 64px; border-top-width: var(--border-thin); }
   .responsive-form-container .result-player-cell { gap: 8px; }
-  .responsive-form-container .result-player-cell i { width: 32px; height: 32px; border-width: 2px; }
+  .responsive-form-container .result-player-cell i { width: 32px; height: 32px; border-width: var(--border-thin); }
   .responsive-form-container .result-player-cell > span { flex: 1 1 auto; white-space: normal; overflow-wrap: anywhere; }
   .responsive-form-container .result-metric-cell strong { font-size: 17px; }
   .responsive-form-container .result-table small { font-size: 12px; }
-  .responsive-form-container .result-reward { padding: 14px; grid-template-columns: minmax(0, 1fr); gap: 12px; border-top-width: 2px; }
+  .responsive-form-container .result-reward { padding: 14px; grid-template-columns: minmax(0, 1fr); gap: 12px; border-top-width: var(--border-thin); }
   .responsive-form-container .result-reward > header strong { font-size: 26px; }
-  .responsive-form-container .result-reward li { font-size: 13px; border-width: 2px; padding: 5px 8px; }
+  .responsive-form-container .result-reward li { font-size: 13px; border-width: var(--border-thin); padding: 5px 8px; }
   .responsive-form-container .result-reward-level { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .responsive-form-container .result-footer { padding: 14px; grid-template-columns: minmax(0, 1fr); gap: 16px; overflow: visible; border-top-width: 3px; }
+  .responsive-form-container .result-footer { padding: 14px; grid-template-columns: minmax(0, 1fr); gap: 16px; overflow: visible; border-top-width: var(--border); }
   .responsive-form-container .result-footer > div { flex-wrap: wrap; gap: 12px; }
   .responsive-form-container .result-footer .round-button { flex: 1; min-width: 0; width: auto !important; }
   .responsive-form-container .result-footer .round-button svg text { font-size: 16px; }
   .responsive-form-container .result-return-timer strong { font-size: 16px; }
   .responsive-form-container .result-return-timer span { font-size: 13px; white-space: normal; }
 
-  .responsive-form-container .settings-shell { position: relative; inset: auto; grid-template-columns: minmax(0, 1fr); border-width: 3px; border-radius: 18px; overflow: visible; }
-  .responsive-form-container .settings-tabs { padding: 12px; border-right: 0; border-bottom: 2px solid var(--settings-border); gap: 10px; }
+  .responsive-form-container .settings-shell { position: relative; inset: auto; grid-template-columns: minmax(0, 1fr); border-width: var(--border); border-radius: var(--radius-md); overflow: visible; }
+  .responsive-form-container .settings-tabs { padding: 12px; border-right: 0; border-bottom: var(--border-thin) solid var(--settings-border); gap: 10px; }
   .responsive-form-container .settings-tablist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .responsive-form-container .settings-tablist > button { min-width: 0; height: auto; min-height: 48px; padding: 8px; gap: 8px; border-width: 2px; border-radius: 12px; }
+  .responsive-form-container .settings-tablist > button { min-width: 0; height: auto; min-height: 48px; padding: 8px; gap: 8px; border-width: var(--border-thin); border-radius: var(--radius-md); }
   .responsive-form-container .settings-tablist span { font-size: 17px; }
   .responsive-form-container .settings-tablist small { font-size: 12px; }
   .responsive-form-container .settings-tabs > p { margin: 0; font-size: 13px; }
   .responsive-form-container .settings-content { grid-template-rows: auto; }
-  .responsive-form-container .settings-content-header { padding: 16px 12px; gap: 12px; flex-wrap: wrap; border-bottom-width: 2px; }
+  .responsive-form-container .settings-content-header { padding: 16px 12px; gap: 12px; flex-wrap: wrap; border-bottom-width: var(--border-thin); }
   .responsive-form-container .settings-content-header h2 { font-size: 25px; }
   .responsive-form-container .settings-content-header span { font-size: 12px; }
-  .responsive-form-container .settings-reset { min-height: 44px; padding: 0 12px; border-width: 2px; border-radius: 12px; font-size: 14px; }
+  .responsive-form-container .settings-reset { min-height: 44px; padding: 0 12px; border-width: var(--border-thin); border-radius: var(--radius-md); font-size: 14px; }
   .responsive-form-container .settings-scroll { padding: 0 12px 20px; overflow: visible; scrollbar-gutter: auto; }
-  .responsive-form-container .settings-row { min-height: 0; padding: 18px 0; grid-template-columns: minmax(0, 1fr); gap: 12px; border-bottom-width: 2px; }
+  .responsive-form-container .settings-row { min-height: 0; padding: 18px 0; grid-template-columns: minmax(0, 1fr); gap: 12px; border-bottom-width: var(--border-thin); }
   .responsive-form-container .settings-row-copy strong { font-size: 18px; }
   .responsive-form-container .settings-row-copy span { font-size: 14px; }
   .responsive-form-container .settings-row-control { justify-content: flex-start; }
-  .responsive-form-container .settings-segmented { min-height: 52px; border-width: 2px; padding: 4px; gap: 3px; }
+  .responsive-form-container .settings-segmented { min-height: 52px; border-width: var(--border-thin); padding: 4px; gap: 3px; }
   .responsive-form-container .settings-segmented button { min-height: 42px; padding: 6px; font-size: 14px; }
   .responsive-form-container .settings-volume-control { gap: 10px; grid-template-columns: minmax(0, 1fr) 48px; }
   .responsive-form-container .settings-volume-control output { font-size: 20px; }
   .responsive-form-container .settings-device-card,
   .responsive-form-container .settings-link-grid > button,
-  .responsive-form-container .settings-install-card { padding: 16px; border-width: 2px; border-radius: 14px; }
+  .responsive-form-container .settings-install-card { padding: 16px; border-width: var(--border-thin); border-radius: var(--radius-md); }
   .responsive-form-container .settings-link-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .responsive-form-container .settings-info-card strong { font-size: 19px; }
   .responsive-form-container .settings-info-card p { font-size: 14px; }
   .responsive-form-container .settings-info-card small,
   .responsive-form-container .settings-card-kicker { font-size: 13px; }
   .responsive-form-container .settings-group-heading { font-size: 21px; padding: 16px 0 8px; }
-  .responsive-form-container .settings-now-playing { padding: 16px; grid-template-columns: minmax(0, 1fr); gap: 16px; border-width: 2px; }
-  .responsive-form-container .settings-album-art { width: 88px; height: 88px; border-radius: 16px; }
+  .responsive-form-container .settings-now-playing { padding: 16px; grid-template-columns: minmax(0, 1fr); gap: 16px; border-width: var(--border-thin); }
+  .responsive-form-container .settings-album-art { width: 88px; height: 88px; border-radius: var(--radius-md); }
   .responsive-form-container .settings-album-art span { font-size: 42px; }
   .responsive-form-container .settings-now-playing strong { font-size: 22px; }
   .responsive-form-container .settings-now-playing p,
   .responsive-form-container .settings-now-playing small { font-size: 14px; }
-  .responsive-form-container .keymap-help { padding: 16px; border-width: 2px; }
+  .responsive-form-container .keymap-help { padding: 16px; border-width: var(--border-thin); }
   .responsive-form-container .keymap-help strong { font-size: 18px; }
   .responsive-form-container .keymap-help span { font-size: 14px; }
-  .responsive-form-container .keymap-error { padding: 12px; font-size: 14px; border-width: 2px; }
+  .responsive-form-container .keymap-error { padding: 12px; font-size: 14px; border-width: var(--border-thin); }
   .responsive-form-container .keymap-group h3 { font-size: 20px; padding: 12px 0; }
-  .responsive-form-container .keymap-row { min-height: 0; padding: 14px 0; grid-template-columns: minmax(0, 1fr); gap: 10px; border-bottom-width: 2px; }
+  .responsive-form-container .keymap-row { min-height: 0; padding: 14px 0; grid-template-columns: minmax(0, 1fr); gap: 10px; border-bottom-width: var(--border-thin); }
   .responsive-form-container .keymap-row > span { font-size: 16px; }
   .responsive-form-container .keymap-row > div { gap: 10px; }
-  .responsive-form-container .key-binding { min-height: 48px; padding: 7px 10px; font-size: 15px; border-width: 2px; }
+  .responsive-form-container .key-binding { min-height: 48px; padding: 7px 10px; font-size: 15px; border-width: var(--border-thin); }
   .responsive-form-container .mfa-settings { gap: 16px; padding-top: 16px; }
   .responsive-form-container .mfa-empty-card,
   .responsive-form-container .mfa-status-card,
@@ -184,17 +184,17 @@
   .responsive-form-container .mfa-summary-grid article,
   .responsive-form-container .mfa-secret-card,
   .responsive-form-container .mfa-action-card,
-  .responsive-form-container .mfa-backup-dialog { padding: 16px; border-width: 2px; border-radius: 14px; }
+  .responsive-form-container .mfa-backup-dialog { padding: 16px; border-width: var(--border-thin); border-radius: var(--radius-md); }
   .responsive-form-container .mfa-empty-card { min-height: 220px; gap: 16px; }
   .responsive-form-container .mfa-empty-card strong { font-size: 19px; }
   .responsive-form-container .mfa-settings button,
-  .responsive-form-container .mfa-backup-dialog button { min-height: 44px; padding: 8px 12px; font-size: 15px; border-width: 2px; }
+  .responsive-form-container .mfa-backup-dialog button { min-height: 44px; padding: 8px 12px; font-size: 15px; border-width: var(--border-thin); }
   .responsive-form-container .mfa-status-card { min-height: 0; flex-wrap: wrap; gap: 12px; }
   .responsive-form-container .mfa-status-copy { gap: 10px !important; }
   .responsive-form-container .mfa-status-copy > svg { width: 28px; height: 28px; }
   .responsive-form-container .mfa-status-card strong { font-size: 21px; }
   .responsive-form-container .mfa-status-card span { font-size: 13px; }
-  .responsive-form-container .mfa-status-card b { font-size: 14px; padding: 8px 12px; border-width: 2px; }
+  .responsive-form-container .mfa-status-card b { font-size: 14px; padding: 8px 12px; border-width: var(--border-thin); }
   .responsive-form-container .mfa-enable-panel h3,
   .responsive-form-container .mfa-device-panel h3,
   .responsive-form-container .mfa-secret-card h3,
@@ -207,12 +207,12 @@
   .responsive-form-container .mfa-enable-fields { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .responsive-form-container .mfa-enable-fields > button { margin-bottom: 0; min-height: 44px; }
   .responsive-form-container .mfa-settings .field-label { font-size: 17px; }
-  .responsive-form-container .mfa-settings .field-group input { height: 48px !important; font-size: 18px !important; border-bottom-width: 3px !important; }
+  .responsive-form-container .mfa-settings .field-group input { height: 48px !important; font-size: 18px !important; border-bottom-width: var(--border) !important; }
   .responsive-form-container .mfa-summary-grid article { min-height: 96px; gap: 8px; }
   .responsive-form-container .mfa-summary-grid article > span { font-size: 13px; }
   .responsive-form-container .mfa-summary-grid article > strong { font-size: 25px; }
-  .responsive-form-container .mfa-device-panel { border-width: 2px; border-radius: 14px; }
-  .responsive-form-container .mfa-device-panel > header { padding: 14px; min-height: 72px; gap: 10px; border-bottom-width: 2px; }
+  .responsive-form-container .mfa-device-panel { border-width: var(--border-thin); border-radius: var(--radius-md); }
+  .responsive-form-container .mfa-device-panel > header { padding: 14px; min-height: 72px; gap: 10px; border-bottom-width: var(--border-thin); }
   .responsive-form-container .mfa-device-list article { padding: 14px; grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .responsive-form-container .mfa-device-list article > b { justify-self: start; font-size: 12px; }
   .responsive-form-container .mfa-device-list strong { font-size: 16px; }
@@ -220,10 +220,10 @@
   .responsive-form-container .mfa-device-list small { font-size: 12px; }
   .responsive-form-container .mfa-secret-card { grid-template-columns: minmax(0, 1fr); }
   .responsive-form-container .mfa-secret-card p { font-size: 14px; }
-  .responsive-form-container .mfa-secret-card code { font-size: 16px; padding: 12px; border-width: 2px; }
+  .responsive-form-container .mfa-secret-card code { font-size: 16px; padding: 12px; border-width: var(--border-thin); }
   .responsive-form-container .mfa-secret-actions { gap: 12px; flex-wrap: wrap; font-size: 13px; }
   .responsive-form-container .mfa-action-card > div { min-width: 0; }
-  .responsive-form-container .mfa-action-card > input { width: 100%; min-width: 0; height: 48px; border-width: 2px; font-size: 16px; }
+  .responsive-form-container .mfa-action-card > input { width: 100%; min-width: 0; height: 48px; border-width: var(--border-thin); font-size: 16px; }
   .responsive-form-container .mfa-action-card > div span,
   .responsive-form-container .mfa-message { font-size: 13px; }
   .responsive-form-container .mfa-backup-dialog h2 { font-size: 24px; }
@@ -238,40 +238,40 @@
   .responsive-form-container .profile-panel > p,
   .responsive-form-container .profile-summary > p { font-size: 16px; }
   .responsive-form-container .profile-avatar,
-  .responsive-form-container .profile-summary .profile-avatar { width: 92px; height: 92px; border-width: 5px; }
+  .responsive-form-container .profile-summary .profile-avatar { width: 92px; height: 92px; border-width: var(--border); }
   .responsive-form-container .profile-avatar svg { width: 60px; height: 60px; }
-  .responsive-form-container .profile-panel > .round-box { width: 100% !important; height: auto !important; padding: 18px !important; font-size: 17px !important; border-width: 3px; }
+  .responsive-form-container .profile-panel > .round-box { width: 100% !important; height: auto !important; padding: 18px !important; font-size: 17px !important; border-width: var(--border); }
   .responsive-form-container .profile-actions,
   .responsive-form-container .profile-actions.is-compact { width: 100%; gap: 12px; margin-top: 0; }
   .responsive-form-container .profile-actions .round-button { flex: 1; min-width: 0; width: auto !important; }
   .responsive-form-container .profile-actions .round-button svg text { font-size: 16px; }
-  .responsive-form-container .profile-stats-card { width: 100%; min-height: 0; padding: 16px; border-width: 3px; border-radius: 16px; }
+  .responsive-form-container .profile-stats-card { width: 100%; min-height: 0; padding: 16px; border-width: var(--border); border-radius: var(--radius-md); }
   .responsive-form-container .profile-stat-grid { gap: 14px 8px; }
   .responsive-form-container .profile-stat-grid strong { font-size: 22px; }
   .responsive-form-container .profile-stat-grid small { font-size: 12px; white-space: normal; }
   .responsive-form-container .profile-detail-stack { grid-template-rows: auto !important; gap: 16px; }
-  .responsive-form-container .match-history-panel { padding: 14px; border-width: 3px; border-radius: 16px; }
+  .responsive-form-container .match-history-panel { padding: 14px; border-width: var(--border); border-radius: var(--radius-md); }
   .responsive-form-container .match-history-panel > header h2 { font-size: 23px; }
   .responsive-form-container .match-history-panel > header span { font-size: 12px; }
   .responsive-form-container .match-history-list { max-height: 440px; padding-right: 0; }
-  .responsive-form-container .profile-panel .match-history-list article { grid-template-columns: 74px minmax(0, 1fr) 44px; gap: 8px; padding: 10px; border-width: 2px; }
+  .responsive-form-container .profile-panel .match-history-list article { grid-template-columns: 74px minmax(0, 1fr) 44px; gap: 8px; padding: 10px; border-width: var(--border-thin); }
   .responsive-form-container .match-history-list article > div:first-child strong { font-size: 16px; }
   .responsive-form-container .match-history-list article > div:first-child span,
   .responsive-form-container .match-history-list time,
   .responsive-form-container .match-history-stats { font-size: 12px; }
-  .responsive-form-container .profile-device-summary { flex-wrap: wrap; gap: 12px; padding: 14px; border-width: 3px; border-radius: 16px; }
+  .responsive-form-container .profile-device-summary { flex-wrap: wrap; gap: 12px; padding: 14px; border-width: var(--border); border-radius: var(--radius-md); }
   .responsive-form-container .profile-device-summary h2 { font-size: 21px; }
   .responsive-form-container .profile-device-summary p { font-size: 14px; }
-  .responsive-form-container .profile-device-summary button { min-height: 44px; font-size: 16px; padding: 8px 12px; border-width: 2px; }
+  .responsive-form-container .profile-device-summary button { min-height: 44px; font-size: 16px; padding: 8px 12px; border-width: var(--border-thin); }
   .responsive-form-container .profile-session-backdrop { position: fixed; }
-  .responsive-form-container .profile-session-dialog.session-panel { width: calc(100% - 24px); max-width: none; max-height: calc(100dvh - 24px); height: auto; padding: 16px; border-width: 3px; }
+  .responsive-form-container .profile-session-dialog.session-panel { width: calc(100% - 24px); max-width: none; max-height: calc(100dvh - 24px); height: auto; padding: 16px; border-width: var(--border); }
   .responsive-form-container .profile-session-dialog header { padding-right: 50px; }
   .responsive-form-container .profile-session-dialog .session-dialog-close { position: relative; inset: auto; align-self: start; padding: 8px 12px; min-height: 44px; font-size: 15px; }
   .responsive-form-container .session-panel > header h2 { font-size: 22px; }
   .responsive-form-container .session-panel > header span,
   .responsive-form-container .session-panel > p { font-size: 14px; }
   .responsive-form-container .profile-session-dialog .session-list { max-height: 50dvh; }
-  .responsive-form-container .session-list article { grid-template-columns: 28px minmax(0, 1fr); gap: 8px; padding: 10px; border-width: 2px; }
+  .responsive-form-container .session-list article { grid-template-columns: 28px minmax(0, 1fr); gap: 8px; padding: 10px; border-width: var(--border-thin); }
   .responsive-form-container .session-list article strong { font-size: 16px; }
   .responsive-form-container .session-list article div span { font-size: 12px; }
   .responsive-form-container .session-current-badge { font-size: 12px; padding: 4px 8px; }
@@ -282,7 +282,7 @@
   .responsive-form-container .guide-lead { font-size: 17px; text-align: left; margin-bottom: 18px; }
   .responsive-form-container .guide-rules,
   .responsive-form-container .guide-controls,
-  .responsive-form-container .guide-demo-section { padding: 14px; border-width: 3px; border-radius: 18px; }
+  .responsive-form-container .guide-demo-section { padding: 14px; border-width: var(--border); border-radius: var(--radius-md); }
   .responsive-form-container .guide-section-heading { align-items: start; flex-direction: column; gap: 12px; }
   .responsive-form-container .guide-section-heading h2,
   .responsive-form-container .guide-rules h2,
@@ -293,18 +293,18 @@
   .responsive-form-container .guide-motion-note { text-align: left; font-size: 14px; }
   .responsive-form-container .guide-rules ol { grid-template-columns: minmax(0, 1fr); margin-top: 12px; }
   .responsive-form-container .guide-rules li { grid-template-columns: 28px minmax(0, 1fr); gap: 10px; font-size: 16px; margin-top: 12px; }
-  .responsive-form-container .guide-rules li::before { width: 26px; height: 26px; border-width: 2px; }
+  .responsive-form-container .guide-rules li::before { width: 26px; height: 26px; border-width: var(--border-thin); }
   .responsive-form-container .guide-control-row { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px 0; }
   .responsive-form-container .guide-control-row h3 { font-size: 17px; }
   .responsive-form-container .guide-key-list { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .responsive-form-container .guide-keycap { min-width: 0; min-height: 44px; padding: 6px; gap: 5px; border-width: 2px; font-size: 14px; }
+  .responsive-form-container .guide-keycap { min-width: 0; min-height: 44px; padding: 6px; gap: 5px; border-width: var(--border-thin); font-size: 14px; }
   .responsive-form-container .guide-keycap small { font-size: 12px; }
   .responsive-form-container .guide-control-row-compact .guide-keycap { min-width: 80px; }
   .responsive-form-container .guide-demo-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .responsive-form-container .guide-demo-tabs button,
-  .responsive-form-container .guide-replay { min-height: 44px; padding: 6px 10px; font-size: 15px; border-width: 2px; }
-  .responsive-form-container .guide-demo-stage { grid-template-columns: minmax(0, 1fr); min-height: 0; border-width: 2px; }
-  .responsive-form-container .guide-demo-viewport { aspect-ratio: 16 / 9; border-right: 0; border-bottom: 2px solid var(--ui-blue-border); }
+  .responsive-form-container .guide-replay { min-height: 44px; padding: 6px 10px; font-size: 15px; border-width: var(--border-thin); }
+  .responsive-form-container .guide-demo-stage { grid-template-columns: minmax(0, 1fr); min-height: 0; border-width: var(--border-thin); }
+  .responsive-form-container .guide-demo-viewport { aspect-ratio: 16 / 9; border-right: 0; border-bottom: var(--border-thin) solid var(--ui-blue-border); }
   .responsive-form-container .guide-demo-copy { padding: 14px; }
   .responsive-form-container .guide-demo-copy h3 { font-size: 22px; margin-bottom: 12px; }
   .responsive-form-container .guide-demo-copy > p:not(.guide-demo-index),
@@ -318,30 +318,30 @@
   .responsive-form-container .guide-training > .round-button { width: 100% !important; max-width: 100%; height: 64px !important; }
 
   .responsive-form-container .replay-shell { position: relative; inset: auto; width: 100%; grid-template-rows: auto; gap: 16px; }
-  .responsive-form-container .replay-dropzone { min-height: 250px; padding: 20px; border-width: 3px; gap: 14px; font-size: 16px; }
+  .responsive-form-container .replay-dropzone { min-height: 250px; padding: 20px; border-width: var(--border); gap: 14px; font-size: 16px; }
   .responsive-form-container .replay-dropzone strong { font-size: 22px; }
   .responsive-form-container .replay-meta { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .responsive-form-container .replay-meta dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .responsive-form-container .replay-meta dd { font-size: 16px; white-space: normal; overflow-wrap: anywhere; }
-  .responsive-form-container .replay-verdict { padding: 12px; border-width: 2px; }
+  .responsive-form-container .replay-verdict { padding: 12px; border-width: var(--border-thin); }
   .responsive-form-container .replay-verdict strong { font-size: 19px; }
   .responsive-form-container .replay-participants { grid-template-columns: repeat(2, minmax(0, 1fr)); font-size: 14px; }
   .responsive-form-container .replay-participants li { overflow-wrap: anywhere; }
   .responsive-form-container .replay-participants i { flex: none; }
-  .responsive-form-container .replay-stage { aspect-ratio: 16 / 9; border-width: 2px; }
+  .responsive-form-container .replay-stage { aspect-ratio: 16 / 9; border-width: var(--border-thin); }
   .responsive-form-container .replay-controls { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; }
   .responsive-form-container .replay-controls .round-button { width: 110px !important; }
   .responsive-form-container .replay-controls input { min-width: 0; width: 100%; }
   .responsive-form-container .replay-position { grid-column: 1 / -1; font-size: 14px; }
 
   .responsive-form-container .admin-shell,
-  .responsive-form-container .admin-shell.has-tabs { position: relative; inset: auto; width: 100%; padding: 14px; border-width: 3px; border-radius: 18px; grid-template-rows: auto; gap: 16px; overflow: visible; }
+  .responsive-form-container .admin-shell.has-tabs { position: relative; inset: auto; width: 100%; padding: 14px; border-width: var(--border); border-radius: var(--radius-md); grid-template-rows: auto; gap: 16px; overflow: visible; }
   .responsive-form-container .admin-state { padding: 24px 0; text-align: center; font-size: 17px; }
   .responsive-form-container .admin-tabs { flex-wrap: wrap; gap: 8px; }
   .responsive-form-container .admin-toggle,
-  .responsive-form-container .admin-tabs .admin-toggle { min-width: 0; min-height: 44px; padding: 8px 10px; border-width: 2px; font-size: 14px; border-radius: 12px; }
+  .responsive-form-container .admin-tabs .admin-toggle { min-width: 0; min-height: 44px; padding: 8px 10px; border-width: var(--border-thin); font-size: 14px; border-radius: var(--radius-md); }
   .responsive-form-container .admin-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .responsive-form-container .admin-kpi { padding: 12px; border-width: 2px; }
+  .responsive-form-container .admin-kpi { padding: 12px; border-width: var(--border-thin); }
   .responsive-form-container .admin-kpi > strong { font-size: 28px; }
   .responsive-form-container .admin-kpi > span { font-size: 14px; }
   .responsive-form-container .admin-kpi > small { font-size: 12px; }
@@ -350,14 +350,14 @@
   .responsive-form-container .admin-overview.has-degraded,
   .responsive-form-container .admin-inspect,
   .responsive-form-container .admin-reports { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; gap: 14px; }
-  .responsive-form-container .admin-panel { min-width: 0; border-width: 2px; border-radius: 14px; }
+  .responsive-form-container .admin-panel { min-width: 0; border-width: var(--border-thin); border-radius: var(--radius-md); }
   .responsive-form-container .admin-panel > header { padding: 12px; gap: 8px; flex-wrap: wrap; }
   .responsive-form-container .admin-panel h2 { font-size: 22px; }
   .responsive-form-container .admin-panel > header span { font-size: 13px; }
   .responsive-form-container .admin-table-wrap { width: 100%; max-height: 420px; scrollbar-gutter: auto; }
   .responsive-form-container .admin-table-wrap table { min-width: 600px; font-size: 14px; }
   .responsive-form-container .admin-table-wrap th { height: 44px; padding: 8px; font-size: 13px; }
-  .responsive-form-container .admin-table-wrap td { padding: 10px 8px; border-top-width: 2px; }
+  .responsive-form-container .admin-table-wrap td { padding: 10px 8px; border-top-width: var(--border-thin); }
   .responsive-form-container .admin-table-wrap td > strong { font-size: 16px; }
   .responsive-form-container .admin-table-wrap td > small { font-size: 12px; }
   .responsive-form-container .admin-footer,

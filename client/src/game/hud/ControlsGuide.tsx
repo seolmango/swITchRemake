@@ -11,7 +11,7 @@ interface Props {
 
 const Key: React.FC<{ theme: Theme; children: React.ReactNode }> = ({ theme, children }) => (
     <span style={{
-        display: 'inline-block', minWidth: 24, padding: '4px 8px', borderRadius: 8,
+        display: 'inline-block', minWidth: 24, padding: '4px 8px', borderRadius: 'var(--radius-sm)',
         border: `2px solid ${Color.smoke[2]}`,
         background: theme === 1 ? Color.black : Color.white,
         color: bodyText(theme), fontSize: HUD_METRICS.captionFont, fontWeight: 800, textAlign: 'center',

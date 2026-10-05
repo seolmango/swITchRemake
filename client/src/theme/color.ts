@@ -48,15 +48,23 @@ export const Color = {
         "#FF9A52",
         "#E8721E"
     ],
+    /**
+     * 플레이어 8슬롯 [채움, 외곽선]. 분위기는 로고·UI의 조이콘 빨강·파랑·회색과 어울리는 밝고 또렷한
+     * 솔리드다(L* 70 이상, C* 42 이상 — 파스텔로 빼면 칙칙하거나 물 빠진 색이 섞인다는 피드백).
+     * 출발점은 다른 모델들과의 브레인스토밍 후보("레트로 팝")이고, client/scripts/palette-search.ts의
+     * 앵커 탐색으로 그 인상을 붙잡은 채 구분 거리만 벌렸다(2026-10-05: 최소 ΔE00 17.8, 이전 7.3).
+     * 빨강(0~40°)·파랑(225~275°) 색상대는 비우고 UI 예약색과 ΔE00 12 이상 떨어뜨린다.
+     * 숫자는 accessibility.test.ts가 같은 구현(colorScience.ts)으로 고정한다.
+     */
     user: [
-        ['#FFD5B8', '#E0B598'],
-        ['#FCE6A9', '#DCC486'],
-        ['#D7EBA4', '#B5C883'],
-        ['#B5E3C8', '#94C2A7'],
-        ['#C4D7B8', '#A3B697'],
-        ['#CDC1F0', '#ADA0CF'],
-        ['#E6C8E6', '#C6A7C6'],
-        ['#E8D4BE', '#C7B39D']
+        ['#FDB54A', '#CC8A1D'],
+        ['#F5E360', '#C6B733'],
+        ['#97EE7D', '#6AC153'],
+        ['#3EC5AD', '#149883'],
+        ['#15DAF9', '#1EAAC2'],
+        ['#9BA6F3', '#707CC5'],
+        ['#FC86B0', '#CC5A86'],
+        ['#EEB8FF', '#C08DD1'],
     ]
 }
 
@@ -77,7 +85,11 @@ export const themeColors = (theme: 0 | 1) => ({
     text: theme === 0 ? Color.black : Color.white,
     muted: Color.muted[theme],
     focus: Color.focus[theme],
-    panel: theme === 0 ? Color.smoke[0] : '#454545',
+    /*
+     * 다크의 패널은 바탕과 같은 색이다. 다크 모드는 "테두리만 남긴다" — 구획은 테두리가 나누고,
+     * 채움은 뒤를 가리는 역할만 한다. 투명으로 두면 팝업 아래 화면이 비쳐 보인다.
+     */
+    panel: theme === 0 ? Color.smoke[0] : Color.black,
     panelBorder: Color.smoke[2],
     field: theme === 0 ? '#F7F7F4' : '#343434',
     backdrop: theme === 0 ? 'rgba(59,59,59,0.16)' : 'rgba(0,0,0,0.42)',

@@ -43,7 +43,7 @@ export class RootErrorBoundary extends Component<Props, State> {
                             ? '예상하지 못한 오류가 발생했습니다. 아래 오류를 기록한 뒤 다시 시도해 주세요.'
                             : 'An unexpected error occurred. Keep the details below and try again.'}
                     </p>
-                    <pre style={{ margin: 0, padding: 16, overflow: 'auto', borderRadius: 10, background: Color.smoke[2], color: Color.red[0], whiteSpace: 'pre-wrap' }}>
+                    <pre style={{ margin: 0, padding: 16, overflow: 'auto', borderRadius: 'var(--radius-sm)', background: Color.smoke[2], color: Color.red[0], whiteSpace: 'pre-wrap' }}>
                         {error.stack || `${error.name}: ${error.message}`}
                     </pre>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>

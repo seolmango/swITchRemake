@@ -12,8 +12,8 @@
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
-  border: 1px solid;
-  border-radius: 10px;
+  border: var(--border-thin) solid;
+  border-radius: var(--radius-sm);
   font-size: 14px;
 }
 .training-role { font-size: 13px; font-weight: 600; }
@@ -32,8 +32,8 @@
   transform: translateX(-50%);
   max-width: 300px;
   padding: 7px 12px;
-  border: 1px solid;
-  border-radius: 10px;
+  border: var(--border-thin) solid;
+  border-radius: var(--radius-sm);
   font: 600 14px/1.4 var(--font-ui);
   text-align: center;
 }
@@ -45,8 +45,8 @@
   gap: 14px;
   width: 240px;
   padding: 20px;
-  border: 1px solid;
-  border-radius: 16px;
+  border: var(--border-thin) solid;
+  border-radius: var(--radius-md);
   text-align: center;
   font: 600 16px var(--font-ui);
   pointer-events: auto;

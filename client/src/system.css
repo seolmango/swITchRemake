@@ -1,0 +1,100 @@
+/*
+ * 공용 부품. 새 화면은 여기 있는 것부터 쓴다 — 화면마다 버튼·창을 새로 그리면 곡률과 두께가
+ * 다시 흩어진다. 토큰은 design.css, 색은 theme/cssVariables.ts가 내려준다.
+ */
+
+/* ── 버튼 ─────────────────────────────────────────────── */
+.ui-button {
+  min-height: var(--control-height);
+  padding: 0 var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  border: var(--border) solid var(--ui-neutral-border);
+  border-radius: var(--radius-md);
+  background: var(--ui-gray-fill);
+  color: var(--ui-on-fill);
+  font: 700 16px/1.2 var(--font-ui);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) ease-out, border-color var(--motion-fast) ease-out;
+}
+.ui-button:hover:not(:disabled) { border-color: var(--theme-text); }
+.ui-button:disabled { opacity: .5; cursor: not-allowed; }
+.ui-button.is-primary { border-color: var(--ui-blue-border); background: var(--ui-blue-fill); }
+.ui-button.is-danger { border-color: var(--semantic-bad); background: var(--theme-canvas); color: var(--semantic-bad); }
+/* 취소·닫기처럼 물러나는 동작. 테두리 없이 글자만 남겨 주요 동작과 무게를 나눈다. */
+.ui-button.is-quiet { border-color: transparent; background: transparent; color: var(--theme-muted); }
+.ui-button.is-quiet:hover:not(:disabled) { border-color: var(--ui-neutral-border); color: var(--theme-text); }
+
+/* ── 대화상자 ─────────────────────────────────────────── */
+/*
+ * 바탕은 반드시 불투명하다. 다크에서도 테두리만 보이게 하되, 채움은 바탕색(--theme-canvas)으로
+ * 막는다 — 투명이면 아래 화면(대기실, 경기)이 창 안으로 비쳐 글자가 겹친다.
+ */
+.ui-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--theme-backdrop);
+}
+.ui-dialog {
+  width: min(560px, 100%);
+  max-height: calc(100dvh - var(--space-8));
+  overflow: auto;
+  padding: var(--space-6);
+  display: grid;
+  gap: var(--space-4);
+  box-sizing: border-box;
+  border: var(--border) solid var(--theme-border);
+  border-radius: var(--radius-lg);
+  background: var(--theme-panel);
+  color: var(--theme-text);
+  font-family: var(--font-ui);
+}
+.ui-dialog:focus { outline: none; }
+.ui-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.ui-dialog-header h2 { margin: 0; font: normal 24px/1.2 var(--font-display); }
+
+/* ── 사람 확인 ─────────────────────────────────────────── */
+.human-check { width: min(640px, 100%); }
+.human-check-body { display: grid; gap: var(--space-3); }
+.human-check-instruction { margin: 0; font-size: 16px; line-height: 1.5; }
+.human-check-arena {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border: var(--border) solid var(--theme-border);
+  border-radius: var(--radius-md);
+  background: var(--theme-field);
+  overflow: hidden;
+  transition: border-color var(--motion-fast) ease-out;
+}
+.human-check-arena.is-open { border-color: var(--ui-blue-border); }
+.human-check-arena canvas { display: block; width: 100%; height: 100%; }
+.human-check-start { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); min-width: 120px; }
+.human-check-cue {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-2);
+  font: normal 18px/1 var(--font-display);
+  color: var(--theme-muted);
+  pointer-events: none;
+}
+.human-check-arena.is-open .human-check-cue { color: var(--semantic-info); }
+.human-check-slots { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.human-check-slots > p { width: 100%; margin: 0; font-weight: 700; }
+.human-check-slot { min-width: 56px; font-family: var(--font-display); font-size: 20px; font-weight: normal; }
+.human-check-hint { min-height: 1.5em; margin: 0; color: var(--theme-muted); font-size: 15px; }
+.human-check-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2); }
+.human-check-relay { margin: 0; padding-left: var(--space-6); display: grid; gap: var(--space-2); font-size: 16px; line-height: 1.5; }
+.human-check-failed { display: grid; justify-items: start; gap: var(--space-3); }
+.human-check-failed p { margin: 0; }
+
+/* 손가락으로 누르는 기기는 번호 칸을 넉넉히. */
+@media (pointer: coarse) {
+  .human-check-slot { min-width: 64px; min-height: 52px; }
+}

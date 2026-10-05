@@ -26,7 +26,7 @@ export const TitlePage: React.FC<{ announcement?: ServiceAnnouncement | null }> 
                     role="status"
                     aria-label={t('titlePage.announcement')}
                     style={{
-                        '--title-notice-fill': theme === 0 ? Color.blue[0] : 'transparent',
+                        '--title-notice-fill': theme === 0 ? Color.blue[0] : 'var(--theme-canvas)',
                         '--title-notice-border': 'var(--ui-blue-border)',
                         '--title-notice-text': colors.text,
                     } as React.CSSProperties}

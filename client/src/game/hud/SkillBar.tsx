@@ -75,7 +75,7 @@ const SkillSlot: React.FC<{
             <span style={{
                 fontSize: HUD_METRICS.badgeFont, fontWeight: 800, letterSpacing: 0.4,
                 color: blockedReason ? statusInk.bad : (ready ? bodyText(theme) : mutedText(theme)),
-                padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap',
+                padding: '3px 9px', borderRadius: 'var(--radius-sm)', whiteSpace: 'nowrap',
                 border: `2px solid ${ready ? Color.smoke[2] : 'transparent'}`,
             }}>{blockedReason ?? (skill.unavailable ? '—' : skill.label)}</span>
         </div>

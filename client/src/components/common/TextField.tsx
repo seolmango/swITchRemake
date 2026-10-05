@@ -57,8 +57,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(({ label, 
                     height: 72,
                     boxSizing: 'border-box',
                     border: 0,
-                    borderBottom: `6px solid ${error ? statusInk.bad : focused ? statusInk.info : colors.panelBorder}`,
-                    borderRadius: '18px 18px 4px 4px',
+                    borderBottom: `var(--border) solid ${error ? statusInk.bad : focused ? statusInk.info : colors.panelBorder}`,
+                    borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
                     outline: 'none',
                     padding: isPassword ? '6px 90px 0 20px' : '6px 20px 0',
                     background: disabled ? 'transparent' : colors.field,
@@ -86,7 +86,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(({ label, 
                 onBlur={() => setRevealed(false)}
                 onKeyDown={(event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); setRevealed(true); } }}
                 onKeyUp={(event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); setRevealed(false); } }}
-                style={{ position: 'absolute', right: 10, top: 10, width: 62, height: 48, border: `2px solid ${colors.panelBorder}`, borderRadius: 12, background: colors.field, color: colors.text, cursor: 'pointer', touchAction: 'none' }}
+                style={{ position: 'absolute', right: 10, top: 10, width: 62, height: 48, border: `var(--border-thin) solid ${colors.panelBorder}`, borderRadius: 'var(--radius-sm)', background: colors.field, color: colors.text, cursor: 'pointer', touchAction: 'none' }}
             ><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>{revealed && <path d="m3 3 18 18"/>}</svg></button>}
             </div>
             <span id={helpId} className={`field-help${error ? ' is-error' : ''}`} aria-live={error ? 'polite' : undefined} style={{ color: error ? colors.text : colors.muted }}>{error || hint || ''}</span>

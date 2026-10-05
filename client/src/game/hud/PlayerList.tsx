@@ -120,7 +120,7 @@ export const PlayerList: React.FC<Props> = ({
                             style={{
                                 display: 'flex', alignItems: 'center', gap: 9,
                                 minHeight: 56, boxSizing: 'border-box',
-                                padding: compact ? 4 : '4px 11px 4px 4px', borderRadius: 999,
+                                padding: compact ? 4 : '4px 11px 4px 4px', borderRadius: 'var(--radius-sm)',
                                 background: fill,
                                 border: `2px solid ${p.isTagger ? statusInk.bad : (isSelf || watching ? Color.black : stroke)}`,
                                 filter: p.alive ? 'none' : 'grayscale(1)',
@@ -149,16 +149,16 @@ export const PlayerList: React.FC<Props> = ({
                             {compact ? null : p.isTagger ? (
                                 <span style={{
                                     ...surface(theme, 'red', true),
-                                    flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
+                                    flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 'var(--radius-sm)',
                                 }}>{t('game.hud.tagger')}</span>
                             ) : canTarget ? (
                                 <span style={{
                                     ...surface(theme, 'blue', true),
-                                    flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
+                                    flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 'var(--radius-sm)',
                                 }}>{t('game.hud.switchAction', { player: playerLabel(p.id) })}</span>
                             ) : watching ? (
                                 <span style={{
-                                    flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 999,
+                                    flex: 'none', fontSize: HUD_METRICS.badgeFont, fontWeight: 800, padding: '3px 7px', borderRadius: 'var(--radius-sm)',
                                     background: Color.black, color: Color.white,
                                 }}>{t('game.hud.watching')}</span>
                             ) : null}

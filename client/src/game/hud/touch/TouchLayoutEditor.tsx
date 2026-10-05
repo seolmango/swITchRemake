@@ -69,7 +69,7 @@ export const TouchLayoutEditor: React.FC<Props> = ({ label }) => {
                 onPointerCancel={stop}
                 style={{
                     position: 'relative', width: '100%', aspectRatio: String(aspect),
-                    borderRadius: 18, overflow: 'hidden', touchAction: 'none',
+                    borderRadius: 'var(--radius-md)', overflow: 'hidden', touchAction: 'none',
                     background: 'var(--settings-preview-bg, rgba(120,120,120,0.16))',
                     border: `3px solid ${Color.gray[1]}`,
                 }}

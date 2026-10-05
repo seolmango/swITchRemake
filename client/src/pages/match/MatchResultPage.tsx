@@ -195,7 +195,7 @@ export const MatchResultPage: React.FC = () => {
                                     <article
                                         key={winner.playerId}
                                         style={{
-                                            '--winner-fill': theme === 0 ? winnerColors[0] : 'transparent',
+                                            '--winner-fill': theme === 0 ? winnerColors[0] : 'var(--theme-canvas)',
                                             '--winner-border': winnerColors[1],
                                             '--winner-text': theme === 0 ? Color.black : colors.text,
                                         } as React.CSSProperties}
@@ -203,7 +203,7 @@ export const MatchResultPage: React.FC = () => {
                                         <div
                                             className="result-winner-avatar"
                                             style={{
-                                                background: theme === 0 ? winnerColors[0] : 'transparent',
+                                                background: theme === 0 ? winnerColors[0] : 'var(--theme-canvas)',
                                                 borderColor: winnerColors[1],
                                             }}
                                         >

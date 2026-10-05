@@ -59,7 +59,7 @@ export const ServerStatusIndicator: React.FC = () => {
             style={{
                 color: theme === 0 ? Color.black : accent,
                 borderColor: theme === 0 ? colors.panelBorder : accent,
-                background: theme === 0 ? Color.smoke[0] : 'transparent',
+                background: theme === 0 ? Color.smoke[0] : 'var(--theme-canvas)',
             }}
         >
             <span className={`server-status-dot is-${connection}`} style={{ '--status-accent': accent } as React.CSSProperties}/>

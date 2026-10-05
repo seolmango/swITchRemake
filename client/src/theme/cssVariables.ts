@@ -5,6 +5,25 @@ import type { MotionLevel } from '../stores/useSettingsStore.ts';
 type Theme = 0 | 1;
 type CssVariables = Record<`--${string}`, string>;
 
+/** 두 hex를 sRGB에서 섞는다. 다크의 '옅은 색 깔림'을 CSS color-mix 대신 hex로 내려 대비를 계산할 수 있게 한다. */
+export const mixHex = (top: string, base: string, amount: number): string => {
+    const channel = (hex: string, i: number) => Number.parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+    return `#${[0, 1, 2].map((i) => Math.round(channel(top, i) * amount + channel(base, i) * (1 - amount)).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+};
+
+/**
+ * 채움이 필요한 UI(선택된 칸, 주요 버튼, 배지)의 바탕과 그 위 글자.
+ * 라이트는 파스텔 그대로, 다크는 **바탕에 테두리 색을 옅게 섞은 불투명 색**이다 — 다크는 테두리만
+ * 남긴다는 원칙을 지키면서, 선택됐다는 사실은 잃지 않고, 뒤가 비치지도 않는다.
+ */
+const DARK_TINT = 0.2;
+const uiFills = (theme: Theme, canvas: string) => ({
+    '--ui-red-fill': theme === 0 ? Color.red[0]! : mixHex(Color.red[2]!, canvas, DARK_TINT),
+    '--ui-blue-fill': theme === 0 ? Color.blue[0]! : mixHex(Color.blue[2]!, canvas, DARK_TINT),
+    '--ui-gray-fill': theme === 0 ? Color.gray[0]! : mixHex(Color.gray[2]!, canvas, DARK_TINT),
+    '--ui-on-fill': theme === 0 ? Color.black : Color.white,
+});
+
 /**
  * React 화면과 CSS가 같은 팔레트를 보도록 색을 한 번만 내려준다.
  * 수풀·광란을 뜻으로 쓰는 성공/주의 색은 색각 보조 팔레트를 반드시 거친다.
@@ -46,8 +65,9 @@ export const appearanceCssVariables = (theme: Theme, colorVisionMode: ColorVisio
         '--theme-muted': colors.muted,
         '--theme-panel': colors.panel,
         '--theme-border': highContrast ? colors.text : colors.panelBorder,
-        '--ui-accent-fill': highContrast && theme === 0 ? status.info : Color.blue[0]!,
-        '--ui-accent-text': highContrast && theme === 0 ? Color.white : Color.black,
+        ...uiFills(theme, colors.canvas),
+        '--ui-accent-fill': theme === 1 ? mixHex(Color.blue[2]!, colors.canvas, DARK_TINT) : highContrast ? status.info : Color.blue[0]!,
+        '--ui-accent-text': theme === 1 ? Color.white : highContrast ? Color.white : Color.black,
         '--ui-blue-border': highContrast ? status.info : Color.blue[2]!,
         '--ui-red-border': highContrast ? status.bad : Color.red[2]!,
         '--ui-neutral-border': highContrast ? colors.text : Color.gray[2]!,

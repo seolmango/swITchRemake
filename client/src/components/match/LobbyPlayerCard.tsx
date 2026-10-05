@@ -84,7 +84,7 @@ export const LobbyPlayerCard: React.FC<LobbyPlayerCardProps> = ({ player, slot, 
                 skill: t(`lobby.skills.${player.skill}`),
             })}
             style={{
-                '--player-fill': theme === 0 ? ramp[0] : 'transparent',
+                '--player-fill': theme === 0 ? ramp[0] : 'var(--theme-canvas)',
                 '--player-border': ramp[1],
             } as React.CSSProperties}
         >

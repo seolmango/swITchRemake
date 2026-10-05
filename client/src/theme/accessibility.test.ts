@@ -11,6 +11,7 @@ import {
 import { Color, statusInkColors, themeColors } from './color.ts';
 import { appearanceCssVariables } from './cssVariables.ts';
 import { colorVisionPalette, userColorsFor, type ColorVisionMode } from './cvd.ts';
+import { minPairDelta, visionDelta, type VisionKind } from './colorScience.ts';
 
 const COLOR_VISION_MODES: ColorVisionMode[] = ['off', 'protanopia', 'deuteranopia', 'tritanopia'];
 
@@ -145,6 +146,29 @@ describe('color vision palette coverage', () => {
         for (let step = 0; step < 3; step += 1) {
             expect(vars[`--color-grass-${step}`]).toBe(palette.grass[step]);
             expect(vars[`--color-frenzy-${step}`]).toBe(palette.frenzy[step]);
+        }
+    });
+
+    /*
+     * 문턱은 저장소 안의 한 구현(colorScience.ts: Machado 2009 + CIEDE2000)으로 잰 값이다.
+     * 팔레트는 client/scripts/palette-search.ts가 찾았고, 이 테스트가 그 결과가 무너지지 않게 막는다.
+     */
+    const VISION: Record<ColorVisionMode, VisionKind> = { off: 'normal', protanopia: 'protanopia', deuteranopia: 'deuteranopia', tritanopia: 'tritanopia' };
+    const PLAYER_MIN: Record<ColorVisionMode, number> = { off: 17, protanopia: 11.5, deuteranopia: 11, tritanopia: 17.5 };
+
+    it.each(COLOR_VISION_MODES)('%s keeps the 8 players apart as that vision sees them', (mode) => {
+        const fills = colorVisionPalette(mode).user.map((pair) => pair[0]!);
+        expect(minPairDelta(fills, VISION[mode])).toBeGreaterThanOrEqual(PLAYER_MIN[mode]);
+        // 같은 화면을 정상 색각으로 보는 다른 플레이어에게도 갈려야 한다.
+        expect(minPairDelta(fills, 'normal')).toBeGreaterThanOrEqual(13);
+    });
+
+    it.each(COLOR_VISION_MODES)('%s never paints a player like the tagger red or the system blue', (mode) => {
+        // UI가 쓰는 빨강·파랑과 플레이어가 겹치면, 그 플레이어가 술래나 '나'로 읽힌다.
+        for (const [fill] of colorVisionPalette(mode).user) {
+            for (const reserved of [...Color.red, ...Color.blue]) {
+                expect(visionDelta(fill!, reserved, VISION[mode])).toBeGreaterThanOrEqual(mode === 'off' ? 12 : 10);
+            }
         }
     });
 

@@ -39,12 +39,14 @@ export const RoundButton = React.memo<RoundButtonProps>(({
     const isActive = (isHovered || isFocused) && !disabled;
     const focusColor = themeColors(theme).focus;
 
-    const transformValue = isActive ? 'translate(-50%, -50%) scale(1.05)' : 'translate(-50%, -50%)';
-
     const { currentBg, currentStroke, currentTextColor } = useMemo(() => {
         const colorArray = type === 0 ? Color.red : type === 1 ? Color.blue : Color.gray;
-        const bg = theme === 0 ? (isActive ? colorArray[1] : colorArray[0]) : 'transparent';
         const stroke = type === 0 ? 'var(--ui-red-border)' : type === 1 ? 'var(--ui-blue-border)' : 'var(--ui-neutral-border)';
+        // 다크는 테두리만 남기되 채움은 바탕색으로 막는다(투명이면 팝업·HUD 아래가 비친다).
+        // 손이 가면 크기를 키우지 않고 채움만 바꾼다.
+        const bg = theme === 0
+            ? (isActive ? colorArray[1] : colorArray[0])
+            : (isActive ? `color-mix(in srgb, ${stroke} 16%, var(--theme-canvas))` : 'var(--theme-canvas)');
         const textColor = theme === 0 ? Color.black : Color.white;
 
         return { currentBg: bg, currentStroke: stroke, currentTextColor: textColor };
@@ -93,8 +95,8 @@ export const RoundButton = React.memo<RoundButtonProps>(({
         width: `${width}px`,
         height: `${height}px`,
         backgroundColor: currentBg,
-        border: `7px solid ${currentStroke}`,
-        borderRadius: "25px",
+        border: `var(--border) solid ${currentStroke}`,
+        borderRadius: 'var(--radius-md)',
         boxSizing: "border-box",
         // The invisible 100px measuring span must not widen a scrollable mobile menu.
         overflow: 'hidden',
@@ -103,13 +105,13 @@ export const RoundButton = React.memo<RoundButtonProps>(({
         justifyContent: "center",
         cursor: disabled ? 'not-allowed' : (isLoading ? 'wait' : 'pointer'),
         opacity: (disabled || isLoading) ? 0.65 : 1,
-        outline: isFocused ? `5px solid ${focusColor}` : '5px solid transparent',
-        outlineOffset: isFocused ? '5px' : '0',
-        transition: 'all 0.2s ease-out',
+        outline: isFocused ? `var(--focus-width) solid ${focusColor}` : 'var(--focus-width) solid transparent',
+        outlineOffset: 'var(--focus-offset)',
+        transition: 'background-color var(--motion-fast) ease-out, border-color var(--motion-fast) ease-out',
         userSelect: 'none',
-        transform: x !== undefined && y !== undefined ? transformValue : (isActive ? 'scale(1.05)' : 'none'),
+        transform: x !== undefined && y !== undefined ? 'translate(-50%, -50%)' : 'none',
         ...style
-    }), [x, y, width, height, currentBg, currentStroke, focusColor, disabled, isLoading, isActive, isFocused, transformValue, style]);
+    }), [x, y, width, height, currentBg, currentStroke, focusColor, disabled, isLoading, isFocused, style]);
 
     // 눌린 버튼만 소리를 낸다. 막힌 버튼은 조용한 것이 맞다 — 아무 일도 안 일어났기 때문이다.
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLButtonElement>) => {

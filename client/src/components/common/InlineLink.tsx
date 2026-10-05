@@ -22,7 +22,6 @@ export const InlineLink: React.FC<InlineLinkProps> = ({ children, onClick, style
             fontSize: 31,
             lineHeight: 1.5,
             paddingBottom: 3,
-            transform: hover ? 'scale(1.025)' : 'none',
             transition: 'transform 160ms ease, color 160ms ease, border-color 160ms ease',
             ...style,
         }}>{children}</button>

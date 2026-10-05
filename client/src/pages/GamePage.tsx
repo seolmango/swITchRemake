@@ -417,7 +417,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
                         aria-live="polite"
                         style={{
                             position: 'absolute', top: 24, left: '50%', zIndex: 40, transform: 'translateX(-50%)',
-                            padding: '14px 24px', borderRadius: 999, color: themeColors(theme).text,
+                            padding: '14px 24px', borderRadius: 'var(--radius-sm)', color: themeColors(theme).text,
                             background: themeColors(theme).panel, border: `2px solid ${themeColors(theme).panelBorder}`,
                             fontSize: 22, fontWeight: 800,
                         }}

@@ -53,8 +53,8 @@ export function GameLoadingOverlay({
                     {mapError ? `${t('game.mapLoadFailed')} ${mapError}` : timedOut ? `${t('game.loadingTimedOut')} ${waitingFor}` : waitingFor}
                 </p>
                 {!failed && !reducedMotion && (
-                    <div aria-hidden="true" style={{ width: 280, height: 8, overflow: 'hidden', borderRadius: 999, background: colors.panelBorder }}>
-                        <div style={{ width: '45%', height: '100%', borderRadius: 999, background: Color.blue[2], animation: 'switch-loading-slide 1.1s ease-in-out infinite alternate' }}/>
+                    <div aria-hidden="true" style={{ width: 280, height: 8, overflow: 'hidden', borderRadius: 'var(--radius-sm)', background: colors.panelBorder }}>
+                        <div style={{ width: '45%', height: '100%', borderRadius: 'var(--radius-sm)', background: Color.blue[2], animation: 'switch-loading-slide 1.1s ease-in-out infinite alternate' }}/>
                     </div>
                 )}
                 {failed && (
