@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import ko from '../../client/src/locales/ko.json';
+import { buildSwitchRound } from 'shared';
 import { clearMail, waitForMail } from './mail';
 
 /**
@@ -36,44 +37,35 @@ export async function gotoHome(page: Page): Promise<void> {
     await expect(button(page, T.titlePage.button.gameStart)).toBeVisible();
 }
 
-/** 장면의 거리·속도 명령을 읽고 실제 타이밍에 맞춰 공통 "첫 스위치" 판정을 통과한다. */
-export async function completeHumanChallenge(page: Page): Promise<void> {
-    const dialog = page.getByRole('dialog', { name: T.auth.humanChallenge.title });
-    await expect(dialog).toBeVisible();
-    const arena = dialog.locator('.human-challenge-arena');
-    await expect(arena).toHaveClass(/is-ready/, { timeout: 5_000 });
-    const rule = await arena.getAttribute('data-challenge-rule');
-    if (!['nearest', 'farthest', 'fastest', 'slowest'].includes(rule ?? '')) {
-        throw new Error(`알 수 없는 첫 스위치 명령입니다: ${rule}`);
+/**
+ * 사람 확인을 통과한다. 클릭하기 **전에** 불러 발급 응답을 붙잡아 둔다:
+ *
+ *     const check = watchHumanCheck(page);
+ *     await button(page, T.auth.sendCode).click();
+ *     await completeHumanChallenge(page, check);
+ *
+ * 새 계정은 보통 충전(작업 증명)만으로 지나간다 — 브라우저가 알아서 풀고 창은 뜨지 않는다.
+ * 실패가 쌓인 상황이면 서버가 장면을 주고, 그때는 같은 시드로 장면을 다시 풀어 사람처럼
+ * 술래가 온 뒤에 정답 번호를 누른다. 정답을 아는 이 점검이 곧 "전용 봇은 풀 수 있다"는 한계의
+ * 증거이기도 하다 — 그 비용(시간·작업 증명·발급 한도)은 서버 단위 테스트가 고정한다.
+ */
+export function watchHumanCheck(page: Page): Promise<{ round: { kind: 'switch' | 'radio'; seed: number } | null }> {
+    return page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/auth/human-challenge')
+        && response.request().method() === 'POST').then((response) => response.json());
+}
+
+export async function completeHumanChallenge(page: Page, check: ReturnType<typeof watchHumanCheck>): Promise<void> {
+    const issued = await check;
+    const verified = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/auth/human-challenge/verify'));
+    if (issued.round?.kind === 'switch') {
+        const dialog = page.getByRole('dialog', { name: T.auth.humanChallenge.title });
+        await expect(dialog).toBeVisible();
+        const round = buildSwitchRound(issued.round.seed);
+        await dialog.getByRole('button', { name: T.auth.humanChallenge.start, exact: true }).click();
+        await page.waitForTimeout(round.openAt + 250);
+        await page.keyboard.press(`Digit${round.target}`);
     }
-    const readPosition = (element: Element) => {
-        const style = (element as HTMLElement).style;
-        return {
-            x: Number.parseFloat(style.getPropertyValue('--player-x')),
-            y: Number.parseFloat(style.getPropertyValue('--player-y')),
-            motionMs: Number.parseFloat(style.getPropertyValue('--runner-motion-ms')),
-        };
-    };
-    const self = await arena.locator('.human-challenge-player.is-self').evaluate(readPosition);
-    const runners = arena.locator('.human-challenge-player.is-runner');
-    const candidates = await runners.evaluateAll((elements) => elements.map((element, index) => {
-        const style = (element as HTMLElement).style;
-        return {
-            index,
-            x: Number.parseFloat(style.getPropertyValue('--player-x')),
-            y: Number.parseFloat(style.getPropertyValue('--player-y')),
-            motionMs: Number.parseFloat(style.getPropertyValue('--runner-motion-ms')),
-        };
-    }));
-    const score = (runner: (typeof candidates)[number]) => rule === 'nearest' || rule === 'farthest'
-        ? ((runner.x - self.x) ** 2) + ((runner.y - self.y) ** 2)
-        : runner.motionMs;
-    const ascending = rule === 'nearest' || rule === 'fastest';
-    const target = [...candidates].sort((left, right) =>
-        ascending ? score(left) - score(right) : score(right) - score(left))[0];
-    if (!target) throw new Error('첫 스위치에 선택할 러너가 없습니다.');
-    await runners.nth(target.index).click();
-    await expect(dialog).toBeHidden();
+    expect((await verified).ok(), 'human check verifies').toBe(true);
 }
 
 /** 가입 화면을 처음부터 끝까지. 인증 코드는 sink에서 읽는다. */
@@ -81,8 +73,9 @@ export async function signUp(page: Page, account: Account): Promise<void> {
     await clearMail(account.email);
     await page.goto('/signup');
     await page.getByLabel(T.auth.email, { exact: true }).fill(account.email);
+    const check = watchHumanCheck(page);
     await button(page, T.auth.sendCode).click();
-    await completeHumanChallenge(page);
+    await completeHumanChallenge(page, check);
     await expect(page.getByText(T.auth.codeSent)).toBeVisible();
 
     const mail = await waitForMail(account.email, 'signup');

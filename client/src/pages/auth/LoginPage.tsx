@@ -15,7 +15,7 @@ import { themeColors } from '../../theme/color.ts';
 import { resendMfaLoginEmail, type LoginMfaChallenge } from '../../api/auth.ts';
 import { deadlineAfterSeconds, useDeadlineSeconds } from '../../utils/deadline.ts';
 import { ApiError } from '../../api/http.ts';
-import { HumanChallengeDialog } from '../../components/auth/HumanChallengeDialog.tsx';
+import { useHumanCheck } from '../../components/auth/useHumanCheck.tsx';
 
 export const LoginPage: React.FC = () => {
     const { t } = useTranslation();
@@ -36,17 +36,23 @@ export const LoginPage: React.FC = () => {
     const [secondFactorCode, setSecondFactorCode] = useState('');
     const [trustDevice, setTrustDevice] = useState(false);
     const [retryDeadline, setRetryDeadline] = useState<number | null>(null);
-    const [challengeOpen, setChallengeOpen] = useState(false);
+    const humanCheck = useHumanCheck();
     const challengeRemaining = useDeadlineSeconds(challenge?.expiresAt ?? null);
     const retryRemaining = useDeadlineSeconds(retryDeadline);
     const valid = isEmail(email) && isPassword(password);
 
     useEffect(() => { emailRef.current?.focus(); }, []);
 
-    const submit = async (humanProof?: string) => {
+    /*
+     * 로그인은 시도마다 사람 확인 증명이 필요하다. 보통은 버튼 위 짧은 충전으로 끝나고, 실패가
+     * 쌓인 계정이면 서버가 장면을 요구해 창이 뜬다. 증명이 도중에 만료되면 한 번 더 받는다.
+     */
+    const submit = async (retried = false) => {
         setTouched(true);
-        if (!valid) return;
+        if (!valid || humanCheck.active) return;
         setMessage(''); setMessageFailed(false);
+        const humanProof = await humanCheck.run('login', email);
+        if (!humanProof) return;
         try {
             const nextChallenge = await login(email, password, humanProof);
             if (nextChallenge) {
@@ -59,8 +65,8 @@ export const LoginPage: React.FC = () => {
             }
             navigate('/', { replace: true });
         } catch (error) {
-            if (error instanceof ApiError && error.code === 'HUMAN_CHALLENGE_REQUIRED') {
-                setChallengeOpen(true);
+            if (error instanceof ApiError && error.code === 'HUMAN_CHALLENGE_REQUIRED' && !retried) {
+                void submit(true);
                 return;
             }
             setMessageFailed(true);
@@ -126,7 +132,7 @@ export const LoginPage: React.FC = () => {
                     <div className={`status-message${messageFailed ? ' is-error' : ''}`} role="status" style={{ color: messageFailed ? themeColors(theme).text : themeColors(theme).muted }}>
                         {(retryRemaining ?? 0) > 0 ? t('auth.rateLimited', { seconds: retryRemaining }) : message || handoff}
                     </div>
-                    <RoundButton width={460} height={104} type={1} content={t('auth.login')} disabled={!valid || pending || (retryRemaining ?? 0) > 0} isLoading={pending} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
+                    <RoundButton width={460} height={104} type={1} content={humanCheck.active ? t('auth.humanChallenge.charging') : t('auth.login')} disabled={!valid || pending || (retryRemaining ?? 0) > 0} isLoading={pending || humanCheck.active} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
                 </div>
             ) : (
                 <div className="form-stack mfa-login-stack" style={{ top: 225 }}>
@@ -156,14 +162,7 @@ export const LoginPage: React.FC = () => {
                     </div>
                 </div>
             )}
-            {challengeOpen && (
-                <HumanChallengeDialog
-                    purpose="login"
-                    subject={email}
-                    onVerified={(proof) => { setChallengeOpen(false); void submit(proof); }}
-                    onClose={() => setChallengeOpen(false)}
-                />
-            )}
+            {humanCheck.element}
         </PageLayout>
     );
 };

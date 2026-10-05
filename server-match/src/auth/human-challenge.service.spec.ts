@@ -1,12 +1,9 @@
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { POW_BITS, RADIO_ROUND, buildRadioRound, buildSwitchRound, searchPow } from 'shared';
 import { HumanChallengePurpose } from './dto/human-challenge.dto';
-import {
-    HumanChallengeService,
-    LOGIN_CHALLENGE_AFTER_FAILURES,
-    resolveHumanChallengeTarget,
-    type HumanChallengeScene,
-} from './human-challenge.service';
+import { HumanChallengeService, LOGIN_CHALLENGE_AFTER_FAILURES, type IssuedHumanChallenge } from './human-challenge.service';
 
 class FakeRedis {
     readonly values = new Map<string, string>();
@@ -34,110 +31,158 @@ const security = {
 const errorCode = (error: unknown): string | undefined =>
     typeof (error as any)?.response?.code === 'string' ? (error as any).response.code : undefined;
 
-test('첫 스위치는 실제 슬롯 상태와 일치하는 한 목표를 만들고 proof를 한 번만 쓴다', async () => {
-    const redis = new FakeRedis();
-    const service = new HumanChallengeService(redis as never, security as never);
+const charge = (issued: IssuedHumanChallenge): number => searchPow(issued.pow.nonce, issued.pow.bits, 0, 1 << 26)!;
+
+/** Date.now를 고정하고 되돌린다. 장면 판정이 실제 흐른 시간을 보기 때문이다. */
+async function withClock(start: number, body: (advance: (ms: number) => void) => Promise<void>) {
     const originalNow = Date.now;
-    let now = 10_000;
+    let now = start;
     Date.now = () => now;
     try {
-        const issued = await service.issue(HumanChallengePurpose.SIGNUP, 'User@Example.com', '203.0.113.1');
-        const byStatus = (status: string) => issued.scene.slots.filter((slot) => slot.status === status);
-        assert.equal(issued.scene.slots.length, 8);
-        assert.equal(byStatus('self').length, 1);
-        assert.equal(byStatus('tagger').length, 1);
-        assert.equal(byStatus('out').length, 1);
-        assert.equal('targetSlot' in issued.scene, false);
-        const targetSlot = resolveHumanChallengeTarget(issued.scene);
-        assert.equal(issued.scene.slots.find((slot) => slot.slot === targetSlot)?.status, 'runner');
-
-        now += 700;
-        const proof = await service.verify(issued.challengeToken, targetSlot, '198.51.100.4');
-        await service.consumeProof(proof.proofToken, HumanChallengePurpose.SIGNUP, 'user@example.com', '192.0.2.8');
-        await assert.rejects(
-            service.consumeProof(proof.proofToken, HumanChallengePurpose.SIGNUP, 'user@example.com', '192.0.2.8'),
-            (error) => errorCode(error) === 'HUMAN_CHALLENGE_REQUIRED',
-        );
+        await body((ms) => { now += ms; });
     } finally {
         Date.now = originalNow;
     }
-});
+}
 
-test('오답 판은 소모되어 번호를 차례로 대입할 수 없다', async () => {
-    const redis = new FakeRedis();
-    const service = new HumanChallengeService(redis as never, security as never);
-    const originalNow = Date.now;
-    let now = 20_000;
-    Date.now = () => now;
-    try {
-        const issued = await service.issue(HumanChallengePurpose.RESET_PASSWORD, 'user@example.com', '203.0.113.1');
-        const targetSlot = resolveHumanChallengeTarget(issued.scene);
-        now += 700;
-        const wrong = targetSlot === 1 ? 2 : 1;
-        await assert.rejects(
-            service.verify(issued.challengeToken, wrong, '203.0.113.1'),
-            (error) => errorCode(error) === 'HUMAN_CHALLENGE_WRONG',
-        );
-        await assert.rejects(
-            service.verify(issued.challengeToken, targetSlot, '203.0.113.1'),
-            (error) => errorCode(error) === 'HUMAN_CHALLENGE_EXPIRED',
-        );
-    } finally {
-        Date.now = originalNow;
-    }
-});
+const setup = () => new HumanChallengeService(new FakeRedis() as never, security as never);
 
-test('로그인은 연속 실패 전에는 그대로 두고 임계점 뒤에는 같은 접속원의 proof를 요구한다', async () => {
-    const redis = new FakeRedis();
-    const service = new HumanChallengeService(redis as never, security as never);
-    const email = 'user@example.com';
-    const ip = '203.0.113.9';
-
-    for (let index = 0; index < LOGIN_CHALLENGE_AFTER_FAILURES - 1; index += 1) {
-        await service.recordLoginFailure(email, ip);
-        await service.assertLoginAllowed(email, ip);
-    }
-    await service.recordLoginFailure(email, ip);
+test('위험 신호가 없으면 충전만으로 증명이 나오고, 그 증명은 한 번만 쓴다', async () => {
+    const service = setup();
+    const issued = await service.issue(HumanChallengePurpose.SIGNUP, 'User@Example.com', '203.0.113.1');
+    assert.equal(issued.round, null);
+    assert.equal(issued.pow.bits, POW_BITS.base);
+    const proof = await service.verify(issued.challengeToken, charge(issued), undefined, '203.0.113.1');
+    await service.consumeProof(proof.proofToken, HumanChallengePurpose.SIGNUP, 'user@example.com', '203.0.113.1');
     await assert.rejects(
-        service.assertLoginAllowed(email, ip),
+        service.consumeProof(proof.proofToken, HumanChallengePurpose.SIGNUP, 'user@example.com', '203.0.113.1'),
         (error) => errorCode(error) === 'HUMAN_CHALLENGE_REQUIRED',
     );
-
-    const originalNow = Date.now;
-    let now = 30_000;
-    Date.now = () => now;
-    try {
-        const issued = await service.issue(HumanChallengePurpose.LOGIN, email, ip);
-        const targetSlot = resolveHumanChallengeTarget(issued.scene);
-        now += 700;
-        const proof = await service.verify(issued.challengeToken, targetSlot, ip);
-        await service.assertLoginAllowed(email, ip, proof.proofToken);
-        await assert.rejects(
-            service.assertLoginAllowed(email, ip, proof.proofToken),
-            (error) => errorCode(error) === 'HUMAN_CHALLENGE_REQUIRED',
-        );
-    } finally {
-        Date.now = originalNow;
-    }
 });
 
-test('네 가지 명령은 각각 거리와 움직임 속도에서 하나의 러너를 고른다', () => {
-    const baseScene: Omit<HumanChallengeScene, 'rule'> = {
-        approachMs: 1_500,
-        approachFrom: 'left',
-        slots: [
-            { slot: 1, status: 'self', x: 50, y: 58, motionMs: null, speedRank: null },
-            { slot: 2, status: 'runner', x: 52, y: 58, motionMs: 2_300, speedRank: 1 },
-            { slot: 3, status: 'runner', x: 60, y: 58, motionMs: 760, speedRank: 3 },
-            { slot: 4, status: 'runner', x: 90, y: 58, motionMs: 1_150, speedRank: 2 },
-            { slot: 5, status: 'tagger', x: 34, y: 58, motionMs: null, speedRank: null },
-            { slot: 6, status: 'out', x: 20, y: 20, motionMs: null, speedRank: null },
-            { slot: 7, status: 'empty', x: 0, y: 0, motionMs: null, speedRank: null },
-            { slot: 8, status: 'empty', x: 0, y: 0, motionMs: null, speedRank: null },
-        ],
-    };
-    assert.equal(resolveHumanChallengeTarget({ ...baseScene, rule: 'nearest' }), 2);
-    assert.equal(resolveHumanChallengeTarget({ ...baseScene, rule: 'farthest' }), 4);
-    assert.equal(resolveHumanChallengeTarget({ ...baseScene, rule: 'fastest' }), 3);
-    assert.equal(resolveHumanChallengeTarget({ ...baseScene, rule: 'slowest' }), 2);
+test('충전하지 않은 답은 떨어지고, 그 실패가 다음 판을 장면과 더 무거운 충전으로 올린다', async () => {
+    const service = setup();
+    const ip = '203.0.113.2';
+    const issued = await service.issue(HumanChallengePurpose.SIGNUP, 'a@example.com', ip);
+    const bad = [0, 1, 2, 3].find((counter) => counter !== charge(issued))!;
+    await assert.rejects(service.verify(issued.challengeToken, bad, undefined, ip), (error) => errorCode(error) === 'HUMAN_CHALLENGE_WRONG');
+    const next = await service.issue(HumanChallengePurpose.SIGNUP, 'a@example.com', ip);
+    assert.equal(next.round?.kind, 'switch');
+    assert.ok(next.pow.bits > POW_BITS.base);
+});
+
+test('가입 증명도 발급받은 IP에 묶인다 — 풀어서 다른 곳으로 옮겨 쓸 수 없다', async () => {
+    const service = setup();
+    const issued = await service.issue(HumanChallengePurpose.SIGNUP, 'b@example.com', '203.0.113.3');
+    await assert.rejects(
+        service.verify(issued.challengeToken, charge(issued), undefined, '198.51.100.9'),
+        (error) => errorCode(error) === 'HUMAN_CHALLENGE_INVALID',
+    );
+    const again = await service.issue(HumanChallengePurpose.SIGNUP, 'b@example.com', '203.0.113.3');
+    const proof = await service.verify(again.challengeToken, charge(again), undefined, '203.0.113.3');
+    await assert.rejects(
+        service.consumeProof(proof.proofToken, HumanChallengePurpose.SIGNUP, 'b@example.com', '198.51.100.9'),
+        (error) => errorCode(error) === 'HUMAN_CHALLENGE_REQUIRED',
+    );
+});
+
+test('라스트 세컨드 스위치: 술래가 오기 전·틀린 번호는 떨어지고, 시간 창 안의 정답만 통과한다', async () => {
+    const service = setup();
+    const ip = '203.0.113.4';
+    const email = 'c@example.com';
+    await withClock(100_000, async (advance) => {
+        // 먼저 한 번 틀려 장면을 부른다.
+        const first = await service.issue(HumanChallengePurpose.RESET_PASSWORD, email, ip);
+        await assert.rejects(service.verify(first.challengeToken, charge(first) + 1, undefined, ip));
+
+        const early = await service.issue(HumanChallengePurpose.RESET_PASSWORD, email, ip);
+        const earlyScene = buildSwitchRound(early.round!.seed);
+        advance(earlyScene.openAt - 800);
+        await assert.rejects(
+            service.verify(early.challengeToken, charge(early), { slot: earlyScene.target, atMs: earlyScene.openAt - 900 }, ip),
+            (error) => errorCode(error) === 'HUMAN_CHALLENGE_TOO_FAST',
+        );
+
+        const wrong = await service.issue(HumanChallengePurpose.RESET_PASSWORD, email, ip);
+        const wrongScene = buildSwitchRound(wrong.round!.seed);
+        advance(wrongScene.openAt + 400);
+        const decoy = wrongScene.runners.find((runner) => runner.slot !== wrongScene.target)!.slot;
+        await assert.rejects(
+            service.verify(wrong.challengeToken, charge(wrong), { slot: decoy, atMs: wrongScene.openAt + 200 }, ip),
+            (error) => errorCode(error) === 'HUMAN_CHALLENGE_WRONG',
+        );
+
+        const good = await service.issue(HumanChallengePurpose.RESET_PASSWORD, email, ip);
+        const scene = buildSwitchRound(good.round!.seed);
+        // 장면이 그 시각까지 실제로 흐르지 않았으면 시각을 지어낸 답이다.
+        await assert.rejects(
+            service.verify(good.challengeToken, charge(good), { slot: scene.target, atMs: scene.openAt + 100 }, ip),
+            (error) => errorCode(error) === 'HUMAN_CHALLENGE_TOO_FAST',
+        );
+        const real = await service.issue(HumanChallengePurpose.RESET_PASSWORD, email, ip);
+        const realScene = buildSwitchRound(real.round!.seed);
+        advance(realScene.openAt + 300);
+        const proof = await service.verify(real.challengeToken, charge(real), { slot: realScene.target, atMs: realScene.openAt + 200 }, ip);
+        assert.ok(proof.proofToken);
+    });
+});
+
+test('관전석 무전은 더 무거운 충전과 최소 시간을 지키며, IP당 횟수가 제한된다', async () => {
+    const service = setup();
+    const ip = '203.0.113.5';
+    const email = 'd@example.com';
+    await withClock(200_000, async (advance) => {
+        const seed = await service.issue(HumanChallengePurpose.SIGNUP, email, ip);
+        await assert.rejects(service.verify(seed.challengeToken, charge(seed) + 1, undefined, ip));
+
+        const normal = await service.issue(HumanChallengePurpose.SIGNUP, email, ip);
+        const radio = await service.issue(HumanChallengePurpose.SIGNUP, email, ip, 'radio');
+        assert.equal(radio.round?.kind, 'radio');
+        assert.ok(radio.pow.bits >= normal.pow.bits + 1);
+
+        const relay = buildRadioRound(radio.round!.seed);
+        advance(RADIO_ROUND.minElapsedMs - 1_000);
+        await assert.rejects(
+            service.verify(radio.challengeToken, charge(radio), { slot: relay.target }, ip),
+            (error) => errorCode(error) === 'HUMAN_CHALLENGE_TOO_FAST',
+        );
+        const again = await service.issue(HumanChallengePurpose.SIGNUP, email, ip, 'radio');
+        advance(RADIO_ROUND.minElapsedMs + 500);
+        const proof = await service.verify(again.challengeToken, charge(again), { slot: buildRadioRound(again.round!.seed).target }, ip);
+        assert.ok(proof.proofToken);
+
+        for (let i = 0; i < 6; i++) await service.issue(HumanChallengePurpose.SIGNUP, email, ip, 'radio').catch(() => undefined);
+        await assert.rejects(
+            service.issue(HumanChallengePurpose.SIGNUP, email, ip, 'radio'),
+            (error) => errorCode(error) === 'HUMAN_CHALLENGE_LIMITED',
+        );
+    });
+});
+
+test('한 판은 한 번만 제출된다 — 번호를 차례로 넣어 볼 수 없다', async () => {
+    const service = setup();
+    const ip = '203.0.113.6';
+    const issued = await service.issue(HumanChallengePurpose.SIGNUP, 'e@example.com', ip);
+    const counter = charge(issued);
+    await service.verify(issued.challengeToken, counter, undefined, ip);
+    await assert.rejects(service.verify(issued.challengeToken, counter, undefined, ip), (error) => errorCode(error) === 'HUMAN_CHALLENGE_EXPIRED');
+});
+
+test('로그인은 매번 증명이 필요하고, 계정 실패가 쌓이면 IP를 바꿔도 장면이 나온다', async () => {
+    const service = setup();
+    const email = 'user@example.com';
+    await assert.rejects(service.assertLoginAllowed(email, '203.0.113.9'), (error) => errorCode(error) === 'HUMAN_CHALLENGE_REQUIRED');
+
+    // 실패마다 다른 IP — 쌍으로만 세면 어느 쌍도 문턱에 닿지 않는 대입 공격이다.
+    for (let index = 0; index < LOGIN_CHALLENGE_AFTER_FAILURES; index += 1) {
+        await service.recordLoginFailure(email, `198.51.100.${index}`);
+    }
+    const fresh = await service.issue(HumanChallengePurpose.LOGIN, email, '192.0.2.77');
+    assert.equal(fresh.round?.kind, 'switch');
+
+    await service.clearLoginFailures(email, '192.0.2.77');
+    const calm = await service.issue(HumanChallengePurpose.LOGIN, email, '192.0.2.78');
+    assert.equal(calm.round, null);
+    const proof = await service.verify(calm.challengeToken, charge(calm), undefined, '192.0.2.78');
+    await service.assertLoginAllowed(email, '192.0.2.78', proof.proofToken);
 });

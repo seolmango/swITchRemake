@@ -1,31 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { database, isolatedContext, login, seedAccount } from './helpers';
+import { database, isolatedContext, login, seedAccount, completeHumanChallenge, watchHumanCheck } from './helpers';
 
 // Solve the displayed instruction from rendered scene geometry/speed labels, without
 // importing the service's answer resolver or modifying verification/rate limits.
-async function firstSwitch(page: Page) {
-    const dialog = page.getByRole('dialog', { name: '첫 스위치', exact: true });
-    await expect(dialog.locator('.human-challenge-arena.is-ready')).toBeVisible();
-    const choice = await dialog.locator('.human-challenge-arena').evaluate(arena => {
-        const self = arena.querySelector<HTMLElement>('.is-self')!;
-        const x = parseFloat(self.style.getPropertyValue('--player-x'));
-        const y = parseFloat(self.style.getPropertyValue('--player-y'));
-        const rule = arena.getAttribute('data-challenge-rule');
-        const runners = Array.from(arena.querySelectorAll<HTMLElement>('.is-runner')).map(runner => ({
-            slot: runner.querySelector('.human-challenge-player-number')!.textContent!.trim(),
-            distance: Math.hypot(parseFloat(runner.style.getPropertyValue('--player-x')) - x,
-                parseFloat(runner.style.getPropertyValue('--player-y')) - y),
-            rank: Number(runner.getAttribute('aria-label')?.match(/속도 (\d+)단계/)?.[1] ?? 0),
-        }));
-        runners.sort((a, b) => rule === 'nearest' ? a.distance - b.distance
-            : rule === 'farthest' ? b.distance - a.distance
-            : rule === 'fastest' ? b.rank - a.rank : a.rank - b.rank);
-        return runners[0]!.slot;
-    });
-    await dialog.getByRole('button', { name: new RegExp(`^${choice}번, 러너`) }).click();
-    await expect(dialog).toHaveCount(0);
-}
 
 async function mailCode(page: Page, email: string) {
     let id: string | undefined;
@@ -53,8 +31,9 @@ test('synthetic SMTP signup, required consent, login, profile, logout complete s
         await page.goto('/signup');
         await page.getByRole('textbox', { name: '이메일', exact: true }).fill(account.email);
         const verification = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/verify');
+        const check = watchHumanCheck(page);
         await page.getByRole('button', { name: '코드 발송', exact: true }).click();
-        await firstSwitch(page);
+        await completeHumanChallenge(page, check);
         expect((await verification).status(), 'synthetic signup verification SMTP request succeeds').toBe(201);
         await expect(page.getByText('인증 코드를 보냈습니다. 5분 안에 입력해 주세요.', { exact: true })).toBeVisible();
         const code = await mailCode(page, account.email);

@@ -193,3 +193,21 @@ export {
     type ReplaySignature,
     type SignatureCheck,
 } from './replay/signature';
+
+export { sha256, leadingZeroBits } from './humanCheck/sha256';
+export { POW_BITS, powInput, powDigestBits, verifyPow, searchPow } from './humanCheck/pow';
+export {
+    HUMAN_ROUND_VERSION,
+    SWITCH_ROUND,
+    RADIO_ROUND,
+    seededRandom,
+    buildSwitchRound,
+    buildRadioRound,
+    roundPosition,
+    checkSwitchAnswer,
+    type RoundKey,
+    type RoundActor,
+    type SwitchRound,
+    type RadioTurn,
+    type RadioRound,
+} from './humanCheck/round';

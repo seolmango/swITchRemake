@@ -28,19 +28,30 @@ describe('password change session', () => {
 describe('human challenge requests', () => {
     beforeEach(() => vi.clearAllMocks());
 
-    it('binds challenge issue to purpose and email, then submits only the chosen slot', async () => {
-        apiRequest.mockResolvedValueOnce({ challengeToken: 'challenge' }).mockResolvedValueOnce({ proofToken: 'proof' });
+    it('binds challenge issue to purpose, email and mode, then submits the charge and only the answer it has', async () => {
+        apiRequest.mockResolvedValue({});
 
         await issueHumanChallenge('test@example.com', 'signup');
-        await verifyHumanChallenge('challenge', 6);
+        await issueHumanChallenge('test@example.com', 'login', 'radio');
+        await verifyHumanChallenge('challenge', 4242);
+        await verifyHumanChallenge('challenge', 7, { slot: 6, atMs: 2_400 });
 
         expect(apiRequest).toHaveBeenNthCalledWith(1, '/auth/human-challenge', {
             method: 'POST', auth: false, retryAuth: false,
-            body: { subject: 'test@example.com', purpose: 'signup' },
+            body: { subject: 'test@example.com', purpose: 'signup', mode: 'switch' },
         });
-        expect(apiRequest).toHaveBeenNthCalledWith(2, '/auth/human-challenge/verify', {
+        expect(apiRequest).toHaveBeenNthCalledWith(2, '/auth/human-challenge', {
             method: 'POST', auth: false, retryAuth: false,
-            body: { challengeToken: 'challenge', selectedSlot: 6 },
+            body: { subject: 'test@example.com', purpose: 'login', mode: 'radio' },
+        });
+        // 장면이 없는 판은 answer를 아예 보내지 않는다 — 서버 검증기가 빈 객체를 거절한다.
+        expect(apiRequest).toHaveBeenNthCalledWith(3, '/auth/human-challenge/verify', {
+            method: 'POST', auth: false, retryAuth: false,
+            body: { challengeToken: 'challenge', powCounter: 4242 },
+        });
+        expect(apiRequest).toHaveBeenNthCalledWith(4, '/auth/human-challenge/verify', {
+            method: 'POST', auth: false, retryAuth: false,
+            body: { challengeToken: 'challenge', powCounter: 7, answer: { slot: 6, atMs: 2_400 } },
         });
     });
 

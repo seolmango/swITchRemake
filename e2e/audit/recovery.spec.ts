@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { database, isolatedContext, login, seedAccount } from './helpers';
+import { database, isolatedContext, login, seedAccount, completeHumanChallenge, watchHumanCheck } from './helpers';
 import { authenticatorCode, localAuthenticator } from './totp';
 
 async function logout(page: Page) {
@@ -12,28 +12,6 @@ async function security(page: Page) {
     await page.goto('/settings');
     await page.getByRole('tab', { name: /^05\s*계정 보안$/ }).click();
     await expect(page.getByText('2차 인증 상태', { exact: true })).toBeVisible();
-}
-async function resetHumanChallenge(page: Page) {
-    const dialog = page.getByRole('dialog', { name: '첫 스위치', exact: true });
-    const arena = dialog.locator('.human-challenge-arena.is-ready');
-    await expect(arena).toBeVisible();
-    const slot = await arena.evaluate(element => {
-        const self = element.querySelector<HTMLElement>('.is-self')!;
-        const x = parseFloat(self.style.getPropertyValue('--player-x'));
-        const y = parseFloat(self.style.getPropertyValue('--player-y'));
-        const rule = element.getAttribute('data-challenge-rule');
-        const runners = Array.from(element.querySelectorAll<HTMLElement>('.is-runner')).map(runner => ({
-            slot: runner.querySelector('.human-challenge-player-number')!.textContent!.trim(),
-            distance: Math.hypot(parseFloat(runner.style.getPropertyValue('--player-x')) - x,
-                parseFloat(runner.style.getPropertyValue('--player-y')) - y),
-            rank: Number(runner.getAttribute('aria-label')?.match(/속도 (\d+)단계/)?.[1] ?? 0),
-        }));
-        runners.sort((a, b) => rule === 'nearest' ? a.distance - b.distance : rule === 'farthest'
-            ? b.distance - a.distance : rule === 'fastest' ? b.rank - a.rank : a.rank - b.rank);
-        return runners[0]!.slot;
-    });
-    await dialog.getByRole('button', { name: new RegExp(`^${slot}번, 러너`) }).click();
-    await expect(dialog).toHaveCount(0);
 }
 async function resetMailCode(page: Page, email: string) {
     let id: string | undefined;
@@ -119,8 +97,9 @@ test('extended UI TOTP setup, login, SMTP password recovery and MFA removal succ
 
         await page.goto('/reset-password');
         await page.getByLabel('이메일', { exact: true }).fill(account.email);
+        const check = watchHumanCheck(page);
         await page.getByRole('button', { name: '코드 발송', exact: true }).click();
-        await resetHumanChallenge(page);
+        await completeHumanChallenge(page, check);
         const emailCode = await resetMailCode(page, account.email);
         await page.getByLabel('인증 코드', { exact: true }).fill(emailCode);
         await page.getByLabel('새 비밀번호', { exact: true }).fill(recovered.password);

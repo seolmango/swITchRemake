@@ -4,37 +4,33 @@ import type { RegistrationAgreements } from '../legal/legalDocuments.ts';
 export type VerificationType = 'signup' | 'reset-password' | 'delete';
 export type HumanChallengePurpose = VerificationType | 'login';
 
-export type HumanChallengeSlotStatus = 'self' | 'tagger' | 'runner' | 'out' | 'empty';
-export type HumanChallengeRule = 'nearest' | 'farthest' | 'fastest' | 'slowest';
+/** 장면을 받을 방식. 'radio'는 턴제 중계(접근성 경로)다. */
+export type HumanRoundKind = 'switch' | 'radio';
 
-export interface HumanChallengeScene {
-    slots: Array<{
-        slot: number;
-        status: HumanChallengeSlotStatus;
-        x: number;
-        y: number;
-        motionMs: number | null;
-        speedRank: number | null;
-    }>;
-    rule: HumanChallengeRule;
-    approachMs: number;
-    approachFrom: 'left' | 'right' | 'top';
-}
-
+/**
+ * 발급된 사람 확인. 충전(작업 증명)은 항상 있고, 장면은 서버가 위험하다고 볼 때만 온다.
+ * 장면은 시드 하나다 — 화면은 `shared`의 같은 생성기로 그 장면을 그린다.
+ */
 export interface HumanChallenge {
     challengeToken: string;
     expiresIn: number;
-    scene: HumanChallengeScene;
+    pow: { nonce: string; bits: number };
+    round: { kind: HumanRoundKind; seed: number } | null;
 }
 
-export const issueHumanChallenge = (subject: string, purpose: HumanChallengePurpose) =>
+export interface HumanChallengeAnswer {
+    slot: number;
+    atMs?: number;
+}
+
+export const issueHumanChallenge = (subject: string, purpose: HumanChallengePurpose, mode: HumanRoundKind = 'switch') =>
     apiRequest<HumanChallenge>('/auth/human-challenge', {
-        method: 'POST', auth: false, retryAuth: false, body: { subject, purpose },
+        method: 'POST', auth: false, retryAuth: false, body: { subject, purpose, mode },
     });
 
-export const verifyHumanChallenge = (challengeToken: string, selectedSlot: number) =>
+export const verifyHumanChallenge = (challengeToken: string, powCounter: number, answer?: HumanChallengeAnswer) =>
     apiRequest<{ proofToken: string; expiresIn: number }>('/auth/human-challenge/verify', {
-        method: 'POST', auth: false, retryAuth: false, body: { challengeToken, selectedSlot },
+        method: 'POST', auth: false, retryAuth: false, body: { challengeToken, powCounter, ...(answer ? { answer } : {}) },
     });
 
 export const sendVerification = (email: string, vtype: VerificationType, humanProof: string) =>

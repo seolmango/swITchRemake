@@ -20,7 +20,7 @@ import {
     TERMS_OF_SERVICE,
     type LegalDocument,
 } from '../../legal/legalDocuments.ts';
-import { HumanChallengeDialog } from '../../components/auth/HumanChallengeDialog.tsx';
+import { useHumanCheck } from '../../components/auth/useHumanCheck.tsx';
 
 export const SignUpPage: React.FC = () => {
     const { t } = useTranslation();
@@ -40,18 +40,20 @@ export const SignUpPage: React.FC = () => {
     const [privacyAcceptedAt, setPrivacyAcceptedAt] = useState<string | null>(null);
     const [isOver14, setIsOver14] = useState(false);
     const [openDocument, setOpenDocument] = useState<LegalDocument | null>(null);
-    const [challengeOpen, setChallengeOpen] = useState(false);
+    const humanCheck = useHumanCheck();
     const agreementsAccepted = hasRequiredAgreements(termsAcceptedAt, privacyAcceptedAt);
     const valid = isEmail(email) && isNickname(nickname) && isPassword(password) && isVerificationCode(code)
         && agreementsAccepted && isOver14;
 
     const requestChallenge = () => {
         if (!isEmail(email)) { emailRef.current?.focus(); return; }
-        setChallengeOpen(true);
+        void (async () => {
+            const proof = await humanCheck.run('signup', email);
+            if (proof) await sendCode(proof);
+        })();
     };
 
     const sendCode = async (humanProof: string) => {
-        setChallengeOpen(false);
         setLoading(true); setMessage(''); setError(false);
         try { await sendVerification(email, 'signup', humanProof); setCodeSent(true); setMessage(t('auth.codeSent')); }
         catch { setError(true); setMessage(t('auth.serverError')); }
@@ -90,7 +92,7 @@ export const SignUpPage: React.FC = () => {
                 <InlineLink onClick={() => navigate('/login')} style={{ gridColumn: '1 / -1', justifySelf: 'center' }}>{t('auth.goLogin')}</InlineLink>
                 <div className="form-row" style={{ gridColumn: '1 / -1' }}>
                     <TextField ref={emailRef} label={t('auth.email')} placeholder={t('auth.emailPlaceholder')} autoComplete="email" value={email} disabled={codeSent} error={touched && !isEmail(email) ? t('auth.invalidEmail') : undefined} onChange={setEmail}/>
-                    <RoundButton width={240} height={82} type={2} content={loading ? t('auth.sending') : t('auth.sendCode')} disabled={!isEmail(email) || codeSent} isLoading={loading} onClick={requestChallenge}/>
+                    <RoundButton width={240} height={82} type={2} content={humanCheck.active ? t('auth.humanChallenge.charging') : loading ? t('auth.sending') : t('auth.sendCode')} disabled={!isEmail(email) || codeSent} isLoading={loading || humanCheck.active} onClick={requestChallenge}/>
                 </div>
                 <TextField label={t('auth.nickname')} placeholder={t('auth.nicknamePlaceholder')} autoComplete="nickname" value={nickname} error={touched && !isNickname(nickname) ? t('auth.invalidNickname') : undefined} onChange={setNicknameValue}/>
                 <TextField label={t('auth.code')} placeholder={t('auth.codePlaceholder')} inputMode="numeric" maxLength={6} value={code} disabled={!codeSent} error={touched && codeSent && !isVerificationCode(code) ? t('auth.invalidCode') : undefined} onChange={(value) => setCode(value.replace(/\D/g, ''))}/>
@@ -124,14 +126,7 @@ export const SignUpPage: React.FC = () => {
                 <RoundButton width={480} height={104} type={1} content={t('auth.signup')} disabled={!valid} isLoading={loading} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
             </div>
             {openDocument && <LegalDocumentDialog document={openDocument} onClose={() => setOpenDocument(null)}/>}
-            {challengeOpen && (
-                <HumanChallengeDialog
-                    purpose="signup"
-                    subject={email}
-                    onVerified={(proof) => void sendCode(proof)}
-                    onClose={() => setChallengeOpen(false)}
-                />
-            )}
+            {humanCheck.element}
         </PageLayout>
     );
 };

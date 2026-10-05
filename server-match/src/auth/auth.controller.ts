@@ -26,13 +26,13 @@ export class AuthController {
     @Post('human-challenge')
     @RateLimiter({ limit: 12, ttl: 60_000 })
     issueHumanChallenge(@Body() dto: IssueHumanChallengeDto, @Req() req: FastifyRequest) {
-        return this.humanChallenges.issue(dto.purpose, dto.subject, req.ip);
+        return this.humanChallenges.issue(dto.purpose, dto.subject, req.ip, dto.mode);
     }
 
     @Post('human-challenge/verify')
     @RateLimiter({ limit: 12, ttl: 60_000 })
     verifyHumanChallenge(@Body() dto: VerifyHumanChallengeDto, @Req() req: FastifyRequest) {
-        return this.humanChallenges.verify(dto.challengeToken, dto.selectedSlot, req.ip);
+        return this.humanChallenges.verify(dto.challengeToken, dto.powCounter, dto.answer, req.ip);
     }
 
     @Post('verify')

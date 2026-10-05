@@ -1,4 +1,5 @@
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { buildSwitchRound } from 'shared';
 import postgres from 'postgres';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
@@ -72,4 +73,25 @@ export async function apiLogin(context: BrowserContext, account: { email: string
     const data = await response.json();
     if (typeof data.accessToken !== 'string') throw new Error('Login did not issue access');
     return { Authorization: `Bearer ${data.accessToken}` };
+}
+
+/** 사람 확인 발급 응답을 붙잡는다. 클릭하기 전에 부른다 — e2e/support/app.ts의 같은 이름 함수 참고. */
+export function watchHumanCheck(page: Page): Promise<{ round: { kind: 'switch' | 'radio'; seed: number } | null }> {
+    return page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/auth/human-challenge')
+        && response.request().method() === 'POST').then((response) => response.json());
+}
+
+/** 충전만이면 브라우저가 알아서 끝낸다. 장면이 오면 같은 시드로 풀어 술래가 온 뒤 정답을 누른다. */
+export async function completeHumanChallenge(page: Page, check: ReturnType<typeof watchHumanCheck>): Promise<void> {
+    const issued = await check;
+    const verified = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/auth/human-challenge/verify'));
+    if (issued.round?.kind === 'switch') {
+        const dialog = page.getByRole('dialog', { name: '스위치 판정', exact: true });
+        await expect(dialog).toBeVisible();
+        const round = buildSwitchRound(issued.round.seed);
+        await dialog.getByRole('button', { name: '시작', exact: true }).click();
+        await page.waitForTimeout(round.openAt + 250);
+        await page.keyboard.press(`Digit${round.target}`);
+    }
+    expect((await verified).ok(), 'human check verifies').toBe(true);
 }

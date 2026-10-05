@@ -12,7 +12,7 @@ import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { themeColors } from '../../theme/color.ts';
 import { mfaErrorMessage, retryAfterSeconds } from './authErrorMessage.ts';
 import { deadlineAfterSeconds, useDeadlineSeconds } from '../../utils/deadline.ts';
-import { HumanChallengeDialog } from '../../components/auth/HumanChallengeDialog.tsx';
+import { useHumanCheck } from '../../components/auth/useHumanCheck.tsx';
 
 export const ResetPasswordPage: React.FC = () => {
     const { t } = useTranslation();
@@ -30,16 +30,18 @@ export const ResetPasswordPage: React.FC = () => {
     const [mfaRequired, setMfaRequired] = useState(false);
     const [secondFactorCode, setSecondFactorCode] = useState('');
     const [retryDeadline, setRetryDeadline] = useState<number | null>(null);
-    const [challengeOpen, setChallengeOpen] = useState(false);
+    const humanCheck = useHumanCheck();
     const retryRemaining = useDeadlineSeconds(retryDeadline);
 
     const requestChallenge = () => {
         if (!isEmail(email) || (retryRemaining ?? 0) > 0) { emailRef.current?.focus(); return; }
-        setChallengeOpen(true);
+        void (async () => {
+            const proof = await humanCheck.run('reset-password', email);
+            if (proof) await sendCode(proof);
+        })();
     };
 
     const sendCode = async (humanProof: string) => {
-        setChallengeOpen(false);
         setLoading(true); setMessage(''); setError(false);
         try { await sendVerification(email, 'reset-password', humanProof); setCodeSent(true); setMessage(t('auth.codeSent')); }
         catch (requestError) {
@@ -89,7 +91,7 @@ export const ResetPasswordPage: React.FC = () => {
             <div className="signup-grid" style={{ top: 240 }}>
                 <div className="form-row" style={{ gridColumn: '1 / -1' }}>
                     <TextField ref={emailRef} label={t('auth.email')} placeholder={t('auth.emailPlaceholder')} value={email} disabled={codeSent} error={email && !isEmail(email) ? t('auth.invalidEmail') : undefined} onChange={setEmail}/>
-                    <RoundButton width={240} height={82} type={2} content={loading && !codeSent ? t('auth.sending') : t('auth.sendCode')} disabled={!isEmail(email) || codeSent || (retryRemaining ?? 0) > 0} isLoading={loading && !codeSent} onClick={requestChallenge}/>
+                    <RoundButton width={240} height={82} type={2} content={humanCheck.active ? t('auth.humanChallenge.charging') : loading && !codeSent ? t('auth.sending') : t('auth.sendCode')} disabled={!isEmail(email) || codeSent || (retryRemaining ?? 0) > 0} isLoading={(loading && !codeSent) || humanCheck.active} onClick={requestChallenge}/>
                 </div>
                 <TextField label={t('auth.code')} placeholder={t('auth.codePlaceholder')} value={code} disabled={!codeSent} maxLength={6} inputMode="numeric" onChange={(value) => setCode(value.replace(/\D/g, ''))}/>
                 <TextField label={t('auth.newPassword')} placeholder={t('auth.passwordPlaceholder')} value={password} disabled={!codeSent} type="password" autoComplete="new-password" error={password && !isPassword(password) ? t('auth.invalidPassword') : undefined} onChange={setPassword}/>
@@ -110,14 +112,7 @@ export const ResetPasswordPage: React.FC = () => {
                 </div>
                 <RoundButton width={620} height={104} type={1} content={t('auth.resetAction')} disabled={!isVerificationCode(code) || !isPassword(password) || (mfaRequired && !secondFactorCode.trim()) || (retryRemaining ?? 0) > 0} isLoading={loading && codeSent} onClick={() => void submit()} style={{ justifySelf: 'center' }}/>
             </div>
-            {challengeOpen && (
-                <HumanChallengeDialog
-                    purpose="reset-password"
-                    subject={email}
-                    onVerified={(proof) => void sendCode(proof)}
-                    onClose={() => setChallengeOpen(false)}
-                />
-            )}
+            {humanCheck.element}
         </PageLayout>
     );
 };

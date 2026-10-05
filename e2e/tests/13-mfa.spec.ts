@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { T, button, completeHumanChallenge, deleteAccount, logIn, newAccount, signUp } from '../support/app';
+import { T, button, completeHumanChallenge, watchHumanCheck, deleteAccount, logIn, newAccount, signUp } from '../support/app';
 import { clearMail, waitForMail, waitForMailReissue, type SinkMail } from '../support/mail';
 
 const openSecuritySettings = async (page: Page): Promise<void> => {
@@ -173,8 +173,9 @@ test.describe('2차 인증', () => {
         await clearMail(account.email);
         await page.goto('/reset-password');
         await page.getByLabel(T.auth.email, { exact: true }).fill(account.email);
+        const check = watchHumanCheck(page);
         await button(page, T.auth.sendCode).click();
-        await completeHumanChallenge(page);
+        await completeHumanChallenge(page, check);
         const resetMail = await waitForMail(account.email, 'reset-password');
         const newPassword = 'MfaReset456!';
         await page.getByLabel(T.auth.code, { exact: true }).fill(resetMail.code);

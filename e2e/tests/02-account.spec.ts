@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { T, button, completeHumanChallenge, deleteAccount, logIn, newAccount, signUp } from '../support/app';
+import { T, button, completeHumanChallenge, watchHumanCheck, deleteAccount, logIn, newAccount, signUp } from '../support/app';
 import { clearMail, waitForMail } from '../support/mail';
 
 test.describe('가입 · 로그인 · 로그아웃', () => {
@@ -28,8 +28,9 @@ test.describe('가입 · 로그인 · 로그아웃', () => {
         await clearMail(account.email);
         await page.goto('/signup');
         await page.getByLabel(T.auth.email, { exact: true }).fill(account.email);
+        const check = watchHumanCheck(page);
         await button(page, T.auth.sendCode).click();
-        await completeHumanChallenge(page);
+        await completeHumanChallenge(page, check);
         const mail = await waitForMail(account.email, 'signup');
         await page.getByLabel(T.auth.nickname, { exact: true }).fill(account.nickname);
         await page.getByLabel(T.auth.code, { exact: true }).fill(mail.code);
@@ -79,8 +80,9 @@ test.describe('가입 · 로그인 · 로그아웃', () => {
         await clearMail(duplicate.email);
         await page.goto('/signup');
         await page.getByLabel(T.auth.email).fill(duplicate.email);
+        const check = watchHumanCheck(page);
         await button(page, T.auth.sendCode).click();
-        await completeHumanChallenge(page);
+        await completeHumanChallenge(page, check);
         await expect(page.getByText(T.auth.codeSent)).toBeVisible();
         const mail = await waitForMail(duplicate.email, 'signup');
 
