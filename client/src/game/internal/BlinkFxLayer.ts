@@ -32,7 +32,14 @@ export class BlinkFxLayer {
      * 궤적이 흐르지 않을 뿐, 궤적이 화면에 영구히 박히지는 않는다.
      */
     update(now: number, t: number, theme: Theme, opts: RenderOptions): void {
-        this.entries = this.entries.filter((e) => now - e.bornAt < BLINK_FX.life);
+        /*
+         * 매 프레임 `filter`로 배열을 새로 만들면, 궤적이 하나도 없는 평소에도 엔진이 사는 동안
+         * 계속 쓰레기를 낸다. `play`가 시간 순으로만 넣으므로 수명이 끝난 것은 항상 앞쪽에 모여
+         * 있다 — 끝난 것이 실제로 있을 때만 한 번 잘라낸다.
+         */
+        let expired = 0;
+        while (expired < this.entries.length && now - this.entries[expired]!.bornAt >= BLINK_FX.life) expired += 1;
+        if (expired > 0) this.entries.splice(0, expired);
         const g = this.gfx;
         g.clear();
         for (const e of this.entries) {

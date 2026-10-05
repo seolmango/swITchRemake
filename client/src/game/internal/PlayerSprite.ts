@@ -195,8 +195,15 @@ export class PlayerSprite {
  * Mirrors `drawBars`'s layout exactly — if that changes, this has to change with it, which is why both
  * live in this file.
  */
+/** 켜져 있는 효과 바의 개수. 매 프레임 플레이어마다 두 번 불리므로 중간 배열을 만들지 않는다. */
+function activeBarCount(s: PlayerVisualState): number {
+    let count = 0;
+    for (const key of EFFECT_BAR_ORDER) if (s.effects[key]) count += 1;
+    return count;
+}
+
 function barStackHeight(s: PlayerVisualState): number {
-    const barCount = EFFECT_BAR_ORDER.filter((k) => s.effects[k]).length;
+    const barCount = activeBarCount(s);
     if (barCount === 0 && !s.isTagger) return PLAYER.radius;
 
     let height = PLAYER.radius + BAR.startOffset + barCount * (BAR.height + BAR.gap);
@@ -284,8 +291,7 @@ function drawBody(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: T
 
 function drawBars(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: Theme, t: number, opts: RenderOptions): void {
     g.clear();
-    const active = EFFECT_BAR_ORDER.filter((k) => s.effects[k]);
-    if (active.length === 0 && !s.isTagger) return;
+    if (activeBarCount(s) === 0 && !s.isTagger) return;
 
     const x = 0;
     let by = -PLAYER.radius - BAR.startOffset;
@@ -295,8 +301,9 @@ function drawBars(g: Phaser.GameObjects.Graphics, s: PlayerVisualState, theme: T
     // so burn the first cycle here at alpha 0 before drawing anything that needs to actually show.
     strokeRoundedRect(g, -BAR.width / 2, by - BAR.height, BAR.width, BAR.height, BAR.radius, 0, 0, 1);
 
-    for (const key of active) {
-        const es = s.effects[key]!;
+    for (const key of EFFECT_BAR_ORDER) {
+        const es = s.effects[key];
+        if (!es) continue;
         const ratio = Math.max(0, Math.min(1, es.total > 0 ? es.remaining / es.total : 0));
         const barX = x - BAR.width / 2, barY = by - BAR.height;
 

@@ -27,7 +27,15 @@ type RecordsState =
 export const ProfilePage: React.FC = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
-    const { status, nickname, logout, abandonSession } = useAuthStore();
+    /*
+     * 필드를 하나씩 고른다. `useAuthStore()`로 통째로 받으면 액세스 토큰이 조용히 갱신될
+     * 때마다(setApiAccessTokenListener가 매번 setState한다) 이 화면이 다시 그려진다 —
+     * 이 화면이 쓰는 값은 하나도 안 바뀌었는데도. zustand v5는 기본 얕은 비교가 없다.
+     */
+    const status = useAuthStore((state) => state.status);
+    const nickname = useAuthStore((state) => state.nickname);
+    const logout = useAuthStore((state) => state.logout);
+    const abandonSession = useAuthStore((state) => state.abandonSession);
     const theme = useSettingsStore((state) => state.theme);
     const colors = themeColors(theme);
     const authenticated = status === 'account';

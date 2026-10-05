@@ -542,25 +542,43 @@ export class MapLayer {
  * a band's true edge into the safe zone, reading as the storm border lagging behind the visible danger
  * texture by about a tile ("한칸 뒤에 외곽선이 따라오는 느낌").
  */
-function clipSegmentToRect(x0: number, y0: number, x1: number, y1: number, xmin: number, ymin: number, xmax: number, ymax: number): [number, number, number, number] | null {
+/*
+ * 한 프레임에 수천 번 불린다(격자 칸 × 칸마다 선분 3개). 그래서 호출마다 아무것도 새로 만들지
+ * 않는다 — 경계 네 쌍과 결과 좌표를 모듈 수준 스크래치에 쓴다. 호출자가 다음 호출 전에 값을
+ * 읽어 가므로(바로 moveTo/lineTo로 넘긴다) 공유해도 안전하고, 이 파일 밖으로 새지 않는다.
+ * 판정 순서와 수식은 Liang-Barsky 원문 그대로다.
+ */
+const CLIP_P = [0, 0, 0, 0];
+const CLIP_Q = [0, 0, 0, 0];
+const CLIP_OUT = [0, 0, 0, 0];
+
+function clipSegmentToRect(x0: number, y0: number, x1: number, y1: number, xmin: number, ymin: number, xmax: number, ymax: number): boolean {
     let t0 = 0, t1 = 1;
     const dx = x1 - x0, dy = y1 - y0;
-    const checks: [number, number][] = [[-dx, x0 - xmin], [dx, xmax - x0], [-dy, y0 - ymin], [dy, ymax - y0]];
-    for (const [p, q] of checks) {
+    CLIP_P[0] = -dx; CLIP_Q[0] = x0 - xmin;
+    CLIP_P[1] = dx;  CLIP_Q[1] = xmax - x0;
+    CLIP_P[2] = -dy; CLIP_Q[2] = y0 - ymin;
+    CLIP_P[3] = dy;  CLIP_Q[3] = ymax - y0;
+    for (let i = 0; i < 4; i++) {
+        const p = CLIP_P[i]!, q = CLIP_Q[i]!;
         if (p === 0) {
-            if (q < 0) return null;
+            if (q < 0) return false;
             continue;
         }
         const r = q / p;
         if (p < 0) {
-            if (r > t1) return null;
+            if (r > t1) return false;
             if (r > t0) t0 = r;
         } else {
-            if (r < t0) return null;
+            if (r < t0) return false;
             if (r < t1) t1 = r;
         }
     }
-    return [x0 + t0 * dx, y0 + t0 * dy, x0 + t1 * dx, y0 + t1 * dy];
+    CLIP_OUT[0] = x0 + t0 * dx;
+    CLIP_OUT[1] = y0 + t0 * dy;
+    CLIP_OUT[2] = x0 + t1 * dx;
+    CLIP_OUT[3] = y0 + t1 * dy;
+    return true;
 }
 
 /**
@@ -570,6 +588,13 @@ function clipSegmentToRect(x0: number, y0: number, x1: number, y1: number, xmin:
  * infinite tiling instead of four independently-phased ones. Every segment is clipped to this band's own
  * (x,y,w,h) — see `clipSegmentToRect` — so nothing bleeds past this band's true edge.
  */
+/** 패턴 한 칸의 선분 3개. 칸마다 다시 만들 이유가 없는 상수라 한 번만 펼쳐 둔다 — [x0,y0,x1,y1]×3. */
+const HATCH_SEGMENTS = [
+    -4 * SCALE, 18 * SCALE, 18 * SCALE, -4 * SCALE,
+    -11 * SCALE, 11 * SCALE, 11 * SCALE, -11 * SCALE,
+    3 * SCALE, 25 * SCALE, 25 * SCALE, 3 * SCALE,
+];
+
 function drawDiagonalHatch(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, driftY: number): void {
     const step = STORM.patternTile;
     g.lineStyle(STORM.hatchLineWidth, Palette.red[2], 0.55);
@@ -582,16 +607,14 @@ function drawDiagonalHatch(g: Phaser.GameObjects.Graphics, x: number, y: number,
     for (let ry = firstRow; ry <= lastRow; ry++) {
         for (let rx = firstCol; rx <= lastCol; rx++) {
             const ox = rx * step, oy = ry * step + driftY;
-            const raw: [number, number, number, number][] = [
-                [ox - 4 * SCALE, oy + 18 * SCALE, ox + 18 * SCALE, oy - 4 * SCALE],
-                [ox - 11 * SCALE, oy + 11 * SCALE, ox + 11 * SCALE, oy - 11 * SCALE],
-                [ox + 3 * SCALE, oy + 25 * SCALE, ox + 25 * SCALE, oy + 3 * SCALE],
-            ];
-            for (const [sx0, sy0, sx1, sy1] of raw) {
-                const clipped = clipSegmentToRect(sx0, sy0, sx1, sy1, x, y, xmax, ymax);
-                if (!clipped) continue;
-                g.moveTo(clipped[0], clipped[1]);
-                g.lineTo(clipped[2], clipped[3]);
+            for (let s = 0; s < HATCH_SEGMENTS.length; s += 4) {
+                if (!clipSegmentToRect(
+                    ox + HATCH_SEGMENTS[s]!, oy + HATCH_SEGMENTS[s + 1]!,
+                    ox + HATCH_SEGMENTS[s + 2]!, oy + HATCH_SEGMENTS[s + 3]!,
+                    x, y, xmax, ymax,
+                )) continue;
+                g.moveTo(CLIP_OUT[0]!, CLIP_OUT[1]!);
+                g.lineTo(CLIP_OUT[2]!, CLIP_OUT[3]!);
             }
         }
     }

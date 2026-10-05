@@ -36,7 +36,10 @@ export class SwitchFxLayer {
     }
 
     update(now: number, theme: Theme, opts: RenderOptions): void {
-        this.entries = this.entries.filter((e) => now - e.bornAt < SWITCH_FX.life);
+        // BlinkFxLayer와 같은 이유로 제자리에서 잘라낸다 — 평소(빈 목록)에 아무것도 할당하지 않는다.
+        let expired = 0;
+        while (expired < this.entries.length && now - this.entries[expired]!.bornAt >= SWITCH_FX.life) expired += 1;
+        if (expired > 0) this.entries.splice(0, expired);
         const g = this.gfx;
         g.clear();
         for (const e of this.entries) {
