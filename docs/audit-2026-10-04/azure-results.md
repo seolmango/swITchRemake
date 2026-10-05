@@ -32,16 +32,33 @@ Git에서 제외한 로컬 증거:
 
 ## 미검증 및 환경 차이
 
-Azure PostgreSQL 직접 대조, 관리자 로그인·조작, MFA/암호 변경·재설정·탈퇴, 실제 휴대폰, 고지연망·부하·장애는 미실행이다. 관리자 암호를 추측하거나 초기화하지 않았다. TestMap1의 제한된 경기로 모든 맵/스킬/규칙 조합을 보장하지 않는다. CI는 Azure에 접근하지 않으며 로컬 수정은 아직 Azure에 배포되지 않았다.
+Azure PostgreSQL 직접 대조, 관리자 변경 작업, MFA/암호 변경·재설정·탈퇴, 실제 휴대폰, 고지연망·부하·장애는 미실행이다. 관리자 로그인·개요·새 테스트 계정 조회는 아래 배치에서 확인했으며 암호를 추측하거나 초기화하지 않았다. TestMap1의 제한된 경기로 모든 맵/스킬/규칙 조합을 보장하지 않는다. CI는 Azure에 접근하지 않는다. 아래 10월 5일 기록 이전의 배치는 수정 전 Azure에서 수행했으며, 배포 이후 증거와 구분한다.
 
 ## 관리자 읽기 전용 배치
 
 소유자가 제공한 현재 자격으로 정상 로그인201을 확인했다. 실제 관리자 UI에서 서버 개요·등록 worker 표시·자동 갱신 중지·이번에 만든 회원A의 닉네임 조회가 통과했다. 최초 조회 검사는 닉네임 옆 계정 번호를 누락한 exact locator라 timeout했고, 실제 표시 전체를 검사하도록 수정한 재실행이 통과했다. 기존 사용자 조회/제재/설정 변경을 수행하지 않았다. 서버 감사 목록에 다른 기록이 표시될 수 있어 화면·응답 본문을 저장하지 않고 성공 boolean과 요청 개수만 `admin-readonly.json`에 남겼다. 관리자 비밀번호 임시 파일은 실행 후 삭제했다.
 
-따라서 앞 절의 관리자 미실행 항목 중 로그인·개요·테스트 계정 조회는 이 결과로 갱신한다. 관리자 신고 처리·제재·공지/점검 변경의 Azure 실행은 여전히 미실행이다.
+관리자 신고 처리·제재·공지/점검 변경의 Azure 실행은 미실행이다.
 
 ## HTTPS 헤더 확인과 보강
 
 공개 readiness와 HTML 문서를 각1회씩 조회했다. 기본 OS 인증서 검증을 통과했고 모두200이었다. readiness 한 번의 응답은369ms였다(성능 기준/부하 검증 아님). 두 응답에 HSTS/CSP/X-Content-Type-Options/X-Frame-Options/Referrer-Policy가 없음을 기록했다. 이를 XSS나 clickjacking 악용 성공으로 표현하지 않는다.
 
-로컬 Caddy 구성에 HSTS1년(하위도메인 포함 안 함), nosniff, frame DENY, strict-origin referrer 및 제한적인 frame-ancestors/base-uri/object-src CSP를 추가했다. script-src nonce/해시 CSP는 별도 미구현이다. Azure에는 미배포이며 승인 후 해당 응답 헤더 및 전체 사용자 여정을 다시 확인해야 한다. 증거는 `https-readiness.json`과 `https-document-headers.json`이다.
+로컬 Caddy 구성에 HSTS1년(하위도메인 포함 안 함), nosniff, frame DENY, strict-origin referrer 및 제한적인 frame-ancestors/base-uri/object-src CSP를 추가했다. script-src nonce/해시 CSP는 별도 미구현이다. 10월 4일에는 미배포였고 아래 10월 5일 승인 배포 후 실제 응답에 적용된 것을 확인했다. 변경 전 증거는 `https-readiness.json`과 `https-document-headers.json`이다.
+
+## 공개 리플레이 키 형식 확인
+
+격리 CI에서 공개키 형식 오류를 발견한 뒤, Azure의 공개 설정 API만 읽어 차이를 확인했다. 13:48Z 응답200, 키1개와 디코딩32바이트 형식을 확인했다. 키 값이나 비밀 설정은 출력·저장하지 않았다. 앞선 조회는 응답 기록 코드가 status 속성을 함수로 취급해 실패하여 수정했고, 충분히 간격을 둔 총2회 조회였다. 이 결과는 공개키 형식 확인이며 Azure 리플레이 서명 검증 전체 성공을 뜻하지 않는다. `replay-key-format.json`에 안전한 메타데이터만 보존했다.
+
+## 10월 5일 승인 배포 후 검증
+
+검사한 코드 SHA `5c87efd88ecf664581b36e8422538cde8048d7fd`를 main에 병합하고 Azure backend/web에 배포했다. 이미지 revision label과 원복 태그를 보존했으며 [배포 기록](deployment-followup.md)에 절차를 남겼다.
+
+- 00:20:00Z 시작한 단일 브라우저 배치 **통과**: 162,328ms, 독립 게스트3명/방1개/두 경기. 각 경기의 권위 snapshot roster3명과 이동 좌표 변화, 3개 화면의 결과·승자·저장 결과 API 일치, 로비 복귀, 다음 경기, 전원 UI 퇴장을 확인했다. 재시도0, 중단 조건 발동 없음. 일반 클라이언트 요청은 정적120/API75, WebSocket 연결3/송신1006으로 기록했고 별도 HTTP 시험 요청은 없었다.
+- 두 번째 경기 결과 화면을 직접 열어 3인 기록·승자·다음 로비 전환 표시를 확인했다. DB 직접 조회로 저장을 대조한 결과는 아니다.
+- 그 배치가 끝난 뒤 별도 HTTP14회를 최소1.2초 간격으로 실행했다. readiness/HTML 모두200, 새 index bundle, HSTS/nosniff/frame DENY/referrer/CSP 5개 헤더 적용을 확인했다. 기본 TLS 검증을 유지했다.
+- 소유자 테스트 회원A/B만 정상 로그인201 → 각각 기존2경기 전적·동일 경기 식별자 보존 → 관리자 API403 → 로그아웃201 → 이후401을 확인했다. 다른 사용자 객체·계정·세션을 조회하거나 변경하지 않았다.
+- 00:24:09Z SSH 집계: fresh worker1/대기방0/경기0/연결0. match/cluster/web/Caddy 모두 running, restart0, OOMfalse였다.
+- 새 비용 자원·VM 사양·운영 DB/Redis·인증 키 변경은 없다. 자동 CI에는 이 라이브 검사를 연결하지 않았다.
+
+증거는 Git 제외 `e2e/artifacts/azure-deploy-20261005/`의 `sanitized-outcomes.json`, 두 합성 결과 PNG, `post-checks.json`, `deployment-state.json`이다. 이번 배포 후 MFA·실제 메일 재발송·관리자 UI·Azure 리플레이 전체 재생 검사는 반복하지 않았으며, 이전 배치/로컬 결과가 그 차이를 자동으로 보장하지 않는다.

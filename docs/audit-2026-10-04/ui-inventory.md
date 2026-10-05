@@ -2,6 +2,8 @@
 
 작성일: 2026-10-04. 최초 목록의 근거는 현재 `client/src/App.tsx`, 각 페이지/컴포넌트/스토어 소스다. 과거 대화·메모리·보고서·기존 테스트를 최초 근거로 사용하지 않았다. `D:\`, `D:\code`, 저장소 및 저장소 파일 검색에서 AGENTS.md가 발견되지 않았다.
 
+이 문서는 조사 시점별 기록을 보존한다. 아래의 초기 `대기/미검증` 문구는 해당 단계의 상태이며, 이후 재실행 결과를 소급해 바꾸지 않았다. 현재 통합 판정은 [커버리지 표](README.md)와 [실행 결과](local-results.md)를 따른다. 10월 5일 최종 core9/9에는 실제 로그아웃 실패 복구와 리플레이 시간 진행·정지·탐색·손상 파일 복구도 포함된다.
+
 ## 역할과 공통 상태
 
 - 익명/부트스트랩 중 → 게스트 또는 계정. 실패 시 복구 화면에서 재시도 가능해야 한다.
@@ -106,10 +108,35 @@ CI의 실제 브라우저 probe로 동일 secure-origin flag에서 Chromium head
 |---|---|---|
 | 가입·동의·로그인·프로필·로그아웃 | 실제 Mailpit SMTP 및 필수 동의 DB 포함 통과 | 코드 만료 후 복구, 이메일 재입력/재발송 |
 | 키 설정·훈련·모달 | 실제 서버 플레이어 이동 및 브라우저 포커스 통과 | full touch 조합·터치 레이아웃 편집·물리 휴대전화·가상 키보드 |
-| 설정 화면 | 390×844 keyboard 및 reload 유지 통과 | 844×390/desktop resize 최종 실행 대기, 진짜 125% browser zoom 미실행 |
+| 설정 화면 | 동일 최종 실행에서 390×844 keyboard/reload 및 844×390·1440×900 resize, 수평 overflow·언어/테마 유지 통과 | 진짜 125% browser zoom·touch·가상 키보드·physical phone 미실행 |
 | 관리자 개요·합성 사용자 조회 | 개요·자동갱신 중지·actor/target 감사 로그 통과 | 신고 moderation·공지 API는 다른 담당자 범위 |
 | 방 목록 | stale 응답·page 상한 DOM 회귀 통과 | 실제 다중회원 경기/결과·통계는 주 담당자 범위 |
-| 비밀번호·email MFA·신뢰기기·탈퇴 | account suite 작성 및 TypeScript 통과 | 전체 실제 실행 대기 |
-| TOTP·메일 비밀번호 복구 | recovery suite TypeScript 및 공개 RFC 벡터 통과 | 전체 실제 UI/SMTP 실행 대기 |
-| 다중탭 세션 | 동시 bootstrap barrier suite TypeScript 통과 | 실제 concurrent refresh 결과는 주 담당자/CI 실행 결과 대기 |
-| 리플레이·공유·설치·오프라인 | 현재 소스 약속과 기존 자동화 비교 | 실제 파일 재생/되감기·share picker·PWA 설치/오프라인은 이 담당자 미실행 |
+| 비밀번호·email MFA·신뢰기기·탈퇴 | 동일 확장 run에서 전체 성공. 모달 수정의 실제 포커스/Escape, Mailpit 탈퇴/DELETE200·DB 익명화·세션/MFA/신뢰기기 0까지 통과 | 코드 만료 후 재발송·중간 네트워크 실패 복구는 별도 미실행 |
+| TOTP·메일 비밀번호 복구 | 동일 확장 run에서 TOTP 등록/로그인·Mailpit+TOTP 비밀번호 복구·새 암호+TOTP 재로그인·TOTP 해제/DB 일치 전체 통과 | 첫 중간 실행의 재로그인 실패는 원인 미확정 history로 보존 |
+| 다중탭 세션 | 동일 context 두 탭 동시 bootstrap barrier, 계정 UI·201/201·활성 DB session·reuse event 0 통과 | HTTP 테스트 origin에 secure-context API를 허용한 실행이며 실제 HTTPS/TLS·물리 다중기기는 별도 미검증 |
+| 리플레이·공유·설치·오프라인 | 주 담당자의 최종 core에서 서명 파일 열기/시간 진행/정지/탐색/손상 파일 복구 통과 | share picker·PWA 설치/오프라인은 미실행; 완전 오프라인 재생 미지원 |
+
+10월 4일 첫 전체 core 성공 증거는 `e2e/artifacts/audit/local-oct04/core-8pass-lowpower.json`의 **동일 run core 8/8 통과(219.2초)**다. 그중 이 담당자의 UI 가입 4.5초·훈련 28.5초·resize 설정 1.4초·관리자 조회 1.3초, 다중탭 1.5초가 모두 통과했다. 설정 시험에는 최신 390×844 → 844×390 → 1440×900 검사가 포함된다. 앞선 `core-7pass-movement-fixture-failed.json`은 UI 4개·다중탭이 이미 통과하고 multiplayer fixture만 실패했던 중간 실행으로 보존한다. 이전 환경/선택자/fixture 실패를 현재 제품 결함이나 최종 실패 수로 합산하지 않는다. account/recovery/operations 확장4/4는 아래의 별도 실행이며 이 8통과 수에 포함하지 않는다.
+
+## 확장 계정 실제 실행 및 후속 수정
+
+`browser-account-recovery-operations-1791119571688.json` 첫 확장 실행은 **1 통과 / 3 실패(4.9분)**다. 공개 RFC TOTP 벡터는 통과했고, 나머지는 전체 성공과 구분하여 아래까지 확인했다.
+
+- 계정 여정은 실제 비밀번호 변경/타 세션 무효 → 이메일 MFA 등록/백업 보관 → Mailpit MFA 로그인/신뢰기기 로그인 → 백업으로 신뢰기기 해제 → Mailpit MFA 해제 → 두 기기 중 타 기기 폐기/DB 활성 하나/폐기 기기 refresh401까지 통과했다. 직후 로그인 기기 dialog가 Escape로 닫히지 않아 탈퇴에 도달하지 못했다.
+- **UI-05(P2, 확정):** 완료된 모달 action이 disabled 또는 제거되면서 포커스가 disabled 버튼/body에 남는다. 공통 hook의 dialog keydown이 도달하지 않아 Escape/Tab이 동작하지 않는다. 최소 DOM 회귀에서 disabled/removal 두 사례가 수정 전 실패했다. 동적 변경 시 body 또는 현재 disabled에 있던 포커스만 첫 유효 버튼으로 복구하며 다른 dialog 포커스는 가져오지 않도록 제한해 수정했다. 새 hook 3개와 기존 GamePage 5개 총 8개 통과, client TypeScript·변경 파일 lint·audit TypeScript 통과. 이 수정 시점에는 실제 웹 재검증이 대기 중이었으며, 아래 후속 확장 실행에서 통과했다.
+- 복구 여정은 실제 TOTP UI 등록/암호화 DB·로그인 → Mailpit/사람 확인 비밀번호 재설정의 추가 TOTP 요구 → 새 암호 설정·세션 모두 폐기·TOTP 유지 DB까지 통과했다. 새 암호 재로그인에서 MFA 화면에 도달하지 못했다. API 상태·오류 enum·mfaRequired/tokenIssued boolean만 기록하는 진단을 추가했으며 원인을 확정하지 않았다. 이후 TOTP 해제는 아직 실행하지 못했다.
+- 운영 여정은 점검 해제 후 빈 `.room-grid`의 0 높이를 visible로 요구해서 실패했다. 빈 방 목록 자체는 현재 소스의 정상 상태이며 이 기대 수정/새 방 생성 성공 검증은 주 담당자의 범위다.
+
+인증 비밀 원문·trace·video·auth screenshot은 보존하지 않는다. Playwright의 자동 `error-context.md`는 감사 수집 코드에서 삭제됨을 확인했다. 다음 실행에는 ARIA 자동 context snapshot 자체도 꺼두도록 주 담당자에게 전달했다.
+
+최신 웹에 UI-05를 반영한 확장 재실행 `browser-account-recovery-operations-1791120876703.json`은 **동일 run 4/4 통과(321.36초, skipped/flaky/unexpected 모두 0)**다. 계정 전체 여정 2.2분·운영 여정 2.9초·공개 TOTP 벡터 3ms·TOTP 복구 전체 여정 3.1분이 완료됐다. 계정 시험은 모달 내 포커스/Escape를 실제 Chromium으로 확인하고 실제 탈퇴 메일·DELETE200/deleted=true·익명화/정리를 끝냈으므로 UI-05의 제품 수정도 브라우저 검증 완료다. 운영 성공은 주 담당자의 수정 범위로 구분한다.
+
+비밀 없는 복구 HTTP metadata는 TOTP 비밀번호 로그인 두 차례 모두 `201/mfaRequired=true` → 추가 인증 `201/mfaRequired=false`, 복구의 첫 요청 `401/MFA_REQUIRED` → 실제 다음 OTP를 제출한 요청 `201`, guest refresh 세 차례 모두201을 보여준다. 이 최종 실행에는429·CAPTCHA login 강제·일반401 암호 거절이 없었다. 첫 실행의 새 암호 재로그인 실패에는 이런 metadata가 없어 원인을 소급 확정하지 않는다. 성공을 위해 제품 인증/암호/제한을 변경하거나 로그인 반복 재시도를 추가하지 않았다.
+
+## 실패한 로그아웃의 신원 보존
+
+**UI-06(P1, HTTP/store 회귀로 확정):** 실제 서버 로그아웃 요청이 네트워크 오류/503으로 실패해도 `logoutAndCreateGuest`가 오류를 삼키고 새 guest를 발급해 계정 화면을 지웠다. 서버 세션과 refresh cookie의 폐기 확인은 없으므로 사용자가 로그아웃된 것으로 판단하는 화면과 서버의 로그인 상태가 달라질 수 있다. `useAuthStore.logout`도409 외 오류를 삼켜 정상 페이지 이동을 허용했다. 최초 최소 단위 6개가 모두 수정 전 실패했으며, 이는 실제 운영 세션에 접근한 증거가 아니라 mock HTTP에 대한 재현이다.
+
+로그아웃은 기존 API의401 갱신 경로로 access token 만료와 서버 세션 폐기를 구분한 뒤 실제 acknowledgment를 받는다. 갱신 자체가401/403으로 거절되어 신원이 이미 anonymous로 바뀐 경우에만 이미 폐기된 경로로 새 guest를 발급한다. 네트워크/503/429/409 오류는 신원·refresh 상태를 보존하고 호출자에게 전달해 프로필에서 실패를 보여준다. 로그아웃 확인 후 guest 발급이 실패한 경우에는 anonymous/error를 유지하며 계정을 되살리지 않는다. store는 갱신으로 새로 받은 token도 보존한다.
+
+수정 후 logout 단위 9개와 기존 auth9개 합계18개, client TypeScript·변경 파일 lint·audit TypeScript가 통과했다. account/guest 임시 실패 보존, access 만료의 정상 갱신/로그아웃, 이미 폐기된401, guest 발급 실패, 갱신 후409의 현재 신원 보존을 포함한다. `e2e/audit/userlogout.spec.ts`는 fresh synthetic account에서 오직 `/api/auth/logout` 전송만1회 abort하고 나머지 서버를 그대로 사용해 실패 표시/계정·DB 활성1·새 탭의 계정 유지 → 실제 재시도 acknowledgment/DB 활성0/새 탭 guest를 확인하도록 작성했다. 10월 5일 코드 `5c87efd`의 로컬 및 Actions 최종 core에서 실제 회귀도 통과했다. 전송 실패 때 회원 화면·DB 활성1·새 탭 회원을 유지하고, 정상 재시도201 후 DB 활성0·새 탭 guest를 확인했다. 최종 core는 총9/9이며 단위 결과와 별도로 기록한다.

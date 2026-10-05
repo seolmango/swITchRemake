@@ -8,13 +8,16 @@ P1은 정상 경기·결과·가용성을 크게 해치는 결함, P2는 기능 
 | UI-02 / P2 | 훈련 설정에서 키보드 포커스가 밖으로 나가거나 Escape로 닫지 못함 | 공통 modal focus 관리 누락을 연결 | DOM + 실제 Chromium 초기포커스/Tab/Escape/복원 통과 |
 | UI-03 / P2 | 느린 새로고침 후 페이지를 바꾸면 이전 목록이 새 화면을 덮음 | 요청 순서 추적 누락. 최신 요청만 수락 | 응답 역순 최소 DOM 재현 실패→통과 |
 | UI-04 / P2 | 방이 줄어들면 존재하지 않는 2/1 페이지 유지 | 수동 refresh에 페이지 상한 누락 | 2/1 재현→1/1과 실제 유효 페이지 재조회 통과 |
+| UI-05 / P2 | 기기 관리에서 다른 세션을 폐기한 뒤 Escape로 모달을 닫지 못함 | 비동기 작업으로 포커스된 버튼이 disabled/제거되면 body로 포커스가 유실됨. 해당 경우에만 모달 안 유효 요소로 복구 | 실제 계정 여정 실패 및 최소 DOM 2개 실패→DOM 3개 통과, 새 빌드에서 모달 종료·최종 탈퇴까지 실제 통과 |
+| UI-06 / P1 | 로그아웃 전송 실패 때 화면은 게스트가 되지만 서버 로그인 세션이 남을 수 있음 | HTTP/store의 오류 삼킴을 제거. access 만료는 갱신 후 실제 로그아웃 확인, 일시 오류는 현재 신원 보존과 실패 표시 | 수정 전 최소6개 실패→logout9+기존auth9 통과. 최종 local/Actions core에서 실제 전송 차단→계정·DB1·새 탭 회원 유지→재시도201/DB0/새 탭 guest 통과 |
 | S1 / P1 | 완료한 방의 worker 이동 후 잠금/다음 경기 정보가 달라짐 | 이관 payload의 경기 이력·후속 grant·잠금 누락을 보존 | 실제 Room export/adopt/start 실패→통과; 전체 worker 검사는 별도 기록 |
 | S2 / P2 | 다운로드 upstream이 본문 중 끊기면 요청이 오래 남음 | 응답 stream abort/error와 downstream 취소 처리 누락 | 실제 loopback 부분 응답의 제한시간 실패→종료 및 다음 정상 요청 통과 |
 | S3 / P1 | Redis 정보 조회 실패 또는 비동기 tick 겹침 때 worker 수 판단 오류 | 실패를 빈 정상 목록으로 취급. unknown hold와 tick 직렬화·heartbeat 검증 | 수정 전 최소 실패→통과; 실제 Redis 중단 동안 동일 PID1 유지/복구 통과 |
 | S4 / P1 | 방 이동 대기 중 방장이 시작하면 진행 중 경기가 닫힘 | 이관 중 새 WAITING 시작 허용. draining 시작 거부, 이미 시작한 경기는 유지 | 네트워크 없는 1초 제한 최소 재현에서 수정 전 실행세션1→수정 후 신규시작 거부/이동 성공 |
 | S5 / P1 | 다른 worker로 옮긴 방의 다음 경기 결과가 옛 worker 권한 때문에 거부됨 | 미실행 grant만 신뢰하는 방 소유권에 맞춰 재연결. 완료 경기 권한은 유지 | 실패한 재처리 회귀→통과. 실제 PostgreSQL 동시 저장/이관 권한 검증 통과 |
 | S6 / P1 | 이동 성공 뒤 이전 worker가 참가 claim을 지우거나 새 claim이 만료됨 | 자기 worker claim만 제거하고 이전 추적 중단, 채택 후 전체 roster 갱신 등록 | 삭제/TTL 두 최소 회귀 실패→통과; 실제 30초 이상 보존은 scaling 증거 참고 |
-| S7 / P1 | heartbeat가 오래됐지만 실제 자식이 살아 있으면 최대 worker 수를 넘길 수 있음 | 살아 있는 모든 OS 자식(시작/종료 대기 포함)을 증설 상한에 포함 | max2에서 두 자식 이상이면 hold, 하나이면 정상 증설. Redis 장애 S3와 구분 |
+| S7 / P1 | heartbeat가 오래됐지만 실제 자식이 살아 있으면 최대 worker 수를 넘길 수 있음 | 살아 있는 모든 OS 자식(시작/종료 대기 포함)을 증설 상한에 포함 | max2 단위 회귀와 실제 두 자식 SIGSTOP/정상 Redis/오래된 heartbeat12초 동안OS2 유지→재개/idle1 복귀 통과. Redis 장애 S3와 구분 |
+| S8 / P1 | 증설 직후 새 worker 방에 배정된 정상 사용자의 WebSocket이502로 실패 | listen 전 heartbeat와 gateway 주기 캐시 사이 경계. listen 후 첫 heartbeat 및 검증된 exact ID의 bounded/coalesced 조회로 보정 | 실제 scaling handshake502 및 loopback101 기대 실패→gateway25개 회귀 통과. 실제 새 worker 첫 연결·1→2→1·이관 전후 경기/PG 저장 통과 |
 | R1 / P1 | Redis 중단 때 rate limit 의존성이 대기하여 readiness와 일반 HTTP가 장시간 멈춤 | rate 전용 Redis client의 offline queue/재전송을 차단하고 command2초 및 guard2초503 fail closed | 실제 장애에서25초 대기 재현→단위 hang/복구 회귀 + 실제 Redisstop503/start200 통과 |
 | Q1 / P2 | 리플레이 안내가 서버 없이 재생 가능하다고 약속하지만 맵·서명 조회가 필요함 | 한국어·영어 안내를 실제 요구에 맞게 수정 | 소스/번들 검증; 완전 오프라인 재생 기능은 추가하지 않음 |
 

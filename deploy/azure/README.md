@@ -1,5 +1,11 @@
 # Azure 학생 개발 서버
 
+## 2026-10-05 감사 릴리스
+
+소유자 승인으로 독립 감사 코드 `5c87efd88ecf664581b36e8422538cde8048d7fd`를 main에 병합하고 backend/web 및 Caddy 보안 헤더를 배포했다. 배포 후 실제3인 두 경기·결과·다음 경기·퇴장, 소유자 테스트 회원의 기존 전적 보존·로그인·권한·로그아웃, HTTPS 헤더를 확인했다. 기존 데이터/인증 키/VM 사양은 유지했다. 최초 이미지와 이번 릴리스는 구분하며, 아래의 10월4일 기록은 그 당시 상태다.
+
+[독립 감사 보고서](../../docs/audit-2026-10-04/README.md), [배포 및 원복 명령](../../docs/audit-2026-10-04/deployment-followup.md), [Azure 검증 범위](../../docs/audit-2026-10-04/azure-results.md)를 참조한다. 반복 CI는 격리된 runner 안에서만 실행하고 Azure에 접속하거나 자동 배포하지 않는다.
+
 2026-10-04 배포 구성. 친구 테스트용이며 자동 종료 없이 실행한다.
 
 - 게임: https://switch-dev-193234.koreacentral.cloudapp.azure.com/
