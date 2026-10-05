@@ -2490,7 +2490,7 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: var(--colo
   border: 5px solid var(--color-gray-2);
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  background: var(--color-user-0, #FFD5B8);
+  background: var(--color-user-0);
   color: var(--color-black);
   font: inherit;
   font-size: 28px;
@@ -2654,7 +2654,9 @@ html[data-motion='reduced'] .human-challenge-scanner { animation: none !importan
 }
 .result-table tr:hover .result-report-button,
 .result-report-button:focus-visible { opacity: 1; }
-.result-report-button:hover { color: var(--theme-text); background: var(--color-red-0); }
+/* 파스텔 채움은 어느 테마에서도 밝다. 다크에서 --theme-text(거의 흰색)를 그 위에 올리면
+   대비가 1.5:1까지 떨어져 글리프가 사라진다 — 채움이 밝으면 글자는 어두운 쪽으로 고정한다. */
+.result-report-button:hover { color: var(--color-black); background: var(--color-red-0); }
 
 .lobby-dialog.is-report-dialog { width: min(680px, calc(100% - 80px)); }
 .lobby-dialog.is-report-dialog h2 { white-space: nowrap; }

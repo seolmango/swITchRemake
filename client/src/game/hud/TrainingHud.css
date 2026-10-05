@@ -17,9 +17,14 @@
   font-size: 14px;
 }
 .training-role { font-size: 13px; font-weight: 600; }
-.training-role::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #468163; }
-.training-role[data-role='tagger']::before { background: #c25f65; }
-.training-role[data-role='out']::before { background: #888; }
+/*
+ * 역할 점은 theme/color.ts를 거친 상태색을 쓴다. 직접 hex를 적으면 테마도 색각 보조도
+ * 지나가지 않아, 같은 뜻을 가진 다른 화면의 점과 색이 어긋난다(BASE.md §12.5).
+ * 글자(러너/술래/아웃)가 항상 함께 있어서 색 없이도 읽힌다.
+ */
+.training-role::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--semantic-good); }
+.training-role[data-role='tagger']::before { background: var(--semantic-bad); }
+.training-role[data-role='out']::before { background: var(--theme-muted); }
 .training-toolbar-actions { display: flex; gap: 6px; pointer-events: auto; }
 .training-pad-hint {
   position: absolute;

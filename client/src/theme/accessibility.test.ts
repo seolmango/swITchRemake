@@ -10,6 +10,9 @@ import {
 } from '../game/hud/hudTheme.ts';
 import { Color, statusInkColors, themeColors } from './color.ts';
 import { appearanceCssVariables } from './cssVariables.ts';
+import { colorVisionPalette, userColorsFor, type ColorVisionMode } from './cvd.ts';
+
+const COLOR_VISION_MODES: ColorVisionMode[] = ['off', 'protanopia', 'deuteranopia', 'tritanopia'];
 
 type Rgb = readonly [number, number, number];
 
@@ -93,6 +96,65 @@ describe('meaning-bearing palette accessibility', () => {
         for (const glyph of ['✓', '△', '!']) {
             expect(css.includes(`content: '${glyph} '`), `${glyph} 단서가 없다`).toBe(true);
         }
+    });
+});
+
+/*
+ * 색약 보조에 대해 **구현에 무관하게 참인 것만** 고정한다. 위에서 ΔE 문턱을 뺀 것과 같은
+ * 이유로 "이 색들이 구분된다"는 주장은 테스트하지 않는다. 대신 그 주장이 성립할 *기회*를
+ * 없애 버리는 구조적 실패를 잡는다 — 팔레트가 비거나 짧아 폴백으로 뭉개지는 것, 두 슬롯이
+ * 아예 같은 색인 것, 그리고 색이 팔레트를 거치지 않고 화면까지 새는 것.
+ *
+ * 마지막 항목이 실제로 났던 사고다. `index.css`가 `--color-user-0`을 읽고 있었는데 그 변수를
+ * 아무도 정의하지 않아, 색약 모드를 켜도 CSS fallback 값이 영구히 남았다.
+ */
+describe('color vision palette coverage', () => {
+    it.each(COLOR_VISION_MODES)('%s palette keeps the base shape so nothing falls back', (mode) => {
+        const palette = colorVisionPalette(mode);
+        expect(palette.user).toHaveLength(Color.user.length);
+        expect(palette.grass).toHaveLength(Color.grass.length);
+        expect(palette.frenzy).toHaveLength(Color.frenzy.length);
+        for (const pair of palette.user) {
+            expect(pair).toHaveLength(2);
+            for (const hex of pair) expect(hex).toMatch(/^#[0-9a-f]{6}$/i);
+        }
+    });
+
+    it.each(COLOR_VISION_MODES)('%s gives each of the 8 slots its own colour', (mode) => {
+        // 같은 색이 두 슬롯에 들어가면 어떤 색각 모형에서도 그 둘은 구분되지 않는다.
+        const fills = colorVisionPalette(mode).user.map((pair) => pair[0]!.toUpperCase());
+        expect(new Set(fills).size).toBe(fills.length);
+    });
+
+    it.each(COLOR_VISION_MODES.filter((mode) => mode !== 'off'))('%s actually differs from the default palette', (mode) => {
+        // 모드를 골랐는데 아무것도 안 바뀌면 그 선택지는 거짓말이다.
+        expect(JSON.stringify(colorVisionPalette(mode))).not.toBe(JSON.stringify(colorVisionPalette('off')));
+    });
+
+    it.each(COLOR_VISION_MODES)('%s exposes every player colour to CSS through the vision palette', (mode) => {
+        const vars = appearanceCssVariables(0, mode);
+        for (let slot = 0; slot < Color.user.length; slot += 1) {
+            // HUD 명단 점(JS)과 CSS가 같은 함수를 거쳐야 한 플레이어가 두 화면에서 같은 색이 된다.
+            expect(vars[`--color-user-${slot}`]).toBe(userColorsFor(slot, mode)[0]);
+        }
+    });
+
+    it.each(COLOR_VISION_MODES)('%s routes terrain and frenzy ramps through the vision palette', (mode) => {
+        const vars = appearanceCssVariables(0, mode);
+        const palette = colorVisionPalette(mode);
+        for (let step = 0; step < 3; step += 1) {
+            expect(vars[`--color-grass-${step}`]).toBe(palette.grass[step]);
+            expect(vars[`--color-frenzy-${step}`]).toBe(palette.frenzy[step]);
+        }
+    });
+
+    it('never paints a player colour from a literal that skips the palette', () => {
+        /*
+         * `var(--color-user-N, #hex)` 같은 폴백은 변수가 사라져도 조용히 돌아가서, 색약 모드가
+         * 안 먹는다는 사실을 숨긴다. 폴백이 없으면 변수가 빠진 순간 눈에 보이게 깨진다.
+         */
+        const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+        expect(css).not.toMatch(/var\(\s*--color-user-\d+\s*,/u);
     });
 });
 

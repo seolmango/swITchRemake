@@ -1,11 +1,13 @@
 import { nearestTrainingPad } from './trainingProximity.ts';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TrainingPadKind, type TrainingPad } from 'shared';
+import { TilePhysics, TrainingPadKind, type TrainingPad } from 'shared';
 import type { MapView, Theme } from '../types.ts';
 import type { SwitchEngine } from '../SwitchEngine.ts';
 import { TILE_SIZE } from '../constants.ts';
-import { themeColors } from '../../theme/color.ts';
+import { Color, themeColors } from '../../theme/color.ts';
+import { colorVisionPalette } from '../../theme/cvd.ts';
+import { useSettingsStore } from '../../stores/useSettingsStore.ts';
 import { HUD_FONT, HUD_METRICS } from './hudTheme.ts';
 import { ControlsGuide } from './ControlsGuide.tsx';
 import './TrainingHud.css';
@@ -26,6 +28,18 @@ export interface TrainingHudOptions {
 export function TrainingHud({ options, engine, theme }: { options: TrainingHudOptions; engine: SwitchEngine | null; theme: Theme }) {
     const { t } = useTranslation();
     const colors = themeColors(theme);
+    /*
+     * 미니맵 지형색은 본 게임 캔버스와 같은 팔레트를 거쳐야 한다. 수풀을 하드코딩하면
+     * 색각 보조 모드가 수풀을 빨강에서 떼어놓은 작업이 미니맵에서만 무효가 된다 — 같은 지형이
+     * 두 화면에서 다른 색이 되는 쪽이 색이 덜 예쁜 것보다 나쁘다(BASE.md §12.5).
+     * 벽·가스는 MapLayer와 같은 gray/smoke 램프를 쓴다(색각 보조 대상이 아닌 무채색).
+     */
+    const vision = colorVisionPalette(useSettingsStore((state) => state.colorVisionMode));
+    const tileFill = (tile: number): string => tile === TilePhysics.Wall
+        ? Color.gray[2]!
+        : tile === TilePhysics.Bush
+            ? vision.grass[1]!
+            : Color.smoke[2]!;
     const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
     const [expanded, setExpanded] = useState(true);
     const [largeMap, setLargeMap] = useState(false);
@@ -72,7 +86,7 @@ export function TrainingHud({ options, engine, theme }: { options: TrainingHudOp
                 {expanded && <button type="button" aria-label={t(largeMap ? 'training.shrinkMap' : 'training.enlargeMap')} style={{ ...button, minHeight: 26, padding: '2px 7px' }} onClick={() => setLargeMap(!largeMap)}>{largeMap ? '↙' : '↗'}</button>}
             </div>
             {expanded && <svg role="img" aria-label={t('training.minimapLabel')} viewBox={`0 0 ${map.cols} ${map.rows}`} style={{ display: 'block', width: '100%', minHeight: 0, flex: '1 1 auto', maxHeight: largeMap ? 270 : 205, marginTop: 4, borderRadius: 5, background: theme === 1 ? '#202631' : '#f3f1ec' }}>
-                {map.tiles.flatMap((row, y) => row.map((tile, x) => tile ? <rect key={`${x},${y}`} x={x} y={y} width={1} height={1} fill={tile === 1 ? '#778391' : tile === 2 ? '#9ccbab' : '#bab0d8'} /> : null))}
+                {map.tiles.flatMap((row, y) => row.map((tile, x) => tile ? <rect key={`${x},${y}`} x={x} y={y} width={1} height={1} fill={tileFill(tile)} /> : null))}
                 {options.pads.map((pad, i) => <circle key={i} cx={pad.x / TILE_SIZE} cy={pad.y / TILE_SIZE} r={Math.max(0.65, pad.radius / TILE_SIZE)} fill="#f4be72" stroke="#775122" strokeWidth={0.2}><title>{descriptions[pad.kind]}</title></circle>)}
                 {position && options.alive && <g><circle cx={position.x / TILE_SIZE} cy={position.y / TILE_SIZE} r={1.5} fill="#fff" /><circle cx={position.x / TILE_SIZE} cy={position.y / TILE_SIZE} r={1} fill="#175eaa" stroke="#fff" strokeWidth={0.3} /></g>}
             </svg>}

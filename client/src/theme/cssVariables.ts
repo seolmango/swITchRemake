@@ -29,6 +29,12 @@ export const appearanceCssVariables = (theme: Theme, colorVisionMode: ColorVisio
         '--color-smoke-0': Color.smoke[0]!,
         '--color-smoke-1': Color.smoke[1]!,
         '--color-smoke-2': Color.smoke[2]!,
+        /*
+         * 플레이어 8슬롯의 채움색. 색각 보조 팔레트를 거친 값이라야 한다 — HUD 명단 점은
+         * JS에서 `userColorsFor`로 같은 값을 받고 있는데, CSS 쪽만 빠지면 같은 플레이어가
+         * 두 화면에서 다른 색이 된다(BASE.md §12.5).
+         */
+        ...Object.fromEntries(vision.user.map((pair, index) => [`--color-user-${index}`, pair[0]])) as Record<`--color-user-${number}`, string>,
         '--color-grass-0': vision.grass[0]!,
         '--color-grass-1': vision.grass[1]!,
         '--color-grass-2': vision.grass[2]!,

@@ -81,7 +81,7 @@ export const TrainingPage: React.FC = () => {
                         width={520}
                         height={104}
                         type={1}
-                        content={t('common.back')}
+                        content={t('nav.back')}
                         onClick={() => navigate('/how-to-play', { replace: true })}
                     />
                 )}
