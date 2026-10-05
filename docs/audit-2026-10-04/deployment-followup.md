@@ -46,3 +46,19 @@
 현재 Caddy는 admin API를 끈 구성이다. 10월 5일 배포 승인에 따라 `deploy/azure/Caddyfile`을 적용하고 Caddy 컨테이너를 재시작했다. 기존 Caddyfile과 TLS 인증서 데이터 볼륨은 보존했다. 로컬과 VM 양쪽에서 네트워크 없는 기존 Caddy 이미지로 구성 문법 검증이 성공했다.
 
 원복 시 기존 Caddyfile과 이전 서비스 이미지로 돌아간다. HSTS는 이미 방문한 브라우저에 남을 수 있으므로 HTTPS를 계속 제공해야 한다. HSTS 자체를 취소해야 한다면 유효한 HTTPS 응답에 `Strict-Transport-Security: max-age=0`을 보내는 별도 변경이 필요하다. 하위 도메인 포함과 preload는 이번 정책에 넣지 않았다.
+
+## 10월 5일 2차 배포 — `26f1dff`
+
+소유자가 병합과 Azure 배포를 지시했다. 이 릴리스는 codex의 결과 내구성·방 이관 펜싱(`541e97a`)과 Claude의 UI 점검·성능·디자인 체계·2층 사람 확인·폰 가로 고정·문구 정리를 함께 담는다.
+
+- 배포 전 격리 감사 core 게이트 통과(브라우저 10/10, 단위 전부). 1회차에서 테스트 헬퍼 3건(증명 없는 API 로그인, 검증 응답 대기 순서 경쟁)이 실패해 고친 뒤 재실행했다. 제품 코드 결함은 없었다.
+- `main` fast-forward push: `e6fab99` → `26f1dff`.
+- 이미지는 푸시된 커밋을 `git archive`한 내용 그대로 빌드했고 두 이미지에 `org.opencontainers.image.revision=26f1dffa152f93af2326c4afbb3df2fffe5beb71` 라벨을 넣었다. VM에서 로드 후 라벨을 다시 확인했다.
+- 교체 전 두 번의 idle 확인에서 worker1/대기방0/경기0/연결0. `.audit/deploy-followup.sh`로 match/cluster/web만 교체했다. 설정(compose·Caddyfile·환경 파일)과 볼륨은 바꾸지 않았고 마이그레이션은 없다. 결과 저널은 기존 `replay_data` 볼륨(`/app/replays/.result-outbox`)에 쌓인다.
+- 실행 중 이미지: backend `sha256:dcc81f7fbc1c…`, web `sha256:3ba1af582ff7…`. 재시작 0, OOM 없음.
+- 공개 HTTPS 확인: `/api/health/ready` 200, 보안 헤더 유지, 실제 Chromium에서 로그인 시 `human-challenge` 201 → 충전 후 `verify` 201 → `login` 응답(가짜 계정이라 401)까지 약 1.2초, 페이지 오류 0, 세로 폰 에뮬레이션에서 대기실 90° 회전 확인.
+- 확인하지 않은 것: 실제 메일 발송(가입·재설정), 실제 폰 기기의 가로 고정·터치 조작, 다인 실경기. 이 배포 후 친구 테스트에서 확인이 필요하다.
+
+**API 계약 변경 주의:** 로그인은 이제 시도마다 사람 확인 증명이 필요하다. 클라이언트와 서버를 반드시 함께 교체한다(이 스크립트가 그렇게 한다).
+
+원복: SSH 접속 후 `sudo sh /opt/switch-dev/releases/followup-26f1dff/rollback.sh` — 이전 `5c87efd` 이미지로 match/cluster/web을 되돌린다. 메모리 경기 상태가 끊기므로 활성 방·연결을 먼저 확인한다.
