@@ -20,7 +20,7 @@ test('acknowledges only after result transaction resolves', async () => {
     const events: string[] = [];
     let release!: () => void;
     const committed = new Promise<void>((resolve) => { release = resolve; });
-    const redis = { get: async () => null, acknowledge: async () => { events.push('ack'); } };
+    const redis = { get: async () => null, set: async () => { events.push('receipt'); }, acknowledge: async () => { events.push('ack'); } };
     const results = { record: async () => { await committed; events.push('commit'); return 'stored' as const; }, issueNextMatch: async () => null };
     const worker = new ResultWorker(redis as never, results as never);
     const processing = worker.processEntry({ id: '1-0', fields: { [RESULT_STREAM_FIELD]: JSON.stringify(result) } });
@@ -28,7 +28,7 @@ test('acknowledges only after result transaction resolves', async () => {
     assert.deepEqual(events, []);
     release();
     await processing;
-    assert.deepEqual(events, ['commit', 'ack']);
+    assert.deepEqual(events, ['commit', 'receipt', 'ack']);
 });
 
 test('leaves a valid result pending when database storage fails', async () => {
@@ -59,6 +59,7 @@ test('a failed next-match delivery stays pending and a committed duplicate retri
     const sent: string[] = [];
     const redis = {
         get: async () => null,
+        set: async () => undefined,
         acknowledge: async () => { acknowledgements++; },
         addStreamEntry: async (_stream: string, _field: string, command: string) => {
             const { payload } = JSON.parse(command);
@@ -100,6 +101,7 @@ test('a delayed result grants its successor to the private directory current own
     const owners: string[] = [];
     const redis = {
         get: async () => JSON.stringify({ roomId: result.roomId, serverId: 'adopter' }),
+        set: async () => undefined,
         acknowledge: async () => undefined,
         addStreamEntry: async (stream: string) => { streams.push(stream); },
     };
@@ -111,4 +113,29 @@ test('a delayed result grants its successor to the private directory current own
     await new ResultWorker(redis as never, results as never).processEntry({ id: '6-0', fields: { [RESULT_STREAM_FIELD]: JSON.stringify(result) } });
     assert.deepEqual(owners, ['adopter', 'adopter']);
     assert.ok(streams[0]?.endsWith(':adopter:commands'));
+});
+
+test('persistence receipt failure leaves the committed result retryable without a stream ACK', async () => {
+    let failReceipt = true;
+    let acknowledgements = 0;
+    const receipts: { key: string; value: string; ttl: number }[] = [];
+    const redis = {
+        get: async () => null,
+        set: async (key: string, value: string, ttl: number) => {
+            if (failReceipt) throw new Error('receipt unavailable');
+            receipts.push({ key, value, ttl });
+        },
+        acknowledge: async () => { acknowledgements++; },
+    };
+    const results = { record: async () => 'duplicate' as const, issueNextMatch: async () => null };
+    const entry = { id: '7-0', fields: { [RESULT_STREAM_FIELD]: JSON.stringify(result) } };
+    await assert.rejects(new ResultWorker(redis as never, results as never).processEntry(entry), /receipt unavailable/);
+    assert.equal(acknowledgements, 0);
+    failReceipt = false;
+    await new ResultWorker(redis as never, results as never).processEntry(entry);
+    assert.equal(acknowledgements, 1);
+    assert.equal(receipts.length, 1);
+    assert.ok(receipts[0]!.key.endsWith(`result-persisted:${result.matchId}`));
+    assert.equal(receipts[0]!.value, '1');
+    assert.equal(receipts[0]!.ttl, 7 * 24 * 60 * 60);
 });

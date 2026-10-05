@@ -20,7 +20,7 @@ import type { Connection } from '../transport/game-transport';
 import { CommandConsumer } from './command-consumer';
 import { CONTROL_STREAM_FIELDS, decodeCommand } from './control-codec';
 import { GameRegistry } from './registry';
-import type { RedisPort, StreamEntry } from './redis-client';
+import type { AtomicReplacement, RedisPort, StreamEntry } from './redis-client';
 import { RESULT_STREAM_FIELD, ResultOutbox } from './result-outbox';
 
 class FakeRedis implements RedisPort {
@@ -67,6 +67,11 @@ class FakeRedis implements RedisPort {
         this.values.delete(key);
         this.ttls.delete(key);
         this.log.push(`compare-del:${key}`);
+        return true;
+    }
+    async compareAndSetMany(items: readonly AtomicReplacement[]): Promise<boolean> {
+        if (items.some(item => (this.values.get(item.key) ?? null) !== item.expected)) return false;
+        for (const item of items) { this.values.set(item.key, item.value); this.ttls.set(item.key, item.ttlMs); }
         return true;
     }
     async compareAndSetPx(key: string, expectedValue: string, value: string, ttlMs: number): Promise<boolean> {
@@ -681,4 +686,43 @@ test('Redis 장애 중 result outbox가 순서를 보존하고 복구 후 MAXLEN
         { field: RESULT_STREAM_FIELD, matchId: 'a' },
         { field: RESULT_STREAM_FIELD, matchId: 'b' },
     ]);
+});
+
+
+test('adoption preserves an ambiguous committed roster and resumes after the deadline', async () => {
+    const h = harness();
+    const payload = {
+        sourceServerId: 'game-old', transferId: 'atomic-lost-ack',
+        serverId: 'game-1', roomId: 'room-import', roomCode: 'ABC234', matchId: 'match-1',
+        name: 'room', mapId: 'map', mode: 'MATCH', password: null, capacity: 8,
+        members: [{ userId: 1, playerId: 1, slot: 1, nickname: 'p', guest: false, stats: null,
+            loadout: 'DASH', joinedOrder: 0, colorIndex: 0, isHost: true }],
+    };
+    const intent = h.keys.operation('handoff:atomic-lost-ack');
+    h.redis.values.set(intent, 'pending');
+    h.redis.values.set(h.keys.room('room-import'), JSON.stringify({ serverId: 'game-old' }));
+    h.redis.values.set(h.keys.userActiveRoom(1), JSON.stringify({ state: 'assigned', roomId: 'room-import', serverId: 'game-old' }));
+    const atomic = h.redis.compareAndSetMany.bind(h.redis);
+    const get = h.redis.get.bind(h.redis);
+    let failed = false;
+    h.redis.compareAndSetMany = async items => {
+        assert.equal(h.rooms.get('room-import'), null, 'uncommitted roster must be hidden');
+        await atomic(items);
+        failed = true;
+        throw new Error('lost commit response');
+    };
+    h.redis.get = async key => { if (failed) throw new Error('offline'); return get(key); };
+    const request = streamEntry('atomic-1', command('atomic-adopt', CommandType.AdoptRoom, payload));
+    h.redis.fresh.push(request);
+    await assert.rejects(h.consumer.pollOnce(), /lost commit response/);
+    assert.equal(h.rooms.size, 1, 'staged room prevents premature drain exit');
+    assert.equal(h.rooms.get('room-import'), null);
+    assert.equal(h.redis.acknowledged.length, 0);
+    failed = false;
+    h.setNow(20_000);
+    h.redis.reclaimed.push(request);
+    await h.consumer.pollOnce();
+    assert.notEqual(h.rooms.get('room-import'), null);
+    assert.equal(h.rooms.get('room-import')!.canReserveResume(1), null, 'grace starts on activation');
+    assert.equal(h.redis.acknowledged.includes('atomic-1'), true);
 });

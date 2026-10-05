@@ -1,5 +1,27 @@
 import Redis, { type RedisOptions } from 'ioredis';
 
+export interface AtomicReplacement {
+    readonly key: string;
+    readonly expected: string | null;
+    readonly value: string;
+    readonly ttlMs: number;
+}
+
+/** Validate every key before any write. null means the key must be absent. */
+export const ATOMIC_REPLACE_SCRIPT = `
+for i, key in ipairs(KEYS) do
+  local offset = (i - 1) * 4
+  local current = redis.call('GET', key)
+  if ARGV[offset + 1] == 'missing' then
+    if current then return 0 end
+  elseif current ~= ARGV[offset + 2] then return 0 end
+end
+for i, key in ipairs(KEYS) do
+  local offset = (i - 1) * 4
+  redis.call('SET', key, ARGV[offset + 3], 'PX', ARGV[offset + 4])
+end
+return 1`;
+
 export interface StreamEntry {
     readonly id: string;
     readonly fields: Readonly<Record<string, string>>;
@@ -16,6 +38,7 @@ export interface RedisPort {
     delete(key: string): Promise<void>;
     compareAndDelete(key: string, expectedValue: string): Promise<boolean>;
     compareAndSetPx(key: string, expectedValue: string, value: string, ttlMs: number): Promise<boolean>;
+    compareAndSetMany(replacements: readonly AtomicReplacement[]): Promise<boolean>;
     compareAndExpire(key: string, expectedValue: string, ttlMs: number): Promise<boolean>;
     /** 값과 상관없이 수명만 늘린다. 살아 있는 동안만 남아야 하는 stream에 쓴다. */
     expire(key: string, ttlMs: number): Promise<void>;
@@ -156,6 +179,18 @@ export class RedisClient implements RedisPort {
 
     public async expire(key: string, ttlMs: number): Promise<void> {
         await this.#client.pexpire(key, ttlMs);
+    }
+
+    public async compareAndSetMany(replacements: readonly AtomicReplacement[]): Promise<boolean> {
+        if (replacements.length === 0) return true;
+        if (new Set(replacements.map((item) => item.key)).size !== replacements.length
+            || replacements.some((item) => !Number.isSafeInteger(item.ttlMs) || item.ttlMs <= 0)) {
+            throw new Error('Invalid atomic replacements');
+        }
+        return await this.#client.eval(ATOMIC_REPLACE_SCRIPT, replacements.length,
+            ...replacements.map((item) => item.key),
+            ...replacements.flatMap((item) => [item.expected === null ? 'missing' : 'value',
+                item.expected ?? '', item.value, String(item.ttlMs)])) === 1;
     }
 
     public async compareAndExpire(key: string, expectedValue: string, ttlMs: number): Promise<boolean> {

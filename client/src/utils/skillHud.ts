@@ -45,7 +45,7 @@ export function cooldownTotalMs(skill: SkillId, gameplay: Readonly<Record<string
     return gameplay?.[key[skill]] ?? 0;
 }
 
-export function skillRejectionMessageKey(reason: string): string {
+export function skillRejectionMessageKey(reason: string, training = false): string {
     switch (reason) {
         case SkillRejection.NotAlive: return 'game.skillRejected.notAlive';
         case SkillRejection.NoSkill: return 'game.skillRejected.noSkill';
@@ -53,6 +53,7 @@ export function skillRejectionMessageKey(reason: string): string {
         case SkillRejection.Role: return 'game.skillRejected.role';
         case SkillRejection.OutOfRange: return 'game.skillRejected.outOfRange';
         case SkillRejection.NoTarget: return 'game.skillRejected.noTarget';
+        case SkillRejection.NoTagger: return training ? 'training.noTagger' : 'game.skillRejected.noTagger';
         default: return 'game.skillRejected.generic';
     }
 }

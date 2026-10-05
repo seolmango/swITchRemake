@@ -347,7 +347,7 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
         spectatingId: training ? null : spectatingId,
         alerts: session.skillRejections.map((rejection) => ({
             id: rejection.id,
-            text: t(skillRejectionMessageKey(rejection.reason)),
+            text: t(skillRejectionMessageKey(rejection.reason, training)),
             tone: 'danger' as const,
         })),
     }), [hudPlayers, keyBindings, session.cooldowns, session.lobby, session.role, session.selfId, session.skillRejections, session.starting, session.trainingSkill, spectatingId, t, training]);

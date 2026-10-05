@@ -1,5 +1,7 @@
 # Disposable local and CI audit
 
+The design follow-up adds mandatory core gates for durable result recovery through actual Redis/PostgreSQL after abrupt producer death, and atomic handoff/cancellation races on actual Redis. Core browser coverage also walks through training role selection and a successful numbered Switch. See `docs/audit-2026-10-04/design-followup.md` for current execution evidence and remaining limits; one-off Azure specs remain outside every CI suite.
+
 This stack builds the real client and all backend workspaces, migrates actual PostgreSQL, runs passworded Redis, captures mail through local Mailpit SMTP, and writes signed replays to a run-scoped volume. It never loads the repository `.env`, reuses existing servers, authenticates to Azure, or mounts cloud credentials. The runtime Docker network is internal and Node socket destinations are allowlisted; browser tests block external HTTP destinations. Build-time npm/apt/Chromium downloads require internet before isolation.
 
 One command, including cleanup on normal success/failure:

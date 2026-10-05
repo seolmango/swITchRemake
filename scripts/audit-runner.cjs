@@ -28,7 +28,9 @@ for (const [name, args] of [
     ['environment-guard-unit', ['--test', 'scripts/audit-environment.test.cjs']],
     ['replay-key-unit', ['--test', 'scripts/audit-replay-keys.test.cjs']],
     ['bots-unit', ['--test', 'scripts/audit-bots.test.cjs']],
-    ['browser', ['node_modules/@playwright/test/cli.js', 'test', '--config', 'e2e/audit.config.ts', ...(process.env.AUDIT_MODE === 'core' ? ['multiplayer.spec.ts', 'security.spec.ts', 'ui.spec.ts', 'multitab.spec.ts', 'userlogout.spec.ts'] : [])]],
+    ['result-durability', ['scripts/audit-result-durability.cjs']],
+    ['atomic-handoff', ['scripts/audit-atomic-handoff.cjs']],
+    ['browser', ['node_modules/@playwright/test/cli.js', 'test', '--config', 'e2e/audit.config.ts', ...(process.env.AUDIT_MODE === 'core' ? ['multiplayer.spec.ts', 'security.spec.ts', 'ui.spec.ts', 'multitab.spec.ts', 'userlogout.spec.ts', 'training.spec.ts'] : [])]],
 ]) {
     if (failed) { checks.push({ name, status: 'not-run', reason: 'prior-stage-failed' }); continue; }
     const passed = run(args, name === 'unit');

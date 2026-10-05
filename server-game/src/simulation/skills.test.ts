@@ -413,7 +413,7 @@ test('스위치로 강등된 술래는 감속을 받는다', () => {
 test('술래는 스위치를 쓸 수 없다', () => {
     const world = switchWorld();
     const { outcome } = use(world, { playerId: 1, slot: 1, targetPlayerId: 3 });
-    assert.deepEqual(outcome, { ok: false, reason: 'NO_SKILL' }, '술래는 1번 슬롯이 비활성이다');
+    assert.deepEqual(outcome, { ok: false, reason: 'ROLE' }, '술래에게는 역할에 맞는 거절 이유를 준다');
 });
 
 test('자기 자신이나 술래를 지목할 수 없다', () => {

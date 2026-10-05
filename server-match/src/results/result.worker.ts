@@ -62,7 +62,12 @@ export class ResultWorker implements OnModuleInit, OnModuleDestroy {
         if (outcome === 'invalid') {
             this.logger.warn(`Discarding unauthorized or inconsistent result ${result.matchId}`);
         }
-        if (outcome === 'stored' || outcome === 'duplicate') await this.grantNextMatch(result);
+        if (outcome === 'stored' || outcome === 'duplicate') {
+            await this.grantNextMatch(result);
+            // A local journal may be removed only after DB commit and successor delivery.
+            // Receipt expiry/loss causes harmless redelivery through record()'s transaction.
+            await this.redis.set(this.keys.operation(`result-persisted:${result.matchId}`), '1', 7 * 24 * 60 * 60);
+        }
         await this.ack(entry.id);
     }
 

@@ -138,6 +138,8 @@ export function decodeCommand(value: string): ControlCommand {
 
 function adoptRoomPayload(payload: unknown): boolean {
     if (!object(payload)) return false;
+    if (payload['sourceServerId'] !== undefined && !text(payload['sourceServerId'])) return false;
+    if (payload['transferId'] !== undefined && !text(payload['transferId'])) return false;
     for (const field of ['serverId', 'roomId', 'roomCode', 'matchId', 'name', 'mapId', 'mode'] as const) {
         if (!text(payload[field])) return false;
     }

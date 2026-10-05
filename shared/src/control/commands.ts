@@ -191,6 +191,9 @@ export interface AdoptedRoomMember {
 }
 
 export interface AdoptRoomPayload {
+    /** Required by the atomic handoff consumer; legacy commands fail closed. */
+    sourceServerId?: string;
+    transferId?: string;
     /** 엉뚱한 서버가 받지 않도록 보낸 쪽이 대상을 적는다. */
     serverId: string;
     roomId: string;

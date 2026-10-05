@@ -86,6 +86,7 @@ function gameplayRules(): Readonly<Record<string, number | string | boolean>> {
  */
 export class RoomManager implements RoomAdmissionPort, TransportHandlers {
     readonly #rooms = new Map<string, Room>();
+    readonly #stagedRooms = new Map<string, Room>();
     readonly #options: RoomManagerOptions;
     readonly #now: () => number;
     readonly #timing: RoomTiming;
@@ -97,7 +98,7 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
     }
 
     public get size(): number {
-        return this.#rooms.size;
+        return this.#rooms.size + this.#stagedRooms.size;
     }
 
     public get(roomId: string): Room | null {
@@ -110,8 +111,8 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
 
     public createRoom(specification: CreateManagedRoom): ManagerResult<Room> {
         this.sweep();
-        if (this.#rooms.has(specification.id)) return { ok: false, code: ControlErrorCode.Internal };
-        if ((this.#options.maxRooms ?? Number.POSITIVE_INFINITY) <= this.#rooms.size) {
+        if (this.#rooms.has(specification.id) || this.#stagedRooms.has(specification.id)) return { ok: false, code: ControlErrorCode.Internal };
+        if ((this.#options.maxRooms ?? Number.POSITIVE_INFINITY) <= this.size) {
             return { ok: false, code: ControlErrorCode.ServerFull };
         }
         const mode = specification.mode ?? RoomMode.Match;
@@ -168,10 +169,10 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
      * 같은 roomId가 이미 있으면 거절한다. 명령은 재전달될 수 있는데, 그때 명단을 덮어쓰면
      * 그 사이에 들어온 사람이 사라진다.
      */
-    public adoptRoom(payload: AdoptRoomPayload): ManagerResult<Room> {
+    public adoptRoom(payload: AdoptRoomPayload, staged = false): ManagerResult<Room> {
         this.sweep();
-        if (this.#rooms.has(payload.roomId)) return { ok: false, code: ControlErrorCode.AlreadyInRoom };
-        if ((this.#options.maxRooms ?? Number.POSITIVE_INFINITY) <= this.#rooms.size) {
+        if (this.#rooms.has(payload.roomId) || this.#stagedRooms.has(payload.roomId)) return { ok: false, code: ControlErrorCode.AlreadyInRoom };
+        if ((this.#options.maxRooms ?? Number.POSITIVE_INFINITY) <= this.size) {
             return { ok: false, code: ControlErrorCode.ServerFull };
         }
         if (!this.#options.isKnownMap(payload.mapId, payload.mode)) {
@@ -209,21 +210,31 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 ...(this.#options.isDraining === undefined ? {} : { isDraining: this.#options.isDraining }),
                 ...(this.#options.onDirectoryChanged === undefined
                     ? {}
-                    : { onDirectoryChanged: this.#options.onDirectoryChanged }),
+                    : { onDirectoryChanged: () => { if (this.#rooms.get(payload.roomId) === room) this.#options.onDirectoryChanged?.(); } }),
                 now: this.#now,
             });
         } catch {
             return { ok: false, code: ControlErrorCode.Internal };
         }
-        this.#rooms.set(room.id, room);
         room.adoptMembers(payload.members);
-        this.#options.onDirectoryChanged?.();
+        if (staged) this.#stagedRooms.set(room.id, room);
+        else this.commitAdoptedRoom(room);
         return { ok: true, value: room };
+    }
+
+    public discardStagedRoom(roomId: string): void { this.#stagedRooms.delete(roomId); }
+
+    public commitAdoptedRoom(room: Room): void {
+        this.#stagedRooms.delete(room.id);
+        room.refreshHandOffGrace();
+        this.#rooms.set(room.id, room);
+        this.#options.onDirectoryChanged?.();
     }
 
     public reserveJoin(reservation: Readonly<SeatReservation>, password: string | null): ManagerResult<{ playerId: number }> {
         const room = this.#rooms.get(reservation.roomId);
         if (room === undefined) return { ok: false, code: ControlErrorCode.RoomNotFound };
+        if (room.handingOff) return { ok: false, code: ControlErrorCode.RoomLocked };
         const error = room.reserveJoin(reservation, password);
         if (error !== null) return { ok: false, code: error };
         const playerId = room.memberByUser(reservation.userId)?.playerId
@@ -235,6 +246,7 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
     public reserveResume(reservation: Readonly<SeatReservation>): ManagerResult<{ playerId: number }> {
         const room = this.#rooms.get(reservation.roomId);
         if (room === undefined) return { ok: false, code: ControlErrorCode.RoomNotFound };
+        if (room.handingOff) return { ok: false, code: ControlErrorCode.RoomLocked };
         if (!reservation.resume || reservation.expiresAt <= this.#now()) return { ok: false, code: ControlErrorCode.Expired };
         const error = room.canReserveResume(reservation.userId);
         if (error !== null) return { ok: false, code: error };
@@ -246,6 +258,7 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
     public releaseSeat(roomId: string, userId: ActorId): ManagerResult<Record<string, never>> {
         const room = this.#rooms.get(roomId);
         if (room === undefined) return { ok: false, code: ControlErrorCode.RoomNotFound };
+        if (room.handingOff) return { ok: false, code: ControlErrorCode.RoomLocked };
         room.releaseSeat(userId);
         if (room.state === RoomState.Closed) this.#rooms.delete(roomId);
         return { ok: true, value: {} };
@@ -254,6 +267,7 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
     public kickUser(roomId: string, userId: ActorId, reason: string): ManagerResult<Record<string, never>> {
         const room = this.#rooms.get(roomId);
         if (room === undefined) return { ok: false, code: ControlErrorCode.RoomNotFound };
+        if (room.handingOff) return { ok: false, code: ControlErrorCode.RoomLocked };
         room.forceKick(userId, reason);
         if (room.state === RoomState.Closed) this.#rooms.delete(roomId);
         return { ok: true, value: {} };
@@ -263,18 +277,19 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
     public grantMatch(roomId: string, matchId: string): ManagerResult<Record<string, never>> {
         const room = this.#rooms.get(roomId);
         if (room === undefined) return { ok: false, code: ControlErrorCode.RoomNotFound };
+        if (room.handingOff) return { ok: false, code: ControlErrorCode.RoomLocked };
         room.grantMatchId(matchId);
         return { ok: true, value: {} };
     }
 
     public admitReservation(reservation: Readonly<SeatReservation>) {
         const room = this.#rooms.get(reservation.roomId);
-        return room?.admitReservation(reservation) ?? null;
+        return room?.handingOff ? null : room?.admitReservation(reservation) ?? null;
     }
 
     public onConnect(connection: Connection): void {
         const room = this.#rooms.get(connection.roomId);
-        if (room === undefined || !room.bindConnection(connection)) throw new Error('connection has no claimed room seat');
+        if (room === undefined || room.handingOff || !room.bindConnection(connection)) throw new Error('connection has no claimed room seat');
         if (connection.resume && this.#options.onResume !== undefined) {
             queueMicrotask(() => {
                 const current = this.#rooms.get(connection.roomId);
@@ -313,6 +328,10 @@ export class RoomManager implements RoomAdmissionPort, TransportHandlers {
                 type: 'error',
                 payload: { requestId: message.requestId ?? null, code: ErrorCode.RoomClosed, retryable: false },
             });
+            return;
+        }
+        if (room.handingOff) {
+            connection.sendJson({ type: 'error', payload: { requestId: message.requestId ?? null, code: ErrorCode.BadState, retryable: true } });
             return;
         }
         const requestId = message.requestId ?? null;

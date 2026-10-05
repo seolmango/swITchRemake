@@ -11,6 +11,7 @@
 
 import { makeKeys, PROTOCOL_VERSION, RoomMode, type ViolationSignal } from 'shared';
 import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { RULES_VERSION } from './config/gameplay';
 import { INFRA } from './config/infrastructure';
 import { assertGameStartupConfig } from './config/startup-config';
@@ -110,15 +111,13 @@ async function main(): Promise<void> {
         onMatchFinished: (session, result) => {
             const replayNote = result.replay ? `replay=${result.replay.storageKey}` : 'replay=none';
             log(`경기 종료 room=${session.id} match=${session.matchId} tick=${result.durationTicks} ${replayNote}`);
-            // outbox가 Redis 장애를 흡수한다. 여기서 await 하지 않는 이유는
-            // 결과 전송이 게임 루프를 막으면 안 되기 때문이다.
+            // Persist locally before returning; Redis/DB delivery retries asynchronously.
             try {
                 outbox.enqueue(result);
             } catch (error) {
-                // outbox가 가득 찼다. 던지게 두면 게임 루프 안에서 터진다.
-                // 여기까지 왔다는 것은 이 경기의 전적이 이미 유실됐다는 뜻이다. 다음 경기부터는
-                // RoomManager의 canStartGame이 시작을 막아 유실을 더 늘리지 않는다.
-                console.error('[swITch] 경기 결과 적재 실패. 이 경기의 전적이 유실된다.', error);
+                // Failed disk writes stay in memory; block new matches until storage recovers.
+                // A simultaneous storage failure and process loss still cannot be recovered.
+                console.error('[swITch] 경기 결과 영속 기록 실패. 메모리 재시도 중이며 새 경기 시작을 차단합니다.', error);
             }
         },
     });
@@ -238,7 +237,14 @@ async function main(): Promise<void> {
         },
     });
 
-    const outbox = new ResultOutbox({ redis, keys });
+    const outbox = new ResultOutbox({
+        redis, keys,
+        // Shared by replacement workers on the existing persistent replay volume.
+        // Replay downloads accept only flat *.swrp keys, never this private directory.
+        journalDirectory: resolve(INFRA.REPLAY_LOCAL_DIR, '.result-outbox'),
+        isPersisted: async (result) => await redis.get(keys.operation(`result-persisted:${result.matchId}`)) === '1',
+        logger: (message, error) => console.error(`[result-outbox] ${message}`, error ?? ''),
+    });
     const consumer = new CommandConsumer({
         redis,
         keys,

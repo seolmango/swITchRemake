@@ -699,9 +699,13 @@ test('대기실 인계는 완료한 경기와 발급받은 다음 경기 id를 �
     source.setNow(8_001);
     source.room.advance();
     assert.equal(source.room.finishGame([1]), true);
-    source.room.grantMatchId('match-next');
     source.setNow(18_002);
     source.room.advance();
+    assert.equal(source.room.state, RoomState.Waiting);
+    assert.equal(source.room.canHandOff(), false, 'late next-match grant must arrive before handoff');
+    assert.equal(source.room.freezeForHandOff(), false);
+    source.room.grantMatchId('match-next');
+    assert.equal(source.room.canHandOff(), true);
     assert.equal(source.room.setLocked(1, true), null);
     const exported = source.room.exportForHandOff('game-2');
     const history = exported as unknown as Record<string, unknown>;

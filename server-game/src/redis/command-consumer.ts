@@ -28,6 +28,7 @@ import { NETWORK } from '../config/network';
  * 응답 stream과 같은 값을 쓴다(매칭 서버의 REPLY_STREAM_TTL_SECONDS).
  */
 const COMMAND_STREAM_TTL_MS = 300_000;
+import type { Room } from '../rooms/room';
 import type { SeatReservation, TicketStore } from '../gateway/ticket-store';
 import type { RoomManager } from '../rooms/room-manager';
 import { CONTROL_STREAM_FIELDS, decodeCommand, decodeStoredReply, encodeReply, isControlRequestId } from './control-codec';
@@ -258,6 +259,8 @@ export class CommandConsumer {
         );
     }
 
+    readonly #stagedAdoptions = new Map<string, Room>();
+
     async #replyFor(command: ControlCommand): Promise<ControlReply> {
         const now = this.#now();
         for (const [requestId, cached] of this.#localOperations) {
@@ -281,7 +284,7 @@ export class CommandConsumer {
             }
         }
 
-        const reply = now > command.deadlineAt
+        const reply = now > command.deadlineAt && !this.#stagedAdoptions.has(command.requestId)
             ? failure(this.#options.serverId, command, ControlErrorCode.Expired)
             : await this.#execute(command);
         const cached: CachedReply = { reply, expiresAt: null };
@@ -345,32 +348,34 @@ export class CommandConsumer {
         if (payload.serverId !== this.#options.serverId) {
             return failure(this.#options.serverId, command, ControlErrorCode.RoomNotFound);
         }
-        if (this.#options.isDraining()) {
+        if (this.#options.isDraining() && !this.#stagedAdoptions.has(command.requestId)) {
             return failure(this.#options.serverId, command, ControlErrorCode.ServerDraining);
         }
-        const adopted = this.#options.rooms.adoptRoom(payload);
+        if (!payload.sourceServerId || !payload.transferId) return failure(this.#options.serverId, command, ControlErrorCode.Internal);
+        const staged = this.#stagedAdoptions.get(command.requestId);
+        const adopted = staged ? { ok: true as const, value: staged } : this.#options.rooms.adoptRoom(payload, true);
         if (!adopted.ok) return failure(this.#options.serverId, command, adopted.code);
-        // 자리 표를 먼저 여기로 돌린다. 방 디렉터리만 바뀌고 표가 옛 서버를 가리키면 매칭 서버가
-        // 둘을 대조해 전원을 ROOM_UNAVAILABLE로 튕긴다.
-        //
-        // 기다린다. 예전에는 던져 놓고 성공을 답했는데, 그러면 표가 실제로 옮겨졌는지 모르는 채
-        // 인계가 확정되고 Redis 실패는 unhandled rejection으로 프로세스를 내린다. 일부만 옮겨진
-        // 방은 그 사람들만 돌아오지 못하는, 가장 알아채기 어려운 상태다.
+        this.#stagedAdoptions.set(command.requestId, adopted.value);
         try {
-            await this.#options.registry.claimAdoptedRoom(
-                payload.roomId,
-                payload.members.map((member) => member.userId),
-            );
+            const state = await this.#options.redis.get(this.#options.keys.operation('handoff:' + payload.transferId));
+            if (state !== 'committed') await this.#options.registry.claimAdoptedRoom(payload, adopted.value.projection());
+            else this.#options.registry.trackAdoptedRoom(payload);
         } catch (error: unknown) {
-            this.#logger(`인계받은 방의 자리 표를 옮기지 못했다 roomId=${payload.roomId}`, error);
-            // 방을 접어 두면 넘긴 쪽이 다시 시도할 수 있다. 표가 옛 서버를 가리키는 채로 두는
-            // 편이, 여기 있지만 아무도 못 찾는 방으로 두는 것보다 낫다.
-            adopted.value.close();
-            this.#options.rooms.sweep();
-            return failure(this.#options.serverId, command, ControlErrorCode.Internal);
+            // A transport error can happen AFTER commit. Preserve the staged room until
+            // Redis resolves the outcome; discarding it would lose a committed roster.
+            this.#logger('Room handoff commit needs reconciliation', error);
+            let state: string | null;
+            try { state = await this.#options.redis.get(this.#options.keys.operation('handoff:' + payload.transferId)); }
+            catch { throw error; }
+            if (state !== 'committed') {
+                this.#stagedAdoptions.delete(command.requestId);
+                this.#options.rooms.discardStagedRoom(payload.roomId);
+                return failure(this.#options.serverId, command, ControlErrorCode.Internal);
+            }
+            this.#options.registry.trackAdoptedRoom(payload);
         }
-        // 방이 여기 있다는 사실을 즉시 알린다. heartbeat 주기를 기다리면 그동안의 재접속이
-        // 옛 서버로 간다.
+        this.#options.rooms.commitAdoptedRoom(adopted.value);
+        this.#stagedAdoptions.delete(command.requestId);
         this.#options.registry.requestPublish();
         return success(this.#options.serverId, command, {});
     }

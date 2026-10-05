@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { join } from 'node:path';
+import { instantiateMap, loadMapBundle } from '../maps/map-loader';
 
 import {
-    EffectType, MapMarkerKind, MapZoneKind, SkillId, TilePhysics, TrainingPadKind,
+    EffectType, MapMarkerKind, MapZoneKind, SkillId, SkillSlot, TilePhysics, TrainingPadKind,
     type MapMarker, type MapZone,
 } from 'shared';
 import { applyEffect, msToTicks } from '../simulation/effects';
 import { stepWorld } from '../simulation/step';
+import { useSkill } from '../simulation/skills';
 import { mapFromRows, makePlayer, makeWorld, worldFingerprint } from '../simulation/testing';
 import type { ResolvedInput, World } from '../simulation/world';
 import { TRAINING_DUMMY_RESPAWN_MS, TrainingGround } from './training-ground';
@@ -233,6 +236,46 @@ function zonedTraining() {
 
 const chaseDummy = (ground: TrainingGround) => ground.players[2]!;
 
+test('술래 없는 훈련장은 번호 오류와 구분해서 안내한다', () => {
+    const { world, human } = zonedTraining();
+    for (let targetPlayerId = 1; targetPlayerId <= 8; targetPlayerId++) {
+        assert.deepEqual(useSkill(world, { playerId: human.playerId, slot: SkillSlot.Switch, targetPlayerId }, []),
+            { ok: false, reason: 'NO_TAGGER' });
+    }
+});
+
+test('기본 추격 모드의 스위치는 술래 역할 때문에 거절된다', () => {
+    const { world, ground, human } = zonedTraining();
+    human.x = 12.5 * world.map.tileSize;
+    human.y = 14.5 * world.map.tileSize;
+    ground.resolveInputs(world);
+    assert.equal(human.isTagger, true);
+    assert.deepEqual(useSkill(world, { playerId: human.playerId, slot: SkillSlot.Switch, targetPlayerId: 2 }, []),
+        { ok: false, reason: 'ROLE' });
+});
+
+test('도망 모드는 가까운 술래를 자기와 술래 이외의 모든 살아 있는 표적 번호로 넘긴다', () => {
+    for (let targetPlayerId = 1; targetPlayerId <= 5; targetPlayerId++) {
+        const { world, ground, human } = zonedTraining();
+        const pad = ground.pads.find((p) => p.kind === TrainingPadKind.ChaseMode)!;
+        human.x = pad.x; human.y = pad.y;
+        ground.afterStep(world);
+        human.x = 6.5 * world.map.tileSize;
+        human.y = 14.5 * world.map.tileSize;
+        ground.resolveInputs(world);
+        const tagger = chaseDummy(ground);
+        assert.equal(tagger.isTagger, true);
+        const outcome = useSkill(world, { playerId: human.playerId, slot: SkillSlot.Switch, targetPlayerId }, []);
+        const valid = targetPlayerId === 2 || targetPlayerId === 3;
+        assert.deepEqual(outcome, valid ? { ok: true, skill: SkillId.Switch } : { ok: false, reason: 'NO_TARGET' });
+        if (valid) {
+            assert.equal(tagger.isTagger, false);
+            assert.equal(world.players.find((p) => p.playerId === targetPlayerId)!.isTagger, true);
+            assert.equal(human.stats.switchSuccess, 1);
+        }
+    }
+});
+
 test('표적 자리와 성격은 맵 마커가 정한다', () => {
     const { ground } = zonedTraining();
     assert.equal(ground.players.length, 3, '마커 셋에 표적 셋');
@@ -445,4 +488,34 @@ test('사람이 구역 밖이면 표적은 스킬도 쓰지 않는다', () => {
     human.y = 9 * world.map.tileSize;   // 추격 구역 밖
     ground.resolveInputs(world);
     assert.deepEqual(ground.resolveSkills(world), []);
+});
+
+
+test('배포 번들의 추격 구역에서 1~8번의 스위치 대상을 실제 표적 구성으로 판정한다', async () => {
+    const bundle = await loadMapBundle(join(__dirname, '../../maps/server_maps.json'), 60);
+    for (let targetPlayerId = 1; targetPlayerId <= 8; targetPlayerId++) {
+        const map = { ...instantiateMap(bundle, 'TrainingGround'), barrierSpeed: 0, timeline: {} };
+        const human = makePlayer(1, 20, 20);
+        const ground = new TrainingGround(map, [human.playerId]);
+        const world = makeWorld(map, [human, ...ground.players]);
+        assert.deepEqual(world.players.map(p => p.playerId), [1, 2, 3, 4, 5, 6, 7, 8]);
+        const pad = ground.pads.find(p => p.kind === TrainingPadKind.ChaseMode)!;
+        human.x = pad.x; human.y = pad.y;
+        ground.afterStep(world);
+        // Stand one tile from the first chase dummy, outside contact distance.
+        const chaser = world.players.find(p => p.playerId === 6)!;
+        human.x = chaser.x - map.tileSize; human.y = chaser.y;
+        ground.resolveInputs(world);
+        assert.equal(chaser.isTagger, true);
+        const frame = stepWorld(world, [neutral(human.playerId), ...ground.resolveInputs(world)],
+            [{ playerId: human.playerId, slot: SkillSlot.Switch, targetPlayerId }]);
+        ground.afterStep(world);
+        if (targetPlayerId === 1 || targetPlayerId === 6) {
+            assert.equal(frame.skillRejections[0]?.reason, 'NO_TARGET');
+        } else {
+            assert.deepEqual(frame.skillRejections, []);
+            assert.ok(frame.events.some(event => event.kind === 'tagged' && event.playerId === targetPlayerId && event.by === 1));
+            assert.equal(human.stats.switchSuccess, 1);
+        }
+    }
 });

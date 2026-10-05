@@ -676,8 +676,9 @@
       "noSkill": "That skill slot is unavailable.",
       "onCooldown": "That skill is still on cooldown.",
       "role": "The tagger cannot use swITch.",
-      "outOfRange": "The target is out of range.",
+      "outOfRange": "The skill target is out of range.",
       "noTarget": "There is no valid target.",
+      "noTagger": "There is no tagger to pass on right now.",
       "generic": "That skill could not be used."
     }
   },
@@ -687,6 +688,7 @@
     "connecting": "Preparing your training ground…",
     "connectingDetail": "You enter alone and training starts as soon as it is ready.",
     "guide": "Use the floor pads to change tagger, skill, or reset state, then test against targets and walls.",
+    "noTagger": "There is no tagger right now. Use the role-switch pad by the entrance to select fleeing practice, then enter the lower chase area.",
     "settings": "Live settings",
     "exit": "Leave training",
     "respawn": "Respawn",

@@ -385,8 +385,20 @@ export class Room {
      *
      * 사람이 아무도 안 붙어 있는 방은 넘기지 않는다. 곧 스스로 닫힐 방이라 옮길 값이 없다.
      */
+    #handingOff = false;
+    public get handingOff(): boolean { return this.#handingOff; }
+    public freezeForHandOff(): boolean {
+        if (!this.canHandOff()) return false;
+        this.#handingOff = true;
+        return true;
+    }
+    public cancelHandOff(): void { this.#handingOff = false; }
+
     public canHandOff(): boolean {
-        return this.state === RoomState.Waiting
+        return !this.#handingOff && this.state === RoomState.Waiting
+            && (this.mode !== RoomMode.Match || this.#playedGames === 0 || this.#grantedMatchId !== null)
+            && this.#roster.occupiedSize === this.#roster.members().length
+            && this.#roster.members().every((member) => member.admissionPendingUntil === null)
             && this.#roster.members().some((member) => member.connection !== null);
     }
 
@@ -434,6 +446,12 @@ export class Room {
             member.connection = null;
         }
         this.#stateMachine.transition(RoomState.Closed, this.#now());
+    }
+
+    public refreshHandOffGrace(): void {
+        for (const member of this.#roster.members()) {
+            if (member.connection === null) member.reconnectUntil = this.#now() + this.#options.timing.reconnectGraceMs;
+        }
     }
 
     public adoptMembers(members: readonly AdoptedRoomMember[]): void {
@@ -893,6 +911,7 @@ export class Room {
     }
 
     public advance(now: number = this.#now()): void {
+        if (this.#handingOff) return;
         const before = this.#directoryState();
         try {
             this.#advance(now);

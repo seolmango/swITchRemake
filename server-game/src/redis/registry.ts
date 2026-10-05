@@ -4,12 +4,13 @@ import {
     RoomMode,
     RoomState,
     type ActorId,
+    type AdoptRoomPayload,
     type GameServerHeartbeat,
     type RedisKeys,
 } from 'shared';
 import type { RoomManager } from '../rooms/room-manager';
 import type { RoomProjection } from '../rooms/room';
-import type { RedisPort } from './redis-client';
+import type { AtomicReplacement, RedisPort } from './redis-client';
 
 const ACTIVE_ROOM_TTL_MS = 30_000;
 const REJOIN_COOLDOWN_MS = 60_000;
@@ -111,64 +112,40 @@ export class GameRegistry {
         );
     }
 
-    /**
-     * Publish the first directory change immediately.  Changes while a
-     * publish is in flight are folded into exactly one trailing publish.
-     */
-    /**
-     * 이 방은 이제 내 것이 아니다. **지우지 말고 잊는다.**
-     *
-     * 아래 정리 루프는 "내 방 목록에서 사라진 방"의 디렉터리 키를 지운다. 방이 끝났을 때는
-     * 맞는 동작이지만, 다른 서버로 넘긴 방에 그대로 적용하면 **방금 상대가 쓴 키를 지운다.**
-     * 그러면 매칭 서버가 그 방을 못 찾아 아무도 재접속하지 못한다 — 실제로 그랬다.
-     */
-    /**
-     * 넘겨받은 방의 사람들이 **여기로** 재접속하게 자리 표를 다시 쓴다.
-     *
-     * 매칭 서버의 재접속 경로는 방 디렉터리의 serverId와 사용자별 자리 표의 serverId가 **둘 다**
-     * 맞는지 본다(`rooms.service.ts`). 방만 옮기고 이걸 안 고치면 전원이 `ROOM_UNAVAILABLE`로
-     * 튕겨서, 방은 멀쩡히 여기 있는데 아무도 돌아오지 못한다.
-     *
-     * 읽은 값을 CAS로 바꾼다. 명단을 내보낸 뒤 실제 인계 전에 사용자가 나가 새 방을 잡을 수
-     * 있으므로, 단순 set은 그 새 배정을 과거 방으로 되돌린다. 한 명이라도 이미 다른 방으로
-     * 이동했으면 앞서 옮긴 표도 되돌리고 인계 전체를 재시도한다.
-     */
-    public async claimAdoptedRoom(roomId: string, userIds: readonly ActorId[]): Promise<void> {
-        const moved: Array<{ key: string; previous: string; adopted: string }> = [];
-        try {
-            for (const userId of userIds) {
-                const key = this.#options.keys.userActiveRoom(userId);
-                const previous = await this.#options.redis.get(key);
-                if (previous === null || !this.#claimPointsToRoom(previous, roomId)) {
-                    throw new Error(`active-room claim changed during room adoption (roomId=${roomId})`);
-                }
-                const adopted = JSON.stringify({
-                    state: 'assigned',
-                    requestId: `adopt:${this.#options.heartbeat.serverId}:${roomId}`,
-                    roomId,
-                    serverId: this.#options.heartbeat.serverId,
-                });
-                if (!await this.#options.redis.compareAndSetPx(key, previous, adopted, ACTIVE_ROOM_TTL_MS)) {
-                    throw new Error(`active-room claim raced during room adoption (roomId=${roomId})`);
-                }
-                moved.push({ key, previous, adopted });
-            }
-        } catch (error) {
-            // 다른 요청이 표를 다시 바꿨다면 그 최신 값은 건드리지 않는다.
-            for (const transfer of moved.reverse()) {
-                await this.#options.redis.compareAndSetPx(
-                    transfer.key,
-                    transfer.adopted,
-                    transfer.previous,
-                    ACTIVE_ROOM_TTL_MS,
-                ).catch(() => undefined);
-            }
-            throw error;
+    /** Atomically move the directory and every actor claim, fenced by source and intent. */
+    public async claimAdoptedRoom(payload: AdoptRoomPayload, projection: RoomProjection): Promise<void> {
+        const { roomId, sourceServerId, transferId } = payload;
+        if (!sourceServerId || !transferId || sourceServerId === this.#options.heartbeat.serverId) {
+            throw new Error('Missing handoff ownership fence');
         }
-        // Only register renewal after every claim was successfully transferred.
-        for (const userId of userIds) {
-            this.trackSeat(roomId, userId, `adopt:${this.#options.heartbeat.serverId}:${roomId}`);
+        const directoryKey = this.#options.keys.room(roomId);
+        const previous = await this.#options.redis.get(directoryKey);
+        if (previous === null || JSON.parse(previous).serverId !== sourceServerId) {
+            throw new Error('Source no longer owns room');
         }
+        const replacements: AtomicReplacement[] = [{
+            key: this.#options.keys.operation('handoff:' + transferId), expected: 'pending',
+            value: 'committed', ttlMs: 86_400_000,
+        }, {
+            key: directoryKey, expected: previous,
+            value: JSON.stringify({ ...projection, serverId: this.#options.heartbeat.serverId,
+                status: projection.state, updatedAt: this.#now() }), ttlMs: HEARTBEAT_TTL_MS,
+        }];
+        for (const member of payload.members) {
+            const key = this.#options.keys.userActiveRoom(member.userId);
+            const claim = await this.#options.redis.get(key);
+            if (claim === null || !this.#claimPointsToRoom(claim, roomId)
+                || JSON.parse(claim).serverId !== sourceServerId) throw new Error('active-room claim changed');
+            replacements.push({ key, expected: claim, value: JSON.stringify({ state: 'assigned',
+                requestId: 'adopt:' + transferId, roomId, serverId: this.#options.heartbeat.serverId }),
+                ttlMs: ACTIVE_ROOM_TTL_MS });
+        }
+        if (!await this.#options.redis.compareAndSetMany(replacements)) throw new Error('Handoff cancelled or ownership changed');
+        this.trackAdoptedRoom(payload);
+    }
+
+    public trackAdoptedRoom(payload: AdoptRoomPayload): void {
+        for (const member of payload.members) this.trackSeat(payload.roomId, member.userId, 'adopt:' + payload.transferId);
     }
 
     public forgetRoom(roomId: string): void {
@@ -286,9 +263,12 @@ export class GameRegistry {
             }
             for (const oldRoomId of this.#lastProjectedRooms) {
                 if (currentRoomIds.has(oldRoomId)) continue;
-                await this.#options.redis.delete(this.#options.keys.room(oldRoomId));
+                const oldKey = this.#options.keys.room(oldRoomId);
+                const oldValue = await this.#options.redis.get(oldKey);
+                if (oldValue === null || JSON.parse(oldValue).serverId !== this.#options.heartbeat.serverId
+                    || !await this.#options.redis.compareAndDelete(oldKey, oldValue)) continue;
                 const oldCode = this.#lastProjectedRoomCodes.get(oldRoomId);
-                if (oldCode) await this.#options.redis.delete(this.#options.keys.roomCode(oldCode));
+                if (oldCode) await this.#options.redis.compareAndDelete(this.#options.keys.roomCode(oldCode), oldRoomId);
                 await this.#options.redis.zRemove(this.#options.keys.roomsWaiting(), oldRoomId);
             }
             await this.#options.redis.zRemoveByScore(
@@ -334,7 +314,14 @@ export class GameRegistry {
             status: projection.state,
             updatedAt: now,
         };
-        await this.#options.redis.setPx(this.#options.keys.room(projection.roomId), JSON.stringify(value), HEARTBEAT_TTL_MS);
+        const key = this.#options.keys.room(projection.roomId);
+        const previous = await this.#options.redis.get(key);
+        if (previous !== null && JSON.parse(previous).serverId !== this.#options.heartbeat.serverId) return;
+        if (previous === null && this.#options.rooms.get(projection.roomId)?.handingOff) return;
+        const published = previous === null
+            ? await this.#options.redis.setPxIfAbsent(key, JSON.stringify(value), HEARTBEAT_TTL_MS)
+            : await this.#options.redis.compareAndSetPx(key, previous, JSON.stringify(value), HEARTBEAT_TTL_MS);
+        if (!published) return;
         await this.#options.redis.setPx(this.#options.keys.roomCode(projection.roomCode), projection.roomId, HEARTBEAT_TTL_MS);
         // 훈련장은 혼자 들어가는 방이라 목록에도 빠른 참가에도 나오면 안 된다.
         // 코드로도 못 들어오게 하려면 roomCode 자체를 안 실어야 하지만, 그건 방을 만든
@@ -358,7 +345,7 @@ export class GameRegistry {
                     const refreshed = currentClaim !== null
                         && this.#claimBelongsToSeat(currentClaim, roomId, tracked.requestId)
                         && await this.#options.redis.compareAndExpire(activeKey, currentClaim, ACTIVE_ROOM_TTL_MS);
-                    if (!refreshed && tracked.joined) {
+                    if (!refreshed && tracked.joined && !room.handingOff) {
                         await this.#options.redis.setPxIfAbsent(activeKey, JSON.stringify({
                             state: 'assigned',
                             requestId: `heartbeat:${this.#options.heartbeat.serverId}:${roomId}`,

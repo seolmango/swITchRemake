@@ -56,5 +56,7 @@ export const SkillRejection = {
     OutOfRange: 'OUT_OF_RANGE',
     /** 스위치 전용. 지목한 사람이 없거나, 죽었거나, 술래이거나, 자기 자신이다. */
     NoTarget: 'NO_TARGET',
+    /** 넘겨줄 술래가 없다. 훈련장의 중립 상태와 잘못된 번호를 구분한다. */
+    NoTagger: 'NO_TAGGER',
 } as const;
 export type SkillRejection = (typeof SkillRejection)[keyof typeof SkillRejection];

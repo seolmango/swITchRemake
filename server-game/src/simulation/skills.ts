@@ -191,7 +191,7 @@ function useSwitch(world: World, caster: PlayerState, targetPlayerId: number | u
     if (caster.isTagger) return { ok: false, reason: 'ROLE' };
 
     const tagger = world.players.find((p) => p.isTagger && p.alive);
-    if (!tagger) return { ok: false, reason: 'NO_TARGET' };
+    if (!tagger) return { ok: false, reason: 'NO_TAGGER' };
 
     const target = world.players.find((p) => p.playerId === targetPlayerId);
     const targetValid = target !== undefined && target.alive && !target.isTagger && target.playerId !== caster.playerId;
@@ -242,6 +242,7 @@ export function skillInSlot(player: PlayerState, slot: number): SkillId | null {
 export function useSkill(world: World, request: SkillRequest, events: WorldEvent[]): SkillOutcome {
     const caster = world.players.find((p) => p.playerId === request.playerId);
     if (!caster || !caster.alive) return { ok: false, reason: 'NOT_ALIVE' };
+    if (request.slot === SkillSlot.Switch && caster.isTagger) return { ok: false, reason: 'ROLE' };
 
     const skill = skillInSlot(caster, request.slot);
     if (skill === null) return { ok: false, reason: 'NO_SKILL' };

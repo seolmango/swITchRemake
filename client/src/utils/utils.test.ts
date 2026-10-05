@@ -123,6 +123,8 @@ describe('server cooldown presentation', () => {
 describe('skill rejection localization', () => {
     it('maps known values and safely falls back for unknown values', () => {
         expect(skillRejectionMessageKey(SkillRejection.OutOfRange)).toBe('game.skillRejected.outOfRange');
+        expect(skillRejectionMessageKey(SkillRejection.NoTagger)).toBe('game.skillRejected.noTagger');
+        expect(skillRejectionMessageKey(SkillRejection.NoTagger, true)).toBe('training.noTagger');
         expect(() => skillRejectionMessageKey('FUTURE_REASON')).not.toThrow();
         expect(skillRejectionMessageKey('FUTURE_REASON')).toBe('game.skillRejected.generic');
     });
