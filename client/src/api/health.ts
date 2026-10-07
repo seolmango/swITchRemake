@@ -11,7 +11,7 @@ export interface ServiceAnnouncement {
 }
 
 export type ServiceStatus =
-    | { kind: 'available'; announcement: ServiceAnnouncement | null }
+    | { kind: 'available'; announcement: ServiceAnnouncement | null; rulesVersions: string[] }
     | { kind: 'maintenance'; returnsAt: string; notice: LocalizedServiceText | null }
     | { kind: 'offline' }
     | { kind: 'unknown' };
@@ -33,6 +33,12 @@ const announcement = (value: unknown): ServiceAnnouncement | null | undefined =>
     return message ? { id: value.id, message } : undefined;
 };
 
+/** 서버가 알려 준 규칙(밸런스) 버전. 화면에 그대로 쓰므로 모양이 이상한 값은 버린다. */
+const rulesVersions = (value: unknown): string[] =>
+    Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === 'string' && /^[0-9A-Za-z.+-]{1,64}$/u.test(item)).slice(0, 4)
+        : [];
+
 /**
  * `GET /health`의 운영 신호를 엄격하게 읽는다. 모르는 모양은 점검으로 추측하지 않는다.
  * 구버전 서버의 `ready` 응답도 그대로 정상으로 받아 배포 순서가 뒤집혀도 앱이 막히지 않는다.
@@ -43,7 +49,7 @@ export const parseServiceStatus = (value: unknown): ServiceStatus => {
         const parsedAnnouncement = announcement(value.announcement);
         return parsedAnnouncement === undefined
             ? { kind: 'unknown' }
-            : { kind: 'available', announcement: parsedAnnouncement };
+            : { kind: 'available', announcement: parsedAnnouncement, rulesVersions: rulesVersions(value.rulesVersions) };
     }
     if (value.status !== 'maintenance' || typeof value.returnsAt !== 'string' || !Number.isFinite(Date.parse(value.returnsAt))) {
         return { kind: 'unknown' };
@@ -77,11 +83,20 @@ export const getServiceStatus = async (): Promise<ServiceStatus> => {
     }
 };
 
-export const probeServer = async (): Promise<number> => {
+export interface ServerProbe {
+    latencyMs: number;
+    /** 지금 도는 인게임 서버의 규칙 버전. 서버가 알려 주지 않으면 비어 있다. */
+    rulesVersions: string[];
+}
+
+export const probeServer = async (): Promise<ServerProbe> => {
     const startedAt = performance.now();
     const status = await getServiceStatus();
     if (status.kind === 'offline') throw new Error('서버가 응답하지 않습니다.');
-    return Math.max(1, Math.round(performance.now() - startedAt));
+    return {
+        latencyMs: Math.max(1, Math.round(performance.now() - startedAt)),
+        rulesVersions: status.kind === 'available' ? status.rulesVersions : [],
+    };
 };
 
 export const localizedServiceText = (value: LocalizedServiceText, language: string): string =>

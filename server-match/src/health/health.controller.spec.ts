@@ -59,3 +59,31 @@ test('readiness는 저장소가 죽으면 503을 낸다', async () => {
     );
     await assert.rejects(controller.readiness(), ServiceUnavailableException);
 });
+
+test('readiness는 살아 있는 인게임 서버의 규칙 버전을 중복 없이 알려 주고 drain 중인 서버는 뺀다', async () => {
+    const heartbeats: Record<string, object> = {
+        a: { serverId: 'a', rulesVersion: '0.5.0' },
+        b: { serverId: 'b', rulesVersion: '0.5.0' },
+        c: { serverId: 'c', rulesVersion: '0.4.0', draining: true },
+    };
+    let reads = 0;
+    const redis = {
+        ping: async () => true,
+        sortedSetMembers: async () => { reads++; return ['a', 'b', 'c']; },
+        get: async (key: string) => {
+            const heartbeat = heartbeats[key.split(':').pop() ?? ''];
+            return heartbeat ? JSON.stringify(heartbeat) : null;
+        },
+    };
+    const controller = new HealthController(
+        { getHealthStatus: () => ({}) } as never,
+        { execute: async () => undefined } as never,
+        redis as never,
+        { getPublicState: async () => ({ status: 'ready' }) } as never,
+    );
+    const first = await controller.readiness();
+    const second = await controller.readiness();
+    assert.deepEqual('rulesVersions' in first ? first.rulesVersions : null, ['0.5.0']);
+    assert.deepEqual('rulesVersions' in second ? second.rulesVersions : null, ['0.5.0']);
+    assert.equal(reads, 1, '10초 안의 두 번째 요청은 Redis를 다시 읽지 않는다');
+});

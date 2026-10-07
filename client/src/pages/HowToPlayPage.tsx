@@ -1,15 +1,16 @@
-import React, { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import React, { useMemo, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { RoundButton } from '../components/common/RoundButton.tsx';
 import { PageLayout } from '../components/layout/PageLayout.tsx';
 import { HUD_METRICS } from '../game/hud/hudTheme.ts';
 import { SKILL_TUNING } from 'shared';
-import { useSettingsStore } from '../stores/useSettingsStore.ts';
+import { EMOJI_ACTIONS, SWITCH_ACTIONS, useSettingsStore } from '../stores/useSettingsStore.ts';
 import { Color, statusInkColors, themeColors } from '../theme/color.ts';
 import { formatKeyBindings } from '../utils/keyBinding.ts';
 import { HelpDemoCanvas } from './howToPlay/HelpDemoCanvas.tsx';
 import { HELP_DEMO_IDS, TAGGER_DEMO_ID, type HelpDemoId } from './howToPlay/tutorialSnapshots.ts';
+import { usePrefersReducedMotion } from '../platform/reducedMotion.ts';
 
 /**
  * 스킬 이름은 로비가 쓰는 키를 그대로 읽는다. 도움말이 자기 이름표를 따로 들면 같은 스킬이
@@ -44,21 +45,6 @@ const SKILL_NAME_KEYS: Record<HelpDemoId, string> = {
     exhaust: 'lobby.skills.exhaust',
     switch: 'lobby.switchRate',
 };
-
-const SWITCH_ACTIONS = ['switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8'] as const;
-const EMOJI_ACTIONS = ['emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8'] as const;
-
-function usePrefersReducedMotion(): boolean {
-    const [reduced, setReduced] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
-    useEffect(() => {
-        const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-        if (!media) return;
-        const update = () => setReduced(media.matches);
-        media.addEventListener('change', update);
-        return () => media.removeEventListener('change', update);
-    }, []);
-    return reduced;
-}
 
 export const HowToPlayPage: React.FC = () => {
     const { t } = useTranslation();

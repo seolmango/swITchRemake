@@ -144,3 +144,33 @@ test('upstream 본문이 헤더 뒤에 멎으면 해당 다운로드를 끊고 �
         await new Promise<void>((resolve) => upstream.close(() => resolve()));
     }
 });
+
+test('a map download skips a worker that just exited and is served by the next one', { timeout: 5_000 }, async () => {
+    // 감독자가 방금 재운 서버는 게이트웨이 목록에서 아직 "가장 한가한 서버"로 보인다. 그 주소는 이미 닫혀 있다.
+    const gone = createServer();
+    const gonePort = await listen(gone);
+    await new Promise<void>((resolve) => gone.close(() => resolve()));
+    const alive = createServer((_req, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"served":"alive"}'); });
+    const alivePort = await listen(alive);
+    const heartbeat = (serverId: string, port: number, load: number) => ({
+        serverId, internalAddress: `http://127.0.0.1:${port}`, draining: false,
+        waitingRooms: load, playingRooms: 0, connections: 0, loopLagMs: 0,
+    }) as unknown as GameServerHeartbeat;
+    const view = { servers: new Map([['a-gone', heartbeat('a-gone', gonePort, 0)], ['b-alive', heartbeat('b-alive', alivePort, 1)]]), ensureServer: async () => null };
+    const proxy = createServer((req, res) => handleRequest(view, new IpRateLimiter(), req, res));
+    const proxyPort = await listen(proxy);
+    try {
+        const { status, body } = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+            get({ host: '127.0.0.1', port: proxyPort, path: `/map-bundles/${'a'.repeat(64)}.json` }, (response) => {
+                let body = '';
+                response.on('data', (chunk) => { body += chunk; });
+                response.on('end', () => resolve({ status: response.statusCode!, body }));
+            }).on('error', reject);
+        });
+        assert.equal(status, 200);
+        assert.equal(body, '{"served":"alive"}');
+    } finally {
+        proxy.closeAllConnections(); alive.closeAllConnections();
+        await Promise.all([new Promise<void>((resolve) => proxy.close(() => resolve())), new Promise<void>((resolve) => alive.close(() => resolve()))]);
+    }
+});

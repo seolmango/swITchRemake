@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>swITch 맵 에디터</title>
+<link rel="stylesheet" href="/editor.css">
+</head>
+<body>
+<header>
+  <h1>swITch 맵 에디터</h1>
+  <div class="row">
+    <select id="map-select" aria-label="맵 열기"></select>
+    <button id="new-map">새 맵</button>
+    <button id="save" class="primary">저장</button>
+    <button id="build">빌드 → 서버 번들</button>
+    <span id="status" role="status"></span>
+  </div>
+</header>
+
+<main>
+  <aside class="panel left">
+    <section>
+      <h2>맵</h2>
+      <label>이름 <input id="prop-name" maxlength="40"></label>
+      <label>파일 <input id="prop-file" disabled></label>
+      <label>크기(타일) <input id="prop-size" type="number" min="10" max="120"></label>
+      <label title="자기장이 한 틱(1/60초)에 줄어드는 거리(px). 타일 한 칸은 256px다.">자기장 속도(px/틱) <input id="prop-barrier" type="number" min="1" max="64"></label>
+      <label class="check"><input id="prop-training" type="checkbox"> 훈련장 전용(경기 맵 목록에서 빠진다)</label>
+    </section>
+
+    <section>
+      <h2>도구 <small>단축키</small></h2>
+      <div class="tools" id="tools"></div>
+      <div id="tool-options"></div>
+    </section>
+
+    <section>
+      <h2>타일</h2>
+      <div class="tiles" id="tiles"></div>
+    </section>
+  </aside>
+
+  <section class="canvas-area">
+    <div class="canvas-toolbar">
+      <label>확대 <input id="zoom" type="range" min="6" max="40" value="18"></label>
+      <label class="check"><input id="show-grid" type="checkbox" checked> 격자</label>
+      <label class="check"><input id="show-layers" type="checkbox" checked> 마커·구역</label>
+      <span class="sep"></span>
+      <label>자기장 미리보기 <input id="preview-tick" type="range" min="0" value="0"></label>
+      <output id="preview-label">0틱</output>
+      <label>시작 위치 <select id="preview-players"><option value="0">끄기</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+      <span id="hover"></span>
+    </div>
+    <div class="canvas-scroll"><canvas id="canvas"></canvas></div>
+  </section>
+
+  <aside class="panel right">
+    <section>
+      <h2>선택한 칸</h2>
+      <div id="inspector"><p class="muted">"칸" 도구로 칸을 누르면 그 칸의 시간표를 고칠 수 있다.</p></div>
+    </section>
+    <section>
+      <h2>검사 <span id="problem-count"></span></h2>
+      <ul id="problems"></ul>
+    </section>
+    <section>
+      <h2>빌드 기록</h2>
+      <pre id="build-log"></pre>
+    </section>
+  </aside>
+</main>
+
+<dialog id="new-dialog">
+  <form method="dialog">
+    <h2>새 맵</h2>
+    <label>파일 이름(영문) <input name="file" required pattern="[A-Za-z0-9_-]+" placeholder="riverside"></label>
+    <label>맵 이름 <input name="name" required placeholder="Riverside"></label>
+    <label>크기(타일) <input name="size" type="number" min="10" max="120" value="40" required></label>
+    <div class="row end"><button value="cancel" formnovalidate>취소</button><button value="ok" class="primary">만들기</button></div>
+  </form>
+</dialog>
+
+<script src="/editor.js"></script>
+</body>
+</html>

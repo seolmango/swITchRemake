@@ -14,7 +14,8 @@ import {
     type ControlErrorCode as ControlErrorCodeValue,
     type ViolationSignal,
 } from 'shared';
-import { GAMEPLAY, RULES_VERSION, hudGameplayPayload } from '../config/gameplay';
+import { GAMEPLAY, hudGameplayPayload } from '../config/gameplay';
+import { RULES_VERSION } from '../config/rules';
 import { NETWORK } from '../config/network';
 import type { RoomAdmissionPort } from '../gateway/ticket-auth';
 import type { SeatReservation } from '../gateway/ticket-store';

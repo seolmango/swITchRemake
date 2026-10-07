@@ -279,6 +279,12 @@ export type LobbyStateMessage = ServerEnvelope<'lobby.state', {
     locked: boolean;
     /** 시작 버튼이 풀리기까지 남은 밀리초. 0이면 시작할 수 있다. */
     startLockMs: number;
+    /**
+     * 방의 지금 상태. `game.*` 이벤트는 그 경기의 참가자에게만 가므로, 경기 중에 들어와 대기실에 있던
+     * 사람은 이 값으로만 "경기가 끝나 대기실로 돌아왔다"를 안다. 없으면(구버전 서버) 클라이언트는
+     * 마지막으로 안 상태를 유지한다.
+     */
+    roomState?: RoomState;
     players: LobbyPlayer[];
 }>;
 

@@ -12,7 +12,7 @@ import { readTouchDirection } from '../game/touchInput.ts';
 import { TILE_SIZE } from '../game/constants.ts';
 import { gameSession } from '../game/GameSession.ts';
 import { useGameSession } from '../game/useGameSession.ts';
-import { type KeyAction, useSettingsStore } from '../stores/useSettingsStore.ts';
+import { EMOJI_ACTIONS, SWITCH_ACTIONS, type KeyAction, useSettingsStore } from '../stores/useSettingsStore.ts';
 import { themeColors } from '../theme/color.ts';
 import { resumeRoom } from '../api/rooms.ts';
 import { useSkillIcons } from '../theme/skillIcons.ts';
@@ -29,27 +29,13 @@ import { matchSfx, useMatchSfx } from '../audio/matchSfx.ts';
 import { canEnterRunningGame } from '../game/roomRole.ts';
 import { BufferedSnapshots } from '../game/BufferedSnapshots.ts';
 import { useModalFocusTrap } from '../components/common/useModalFocusTrap.ts';
+import { usePrefersReducedMotion } from '../platform/reducedMotion.ts';
 
 const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { icon: 'dash' | 'flash' | 'exhaust'; labelKey: string }> = {
     [SkillId.Dash]: { icon: 'dash', labelKey: 'lobby.skills.dash' },
     [SkillId.Flash]: { icon: 'flash', labelKey: 'lobby.skills.flash' },
     [SkillId.Exhaust]: { icon: 'exhaust', labelKey: 'lobby.skills.exhaust' },
 };
-
-const SWITCH_ACTIONS: readonly KeyAction[] = ['switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8'];
-const EMOJI_ACTIONS: readonly KeyAction[] = ['emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8'];
-
-function usePrefersReducedMotion(): boolean {
-    const [reduced, setReduced] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
-    useEffect(() => {
-        const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-        if (!media) return;
-        const update = () => setReduced(media.matches);
-        media.addEventListener('change', update);
-        return () => media.removeEventListener('change', update);
-    }, []);
-    return reduced;
-}
 
 export const GamePage: React.FC<{ training?: boolean }> = ({ training = false }) => {
     const skillIcons = useSkillIcons();

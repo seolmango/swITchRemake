@@ -1,0 +1,168 @@
+# swITch 배포 스택. 서버 한 대에 전부 띄운다.
+#
+# 직접 부르지 말고 `npm run stack:up`을 쓴다. 그 스크립트가 .env.deploy를 검사하고, SWITCH_DOMAIN이
+# 있으면 https 프로필(Caddy, 자동 인증서)을 켜고, BUILD_ID에 지금 커밋을 넣는다. 설명: docs/deployment.md
+#
+#   브라우저 ─ (caddy :443, https 프로필) ─ web(nginx) ─┬─ /api/*            → match
+#                                                      └─ /game-ws 등 게임  → cluster(게이트웨이)
+name: switch
+
+x-backend: &backend
+  image: switch-backend:local
+  env_file:
+    - ../.env.deploy
+  init: true
+
+x-app-environment: &app-environment
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  SWITCH_SKIP_ENV_FILE: "true"
+  BUILD_ID: ${STACK_BUILD_ID:-local}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-switch}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?.env.deploy가 없다. npm run setup -- deploy}
+      POSTGRES_DB: ${DB_NAME:-switch}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?.env.deploy가 없다. npm run setup -- deploy}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --appendfsync everysec --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  migrate:
+    <<: *backend
+    # 이미지는 여기서 한 번만 빌드한다. 세 서비스에 모두 build를 적으면 병렬 빌드가 같은 태그를 두고 다툰다.
+    build:
+      context: ..
+      dockerfile: Dockerfile.backend
+      labels:
+        org.opencontainers.image.revision: ${STACK_REVISION:-unknown}
+    pull_policy: build
+    command: ["npm", "run", "db:migrate", "-w", "server-match"]
+    environment:
+      <<: *app-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  match:
+    <<: *backend
+    pull_policy: never
+    restart: unless-stopped
+    command: ["node", "server-match/dist/main.js"]
+    environment:
+      <<: *app-environment
+      PORT: "3000"
+      MATCH_TRUSTED_PROXIES: ${INTERNAL_SUBNET:-172.29.240.0/24}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+
+  cluster:
+    <<: *backend
+    pull_policy: never
+    restart: unless-stopped
+    command: ["node", "docker-cluster.cjs"]
+    environment:
+      <<: *app-environment
+      GAME_HOST: "0.0.0.0"
+      GAME_INTERNAL_HOST: "127.0.0.1"
+      GAME_MAP_BUNDLE: /app/server-game/maps/server_maps.json
+      GAME_TRUSTED_PROXIES: "127.0.0.1,::1,${INTERNAL_SUBNET:-172.29.240.0/24}"
+      GATEWAY_HOST: "0.0.0.0"
+      GATEWAY_PORT: "4100"
+      GATEWAY_ALLOWED_GAME_HOSTS: "127.0.0.1,localhost,::1"
+      REPLAY_STORE: local
+      REPLAY_LOCAL_DIR: /app/replays
+    volumes:
+      - replay_data:/app/replays
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4100/healthz').then(r=>r.json()).then(v=>{if(!v.ok||v.servers<1)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+    # 감독자가 인게임 서버를 drain할 시간. 진행 중인 경기는 그래도 끝난다(상태가 메모리에만 있다).
+    stop_grace_period: 15s
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      labels:
+        org.opencontainers.image.revision: ${STACK_REVISION:-unknown}
+    image: switch-web:local
+    restart: unless-stopped
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"
+    depends_on:
+      match:
+        condition: service_healthy
+      cluster:
+        condition: service_healthy
+
+  # SWITCH_DOMAIN이 있을 때만 켠다(https 프로필). 80/443을 열고 Let's Encrypt 인증서를 자동으로 받는다.
+  # 인증서 발급에는 도메인의 DNS가 이 서버를 가리키고 80/443이 인터넷에서 열려 있어야 한다.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    environment:
+      SWITCH_DOMAIN: ${SWITCH_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${INTERNAL_SUBNET:-172.29.240.0/24}
+
+volumes:
+  postgres_data:
+  redis_data:
+  replay_data:
+  caddy_data:
+  caddy_config:

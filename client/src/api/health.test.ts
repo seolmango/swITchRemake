@@ -35,6 +35,12 @@ describe('점검 상태 계약', () => {
         expect(localizedServiceText(status.announcement.message, 'en')).toBe('Today’s notice');
     });
 
+    it('서버의 규칙 버전만 받고 이상한 값은 버린다', () => {
+        const status = parseServiceStatus({ status: 'ready', timestamp: 1, rulesVersions: ['0.5.0', '<b>x</b>', 7, '0.6.0-dev.ab12'] });
+        expect(status).toMatchObject({ kind: 'available', rulesVersions: ['0.5.0', '0.6.0-dev.ab12'] });
+        expect(parseServiceStatus({ status: 'ready', timestamp: 1 })).toMatchObject({ rulesVersions: [] });
+    });
+
     it('연결 실패와 점검을 구분하고 형식이 다른 응답은 평소 앱을 막지 않는다', () => {
         expect(classifyServiceFailure(new TypeError('fetch failed'))).toEqual({ kind: 'offline' });
         expect(classifyServiceFailure(new ApiError(503, null))).toEqual({ kind: 'offline' });

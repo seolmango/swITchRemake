@@ -1,10 +1,9 @@
 # Azure 학생 개발 서버
 
-## 2026-10-05 감사 릴리스
-
-소유자 승인으로 독립 감사 코드 `5c87efd88ecf664581b36e8422538cde8048d7fd`를 main에 병합하고 backend/web 및 Caddy 보안 헤더를 배포했다. 배포 후 실제3인 두 경기·결과·다음 경기·퇴장, 소유자 테스트 회원의 기존 전적 보존·로그인·권한·로그아웃, HTTPS 헤더를 확인했다. 기존 데이터/인증 키/VM 사양은 유지했다. 최초 이미지와 이번 릴리스는 구분하며, 아래의 10월4일 기록은 그 당시 상태다.
-
-[독립 감사 보고서](../../docs/audit-2026-10-04/README.md), [배포 및 원복 명령](../../docs/audit-2026-10-04/deployment-followup.md), [Azure 검증 범위](../../docs/audit-2026-10-04/azure-results.md)를 참조한다. 반복 CI는 격리된 runner 안에서만 실행하고 Azure에 접속하거나 자동 배포하지 않는다.
+친구 테스트용 운영 서버의 구성과 점검 방법이다. 릴리스(이미지 교체) 절차는
+[docs/deployment.md](../../docs/deployment.md#릴리스-절차), 회차별 기록과 원복 명령은
+[deployment-followup.md](../../docs/audit-2026-10-04/deployment-followup.md)에 있다. CI는 Azure에 접속하거나
+자동 배포하지 않는다.
 
 2026-10-04 배포 구성. 친구 테스트용이며 자동 종료 없이 실행한다.
 
@@ -84,7 +83,14 @@ sudo docker compose -f compose.yml up -d --no-deps --force-recreate match cluste
 
 ## 재배포와 비밀 값
 
-현재 이미지는 로컬 PC에서 `Dockerfile.backend`, `deploy/Dockerfile.web`으로 빌드한 `switch-azure-backend:local`, `switch-azure-web:local`이다. `docker save`로 내보내 SSH로 전송하고 VM에서 `docker load`한 뒤 서비스를 재생성한다. 소스 변경만으로 실행 이미지가 자동 갱신되지는 않는다.
+실행 이미지는 `switch-azure-backend:local`, `switch-azure-web:local`이다. 새 버전은 `release.sh`가 커밋 하나로 구워 올리고 `remote-release.sh`가 VM에서 교체한다(GitHub Deploy 워크플로가 Verify를 통과한 main 커밋에만 부른다). 절차는 [docs/deployment.md](../../docs/deployment.md#azure-운영-서버). 소스를 push하는 것만으로 VM 이미지가 바뀌지는 않는다.
+
+| 파일 | 어디서 | 하는 일 |
+| --- | --- | --- |
+| `release.sh` | 배포하는 쪽(Actions 또는 PC) | 커밋으로 이미지 빌드·라벨, VM에 업로드, `remote-release.sh` 실행 |
+| `remote-release.sh` | VM | 원복 준비, idle 확인, match·cluster·web 교체, health 확인, 실패 시 원복 |
+| `idle-check.cjs` | VM의 cluster 컨테이너 | 대기방·경기·연결이 0인지 읽기 전용으로 확인 |
+| `post-check.cjs` | 배포하는 쪽 | 공개 주소가 이 커밋의 규칙 버전을 말하는지 확인 |
 
 `bootstrap-vm.sh`는 Ubuntu/Docker/swap 준비, `provision-db.py`는 DB/앱 역할 준비, `prepare-runtime.py`는 서비스별 환경 파일 작성, `migrate.cjs`는 마이그레이션을 담당한다. 초기 관리자는 `bootstrap-admin.cjs`에 소유자가 지정한 이메일·닉네임·bcrypt 해시를 JSON stdin으로 전달해 만든다. 기존 이메일 또는 닉네임이 있으면 변경 없이 중단하며 새 관리자 생성은 감사 로그에 남긴다.
 

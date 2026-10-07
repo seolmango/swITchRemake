@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './lobby.css';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { RoomState, SkillId, isLoadoutSkill, type PlayerControl } from 'shared';
+import { PlayerRole, RoomState, SkillId, isLoadoutSkill, type PlayerControl } from 'shared';
 import { PageLayout } from '../../components/layout/PageLayout.tsx';
 import { RoundBox } from '../../components/common/RoundBox.tsx';
 import { RoundButton } from '../../components/common/RoundButton.tsx';
@@ -82,7 +82,8 @@ export const LobbyPage: React.FC = () => {
                 isSelf: player.playerId === session.selfId,
                 guest: player.guest,
                 role: player.role,
-                waitingForNextMatch: session.roomState === RoomState.Playing,
+                // 사람마다 다르다: 진행 중인 경기에 끼지 못하고 기다리는 사람만(서버가 정한 역할).
+                waitingForNextMatch: player.role === PlayerRole.Waiting,
                 // 서버가 돌려준 각자의 조작 방식. 내 것은 알리기 전에도 바로 보이게 지금 값을 쓴다.
                 control: player.playerId === session.selfId ? localControl : player.control ?? undefined,
                 // `skills` is the shared lobby contract; this view has one movement-skill badge today.
@@ -92,7 +93,7 @@ export const LobbyPage: React.FC = () => {
                 stats: player.stats,
             })),
         };
-    }, [currentRoomId, live, liveLockElapsedMs, session.isPrivate, session.lobby, session.selfId, session.roomState, localControl]);
+    }, [currentRoomId, live, liveLockElapsedMs, session.isPrivate, session.lobby, session.selfId, localControl]);
 
     /*
      * 내 조작 방식을 서버에 알린다. 다른 사람 카드에도 보이려면 서버가 알아야 한다 — 예전에는 자기

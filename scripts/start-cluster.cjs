@@ -10,7 +10,7 @@
 const { resolve } = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
-// 서버 프로세스는 `.env`를 스스로 읽지 않는다(매칭 서버만 @nestjs/config로 읽는다). 그래서
+// 게이트웨이와 감독자는 `.env`를 스스로 읽지 않는다(매칭 서버와 인게임 서버만 읽는다). 그래서
 // 여기서 읽어 넘긴다 — 안 그러면 REDIS_PASSWORD가 없어 게이트웨이가 NOAUTH로 즉시 죽는다.
 require('dotenv').config({ path: resolve(__dirname, '..', '.env'), quiet: true });
 

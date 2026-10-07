@@ -94,11 +94,3 @@ export function playSfx(id: SfxId, options: PlayOptions = {}): void {
     source.start();
     source.onended = () => source.disconnect();
 }
-
-/** 테스트용. 프로덕션 경로에서는 부를 일이 없다. */
-export function resetSfxForTest(): void {
-    buffers.clear();
-    lastPlayedAt.clear();
-    loadStarted = false;
-    loadPromise = null;
-}

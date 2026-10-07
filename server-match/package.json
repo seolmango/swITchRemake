@@ -1,7 +1,7 @@
 {
   "name": "server-match",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/main.js",
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
@@ -16,24 +16,20 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "description": "",
+  "description": "swITch 매칭 서버. 인증·계정·방 배정·전적·신고·운영 API (NestJS + Fastify).",
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@nestjs/common": "^11.2.3",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.2.3",
     "@nestjs/jwt": "^11.0.2",
-    "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-fastify": "11.2.7",
-    "@nestjs/throttler": "^6.5.0",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "drizzle-orm": "^0.45.2",
     "ioredis": "^5.10.1",
     "nodemailer": "10.0.14",
-    "passport": "^0.7.0",
-    "passport-jwt": "^4.0.1",
     "postgres": "^3.4.9",
     "shared": "file:../shared"
   },
@@ -42,7 +38,6 @@
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^24.12.4",
     "@types/nodemailer": "^8.0.0",
-    "@types/passport-jwt": "^4.0.1",
     "drizzle-kit": "^0.31.10"
   }
 }

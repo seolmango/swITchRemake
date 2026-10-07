@@ -13,7 +13,7 @@
   .responsive-form-container .settings-dock { position: relative; inset: auto; justify-content: center; flex-wrap: wrap; gap: 12px; }
   .responsive-form-container .settings-dock .round-button { width: 52px !important; height: 52px !important; }
   .responsive-form-container .settings-dock .round-button svg { width: 28px; height: 28px; }
-  .responsive-form-container .server-status { position: relative; inset: auto; width: 100%; height: 48px; min-width: 0; padding: 0 14px; gap: 12px; font-size: 16px; border-width: var(--border); }
+  .responsive-form-container .server-status { position: relative; inset: auto; justify-content: center; width: 100%; gap: 10px; font-size: 16px; }
   .responsive-form-container [role='checkbox'] { font-size: 17px !important; gap: 10px !important; text-align: left; }
   .responsive-form-container [role='checkbox'] > span { width: 34px !important; height: 34px !important; flex: 0 0 auto; border-width: var(--border) !important; }
   .responsive-form-container [role='checkbox'] > span svg { width: 24px; height: 24px; }

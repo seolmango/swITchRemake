@@ -1,0 +1,14 @@
+ARG AUDIT_BACKEND_IMAGE
+FROM ${AUDIT_BACKEND_IMAGE}
+USER root
+COPY scripts ./scripts
+COPY e2e ./e2e
+COPY client ./client
+COPY legal ./legal
+COPY .github ./.github
+COPY deploy ./deploy
+COPY docs/configuration.md ./docs/configuration.md
+COPY Dockerfile.backend .env.example ./
+RUN npx playwright install --with-deps chromium
+ENV CI=true
+CMD ["node", "scripts/verify/runner.cjs"]

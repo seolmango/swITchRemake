@@ -1,0 +1,16 @@
+ARG AUDIT_RUNNER_IMAGE
+FROM ${AUDIT_RUNNER_IMAGE}
+# Local iteration only: preserve installed browsers, update audit code and tests.
+COPY scripts ./scripts
+COPY e2e ./e2e
+COPY client ./client
+COPY legal ./legal
+COPY .github ./.github
+COPY deploy ./deploy
+COPY docs/configuration.md ./docs/configuration.md
+COPY Dockerfile.backend .env.example ./
+COPY server-match ./server-match
+COPY shared ./shared
+COPY server-game ./server-game
+COPY server-gateway ./server-gateway
+COPY server-supervisor ./server-supervisor

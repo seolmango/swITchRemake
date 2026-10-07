@@ -45,10 +45,15 @@ export const createDefaultTouchLayout = (): TouchLayout => ({
 // 색각 보조 모드의 정의는 팔레트가 있는 곳(theme/cvd.ts)에 둔다 — 값이 늘어나면 팔레트도 같이 늘어야 하므로.
 export type { ColorVisionMode };
 
+/** 스위치 n번 키는 n번 플레이어를 지목한다. 배열 순서가 곧 번호다. */
+export const SWITCH_ACTIONS = ['switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8'] as const;
+/** 이모지 n번 키. 배열 순서가 곧 이모지 번호다. */
+export const EMOJI_ACTIONS = ['emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8'] as const;
+
 export const KEY_ACTIONS = [
     'moveUp', 'moveDown', 'moveLeft', 'moveRight', 'movementSkill',
-    'switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8',
-    'emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8',
+    ...SWITCH_ACTIONS,
+    ...EMOJI_ACTIONS,
     'toggleMinimap',
 ] as const;
 

@@ -27,6 +27,11 @@ export default defineConfig({
         target: 'http://localhost:4100',
         changeOrigin: true,
       },
+      // 리플레이 파일도 인게임 서버 디스크에 있어 게이트웨이를 거친다(deploy/nginx.conf와 같은 경로).
+      '/replays': {
+        target: 'http://localhost:4100',
+        changeOrigin: true,
+      },
     },
   },
 })

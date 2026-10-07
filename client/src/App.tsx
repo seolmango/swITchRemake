@@ -19,7 +19,7 @@ import { AdminPage } from './pages/AdminPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { useAuthStore } from './stores/useAuthStore.ts';
 import { GameContainer } from './components/layout/GameContainer.tsx';
-import { useAudioRuntime } from './audio/useAudio.ts';
+import { useAudioRuntime } from './audio';
 import { getServiceStatus, serviceRouteBypassesGate, serviceRouteRequiresServer, type ServiceStatus } from './api/health.ts';
 import { ServiceStatusPage } from './pages/ServiceStatusPage.tsx';
 import { applyAppearanceToDocument } from './theme/cssVariables.ts';

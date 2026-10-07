@@ -28,6 +28,12 @@ export interface BackendRoute {
     backend: Backend;
     /** 판정과 실제 전송에 함께 쓰는 정규화된 origin-form 요청 대상이다. */
     path: string;
+    /**
+     * 같은 응답을 줄 수 있는 다른 서버(가까운 순). 어느 서버가 줘도 같은 불변 다운로드에만 있다.
+     * 게이트웨이가 아는 목록은 heartbeat 주기만큼 늦어서, 방금 내려간 서버로 보낼 수 있다 — 연결 자체가
+     * 실패하면 다음 서버로 한 번 더 보낸다.
+     */
+    fallbacks?: Backend[];
 }
 
 export type RouteResolution =
@@ -241,13 +247,14 @@ export function resolveBundleRoute(
         .filter((server) => !server.draining && server.internalAddress.length > 0)
         // 동률을 serverId로 깨서 같은 상태면 늘 같은 곳으로 간다. 캐시가 한 곳에 모인다.
         .sort((a, b) => backendLoad(a) - backendLoad(b) || a.serverId.localeCompare(b.serverId));
-    const chosen = candidates[0];
+    const [chosen, ...others] = candidates;
     if (chosen === undefined) return { kind: 'unavailable' };
     return {
         kind: 'route',
         route: {
             backend: { serverId: chosen.serverId, address: chosen.internalAddress },
             path: normalizedPath,
+            fallbacks: others.map((server) => ({ serverId: server.serverId, address: server.internalAddress })),
         },
     };
 }

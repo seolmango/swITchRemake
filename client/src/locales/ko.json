@@ -21,9 +21,9 @@
   "serverStatus": {
     "checking": "서버 연결 중…",
     "online": "서버 연결됨",
-    "connected": "서버 연결됨 · {{latency}}ms",
-    "offline": "서버 연결 끊김",
-    "retry": "다시 확인"
+    "latency": "서버 {{latency}}ms",
+    "patch": "패치 {{version}}",
+    "offline": "서버 연결 끊김"
   },
   "browserUnsupported": {
     "title": "지원하지 않는 브라우저예요",

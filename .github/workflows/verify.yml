@@ -1,0 +1,102 @@
+# swITch의 표준. 로컬의 `npm run verify`와 같은 명령이다(CONTRIBUTING.md).
+# 이 검사를 통과한 커밋만 배포할 수 있다(.github/workflows/deploy.yml).
+name: Verify
+on:
+  # 브랜치 작업은 PR에서 검사한다. main push는 배포 관문이라 따로 돈다(deploy.yml).
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      extended:
+        description: Also run process scaling and fault injection
+        type: boolean
+        default: true
+  schedule:
+    - cron: '30 18 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    # 묶음마다 워커 하나. 워커마다 자기 일회용 스택을 띄우므로 메모리 상한이 워커별로 따로 걸린다.
+    # 목록은 scripts/verify/areas.cjs의 SHARDS와 같아야 한다(배포 정책 검사가 확인한다).
+    name: verify (${{ matrix.areas }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        areas: ['static unit', 'security', 'account', 'rooms', 'match', 'client', 'admin']
+    env:
+      AUDIT_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+      # Hosted Ubuntu exports this CLI installation path; it is not an application credential.
+      # Clear only this metadata field; inherited cloud credentials still fail closed.
+      AZURE_EXTENSION_DIR: ''
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Run this part of the standard in a disposable isolated stack
+        # No application secrets, cloud login, deployment permissions, or production URLs.
+        run: npm run verify -- ${{ matrix.areas }}
+      - name: Cleanup only this verify project
+        if: always()
+        run: |
+          if test -f ".audit/$AUDIT_RUN_ID/runtime.env"; then
+            node scripts/verify/stack.cjs down
+          fi
+      - name: Preserve sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: verify-${{ strategy.job-index }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: e2e/artifacts/audit
+          retention-days: 14
+          if-no-files-found: warn
+          include-hidden-files: false
+
+  passed:
+    # 브랜치 보호의 필수 검사로 이 이름 하나만 걸면 된다. 묶음이 하나라도 실패하면 실패한다.
+    if: always()
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every part of the standard passed
+        run: test "${{ needs.verify.result }}" = success
+
+  extended:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.extended)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      AUDIT_RUN_ID: extended-${{ github.run_id }}-${{ github.run_attempt }}
+      # Clear hosted-runner CLI path metadata without weakening credential rejection.
+      AZURE_EXTENSION_DIR: ''
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Run the standard plus scaling and faults
+        run: npm run verify:extended
+      - name: Cleanup only this verify project
+        if: always()
+        run: |
+          if test -f ".audit/$AUDIT_RUN_ID/runtime.env"; then
+            node scripts/verify/stack.cjs down extended
+          fi
+      - name: Preserve sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: verify-extended-${{ github.run_id }}-${{ github.run_attempt }}
+          path: e2e/artifacts/audit
+          retention-days: 14
+          if-no-files-found: warn
+          include-hidden-files: false

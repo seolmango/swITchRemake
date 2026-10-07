@@ -1,15 +1,11 @@
-export { audioBus, volumeToGain } from './AudioBus.ts';
-export { playSfx, preloadSfx, type SfxId } from './sfxPlayer.ts';
-export { SFX_IDS, SFX_TOTAL_BYTES, BGM_TRACK } from './manifest.generated.ts';
+export { playSfx, type SfxId } from './sfxPlayer.ts';
+export { BGM_TRACK } from './manifest.generated.ts';
 export {
-    bgmSource,
     cancelBgmDownload,
     discardBgm,
     downloadBgm,
-    getBgmState,
     playBgm,
     stopBgm,
-    subscribeBgm,
     type BgmState,
     type BgmStatus,
 } from './bgmPlayer.ts';

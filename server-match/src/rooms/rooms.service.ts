@@ -117,6 +117,15 @@ type ClientSeatGrant = SeatGrant & { roomId: string; roomCode: string };
 const hasRoomCapacity = (server: GameServerHeartbeat): boolean =>
     typeof server.maxRooms !== 'number' || server.waitingRooms + server.playingRooms < server.maxRooms;
 
+/**
+ * 방 배정. 방을 직접 들고 있지 않고 인게임 서버에 시킨다(BASE.md §3.1, §5).
+ *
+ * 생성·참가·빠른 참가·재접속은 모두 같은 모양이다 — 남용 제한과 "한 사람 한 방" 예약을 Redis에서
+ * 확인하고, 인게임 서버의 heartbeat로 대상 서버를 고른 뒤, 제어 명령을 Redis stream에 넣고 이
+ * 인스턴스 전용 응답 stream에서 결과를 기다린다. 성공하면 인게임 서버가 발급한 일회용 접속 티켓을
+ * 클라이언트에 돌려준다. 첫 경기의 식별자는 방을 만들 때 여기서 만들어 `ResultService`에 기록하고,
+ * 다음 경기의 식별자는 결과를 저장한 쪽이 내려보낸다(§5.3).
+ */
 @Injectable()
 export class RoomsService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(RoomsService.name);

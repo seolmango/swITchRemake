@@ -177,59 +177,89 @@ export function handleRequest(
             return;
         }
     }
-    const target = parseBackendAddress(backend.address);
-    if (target === null) {
-        log(`올바르지 않은 backend 주소를 제외했습니다: serverId=${backend.serverId}`);
-        res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
-        res.end('bad gateway');
-        return;
-    }
-    const proxied = httpRequest(
-        {
-            hostname: target.hostname,
-            port: target.port,
-            path: targetPath,
-            method: req.method ?? 'GET',
-            headers: filterHttpRequestHeaders(req.headers, req.socket.remoteAddress),
-        },
-        (upstream) => {
-            clearTimeout(responseTimer);
-            // The response stream has its own error boundary after headers. A short
-            // body must close the client socket: ending it would claim success with
-            // a mismatched Content-Length and leave the download waiting forever.
-            upstream.on('error', () => res.destroy());
-            upstream.on('aborted', () => res.destroy());
-            // 헤더 뒤에 본문이 멎는 경우도 소켓을 영원히 점유하지 못하게 한다.
-            upstream.setTimeout(limits.responseTimeoutMs, () => upstream.destroy(new Error('upstream response timeout')));
-            res.writeHead(upstream.statusCode ?? 502, filterHttpResponseHeaders(upstream.headers));
-            upstream.pipe(res);
-        },
-    );
-    const responseTimer = setTimeout(() => proxied.destroy(new Error('upstream response timeout')), limits.responseTimeoutMs);
-    responseTimer.unref();
-    proxied.on('socket', (upstreamSocket) => {
-        if (!upstreamSocket.connecting) return;
-        const connectTimer = setTimeout(() => proxied.destroy(new Error('upstream connect timeout')), limits.connectTimeoutMs);
-        connectTimer.unref();
-        upstreamSocket.once('connect', () => clearTimeout(connectTimer));
-        upstreamSocket.once('error', () => clearTimeout(connectTimer));
-    });
-    proxied.on('error', (error: unknown) => {
-        clearTimeout(responseTimer);
-        log(`${backend.serverId}로 넘기지 못했습니다: ${String(error)}`);
-        if (res.headersSent) {
-            res.destroy();
-        } else {
+    /*
+     * 게이트웨이가 아는 서버 목록은 heartbeat만큼 늦다. 감독자가 방금 재운 서버가 아직 "한가한 서버"로
+     * 보여 그리로 보내면 연결이 거절된다(검증 스택에서 실제로 재현했다). 응답을 받기 전에 연결 자체가
+     * 실패했을 때만 다음 서버로 한 번 더 보낸다. 본문 없는 GET/HEAD이고 어느 서버가 줘도 같은 파일이라
+     * 다시 보내도 안전하다. 느린 응답은 다시 보내지 않는다 — 살아 있는 서버에 같은 부하를 두 번 얹게 된다.
+     */
+    const backends = [backend, ...(resolution.route.fallbacks ?? [])].slice(0, 2);
+    let proxied: ReturnType<typeof httpRequest> | null = null;
+    let responseTimer: NodeJS.Timeout | null = null;
+    const badGateway = () => {
+        if (res.headersSent) res.destroy();
+        else {
             res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
             res.end('bad gateway');
         }
-    });
-    req.on('aborted', () => proxied.destroy());
+    };
+    const forward = (attempt: number): void => {
+        const current = backends[attempt]!;
+        const target = parseBackendAddress(current.address);
+        if (target === null) {
+            log(`올바르지 않은 backend 주소를 제외했습니다: serverId=${current.serverId}`);
+            if (attempt + 1 < backends.length) forward(attempt + 1);
+            else badGateway();
+            return;
+        }
+        const request = httpRequest(
+            {
+                hostname: target.hostname,
+                port: target.port,
+                path: targetPath,
+                method: req.method ?? 'GET',
+                headers: filterHttpRequestHeaders(req.headers, req.socket.remoteAddress),
+            },
+            (upstream) => {
+                if (responseTimer) clearTimeout(responseTimer);
+                // The response stream has its own error boundary after headers. A short
+                // body must close the client socket: ending it would claim success with
+                // a mismatched Content-Length and leave the download waiting forever.
+                upstream.on('error', () => res.destroy());
+                upstream.on('aborted', () => res.destroy());
+                // 헤더 뒤에 본문이 멎는 경우도 소켓을 영원히 점유하지 못하게 한다.
+                upstream.setTimeout(limits.responseTimeoutMs, () => upstream.destroy(new Error('upstream response timeout')));
+                res.writeHead(upstream.statusCode ?? 502, filterHttpResponseHeaders(upstream.headers));
+                upstream.pipe(res);
+            },
+        );
+        proxied = request;
+        if (responseTimer) clearTimeout(responseTimer);
+        responseTimer = setTimeout(() => request.destroy(new Error('upstream response timeout')), limits.responseTimeoutMs);
+        responseTimer.unref();
+        request.on('socket', (upstreamSocket) => {
+            if (!upstreamSocket.connecting) return;
+            const connectTimer = setTimeout(() => request.destroy(new Error('upstream connect timeout')), limits.connectTimeoutMs);
+            connectTimer.unref();
+            upstreamSocket.once('connect', () => clearTimeout(connectTimer));
+            upstreamSocket.once('error', () => clearTimeout(connectTimer));
+        });
+        request.on('error', (error: unknown) => {
+            if (responseTimer) clearTimeout(responseTimer);
+            log(`${current.serverId}로 넘기지 못했습니다: ${String(error)}`);
+            if (!res.headersSent && !res.destroyed && isConnectFailure(error) && attempt + 1 < backends.length) {
+                log(`${backends[attempt + 1]!.serverId}로 다시 보냅니다`);
+                forward(attempt + 1);
+                return;
+            }
+            badGateway();
+        });
+        // 본문이 있는 요청은 위에서 거절했다. 그래서 다시 보낼 때도 같은 빈 요청을 보낸다.
+        request.end();
+    };
+    req.on('aborted', () => proxied?.destroy());
     res.on('close', () => {
-        clearTimeout(responseTimer);
-        if (!res.writableFinished) proxied.destroy();
+        if (responseTimer) clearTimeout(responseTimer);
+        if (!res.writableFinished) proxied?.destroy();
     });
-    req.pipe(proxied);
+    forward(0);
+}
+
+/** 응답을 받기 전, 연결 자체가 이뤄지지 않은 실패. 다른 서버로 다시 보내도 같은 요청이 두 번 처리되지 않는다. */
+function isConnectFailure(error: unknown): boolean {
+    const code = (error as NodeJS.ErrnoException | null)?.code;
+    return ['ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND'].includes(code ?? '')
+        || (error instanceof Error && error.message === 'upstream connect timeout');
 }
 
 /**

@@ -12,12 +12,9 @@ import { NETWORK } from './network';
  * 레거시의 속도감이 나쁘지 않다는 판단에 따라 그 값을 그대로 기준으로 삼았다. 밸런스 패치는
  * 나중에 쉬우므로 지금은 "검증된 감각"에서 출발하는 편이 임의의 숫자보다 낫다.
  *
- * 이 파일이 바뀌면 `RULES_VERSION`도 바뀌어야 한다. 진행 중인 방은 생성 시점의 snapshot을 쓰므로
- * 프로세스 재시작 없이 게임 중간에 전역 값이 바뀌는 일은 없다.
+ * 값을 바꾸면 규칙 버전(`rules.ts`)이 저절로 달라진다. 확정하려면 `npm run balance:release`.
+ * 진행 중인 방은 생성 시점의 snapshot을 쓰므로 게임 중간에 전역 값이 바뀌는 일은 없다.
  */
-
-/** 밸런스가 바뀌면 올린다. 경기 결과와 리플레이에 함께 기록되어 "그 경기가 어떤 규칙이었는지"를 남긴다. */
-export const RULES_VERSION = '0.5.0-match-time-limit';
 
 const TILE_PX = SHARED_TILE_PX;
 

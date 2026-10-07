@@ -1,0 +1,18 @@
+# deploy/compose.yml의 https 프로필이 쓴다. SWITCH_DOMAIN(.env.deploy)으로 인증서를 자동 발급받는다.
+# 경로 나누기는 뒤의 web(nginx, deploy/nginx.conf)이 하므로 여기서는 전부 넘긴다.
+{
+    servers {
+        protocols h1 h2
+    }
+}
+
+{$SWITCH_DOMAIN} {
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+    }
+    reverse_proxy web:80
+}

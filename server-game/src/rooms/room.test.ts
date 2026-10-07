@@ -524,6 +524,10 @@ test('경기 중 참가자는 Waiting으로 들어와 게임 상태를 받지 �
     context.setNow(context.getNow() + 10_001);
     context.room.advance();
     assert.equal(context.room.memberByUser(4)?.role, PlayerRole.Player);
+    // game.ended를 못 받은 대기자는 lobby.state로만 "대기실로 돌아왔다"를 안다.
+    const lastLobby = late.messages.filter((message) => message.type === 'lobby.state').at(-1) as { payload: { roomState?: string; players: { playerId: number; role: string }[] } } | undefined;
+    assert.equal(lastLobby?.payload.roomState, RoomState.Waiting);
+    assert.equal(lastLobby?.payload.players.find((player) => player.playerId === admission.playerId)?.role, PlayerRole.Player);
 
     context.room.grantMatchId('match-2');
     assert.equal(context.room.requestStart(1), null);

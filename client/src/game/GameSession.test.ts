@@ -46,6 +46,15 @@ describe('training session authoritative snapshot transitions', () => {
         expect(gameSession.getSnapshot().trainingPlayers.every((entry) => !entry.isTagger)).toBe(true);
     });
 
+    it('follows the room state carried by lobby.state and keeps the last one when it is absent', () => {
+        // 경기 중에 들어온 대기자는 game.ended를 받지 않는다. 대기실 복귀는 lobby.state로만 안다.
+        expect(gameSession.getSnapshot().roomState).toBe(RoomState.Playing);
+        TestSocket.current.message('lobby.state', { ...lobby(), roomState: RoomState.Waiting });
+        expect(gameSession.getSnapshot().roomState).toBe(RoomState.Waiting);
+        TestSocket.current.message('lobby.state', lobby());
+        expect(gameSession.getSnapshot().roomState).toBe(RoomState.Waiting);
+    });
+
     it('does not confuse hidden players with elimination and revives on reappearance', () => {
         TestSocket.current.message('player.eliminated', { playerId: 1 });
         gameSession.updateHudSnapshot(snapshot({ players: [] }));
