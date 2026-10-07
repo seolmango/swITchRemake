@@ -5,7 +5,6 @@ import {
     ErrorCode,
     isNewerSequence,
     isRetryable,
-    movementVector,
     PlayerRole,
     RoomState,
     RoomMode,
@@ -22,6 +21,7 @@ import {
     type SkillId,
     type SkillRejection, type PlayerControl } from 'shared';
 import type { SeatReservation } from '../gateway/ticket-store';
+import { resolveInput } from '../simulation/movement';
 import type { ResolvedInput } from '../simulation/world';
 import type { Connection } from '../transport/game-transport';
 import { LobbyRoster, StartLock, type LobbyMember, type MoveSlotResult } from './lobby-state';
@@ -880,14 +880,7 @@ export class Room {
         for (const member of this.#roster.members()) {
             if (member.connection === null || member.role !== PlayerRole.Player || member.spectatorEligible
                 || member.latestInput === null || member.lastInputSequence === null) continue;
-            const movement = movementVector(member.latestInput);
-            result.push({
-                playerId: member.playerId,
-                moveX: movement.x,
-                moveY: movement.y,
-                heldActions: member.latestInput.heldActions,
-                lastProcessedSequence: member.lastInputSequence,
-            });
+            result.push(resolveInput(member.latestInput, member.playerId));
         }
         return result;
     }
@@ -916,6 +909,7 @@ export class Room {
                 capacity: this.#roster.capacity,
                 locked: this.#locked,
                 startLockMs: this.#startLock.remainingMs(this.#now()),
+                roomState: this.state,
                 players,
             },
         });

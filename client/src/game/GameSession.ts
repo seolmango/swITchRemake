@@ -399,6 +399,8 @@ class GameSession {
             case 'lobby.state':
                 this.setState({
                     lobby: message.payload,
+                    // 경기 중에 들어온 사람은 game.ended를 받지 않는다. 방 상태는 여기서 따라간다.
+                    ...(message.payload.roomState ? { roomState: message.payload.roomState } : {}),
                     selfId: message.payload.selfId ?? this.state.selfId,
                     lobbyReceivedAt: Date.now(),
                     role: roleFromLobby(this.state.role, message.payload.selfId ?? this.state.selfId, message.payload.players),
