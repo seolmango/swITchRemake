@@ -1568,7 +1568,8 @@ html[data-motion='reduced'] .room-card {
 }
 .match-history-panel > header button:disabled { opacity: .5; cursor: not-allowed; }
 .match-history-state { min-height: 0; display: grid; place-items: center; color: var(--profile-muted); font-size: 19px; text-align: center; }
-.match-history-list { min-height: 0; overflow: auto; display: grid; align-content: start; gap: 8px; padding-right: 7px; scrollbar-color: var(--profile-border) var(--profile-field); }
+/* 줄 높이를 내용에 맞춘다. 목록 높이가 정해져 있으면 auto 줄이 카드의 min-height까지 줄어 글자가 카드 밖으로 넘친다. */
+.match-history-list { min-height: 0; overflow: auto; display: grid; grid-auto-rows: max-content; align-content: start; gap: 8px; padding-right: 7px; scrollbar-color: var(--profile-border) var(--profile-field); }
 .match-history-list article {
   min-height: 72px; padding: 9px 12px; border: var(--border) solid var(--profile-border); border-radius: var(--radius-md);
   background: var(--profile-field); display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; align-items: center; gap: 13px; box-sizing: border-box;
@@ -1609,7 +1610,7 @@ html[data-motion='reduced'] .room-card {
 }
 .session-panel > p { margin: 0; color: var(--session-muted); font-size: 20px; line-height: 1.4; }
 .session-list {
-  min-height: 0; overflow: auto; display: grid; align-content: start; gap: 10px; padding-right: 9px;
+  min-height: 0; overflow: auto; display: grid; grid-auto-rows: max-content; align-content: start; gap: 10px; padding-right: 9px;
   scrollbar-width: auto; scrollbar-color: var(--session-border) var(--session-field);
 }
 .session-list.has-overflow { cursor: grab; }
@@ -1620,13 +1621,14 @@ html[data-motion='reduced'] .room-card {
 .session-scroll-hint { align-self: end; color: var(--session-muted); font-size: 15px; }
 .session-list article {
   min-height: 82px; padding: 12px 16px; border: var(--border) solid var(--session-border); border-radius: var(--radius-md);
-  background: var(--session-field); display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;
+  background: var(--session-field); display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center; gap: 14px; box-sizing: border-box;
 }
 .session-list article.is-current { border-color: var(--semantic-info); }
 .session-list article > div { display: grid; min-width: 0; gap: 4px; }
 .session-list article strong { font-size: 21px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-list article div span { font-size: 16px; color: var(--session-muted); }
+.session-list article > .session-actions { display: flex; align-items: center; gap: 10px; }
 .session-current-badge { padding: 5px 10px; border: var(--border) solid currentColor; border-radius: var(--radius-sm); font-size: 15px; white-space: nowrap; }
 .session-revoke, .session-panel > footer button {
   border: var(--border) solid currentColor; border-radius: var(--radius-md); background: transparent; color: inherit;
