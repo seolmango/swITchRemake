@@ -111,8 +111,7 @@ button.settings-install-card:hover,
 .credits-dialog-content a:hover,
 .key-binding:hover,
 .mfa-backup-dialog button:hover,
-.mfa-backup-dialog > [role='checkbox']:hover,
-.server-status:hover { transform: scale(var(--hover-scale-sm)); }
+.mfa-backup-dialog > [role='checkbox']:hover { transform: scale(var(--hover-scale-sm)); }
 .signup-consent-row > button:last-child:hover,
 .legal-dialog-close:hover,
 .settings-toggle:hover { transform: scale(var(--hover-scale)); }

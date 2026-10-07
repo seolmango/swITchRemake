@@ -21,9 +21,9 @@
   "serverStatus": {
     "checking": "Connecting to server…",
     "online": "Server connected",
-    "connected": "Server connected · {{latency}}ms",
-    "offline": "Server offline",
-    "retry": "Check again"
+    "latency": "Server {{latency}}ms",
+    "patch": "Patch {{version}}",
+    "offline": "Server offline"
   },
   "browserUnsupported": {
     "title": "This browser isn’t supported",

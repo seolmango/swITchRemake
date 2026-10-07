@@ -254,26 +254,18 @@ html[lang='ko'] .page-title { top: 42px; }
   gap: 20px;
 }
 
+/* 읽기만 하는 글자다. 버튼처럼 보이지 않게 테두리·배경·커서를 두지 않는다. */
 .server-status {
   position: absolute;
-  left: 30px;
-  bottom: 34px;
-  height: 72px;
-  min-width: 255px;
-  padding: 0 23px;
-  border: var(--border) solid;
-  border-radius: var(--radius-md);
+  left: 34px;
+  bottom: 40px;
+  margin: 0;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 15px;
-  box-sizing: border-box;
-  cursor: pointer;
+  gap: 12px;
   font-size: 23px;
-  transition: color 180ms ease, border-color 180ms ease, background 180ms ease, transform 180ms ease;
+  font-variant-numeric: tabular-nums;
 }
-
-.server-status:hover { }
 
 .server-status-dot {
   position: relative;
