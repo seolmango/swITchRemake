@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { EffectType } from 'shared';
+import { EffectType, MOVEMENT, TILE_PX } from 'shared';
 import { GAMEPLAY, SKILLS, SPEED } from '../config/gameplay';
 import { applyEffect, currentSpeed, msToTicks } from './effects';
 import { SkillId, useSkill } from './skills';
@@ -32,9 +32,9 @@ function use(world: World, request: SkillRequest) {
 
 /* ────────────────────────── 속도 계산식 ────────────────────────── */
 
-test('레거시 기준 속도가 유지된다', () => {
-    // 레거시: 58 milli-tile/tick @ 30Hz × 256px = 445.44 px/s
-    assert.ok(Math.abs(BASE - 445.44) < 0.01, `기준 속도가 레거시와 다르다: ${BASE}`);
+test('서버 기준 속도는 shared의 타일 단위 속도를 픽셀로 바꾼 값이다', () => {
+    // 값 자체는 밸런스가 정한다. 여기서는 서버와 클라이언트(도움말·예측)가 같은 속도를 보는지만 본다.
+    assert.ok(Math.abs(BASE - MOVEMENT.BASE_SPEED_TILES_PER_SEC * TILE_PX) < 1e-9, `기준 속도가 shared와 다르다: ${BASE}`);
 });
 
 test('유체화는 설정된 배율만큼 빠르다', () => {
