@@ -70,20 +70,21 @@ const BODY_GAP = MOVEMENT.PLAYER_RADIUS_TILES * 2 * TILE_PX;
  * 데모 맵은 화면에 보이는 것보다 넉넉히 크다. 맵 전체를 화면에 맞추면 사방이 자기장 테두리로
  * 둘러싸여 실제 경기와 전혀 다르게 보인다 — 경기 중에는 늘 맵의 일부만 보인다.
  *
- * 벽은 데모의 이동 경로를 피해 배치했다. 점멸만 예외로 6열의 벽을 가로지른다.
+ * 벽은 데모의 이동 경로를 피해 배치했다. 점멸만 예외로 6열의 벽을 가로지른다. 오른쪽이 넉넉한 것은
+ * 유체화 데모가 실제 속도로 끝까지 달려도 벽에 닿지 않게 하기 위해서다.
  */
 const W = TilePhysics.Wall;
 const F = TilePhysics.Floor;
 const MAP_TILES: TilePhysics[][] = [
-    [W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W],
-    [W, F, F, F, F, F, F, F, F, F, F, F, F, F, F, W],
-    [W, F, F, W, F, F, W, F, F, F, F, W, W, F, F, W],
-    [W, F, F, F, F, F, W, F, F, F, F, F, F, F, F, W],
-    [W, F, F, F, F, F, W, F, F, F, F, F, F, F, F, W],
-    [W, F, F, F, F, F, F, F, F, W, F, F, F, F, F, W],
-    [W, F, F, F, F, F, F, F, F, W, F, F, F, F, F, W],
-    [W, F, F, F, F, F, F, F, F, F, F, F, F, F, F, W],
-    [W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W],
+    [W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W],
+    [W, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, W],
+    [W, F, F, W, F, F, W, F, F, F, F, W, W, F, F, F, F, F, F, F, F, F, F, W],
+    [W, F, F, F, F, F, W, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, W],
+    [W, F, F, F, F, F, W, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, W],
+    [W, F, F, F, F, F, F, F, F, W, F, F, F, F, F, F, F, F, F, F, F, F, F, W],
+    [W, F, F, F, F, F, F, F, F, W, F, F, F, F, F, F, F, F, F, F, F, F, F, W],
+    [W, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, F, W],
+    [W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W, W],
 ];
 
 const DEMO_MAP: NonNullable<Snapshot['map']> = {
@@ -153,7 +154,7 @@ function taggerPlayers(frame: number): SnapshotPlayer[] {
     ];
 }
 
-/** 유체화. 같은 속도로 달리다 스킬 순간부터 실제 배율(3배)만큼 빨라진다. 벽은 못 넘는다. */
+/** 유체화. 같은 속도로 달리다 스킬 순간부터 실제 배율만큼 빨라진다. 벽은 못 넘는다. */
 function dashPlayers(frame: number): SnapshotPlayer[] {
     const lane = at(0, 7).y;
     const start = at(2, 7).x;

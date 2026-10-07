@@ -51,12 +51,12 @@ test('allowed origins and sessions work; unrelated identities and bounded malfor
         expect((await second.context.request.delete(`/api/users/me/sessions/${sessionA}`, { headers: headersB })).status()).toBe(404);
         expect((await first.context.request.get('/api/users/me/stats', { headers: headersA })).status()).toBe(200);
 
-        const created = await first.context.request.post('/api/rooms', { headers: headersA, data: { name: '경계검증', capacity: 3, mapId: 'TestMap1' } });
+        const created = await first.context.request.post('/api/rooms', { headers: headersA, data: { name: '경계검증', capacity: 3, mapId: 'Plaza' } });
         expect(created.status()).toBe(201);
         const grant = await created.json();
         if (typeof grant.ticket !== 'string') throw new Error('No synthetic room ticket');
         expect(Object.keys(grant).sort()).toEqual(['expiresAt', 'mapId', 'roomCode', 'roomId', 'ticket', 'wsPath'].sort());
-        expect(grant.mapId).toBe('TestMap1');
+        expect(grant.mapId).toBe('Plaza');
         expect(grant.expiresAt > Date.now()).toBe(true);
         expect((await second.context.request.post(`/api/rooms/${grant.roomId}/resume`, { headers: headersB })).status()).toBe(409);
 
@@ -147,10 +147,10 @@ test('synthetic result transactions consume issued authority once and transfer o
         const service = new ResultService(drizzle(db, { schema }));
         const accounts = await Promise.all([0, 1, 2].map(() => seedAccount()));
         const matchId = randomUUID(); const roomId = randomUUID();
-        await service.issueMatch(matchId, 'source-worker', 'TestMap1', { id: accounts[0]!.id, nickname: accounts[0]!.nickname, guest: false });
-        await service.confirmRoom(matchId, roomId, 'TestMap1');
+        await service.issueMatch(matchId, 'source-worker', 'Plaza', { id: accounts[0]!.id, nickname: accounts[0]!.nickname, guest: false });
+        await service.confirmRoom(matchId, roomId, 'Plaza');
         for (const account of accounts.slice(1)) await service.addAssignmentByRoom(roomId, { id: account.id, nickname: account.nickname, guest: false });
-        const result = { v: 1, matchId, roomId, serverId: 'source-worker', mapId: 'TestMap1',
+        const result = { v: 1, matchId, roomId, serverId: 'source-worker', mapId: 'Plaza',
             startedAt: 1_000, endedAt: 3_000, durationTicks: 60, buildId: 'audit-synthetic-transaction',
             protocolVersion: 2, rulesVersion: 'audit-synthetic', mapBundleHash: 'audit-synthetic', visibilityCoreVersion: 1,
             winnerPlayerIds: [1], replay: null,

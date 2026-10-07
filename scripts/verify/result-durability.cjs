@@ -79,10 +79,10 @@ async function main() {
             accounts.push(account);
         }
         const matchId = randomUUID(), roomId = randomUUID();
-        await service.issueMatch(matchId, 'durability-source', 'TestMap1', { id: accounts[0].id, nickname: accounts[0].nickname, guest: false });
-        await service.confirmRoom(matchId, roomId, 'TestMap1');
+        await service.issueMatch(matchId, 'durability-source', 'Plaza', { id: accounts[0].id, nickname: accounts[0].nickname, guest: false });
+        await service.confirmRoom(matchId, roomId, 'Plaza');
         for (const account of accounts.slice(1)) await service.addAssignmentByRoom(roomId, { id: account.id, nickname: account.nickname, guest: false });
-        const result = { v: 1, matchId, roomId, serverId: 'durability-source', mapId: 'TestMap1',
+        const result = { v: 1, matchId, roomId, serverId: 'durability-source', mapId: 'Plaza',
             startedAt: 1000, endedAt: 3000, durationTicks: 60, buildId: 'audit-durability', protocolVersion: 2,
             rulesVersion: 'audit', mapBundleHash: 'audit', visibilityCoreVersion: 1, winnerPlayerIds: [1], replay: null,
             players: accounts.map((a, i) => ({ userId: a.id, nickname: a.nickname, playerId: i + 1, colorIndex: i,

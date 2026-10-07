@@ -67,9 +67,14 @@ test('three member browsers complete two games, persist results and stats, downl
         await host.waitForURL('**/lobby');
         const roomId = new URL(host.url()).pathname.split('/')[2]!;
         const map = host.locator('.lobby-map-picker strong');
-        await expect(map).toHaveText(/BattleField|TestMap1/);
-        if (await map.innerText() !== 'TestMap1') await host.getByRole('button', { name: '다음 맵', exact: true }).click();
-        await expect(map).toHaveText('TestMap1');
+        // The room starts on a random map. Plaza is the smallest one, so its storm ends a round fastest.
+        await expect(map).not.toHaveText('');
+        for (let step = 0; step < 8 && await map.innerText() !== 'Plaza'; step++) {
+            const before = await map.innerText();
+            await host.getByRole('button', { name: '다음 맵', exact: true }).click();
+            await expect(map).not.toHaveText(before);
+        }
+        await expect(map).toHaveText('Plaza');
         const code = (await host.locator('.lobby-room-code strong').innerText()).trim();
         for (const client of clients.slice(1)) {
             await client.page.goto('/rooms/join');

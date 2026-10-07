@@ -2,15 +2,15 @@
 
 <!-- npm run balance:release가 생성한다. 손으로 고치지 않는다. -->
 
-규칙 버전 **0.5.0** (2026-10-07). 바꾸는 법은 [CONTRIBUTING.md](../CONTRIBUTING.md#밸런스-바꾸기), 지난 변경은 [CHANGELOG.md](../CHANGELOG.md).
+규칙 버전 **0.6.0** (2026-10-07). 바꾸는 법은 [CONTRIBUTING.md](../CONTRIBUTING.md#밸런스-바꾸기), 지난 변경은 [CHANGELOG.md](../CHANGELOG.md).
 
 ## 지켜야 하는 관계
 
 | 관계 | 지금 값 |
 | --- | --- |
-| ✓ 유체화가 같은 시간에 점멸보다 멀리 간다 | 유체화 추가 이동 4.35타일 vs 점멸 3타일 |
-| ✓ 쿨타임은 점멸 < 유체화 < 탈진 | 점멸 12000 / 유체화 16000 / 탈진 22000 ms |
-| ✓ 탈진의 자기 감속은 남에게 거는 것보다 짧고 얕다 | 자기 0.1·3000ms vs 남 0.25·5000ms |
+| ✓ 유체화가 같은 시간에 점멸보다 멀리 간다 | 유체화 추가 이동 4.20타일 vs 점멸 3.5타일 |
+| ✓ 쿨타임은 점멸 < 유체화 < 탈진 | 점멸 10000 / 유체화 13000 / 탈진 18000 ms |
+| ✓ 탈진의 자기 감속은 남에게 거는 것보다 짧고 얕다 | 자기 0.1·2500ms vs 남 0.25·4000ms |
 | ✓ 감속 바닥은 0과 1 사이(효과가 겹쳐도 속도가 0이 되지 않는다) | 바닥 0.3 |
 | ✓ 최소 3명, 최대 8명이고 승리 인원은 시작 인원보다 적다 | 시작 3~8명, 승리 2명 이하 |
 | ✓ 근접 쿨감은 0보다 크다(도망자가 술래 곁에 머물 이유) | 보너스 0.5, 반경 6타일 |
@@ -22,7 +22,7 @@
 
 | 값 | |
 | --- | --- |
-| `BASE_SPEED_TILES_PER_SEC` | 1.74 |
+| `BASE_SPEED_TILES_PER_SEC` | 2.1 |
 | `PLAYER_RADIUS_TILES` | 0.4 |
 
 ## 스킬과 효과
@@ -31,28 +31,28 @@
 
 | 값 | |
 | --- | --- |
-| `DASH_COOLDOWN_MS` | 16000 |
-| `DASH_DURATION_MS` | 5000 |
+| `DASH_COOLDOWN_MS` | 13000 |
+| `DASH_DURATION_MS` | 4000 |
 | `DASH_SPEED_INCREASE` | 0.5 |
-| `EXHAUST_COOLDOWN_MS` | 22000 |
-| `EXHAUST_DURATION_MS` | 5000 |
-| `EXHAUST_RANGE_TILES` | 1.4 |
+| `EXHAUST_COOLDOWN_MS` | 18000 |
+| `EXHAUST_DURATION_MS` | 4000 |
+| `EXHAUST_RANGE_TILES` | 1.8 |
 | `EXHAUST_SELF_DECREASE` | 0.1 |
-| `EXHAUST_SELF_DURATION_MS` | 3000 |
+| `EXHAUST_SELF_DURATION_MS` | 2500 |
 | `EXHAUST_SPEED_DECREASE` | 0.25 |
-| `FLASH_COOLDOWN_MS` | 12000 |
-| `FLASH_DISTANCE_TILES` | 3 |
+| `FLASH_COOLDOWN_MS` | 10000 |
+| `FLASH_DISTANCE_TILES` | 3.5 |
 | `FRENZY_DURATION_MS` | 5000 |
-| `FRENZY_SPEED_INCREASE` | 0.1 |
+| `FRENZY_SPEED_INCREASE` | 0.2 |
 | `FRENZY_TAG_BONUS_INCREASE` | 0.05 |
 | `FRENZY_TAG_BONUS_MS` | 5000 |
 | `NEAR_TAGGER_COOLDOWN_BONUS` | 0.5 |
 | `NEAR_TAGGER_RADIUS_TILES` | 6 |
-| `SWITCH_COOLDOWN_MS` | 5000 |
+| `SWITCH_COOLDOWN_MS` | 4000 |
 | `SWITCH_RANGE_TILES` | 1.4 |
-| `SWITCH_VICTIM_DURATION_MS` | 5000 |
+| `SWITCH_VICTIM_DURATION_MS` | 4000 |
 | `SWITCH_VICTIM_SPEED_DECREASE` | 0.1 |
-| `TAGGER_CHANGE_COOLDOWN_MS` | 20000 |
+| `TAGGER_CHANGE_COOLDOWN_MS` | 15000 |
 
 ## 감속 바닥
 
@@ -91,7 +91,7 @@
 
 | 값 | |
 | --- | --- |
-| `BASE_MOVE_SPEED_PX_PER_SEC` | 445.44 |
+| `BASE_MOVE_SPEED_PX_PER_SEC` | 537.6 |
 | `MAX_MATCH_DURATION_TICKS` | 72000 |
 | `MAX_PLAYERS` | 8 |
 | `MAX_SUBSTEP_DISTANCE_PX` | 48 |
@@ -102,7 +102,7 @@
 | `PUSH_SPEED_FACTOR` | 0.01 |
 | `SIGHT_RANGE_PX` | 4096 |
 | `SURVIVORS_TO_WIN` | 2 |
-| `TAGGER_CHANGE_COOLDOWN_MS` | 20000 |
+| `TAGGER_CHANGE_COOLDOWN_MS` | 15000 |
 
 ## 서버 전용 스킬 값(대부분 SKILL_TUNING에서 단위만 바꾼 것)
 
@@ -110,27 +110,27 @@
 
 | 값 | |
 | --- | --- |
-| `DASH.COOLDOWN_MS` | 16000 |
-| `DASH.DURATION_MS` | 5000 |
+| `DASH.COOLDOWN_MS` | 13000 |
+| `DASH.DURATION_MS` | 4000 |
 | `DASH.SPEED_INCREASE` | 0.5 |
-| `EXHAUST.COOLDOWN_MS` | 22000 |
-| `EXHAUST.DURATION_MS` | 5000 |
-| `EXHAUST.RANGE_PX` | 358.4 |
+| `EXHAUST.COOLDOWN_MS` | 18000 |
+| `EXHAUST.DURATION_MS` | 4000 |
+| `EXHAUST.RANGE_PX` | 460.8 |
 | `EXHAUST.SELF_DECREASE` | 0.1 |
-| `EXHAUST.SELF_DURATION_MS` | 3000 |
+| `EXHAUST.SELF_DURATION_MS` | 2500 |
 | `EXHAUST.SPEED_DECREASE` | 0.25 |
-| `FLASH.COOLDOWN_MS` | 12000 |
-| `FLASH.DISTANCE_PX` | 768 |
+| `FLASH.COOLDOWN_MS` | 10000 |
+| `FLASH.DISTANCE_PX` | 896 |
 | `FLASH.WALL_EXIT_MAX_PX` | 512 |
 | `FRENZY.DURATION_MS` | 5000 |
-| `FRENZY.SPEED_INCREASE` | 0.1 |
+| `FRENZY.SPEED_INCREASE` | 0.2 |
 | `FRENZY.TAG_BONUS_INCREASE` | 0.05 |
 | `FRENZY.TAG_BONUS_MS` | 5000 |
 | `NEAR_TAGGER_COOLDOWN_BONUS` | 0.5 |
 | `NEAR_TAGGER_RADIUS_PX` | 1536 |
-| `SWITCH.COOLDOWN_MS` | 5000 |
+| `SWITCH.COOLDOWN_MS` | 4000 |
 | `SWITCH.RANGE_PX` | 358.4 |
-| `SWITCH_VICTIM.DURATION_MS` | 5000 |
+| `SWITCH_VICTIM.DURATION_MS` | 4000 |
 | `SWITCH_VICTIM.SPEED_DECREASE` | 0.1 |
 
 ## 속도 계산

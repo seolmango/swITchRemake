@@ -25,7 +25,7 @@ test('operator announcement and maintenance reach browsers, block new entry and 
         await newcomer.goto('/rooms');
         await expect(newcomer.getByText(maintenance.notice.ko, { exact: true })).toBeVisible();
         expect((await member.context.request.post('/api/rooms', { headers: memberHeaders,
-            data: { name: '점검중생성거절', capacity: 3, mapId: 'TestMap1' } })).status()).toBe(423);
+            data: { name: '점검중생성거절', capacity: 3, mapId: 'Plaza' } })).status()).toBe(423);
         expect((await visitor.context.request.post('/api/auth/guest')).status()).toBe(423);
         expect((await admin.context.request.get('/api/admin/maintenance', { headers: adminHeaders })).status()).toBe(200);
         expect((await admin.context.request.post('/api/admin/maintenance', { headers: adminHeaders, data: { status: 'ready', reason } })).status()).toBe(201);

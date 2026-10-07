@@ -356,9 +356,11 @@ export const ProfilePage: React.FC = () => {
                             <span>{t('profile.securityKicker')}</span>
                             <h2 id="session-dialog-title">{t('profile.loginDevices')}</h2>
                         </div>
-                        <button type="button" onClick={() => void loadSessions()} disabled={loadingSessions} aria-label={t('rooms.refresh')}><Icon name="refresh" size={28}/></button>
+                        <div className="session-dialog-actions">
+                            <button type="button" className="session-dialog-close" onClick={() => setDevicesOpen(false)}>{t('common.close')}</button>
+                            <button type="button" onClick={() => void loadSessions()} disabled={loadingSessions} aria-label={t('rooms.refresh')}><Icon name="refresh" size={28}/></button>
+                        </div>
                     </header>
-                    <button type="button" className="session-dialog-close" onClick={() => setDevicesOpen(false)}>{t('common.close')}</button>
                     <p>{t('profile.loginDevicesHelp')}</p>
                     <div
                         ref={sessionListRef}
@@ -380,10 +382,12 @@ export const ProfilePage: React.FC = () => {
                                     <span>{t('profile.sessionCreated', { date: formatDate(session.createdAt) })}</span>
                                     <span>{t('profile.sessionExpires', { date: formatDate(session.expiresAt) })}</span>
                                 </div>
-                                {session.current && <span className="session-current-badge">{t('profile.currentDevice')}</span>}
-                                <button type="button" className="session-revoke" disabled={sessionAction !== null} onClick={() => void revokeSession(session)}>
-                                    {session.current ? t('auth.logout') : t('profile.revokeSession')}
-                                </button>
+                                <div className="session-actions">
+                                    {session.current && <span className="session-current-badge">{t('profile.currentDevice')}</span>}
+                                    <button type="button" className="session-revoke" disabled={sessionAction !== null} onClick={() => void revokeSession(session)}>
+                                        {session.current ? t('auth.logout') : t('profile.revokeSession')}
+                                    </button>
+                                </div>
                             </article>
                         ))}
                         {!loadingSessions && sessions.length === 0 && <div className="session-empty">{t('profile.noSessions')}</div>}

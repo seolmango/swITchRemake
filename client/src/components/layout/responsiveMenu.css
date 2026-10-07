@@ -267,8 +267,10 @@
   .responsive-form-container .profile-device-summary button { min-height: 44px; font-size: 16px; padding: 8px 12px; border-width: var(--border-thin); }
   .responsive-form-container .profile-session-backdrop { position: fixed; }
   .responsive-form-container .profile-session-dialog.session-panel { width: calc(100% - 24px); max-width: none; max-height: calc(100dvh - 24px); height: auto; padding: 16px; border-width: var(--border); }
-  .responsive-form-container .profile-session-dialog header { padding-right: 50px; }
-  .responsive-form-container .profile-session-dialog .session-dialog-close { position: relative; inset: auto; align-self: start; padding: 8px 12px; min-height: 44px; font-size: 15px; }
+  .responsive-form-container .profile-session-dialog header { align-items: flex-start; }
+  .responsive-form-container .profile-session-dialog .session-dialog-actions { gap: 8px; }
+  .responsive-form-container .profile-session-dialog .session-dialog-close { height: 44px; padding: 0 12px; font-size: 15px; }
+  .responsive-form-container .profile-session-dialog header .session-dialog-actions button:not(.session-dialog-close) { width: 44px; height: 44px; }
   .responsive-form-container .session-panel > header h2 { font-size: 22px; }
   .responsive-form-container .session-panel > header span,
   .responsive-form-container .session-panel > p { font-size: 14px; }
@@ -277,7 +279,8 @@
   .responsive-form-container .session-list article strong { font-size: 16px; }
   .responsive-form-container .session-list article div span { font-size: 12px; }
   .responsive-form-container .session-current-badge { font-size: 12px; padding: 4px 8px; }
-  .responsive-form-container .profile-session-dialog .session-revoke { grid-column: 2; justify-self: start; min-height: 44px; font-size: 14px; }
+  .responsive-form-container .session-list article > .session-actions { grid-column: 2; flex-wrap: wrap; gap: 8px; }
+  .responsive-form-container .profile-session-dialog .session-revoke { min-height: 44px; font-size: 14px; }
   .responsive-form-container .session-panel > footer { flex-wrap: wrap; }
 
   .responsive-form-container .guide-page { position: relative; inset: auto; width: 100%; padding: 0 0 16px; overflow: visible; scrollbar-gutter: auto; }
