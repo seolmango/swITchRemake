@@ -91,7 +91,7 @@ class AuditBots {
         });
         this.ownsPool = true;
     }
-    async createRoom(index, capacity = 3, mapId = 'TestMap1') {
+    async createRoom(index, capacity = 3, mapId = 'Plaza') {
         if (this.rooms.size >= 8) throw new Error('Audit room limit reached');
         const bot = this.bots[index]; if (!bot || bot.roomId) throw new Error('Bot is already assigned');
         const response = await this.request('/api/rooms', bot, 'POST', {

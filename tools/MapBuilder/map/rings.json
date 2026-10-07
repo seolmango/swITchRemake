@@ -1,0 +1,6 @@
+{
+  "name": "Rings",
+  "size": 40,
+  "barrier": 1,
+  "data": "rings.csv"
+}

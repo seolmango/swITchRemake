@@ -1,0 +1,6 @@
+{
+  "name": "Plaza",
+  "size": 32,
+  "barrier": 1,
+  "data": "plaza.csv"
+}
