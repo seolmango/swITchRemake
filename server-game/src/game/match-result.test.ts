@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { PROTOCOL_VERSION, statsEligible, VISIBILITY_CORE_VERSION, winnerUserIds, type MatchResultMessage, type ReplayHandleInfo , RoomMode } from 'shared';
-import { RULES_VERSION } from '../config/gameplay';
+import { RULES_VERSION } from '../config/rules';
 import type { ReplayMeta, ReplayOutcome, ReplayRecorder } from '../replay/recorder';
 import { GameSession } from './game-session';
 import { stepWorld } from '../simulation/step';

@@ -12,7 +12,7 @@
 import { makeKeys, PROTOCOL_VERSION, RoomMode, type ViolationSignal } from 'shared';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { RULES_VERSION } from './config/gameplay';
+import { RULES_VERSION } from './config/rules';
 import { INFRA } from './config/infrastructure';
 import { assertGameStartupConfig } from './config/startup-config';
 import { NETWORK, SNAPSHOT_INTERVAL_TICKS } from './config/network';
@@ -78,11 +78,6 @@ async function main(): Promise<void> {
                 ...(replaySigner ? { signer: replaySigner } : {}),
             })
             : new NullReplayRecorder();
-
-    if (INFRA.ALLOWED_ORIGINS.length === 0) {
-        // 비어 있으면 upgrade를 전부 거절한다. 조용히 전체 허용으로 열리는 것보다 낫다.
-        console.warn('  ⚠ GAME_ALLOWED_ORIGINS가 비어 있어 WebSocket upgrade를 모두 거절합니다.');
-    }
 
     // ── 맵 ──
     // simulationHz가 다르면 같은 timeline이 다른 속도로 재생된다. 여기서 실패시키는 편이

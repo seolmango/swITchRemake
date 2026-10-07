@@ -18,7 +18,8 @@ import {
     type ReplayHandleInfo,
     type ViolationSignal,
 } from 'shared';
-import { GAMEPLAY, RULES_VERSION } from '../config/gameplay';
+import { GAMEPLAY } from '../config/gameplay';
+import { RULES_VERSION } from '../config/rules';
 import { NETWORK } from '../config/network';
 import { NullReplayRecorder, type ReplayMeta, type ReplayRecorder } from '../replay/recorder';
 import type { Room } from '../rooms/room';
