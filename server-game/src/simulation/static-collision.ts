@@ -7,8 +7,8 @@
  */
 
 import { TilePhysics } from 'shared';
-import { confineToStorm, stormRect, type StormRect } from './storm';
-import type { World, WorldMap } from './world';
+import { confineToStorm, type StormRect } from './storm';
+import type { WorldMap } from './world';
 
 /** 통과할 수 없는 타일. 수풀과 연막은 시야만 가리고 이동은 막지 않는다. */
 function isSolid(physics: TilePhysics | undefined): boolean {
@@ -94,10 +94,6 @@ export function resolveStatic(
 ): Displacement {
     const afterWall = resolveWallCollision(map, x, y, radius);
     return confineToStorm(afterWall.x, afterWall.y, radius, storm);
-}
-
-export function resolveStaticForWorld(world: World, x: number, y: number, radius: number): Displacement {
-    return resolveStatic(world.map, x, y, radius, stormRect(world));
 }
 
 /**

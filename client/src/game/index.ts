@@ -1,3 +1,12 @@
+/**
+ * 렌더링 엔진의 바깥 표면. `internal/`은 엔진 안쪽 전용이고 밖에서 가져오지 않는다.
+ *
+ * - `SwitchGame`: 페이지가 붙이는 컴포넌트 하나. Phaser 월드와 화면 고정 HUD를 함께 묶는다(BASE.md §12.2).
+ * - `SwitchEngine` / `MapController` / `PlayerHandle`: 받은 상태를 그리는 명령형 API. 엔진은 판정하지 않는다.
+ *
+ * 엔진은 상태가 어디서 왔는지 모른다. 플레이·관전은 서버 연결(`GameSession.ts`, `useGameSession.ts`)이,
+ * 도움말과 리플레이는 로컬에서 만든 같은 형식의 스냅샷이 먹인다. 그쪽 파일은 페이지가 직접 가져온다.
+ */
 export { SwitchEngine, type SwitchEngineOptions } from './SwitchEngine.ts';
 export { MapController } from './MapController.ts';
 export { PlayerHandle } from './PlayerHandle.ts';

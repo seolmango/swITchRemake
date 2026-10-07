@@ -28,13 +28,6 @@ export function resolveInput(state: InputState, playerId: number): ResolvedInput
     };
 }
 
-/** 연결이 끊긴 플레이어의 입력. 마지막 방향으로 계속 미끄러지면 안 된다. */
-export function neutralInput(playerId: number, lastProcessedSequence: number): ResolvedInput {
-    return { playerId, moveX: 0, moveY: 0, heldActions: 0, lastProcessedSequence };
-}
-
-
-
 /**
  * 속도를 갱신하고 후보 위치를 만든다. 아직 충돌을 보지 않은 위치다.
  *

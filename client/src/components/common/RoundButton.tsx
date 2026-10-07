@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from "react";
 import { Color, themeColors } from "../../theme/color.ts";
 import { useSettingsStore } from "../../stores/useSettingsStore";
-import { playSfx } from "../../audio/sfxPlayer.ts";
+import { playSfx } from "../../audio";
 
 interface RoundButtonProps {
     x?: number;

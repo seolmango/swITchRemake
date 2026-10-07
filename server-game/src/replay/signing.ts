@@ -1,16 +1,15 @@
 /**
  * 리플레이 서명의 노드 쪽.
  *
- * 개인키는 지금 인게임 서버 프로세스가 env로 들고 있다. **이건 타협이다** — BASE.md §14가
- * §8은 서버마다 개인키를 뿌리지 말고 제한된 signer service나 KMS가 서명하라고 한다. 서버가
- * 늘어날수록 키가 있는 곳도 늘어나기 때문이다. 지금은 서버가 몇 대 안 되고 파일을 서명하는
- * 자리가 여기뿐이라 여기에 둔다. 옮길 때 고칠 곳은 이 파일 하나다.
+ * 개인키는 지금 인게임 서버 프로세스가 env로 들고 있다. **이건 타협이다** — 서버가 늘어날수록
+ * 키가 있는 곳도 늘어나므로, 결국은 제한된 서명 서비스나 KMS로 옮겨야 한다. 지금은 서버가 몇 대
+ * 안 되고 파일을 서명하는 자리가 여기뿐이라 여기에 둔다. 옮길 때 고칠 곳은 이 파일 하나다.
  *
  * 키가 없으면 서명하지 않는다. 서명 없는 파일도 재생은 된다 — 개발 중에 만든 파일에는 서명이
  * 없을 수 있다. 운영 기동은 `startup-config.ts`가 키 누락을 먼저 거부한다.
  */
 
-import { createPrivateKey, createPublicKey, sign as nodeSign } from 'node:crypto';
+import { createPrivateKey, sign as nodeSign } from 'node:crypto';
 import type { ReplaySigner } from 'shared';
 
 export interface ReplaySigningConfig {
@@ -42,13 +41,4 @@ export function replaySignerFrom(config: Partial<ReplaySigningConfig>): ReplaySi
             return new Uint8Array(signature.buffer, signature.byteOffset, signature.byteLength);
         },
     };
-}
-
-/** 개인키에서 공개키(raw 32바이트)를 뽑는다. 배포할 값을 사람이 눈으로 확인할 때 쓴다. */
-export function replayPublicKeyBase64(privateKeyBase64: string): string {
-    const pem = Buffer.from(privateKeyBase64, 'base64').toString('utf8');
-    const raw = createPublicKey(createPrivateKey(pem)).export({ format: 'jwk' });
-    if (typeof raw.x !== 'string') throw new Error('ed25519 공개키를 읽지 못했다');
-    // JWK의 x는 base64url이다. 재생기는 표준 base64로 받는다.
-    return Buffer.from(raw.x, 'base64url').toString('base64');
 }

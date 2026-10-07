@@ -133,8 +133,3 @@ export function encodeForViewer(
 ): ArrayBuffer {
     return encodeSnapshot(buildSnapshot(frame, viewer, roster, tileChanges));
 }
-
-/** 연막 잔여시간. 아직 연막 스킬이 없어 항상 비어 있지만 형태를 미리 맞춰 둔다. */
-export function regionsOf(_world: World): { x: number; y: number; remaining: number }[] {
-    return [];
-}

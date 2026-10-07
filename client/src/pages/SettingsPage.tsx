@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PageLayout } from '../components/layout/PageLayout.tsx';
 import {
+    EMOJI_ACTIONS,
+    SWITCH_ACTIONS,
     type KeyAction,
     type SettingsSection,
     useSettingsStore,
@@ -96,8 +98,6 @@ const normalizeBinding = (event: KeyboardEvent): string | null => {
 
 const MOVEMENT_ACTIONS: KeyAction[] = ['moveUp', 'moveDown', 'moveLeft', 'moveRight', 'movementSkill'];
 const VIEW_ACTIONS: KeyAction[] = ['toggleMinimap'];
-const SWITCH_ACTIONS: KeyAction[] = ['switch1', 'switch2', 'switch3', 'switch4', 'switch5', 'switch6', 'switch7', 'switch8'];
-const EMOJI_ACTIONS: KeyAction[] = ['emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5', 'emoji6', 'emoji7', 'emoji8'];
 
 export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
     const { t } = useTranslation();
@@ -318,7 +318,7 @@ export const SettingsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
         </>
     );
 
-    const renderBindingGroup = (title: string, actions: KeyAction[]) => (
+    const renderBindingGroup = (title: string, actions: readonly KeyAction[]) => (
         <section className="keymap-group">
             <h3>{title}</h3>
             {actions.map((action) => (

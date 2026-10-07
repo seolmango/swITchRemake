@@ -239,6 +239,3 @@ export function suspendBgm(): void {
 export function resumeBgmIfWanted(): void {
     if (wantsPlayback && state.status === 'ready') void playBgm();
 }
-
-export const bgmTrack = BGM_TRACK;
-export const bgmSource = selected;

@@ -1,8 +1,8 @@
 const { resolve } = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
-// 서버 프로세스는 `.env`를 스스로 읽지 않는다(매칭 서버만 @nestjs/config로 읽는다). 그래서
-// 여기서 읽어 넘긴다 — 안 그러면 REDIS_PASSWORD가 없어 게이트웨이가 NOAUTH로 즉시 죽는다.
+// 아래 로컬 기본값이 `.env`의 값을 덮지 않도록 먼저 읽어 둔다. 인게임 서버도 기동할 때 같은
+// 파일을 읽지만(config/load-env.ts) 이미 있는 값을 바꾸지 않는다.
 require('dotenv').config({ path: resolve(__dirname, '..', '.env'), quiet: true });
 
 
