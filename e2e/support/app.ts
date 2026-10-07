@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import { expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import ko from '../../client/src/locales/ko.json';
 import { buildSwitchRound } from 'shared';
 import { clearMail, waitForMail } from './mail';
@@ -208,4 +208,28 @@ export async function startMatch(page: Page, timeoutMs = 60_000): Promise<void> 
         }
     }
     throw new Error(`${timeoutMs}ms 안에 경기를 시작하지 못했습니다. 지금 주소: ${page.url()}`);
+}
+
+/**
+ * 인게임 화면을 여러 창이 동시에 그리는 흐름에 쓴다.
+ *
+ * 검증 스택의 브라우저 runner는 CPU 2개다. 기본 품질(60fps·높음·100%)로 게임 창 셋 이상을 그리면
+ * 페이지가 몇 초씩 밀려, 결과 화면이 10초 카운트다운 안에 뜨지 못한다. 게임 규칙·입력·결과는 그대로이고
+ * 그리는 비용만 줄인다. 실제 사용자가 고를 수 있는 설정 값이다(설정 → 인게임).
+ */
+export async function useLowPowerGraphics(context: BrowserContext): Promise<void> {
+    await context.addInitScript(() => {
+        let saved: { state?: Record<string, unknown> } = {};
+        try { saved = JSON.parse(localStorage.getItem('switch-settings') ?? '{}'); } catch { /* 깨진 설정은 덮어쓴다 */ }
+        localStorage.setItem('switch-settings', JSON.stringify({
+            version: 2,
+            state: { ...saved.state, frameRate: '30', graphicsQuality: 'low', resolutionScale: '75', masterVolume: 0, bgmEnabled: false },
+        }));
+    });
+}
+
+export async function lowPowerContext(browser: Browser): Promise<BrowserContext> {
+    const context = await browser.newContext();
+    await useLowPowerGraphics(context);
+    return context;
 }

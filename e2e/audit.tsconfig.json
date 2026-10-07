@@ -1,5 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": { "module": "ESNext", "moduleResolution": "bundler" },
-  "include": ["audit/**/*.ts", "audit.config.ts", "../client/src/locales/*.json"]
-}

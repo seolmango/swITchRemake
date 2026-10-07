@@ -1,0 +1,74 @@
+import { expect, test } from '@playwright/test';
+import { T, button, gotoHome, logIn, newAccount, signUp, completeHumanChallenge, watchHumanCheck } from '../../support/app';
+import { clearMail, waitForMail, waitForMailReissue } from '../../support/mail';
+
+// 1920×1080 설계 캔버스를 그대로 담는다. 작게 잡으면 전체가 축소돼 클릭 좌표가 흔들린다.
+test.use({ viewport: { width: 1920, height: 1080 } });
+
+test.describe('탈퇴', () => {
+    test('탈퇴하면 계정과 로그인 기기가 사라지고 같은 이메일로 다시 가입할 수 있다', async ({ page, browser }) => {
+        const account = newAccount('bye');
+        await signUp(page, account);
+        // 끝에서 같은 주소로 다시 가입한다. 그때 메일을 또 받아야 하므로 첫 메일의 시각을 잡아 둔다.
+        const firstSignupMail = await waitForMail(account.email, 'signup');
+        await logIn(page, account);
+
+        // 다른 기기 하나. 탈퇴 뒤에 이쪽도 못 들어가야 한다.
+        const other = await browser.newContext();
+        const otherPage = await other.newPage();
+        await logIn(otherPage, account);
+
+        await clearMail(account.email);
+        await page.goto('/profile');
+        await button(page, T.profile.deleteTitle).click();
+        await page.getByRole('button', { name: T.profile.deleteSendCode }).click();
+        await expect(page.getByText(T.profile.deleteCodeSent)).toBeVisible();
+
+        // 틀린 코드로는 지워지지 않는다.
+        await page.locator('.delete-code-field input').fill('000000');
+        await page.getByRole('button', { name: T.profile.deleteConfirm }).click();
+        await expect(page.getByText(T.auth.invalidCodeServer)).toBeVisible();
+
+        const firstDeleteMail = await waitForMail(account.email, 'delete');
+        await page.locator('.delete-code-field input').fill(firstDeleteMail.code);
+        await page.getByRole('button', { name: T.profile.deleteConfirm }).click();
+        await page.waitForURL((url) => new URL(url).pathname === '/', { timeout: 30_000 });
+
+        // 지워진 계정으로는 로그인이 안 된다.
+        await page.goto('/login');
+        await page.getByLabel(T.auth.email, { exact: true }).fill(account.email);
+        await page.getByLabel(T.auth.password, { exact: true }).fill(account.password);
+        const loginCheck6 = watchHumanCheck(page);
+        await button(page, T.auth.login).click();
+        await completeHumanChallenge(page, loginCheck6);
+        await expect(page.getByText(T.auth.invalidCredentials)).toBeVisible();
+
+        // 다른 기기의 세션도 같이 끊겼어야 한다.
+        const stale = await otherPage.request.post('/api/auth/refresh');
+        expect(stale.ok(), '탈퇴한 계정의 세션 갱신은 실패해야 한다').toBeFalsy();
+        await other.close();
+
+        // 게스트로는 여전히 놀 수 있어야 한다 — 탈퇴가 브라우저를 못 쓰게 만들면 안 된다.
+        await gotoHome(page);
+        await page.goto('/rooms');
+        await expect(button(page, T.rooms.create)).toBeVisible();
+
+        // 탈퇴는 상태 표시가 아니라 실제 삭제다. 이메일과 닉네임의 유일성도 함께 풀려야 한다.
+        await waitForMailReissue(firstSignupMail);
+        await signUp(page, account);
+        await expect(page.getByText(T.auth.signupSuccess)).toBeVisible();
+        await logIn(page, account);
+
+        await clearMail(account.email);
+        await page.goto('/profile');
+        // 이 흐름은 탈퇴 코드를 두 번 받는다(본 검증 한 번, 정리 한 번). 같은 용도라
+        // 60초 창을 기다려야 두 번째가 실제로 발송된다 — 안 기다리면 경계에서 흔들린다.
+        await waitForMailReissue(firstDeleteMail);
+        await button(page, T.profile.deleteTitle).click();
+        await page.getByRole('button', { name: T.profile.deleteSendCode }).click();
+        const cleanupMail = await waitForMail(account.email, 'delete');
+        await page.locator('.delete-code-field input').fill(cleanupMail.code);
+        await page.getByRole('button', { name: T.profile.deleteConfirm }).click();
+        await page.waitForURL((url) => new URL(url).pathname === '/', { timeout: 30_000 });
+    });
+});
