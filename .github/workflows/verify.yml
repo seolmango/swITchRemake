@@ -2,7 +2,9 @@
 # 이 검사를 통과한 커밋만 배포할 수 있다(.github/workflows/deploy.yml).
 name: Verify
 on:
+  # 브랜치 작업은 PR에서 검사한다. main push는 배포 관문이라 따로 돈다(deploy.yml).
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
     inputs:
