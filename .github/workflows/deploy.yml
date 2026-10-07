@@ -1,0 +1,75 @@
+# 검증(Verify)을 통과한 커밋만 배포한다. 설명: docs/deployment.md
+#
+# - main에 push된 커밋의 Verify가 성공하면 자동으로 시작한다. 실제 배포는 `production` 환경을 지나므로,
+#   GitHub 저장소 설정 → Environments → production에서 승인자를 두면 사람이 누를 때까지 기다린다.
+# - 직접 돌릴 때는 SHA를 넣는다. 그 SHA에 성공한 Verify(main push)가 없으면 멈춘다.
+# - 서버에 사람이 있으면(대기방·경기·연결이 0이 아니면) VM 스크립트가 배포를 거부한다. 실패하면 자동 원복한다.
+#
+# 필요한 설정(production 환경)
+#   secrets.DEPLOY_SSH_KEY       VM에 접속할 개인키
+#   secrets.DEPLOY_KNOWN_HOSTS   `ssh-keyscan <host>` 결과. 처음 보는 호스트에 키를 내주지 않는다
+#   vars.DEPLOY_HOST             user@host
+#   vars.DEPLOY_URL              https://공개주소
+name: Deploy
+on:
+  workflow_run:
+    workflows: [Verify]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Verify를 통과한 main 커밋의 40자 SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    environment: production
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+    steps:
+      - name: Confirm Verify passed for this exact commit on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$SHA" in *[!a-f0-9]*|'') echo 'SHA must be a 40-character hex commit'; exit 1;; esac
+          test "${#SHA}" -eq 40
+          passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/verify.yml/runs?head_sha=$SHA&branch=main&event=push&status=success" --jq '.total_count')
+          if [ "$passed" -lt 1 ]; then echo "No successful Verify run on main for $SHA"; exit 1; fi
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.SHA }}
+          persist-credentials: false
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy ~/.ssh/known_hosts
+      - name: Build this commit, upload and swap match/cluster/web
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_URL: ${{ vars.DEPLOY_URL }}
+        run: DEPLOY_SSH_KEY=~/.ssh/deploy sh deploy/azure/release.sh "$SHA"
+      - name: Public server reports the released rules version
+        env:
+          DEPLOY_URL: ${{ vars.DEPLOY_URL }}
+        run: node deploy/azure/post-check.cjs "$DEPLOY_URL"
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy

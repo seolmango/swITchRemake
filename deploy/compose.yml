@@ -1,9 +1,16 @@
-name: switch-internal
+# swITch 배포 스택. 서버 한 대에 전부 띄운다.
+#
+# 직접 부르지 말고 `npm run stack:up`을 쓴다. 그 스크립트가 .env.deploy를 검사하고, SWITCH_DOMAIN이
+# 있으면 https 프로필(Caddy, 자동 인증서)을 켜고, BUILD_ID에 지금 커밋을 넣는다. 설명: docs/deployment.md
+#
+#   브라우저 ─ (caddy :443, https 프로필) ─ web(nginx) ─┬─ /api/*            → match
+#                                                      └─ /game-ws 등 게임  → cluster(게이트웨이)
+name: switch
 
 x-backend: &backend
-  image: switch-internal-backend:local
+  image: switch-backend:local
   env_file:
-    - .env.internal
+    - ../.env.deploy
   init: true
 
 x-app-environment: &app-environment
@@ -12,6 +19,7 @@ x-app-environment: &app-environment
   REDIS_HOST: redis
   REDIS_PORT: "6379"
   SWITCH_SKIP_ENV_FILE: "true"
+  BUILD_ID: ${STACK_BUILD_ID:-local}
 
 services:
   postgres:
@@ -19,7 +27,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-switch}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?Run the internal environment setup first}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?.env.deploy가 없다. npm run setup -- deploy}
       POSTGRES_DB: ${DB_NAME:-switch}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -33,7 +41,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run the internal environment setup first}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?.env.deploy가 없다. npm run setup -- deploy}
     command: ["sh", "-c", "exec redis-server --appendonly yes --appendfsync everysec --requirepass \"$$REDIS_PASSWORD\""]
     volumes:
       - redis_data:/data
@@ -45,11 +53,12 @@ services:
 
   migrate:
     <<: *backend
-    # Build the shared image once. Defining this on all three consumers makes
-    # Compose export competing copies to the same tag during parallel builds.
+    # 이미지는 여기서 한 번만 빌드한다. 세 서비스에 모두 build를 적으면 병렬 빌드가 같은 태그를 두고 다툰다.
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile.backend
+      labels:
+        org.opencontainers.image.revision: ${STACK_REVISION:-unknown}
     pull_policy: build
     command: ["npm", "run", "db:migrate", "-w", "server-match"]
     environment:
@@ -90,7 +99,6 @@ services:
       GAME_HOST: "0.0.0.0"
       GAME_INTERNAL_HOST: "127.0.0.1"
       GAME_MAP_BUNDLE: /app/server-game/maps/server_maps.json
-      GAME_ALLOWED_ORIGINS: ${GAME_ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
       GAME_TRUSTED_PROXIES: "127.0.0.1,::1,${INTERNAL_SUBNET:-172.29.240.0/24}"
       GATEWAY_HOST: "0.0.0.0"
       GATEWAY_PORT: "4100"
@@ -108,12 +116,16 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 10
+    # 감독자가 인게임 서버를 drain할 시간. 진행 중인 경기는 그래도 끝난다(상태가 메모리에만 있다).
     stop_grace_period: 15s
 
   web:
     build:
-      context: .
+      context: ..
       dockerfile: deploy/Dockerfile.web
+      labels:
+        org.opencontainers.image.revision: ${STACK_REVISION:-unknown}
+    image: switch-web:local
     restart: unless-stopped
     ports:
       - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"
@@ -122,6 +134,25 @@ services:
         condition: service_healthy
       cluster:
         condition: service_healthy
+
+  # SWITCH_DOMAIN이 있을 때만 켠다(https 프로필). 80/443을 열고 Let's Encrypt 인증서를 자동으로 받는다.
+  # 인증서 발급에는 도메인의 DNS가 이 서버를 가리키고 80/443이 인터넷에서 열려 있어야 한다.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    environment:
+      SWITCH_DOMAIN: ${SWITCH_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
 
 networks:
   default:
@@ -133,3 +164,5 @@ volumes:
   postgres_data:
   redis_data:
   replay_data:
+  caddy_data:
+  caddy_config:
