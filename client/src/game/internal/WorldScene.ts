@@ -98,6 +98,14 @@ export class WorldScene extends Phaser.Scene {
     /** Currently-following target, tracked separately from Phaser's own follow state so per-frame FX can
      * read *that player's* concealed/effects without a lookup back through the camera. Null in free mode. */
     private followedId: number | null = null;
+    /**
+     * 마지막으로 화면에 맞춘 영역. 캔버스 크기가 바뀌면 다시 맞춘다. Phaser는 크기가 바뀌어도 scroll을
+     * 그대로 두기 때문에, 맞춘 뒤에 크기가 한 번 바뀌면 맵이 한쪽으로 밀려 있었다(리플레이에서 실제로 봤다).
+     * 사용자가 끌거나 휠을 굴리거나 따라가기로 바꾸면 지운다 — 그때부터 카메라는 사용자 것이다.
+     */
+    private fitTarget: { x: number; y: number; width: number; height: number; paddingPx: number } | null = null;
+    /** 직전 카메라 크기(게임 픽셀). 크기가 바뀔 때 화면 가운데를 지키는 데 쓴다. */
+    private lastViewSize = { width: 0, height: 0 };
     /** Smoothed product of all active zoom multipliers (concealment/dash/exhaust/frenzy). */
     private fxZoomMult = 1;
     /** One-shot decaying zoom "punch" from the followed player's own blink — separate from `fxZoomMult`
@@ -145,7 +153,31 @@ export class WorldScene extends Phaser.Scene {
         this.blinkFx = new BlinkFxLayer(this);
         this.switchFx = new SwitchFxLayer(this);
         this.setupCameraInput();
+        this.lastViewSize = { width: this.cameras.main.width, height: this.cameras.main.height };
+        // ScaleManager는 게임 전체의 것이라 씬이 내려갈 때 직접 떼어야 한다.
+        this.scale.on(Phaser.Scale.Events.RESIZE, this.handleViewportResize, this);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.handleViewportResize, this));
+        this.events.once(Phaser.Scenes.Events.DESTROY, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.handleViewportResize, this));
         this.onReadyCb?.(this);
+    }
+
+    /**
+     * 카메라 매니저가 먼저 카메라 크기를 바꾼 뒤에 불린다(부팅 때 먼저 등록되므로). 따라가기 중이면
+     * Phaser가 알아서 다시 맞추므로 손대지 않는다. 자유 카메라는 보던 가운데를 그대로 지킨다.
+     */
+    private handleViewportResize(): void {
+        const cam = this.cameras.main;
+        const previous = this.lastViewSize;
+        this.lastViewSize = { width: cam.width, height: cam.height };
+        if (!this.freeCamera) return;
+        if (this.fitTarget) {
+            const { x, y, width, height, paddingPx } = this.fitTarget;
+            this.fitRectToView(x, y, width, height, paddingPx);
+            return;
+        }
+        if (previous.width <= 0 || previous.height <= 0) return;
+        cam.scrollX += (previous.width - cam.width) / 2;
+        cam.scrollY += (previous.height - cam.height) / 2;
     }
 
     update(_time: number, delta: number): void {
@@ -305,6 +337,7 @@ export class WorldScene extends Phaser.Scene {
         if (this.mode === EngineMode.Help) return;
         this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
             if (!this.freeCamera || !pointer.isDown) return;
+            this.fitTarget = null;
             const cam = this.cameras.main;
             // 폰에서 화면을 가로로 돌려 그리는 중이면 Phaser가 읽은 이동량의 축이 돌아가 있다.
             const delta = toContentDelta(pointer.x - pointer.prevPosition.x, pointer.y - pointer.prevPosition.y);
@@ -315,6 +348,7 @@ export class WorldScene extends Phaser.Scene {
             'wheel',
             (_pointer: Phaser.Input.Pointer, _objects: unknown, _dx: number, dy: number) => {
                 if (!this.freeCamera) return;
+                this.fitTarget = null;
                 const factor = dy > 0 ? 1 - CAMERA.wheelZoomStep : 1 + CAMERA.wheelZoomStep;
                 this.baseZoom = Phaser.Math.Clamp(this.baseZoom * factor, CAMERA.minZoom, CAMERA.maxZoom);
             },
@@ -323,6 +357,8 @@ export class WorldScene extends Phaser.Scene {
 
     cameraFollow(id: number): void {
         const sprite = this.players.get(id);
+        this.fitTarget = null;
+        this.cameras.main.useBounds = true;
         this.freeCamera = false;
         this.cameraInitialized = true;
         this.followedId = id;
@@ -331,6 +367,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     cameraFree(): void {
+        this.fitTarget = null;
         this.freeCamera = true;
         this.cameraInitialized = true;
         this.followedId = null;
@@ -338,6 +375,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     setCameraZoom(zoom: number): void {
+        this.fitTarget = null;
         this.baseZoom = Phaser.Math.Clamp(zoom, CAMERA.minZoom, CAMERA.maxZoom);
     }
 
@@ -350,6 +388,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     cameraCenterOn(x: number, y: number): void {
+        this.fitTarget = null;
         this.freeCamera = true;
         this.cameraInitialized = true;
         this.followedId = null;
@@ -373,11 +412,19 @@ export class WorldScene extends Phaser.Scene {
         this.cameraInitialized = true;
         this.followedId = null;
         this.cameras.main.stopFollow();
-        this.cameras.main.centerOn(x + width / 2, y + height / 2);
         // scale.width는 렌더 해상도가 곱해진 게임 픽셀이라, 논리 줌을 구하려면 되나눠야 한다.
         const zoomX = (this.scale.width / this.renderScale) / (width + paddingPx * 2);
         const zoomY = (this.scale.height / this.renderScale) / (height + paddingPx * 2);
         this.baseZoom = Phaser.Math.Clamp(Math.min(zoomX, zoomY), CAMERA.minZoom, CAMERA.maxZoom);
+        this.fitTarget = { x, y, width, height, paddingPx };
+        // 화면이 카메라 경계보다 넓으면 Phaser가 scroll을 경계 안으로 밀어 맵이 한쪽에 붙는다(시작 연출과
+        // 같은 문제). 그때만 경계를 끈다 — 도움말 데모처럼 일부만 비출 때는 경계가 그대로 가장자리를 막는다.
+        const cam = this.cameras.main;
+        const bounds = cam.getBounds();
+        const viewW = this.scale.width / this.renderScale / this.baseZoom;
+        const viewH = this.scale.height / this.renderScale / this.baseZoom;
+        cam.useBounds = !(viewW > bounds.width || viewH > bounds.height);
+        cam.centerOn(x + width / 2, y + height / 2);
     }
 
     get now(): number {
