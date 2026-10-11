@@ -3,7 +3,7 @@ import { WorldScene, type WorldSceneInit } from './internal/WorldScene.ts';
 import type { SceneAccessor } from './internal/SceneAccessor.ts';
 import { MapController } from './MapController.ts';
 import { PlayerHandle } from './PlayerHandle.ts';
-import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EngineMode, type DisplayOptions, type EngineSettings, type PlayerInit, type Theme } from './types.ts';
+import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EngineMode, type DisplayOptions, type EngineSettings, type PlayerInit, type StartIntro, type Theme } from './types.ts';
 import { decodeSnapshot, type Snapshot, type TrainingPad } from 'shared';
 import { phaserFpsLimit } from './internal/frameRateLimit.ts';
 
@@ -223,6 +223,19 @@ export class SwitchEngine {
      */
     playSkillArea(playerId: number, x: number, y: number, targetPlayerId: number | null, rangePx: number): void {
         this._accessor.withScene((s) => s.playSkillArea(playerId, x, y, targetPlayerId, rangePx));
+    }
+
+    /**
+     * 경기 시작 연출(BASE.md §2.8). 카운트다운 동안 맵 전체를 비춘 뒤 내 시작 위치로 다가간다.
+     * `intro.endsAt`에 맞춰 스스로 진행하므로 부른 쪽은 시작만 알리면 된다.
+     */
+    playStartIntro(intro: StartIntro): void {
+        this._accessor.withScene((s) => s.playStartIntro(intro));
+    }
+
+    /** 첫 스냅샷이 그려졌다. 다른 사람 표식을 지우고 카메라를 평소 따라가기로 돌린다. */
+    endStartIntro(): void {
+        this._accessor.withScene((s) => s.endStartIntro());
     }
 
     /** 서버가 보낸 훈련장 판정 반경을 그대로 바닥 레이어에 반영한다. */

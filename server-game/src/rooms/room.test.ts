@@ -38,6 +38,9 @@ class FakeLifecycle implements RoomLifecyclePort {
         this.starts.push(snapshot);
         return { startTick: 200, taggerId: snapshot.players[0]!.playerId };
     }
+    public startPositions(snapshot: RoomStartSnapshot) {
+        return snapshot.players.map((player) => ({ playerId: player.playerId, x: player.playerId * 100, y: 50 }));
+    }
     public connectionChanged(_roomId: string, playerId: number, connected: boolean): void {
         this.connections.push({ playerId, connected });
     }
@@ -618,6 +621,26 @@ test('경기가 끝난 뒤에 들어온 사람에게는 다시 알리지 않는�
     assert.equal(back.messages.some((message) => message.type === 'game.started'), false);
 });
 
+test('카운트다운이 시작되면 참가자 전원의 시작 위치를 game.starting으로 모두에게 보낸다', async () => {
+    // 시작 연출(BASE.md §2.8). 자리는 lifecycle이 시뮬레이션과 같은 함수로 정한 것을 그대로 싣는다.
+    const context = setup();
+    const c1 = context.connect(context.owner);
+    const r2 = seat(2, 0);
+    const r3 = seat(3, 0);
+    assert.equal(context.room.reserveJoin(r2, 'secret'), null);
+    assert.equal(context.room.reserveJoin(r3, 'secret'), null);
+    const c2 = context.connect(r2);
+    const c3 = context.connect(r3);
+    await Promise.resolve();
+    context.setNow(5_001);
+    assert.equal(context.room.requestStart(1), null);
+
+    for (const connection of [c1, c2, c3]) {
+        const starting = connection.messages.find((message) => message.type === 'game.starting');
+        assert.deepEqual(starting?.payload.spawns?.map((spawn) => spawn.playerId), [1, 2, 3]);
+    }
+});
+
 test('카운트다운 중에 재접속하면 game.starting만 받는다', async () => {
     // 아직 시작하지 않았으므로 started는 없다. 그래도 gameplay는 지금 줘야 카운트다운이 끝나는
     // 순간 화면이 준비돼 있다.
@@ -644,6 +667,10 @@ test('카운트다운 중에 재접속하면 game.starting만 받는다', async 
     assert.notEqual(starting, undefined);
     // 카운트다운이 실제로 남아 있으므로 0으로 덮지 않는다.
     assert.ok((starting?.payload.countdownMs ?? 0) > 0);
+    // 다시 들어온 사람도 시작 연출을 이어 볼 수 있어야 한다.
+    assert.deepEqual(starting?.payload.spawns, [
+        { playerId: 1, x: 100, y: 50 }, { playerId: 2, x: 200, y: 50 }, { playerId: 3, x: 300, y: 50 },
+    ]);
     assert.equal(back.messages.some((message) => message.type === 'game.started'), false);
 });
 

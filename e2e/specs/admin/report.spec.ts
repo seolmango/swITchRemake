@@ -45,7 +45,9 @@ async function playedMatch(page: Page, context: BrowserContext, tag: string) {
      * 몇 분이 걸리는데, 이 점검이 보려는 것은 경기가 아니라 **결과 화면의 신고**다. 남은 둘이
      * 공동 우승으로 그 자리에서 끝난다.
      */
-    await page.waitForTimeout(3_000);
+    // 시작 카운트다운(연출)이 끝나 경기가 실제로 돌 때까지 기다린 뒤 내보낸다.
+    await expect(page.locator('.game-hud[data-hud-ready="true"]')).toBeVisible({ timeout: 90_000 });
+    await expect(guests[0].locator('.game-hud[data-hud-ready="true"]')).toBeVisible({ timeout: 90_000 });
     await guests[0].close();
     await page.waitForURL('**/result**', { timeout: MATCH_TIMEOUT_MS });
     await expect(page.locator('.result-table')).toBeVisible({ timeout: 30_000 });

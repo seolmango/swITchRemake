@@ -628,6 +628,8 @@
     "waitingMap": "Loading map…",
     "waitingStart": "Waiting for the match to start…",
     "waitingSnapshot": "Waiting for the first game state…",
+    "introSelf": "YOU",
+    "introCountdown": "Starts in {{seconds}}s",
     "connectionLost": "Lost connection to the game server.",
     "serverPending": "Renderer ready. Waiting for the server connection…",
     "reconnecting": "Reconnecting… The match will resume shortly.",

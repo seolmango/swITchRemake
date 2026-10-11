@@ -6,7 +6,9 @@ import { PlayerSprite, type PlayerVisualState } from './PlayerSprite.ts';
 import { BlinkFxLayer } from './BlinkFxLayer.ts';
 import { SwitchFxLayer } from './SwitchFxLayer.ts';
 import { TrainingPadLayer } from './TrainingPadLayer.ts';
-import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EffectType, EngineMode, type DisplayOptions, type EngineSettings, type FloorVariant, type MapView, type PlayerInit, type StormRect, type Theme, type TilePhysics } from '../types.ts';
+import { StartIntroLayer } from './StartIntroLayer.ts';
+import { START_INTRO, blendIntroCamera, startIntroProgress } from './startIntro.ts';
+import { DEFAULT_DISPLAY_OPTIONS, DEFAULT_ENGINE_SETTINGS, EffectType, EngineMode, type DisplayOptions, type EngineSettings, type FloorVariant, type MapView, type PlayerInit, type StartIntro, type StormRect, type Theme, type TilePhysics } from '../types.ts';
 import { applyColorVision, Palette } from '../palette.ts';
 import { CAMERA, CAMERA_FX, CULL_MARGIN, MOTION_PRESETS, QUALITY_PRESETS, TILE_SIZE, type RenderOptions } from '../constants.ts';
 import { EMOJI_COUNT, emojiDataUri, emojiTextureKey } from '../emoji.ts';
@@ -73,6 +75,11 @@ export class WorldScene extends Phaser.Scene {
     private mode: EngineMode = EngineMode.Play;
     /** Play mode follows self once, after the self sprite actually exists. Explicit camera actions own it afterwards. */
     private cameraInitialized = false;
+    /**
+     * 경기 시작 연출. `camera`가 true인 동안은 연출이 카메라를 쥐고, 자기 자신 따라가기를 미룬다.
+     * 연출이 끝나도 "나" 표식이 흐려지는 동안 층은 남아 있다(`camera`만 false).
+     */
+    private startIntro: { layer: StartIntroLayer; intro: StartIntro; playZoom: number; camera: boolean } | null = null;
     private freeCamera = true;
     private displayOptions: DisplayOptions = { ...DEFAULT_DISPLAY_OPTIONS };
     /** Roster names that arrived before the player was visible — applied when they're first spawned. */
@@ -170,7 +177,57 @@ export class WorldScene extends Phaser.Scene {
             sprite.update(this.clock, this.animClock, this.theme, onScreen, this.renderOptions);
         }
 
+        this.updateStartIntro();
         this.updateCameraFx(dt, boundedDelta);
+    }
+
+    // ---- 경기 시작 연출 (BASE.md §2.8, §12.2) ----
+
+    playStartIntro(intro: StartIntro): void {
+        this.startIntro?.layer.destroy();
+        this.startIntro = { layer: new StartIntroLayer(this, intro), intro, playZoom: this.baseZoom, camera: true };
+        this.followedId = null;
+        this.cameras.main.stopFollow();
+        this.updateStartIntro();
+    }
+
+    /** 경기가 시작돼 첫 스냅샷이 그려졌다. 카메라를 돌려주고 평소처럼 자기 자신을 따라간다. */
+    endStartIntro(): void {
+        const current = this.startIntro;
+        if (current === null || !current.camera) return;
+        current.camera = false;
+        current.layer.end(performance.now());
+        this.cameras.main.useBounds = true;
+        this.baseZoom = current.playZoom;
+        this.initializePlayCameraIfReady();
+    }
+
+    private updateStartIntro(): void {
+        const current = this.startIntro;
+        if (current === null) return;
+        const now = performance.now();
+        if (current.camera) {
+            const self = current.intro.spawns.find((spawn) => spawn.id === current.intro.selfId);
+            const w = this.mapLayer.worldWidth, h = this.mapLayer.worldHeight;
+            if (self && w > 0 && h > 0) {
+                // 매 프레임 다시 잰다. 연출 중에 창 크기가 바뀌어도 맵이 화면에 맞는다.
+                const pad = START_INTRO.OVERVIEW_PADDING_PX;
+                const viewW = this.scale.width / this.renderScale, viewH = this.scale.height / this.renderScale;
+                const overview = { x: w / 2, y: h / 2, zoom: Math.min(viewW / (w + pad * 2), viewH / (h + pad * 2)) };
+                const play = { x: self.x, y: self.y, zoom: current.playZoom };
+                const camera = blendIntroCamera(overview, play, startIntroProgress(now, current.intro.endsAt, current.intro.reducedMotion));
+                this.baseZoom = Phaser.Math.Clamp(camera.zoom, CAMERA.minZoom, CAMERA.maxZoom);
+                // 맵 전체를 비출 때는 화면이 카메라 경계보다 넓어 경계가 맵을 한쪽으로 민다. 연출 동안만 끈다.
+                this.cameras.main.useBounds = false;
+                this.cameras.main.centerOn(camera.x, camera.y);
+            }
+        }
+        if (current.layer.finished) {
+            current.layer.destroy();
+            this.startIntro = null;
+            return;
+        }
+        current.layer.update(now, this.baseZoom, this.theme, current.intro.reducedMotion);
     }
 
     private reportUpdateError(error: unknown): void {
@@ -489,6 +546,7 @@ export class WorldScene extends Phaser.Scene {
 
     private initializePlayCameraIfReady(): void {
         if (this.cameraInitialized || this.mode !== EngineMode.Play || this.selfId === null) return;
+        if (this.startIntro?.camera) return;
         const sprite = this.players.get(this.selfId);
         if (!sprite) return;
         this.freeCamera = false;

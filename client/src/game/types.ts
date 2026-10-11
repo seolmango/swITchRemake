@@ -54,6 +54,27 @@ export interface PlayerInit {
     nickname?: string;
 }
 
+/** 시작 연출에 보여 줄 한 사람. 좌표는 서버가 `game.starting.spawns`로 보낸 시작 위치다. */
+export interface StartIntroSpawn {
+    id: number;
+    x: number;
+    y: number;
+    colorIndex: number;
+    /** 몸에 적는 번호. */
+    label: string;
+}
+
+/** 경기 시작 연출(BASE.md §2.8, §12.2). 카운트다운이 끝나는 시각에 맞춰 스스로 진행한다. */
+export interface StartIntro {
+    spawns: readonly StartIntroSpawn[];
+    selfId: number;
+    /** 카운트다운이 끝나는 시각, `performance.now()` 기준. */
+    endsAt: number;
+    reducedMotion: boolean;
+    /** 내 표식 위의 글자("나"). 언어 설정을 따른다. */
+    selfLabel: string;
+}
+
 export type CameraMode = 'follow' | 'free';
 
 export interface StormRect {

@@ -628,6 +628,8 @@
     "waitingMap": "맵 불러오는 중…",
     "waitingStart": "경기 시작 신호를 기다리는 중…",
     "waitingSnapshot": "첫 경기 상태를 기다리는 중…",
+    "introSelf": "나",
+    "introCountdown": "{{seconds}}초 뒤 시작",
     "connectionLost": "게임 서버와 연결이 끊겼어요.",
     "serverPending": "렌더러는 준비됐어요. 서버 연결을 기다리는 중…",
     "reconnecting": "연결 복구 중… 경기는 곧 이어져요.",

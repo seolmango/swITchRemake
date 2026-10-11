@@ -106,6 +106,7 @@ export {
     PLAYER_CONTROLS,
     isPlayerControl,
     type SkillRejectedMessage,
+    type GameSpawn,
     type ViolationSignal,
 } from './protocol/events';
 

@@ -62,7 +62,12 @@ export const NETWORK = Object.freeze({
     RECONNECT_GRACE_MS: 5_000,
 
     // ── 방 수명 ──
-    COUNTDOWN_MS: 3_000,
+    /**
+     * 시작 카운트다운. 이 동안 시작 연출이 돈다(BASE.md §2.8, §12.2): 맵 전체 → 천천히 내 자리로
+     * → 도착해서 3·2·1 → 시작. 화면 준비(엔진 부팅·맵 그리기)가 앞의 1.1~1.8초를 먹으므로
+     * (2026-10-11, 실제 브라우저 3개로 잼) 그것을 넘기고도 맵 전체를 2초 넘게 비추는 길이다.
+     */
+    COUNTDOWN_MS: 9_000,
     /** 원본은 shared다 — 결과창 길이는 클라이언트도 알아야 막대를 그린다(§0). */
     POST_GAME_MS: ROOM_TIMING.POST_GAME_MS,
 
