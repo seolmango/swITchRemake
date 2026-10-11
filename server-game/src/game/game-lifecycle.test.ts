@@ -128,6 +128,32 @@ test('selected loadouts enter PlayerState and a missing recovered value falls ba
     assert.equal(players.find((player) => player.playerId === 3)?.loadout, SkillId.Exhaust);
 });
 
+test('시작 연출에 보내는 자리가 시뮬레이션이 실제로 세우는 자리와 같다', () => {
+    // 연출이 보여 준 자리와 경기가 시작된 자리가 다르면 "내 위치"를 알려 준다는 목적이 거짓이 된다.
+    // 번호가 띄엄띄엄이고 입력 순서가 섞여 있어도 번호 오름차순으로 자리를 받는다.
+    const lifecycle = new GameLifecycle({
+        bundle, serverId: 'game', buildId: 'test', scheduler: new Scheduler(),
+        lookupRoom: () => fakeRoom(), violationSink: () => undefined, makeSeed: () => 1,
+    });
+    const snapshot: RoomStartSnapshot = {
+        roomId: 'room', matchId: 'match', mapId: 'map', mode: RoomMode.Match,
+        players: [{ playerId: 7 }, { playerId: 2 }, { playerId: 5 }], rules: {},
+    };
+
+    const spawns = lifecycle.startPositions(snapshot);
+    assert.deepEqual(spawns, [
+        { playerId: 2, x: 384, y: 384 },
+        { playerId: 5, x: 640, y: 384 },
+        { playerId: 7, x: 896, y: 384 },
+    ]);
+
+    lifecycle.startGame(snapshot);
+    const placed = lifecycle.session('room')!.world.players
+        .map((player) => ({ playerId: player.playerId, x: player.x, y: player.y }))
+        .sort((left, right) => left.playerId - right.playerId);
+    assert.deepEqual(placed, spawns);
+});
+
 test('in-game colorIndex maps every one-based playerId into the zero-based palette', () => {
     const lifecycle = new GameLifecycle({
         bundle,

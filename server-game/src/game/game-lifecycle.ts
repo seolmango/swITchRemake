@@ -4,7 +4,7 @@
  * 방은 world를 모르고 시뮬레이션은 방을 모른다. 둘을 아는 유일한 곳이 이 파일이다.
  */
 
-import { RoomMode, TilePhysics, type MatchResultMessage, type ViolationSignal } from 'shared';
+import { RoomMode, TilePhysics, type GameSpawn, type MatchResultMessage, type ViolationSignal } from 'shared';
 import { GAMEPLAY } from '../config/gameplay';
 import { instantiateMap, type ServerMapBundle } from '../maps/map-loader';
 import { NullReplayRecorder, type ReplayRecorder } from '../replay/recorder';
@@ -77,7 +77,7 @@ export class GameLifecycle implements RoomLifecyclePort {
         // leaves training walls disappearing and emits continuous collapse events.
         const trainingMap = snapshot.mode === RoomMode.Training ? { ...map, barrierSpeed: 0, timeline: {} } : map;
         const seed = this.#options.makeSeed?.(snapshot) ?? Date.now();
-        const players = this.#placePlayers(snapshot, map.tileSize, map.cols);
+        const players = this.#placePlayers(snapshot);
         const trainingGround = snapshot.mode === RoomMode.Training
             ? new TrainingGround(trainingMap, players.map((player) => player.playerId))
             : undefined;
@@ -207,10 +207,13 @@ export class GameLifecycle implements RoomLifecyclePort {
      * `sx * tile_size + half_tile_size`로 만들어 내려보낸다). 여기서 다시 스케일하면 안 된다.
      * 배정 순서는 `playerId` 오름차순으로 고정한다. 무작위로 섞으면 리플레이가 재현되지 않는다.
      */
-    #placePlayers(snapshot: RoomStartSnapshot, tileSize: number, cols: number): PlayerState[] {
+    /**
+     * 참가자가 서는 자리. 시뮬레이션의 첫 배치와 카운트다운의 시작 연출(`game.starting.spawns`)이
+     * **이 함수 하나를** 쓴다. 두 벌이 되면 연출이 보여 준 자리와 실제로 서는 자리가 갈라진다.
+     */
+    public startPositions(snapshot: RoomStartSnapshot): GameSpawn[] {
         const map = this.#options.bundle.maps[snapshot.mapId];
-        const players = [...snapshot.players].sort((a, b) => a.playerId - b.playerId);
-        const ids = players.map((player) => player.playerId);
+        const ids = snapshot.players.map((player) => player.playerId).sort((a, b) => a - b);
         const starts = map?.startPositions[ids.length] ?? [];
         // 인원수에 맞는 시작 위치가 없을 때의 자리. MapBuilder는 3인 이상만 만들기 때문에
         // 훈련장(1인)이 여기로 온다.
@@ -218,15 +221,24 @@ export class GameLifecycle implements RoomLifecyclePort {
         // 맵 중앙을 그대로 쓰면 안 된다 — 중앙이 벽인 맵이 있고(훈련장은 가운데가 칸막이다)
         // 벽 속에서 시작하면 첫 tick에 밀려나며 어디로 튈지 모른다. 중앙에서 바깥으로 훑어
         // 처음 나오는 바닥을 쓴다.
-        const fallback = nearestFloorToCenter(map?.initialMap, cols, tileSize);
+        const fallback = nearestFloorToCenter(map?.initialMap, map?.size ?? 0, this.#options.bundle.tileSize);
+        return ids.map((playerId, index) => {
+            const point = starts[index];
+            return { playerId, x: point?.[0] ?? fallback.x, y: point?.[1] ?? fallback.y };
+        });
+    }
+
+    #placePlayers(snapshot: RoomStartSnapshot): PlayerState[] {
+        const players = [...snapshot.players].sort((a, b) => a.playerId - b.playerId);
+        const spawns = this.startPositions(snapshot);
 
         return players.map((startPlayer, index) => {
             const playerId = startPlayer.playerId;
-            const point = starts[index];
+            const spawn = spawns[index]!;
             return {
                 playerId,
-                x: point?.[0] ?? fallback.x,
-                y: point?.[1] ?? fallback.y,
+                x: spawn.x,
+                y: spawn.y,
                 vx: 0,
                 vy: 0,
                 facingX: 0,
