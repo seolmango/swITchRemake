@@ -47,6 +47,8 @@ export interface GameSessionState {
     lobby: LobbyStateMessage['payload'] | null;
     lobbyReceivedAt: number;
     starting: GameStartingMessage['payload'] | null;
+    /** `game.starting`을 받은 시각(Date.now). `countdownMs`와 더하면 카운트다운이 끝나는 시각이다. */
+    startingReceivedAt: number;
     started: GameStartedMessage['payload'] | null;
     /** Latest tagger id from the already-decoded snapshot; switches can change it mid-match. */
     taggerId: number | null;
@@ -78,6 +80,7 @@ const INITIAL_STATE: GameSessionState = {
     lobby: null,
     lobbyReceivedAt: 0,
     starting: null,
+    startingReceivedAt: 0,
     started: null,
     taggerId: null,
     ended: null,
@@ -409,7 +412,7 @@ class GameSession {
             case 'game.starting':
                 this.latestSnapshot = null;
                 this.startupSnapshots.clear();
-                this.setState({ roomState: RoomState.Countdown, starting: message.payload, ended: null });
+                this.setState({ roomState: RoomState.Countdown, starting: message.payload, startingReceivedAt: Date.now(), ended: null });
                 break;
             case 'game.started':
                 this.setState({ roomState: RoomState.Playing, started: message.payload, taggerId: message.payload.taggerId });

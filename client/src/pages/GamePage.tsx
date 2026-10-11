@@ -30,6 +30,8 @@ import { canEnterRunningGame } from '../game/roomRole.ts';
 import { BufferedSnapshots } from '../game/BufferedSnapshots.ts';
 import { useModalFocusTrap } from '../components/common/useModalFocusTrap.ts';
 import { usePrefersReducedMotion } from '../platform/reducedMotion.ts';
+import { START_INTRO } from '../game/internal/startIntro.ts';
+import { StartIntroCountdown } from '../game/hud/StartIntroCountdown.tsx';
 
 const SKILL_PRESENTATION: Record<Exclude<SkillId, 'switch'>, { icon: 'dash' | 'flash' | 'exhaust'; labelKey: string }> = {
     [SkillId.Dash]: { icon: 'dash', labelKey: 'lobby.skills.dash' },
@@ -66,6 +68,9 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
     const [trainingMap, setTrainingMap] = useState<MapView | null>(null);
     const [trainingPads, setTrainingPads] = useState<readonly TrainingPad[]>([]);
     const [spectatingId, setSpectatingId] = useState<number | null>(null);
+    /** 지금 경기의 시작 연출. 있으면 로딩 가림막을 걷고 카운트다운 숫자를 띄운다. */
+    const [intro, setIntro] = useState<{ key: string; endsAt: number } | null>(null);
+    const introKey = useRef<string | null>(null);
     const nextInputSequence = useCallback(() => inputSequence.current++ & 0xffff, []);
     const requestedRoomId = searchParams.get('room_id');
     const live = session.status === 'connected' && session.roomId !== null;
@@ -205,6 +210,55 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
     }, [navigate, session.ended, session.roomId, training]);
 
     const matchReady = engineReady && mapLoaded && session.started !== null && firstSnapshotApplied;
+    const reducedMotion = motionLevel === 'reduced' || prefersReducedMotion;
+
+    /*
+     * 경기 시작 연출(BASE.md §2.8). 카운트다운 동안 맵 전체를 비추고 내 시작 위치로 다가간다.
+     * 카운트다운은 이미 있던 대기 시간이라 연출 때문에 시작이 늦어지지 않는다. 맵을 늦게 받으면
+     * 남은 시간만큼만 보여 주고, 너무 짧으면 아예 건너뛴다.
+     */
+    const starting = session.starting;
+    const startingKey = starting ? `${session.roomId}:${starting.startsAtTick}` : null;
+    useEffect(() => {
+        const engine = engineRef.current;
+        if (training || !engine || !engineReady || !mapLoaded || session.roomState !== RoomState.Countdown
+            || session.role !== 'player' || session.selfId === null || !starting?.spawns) return;
+        const key = startingKey;
+        const spawns = starting.spawns;
+        const selfId = session.selfId;
+        if (key === null || introKey.current === key || !spawns.some((spawn) => spawn.playerId === selfId)) return;
+        const countdownEndsAt = session.startingReceivedAt + starting.countdownMs;
+        // 렌더러에 그리라고 넘기는 일이라 다음 프레임에 시작한다.
+        const frame = window.requestAnimationFrame(() => {
+            const remainingMs = countdownEndsAt - Date.now();
+            if (introKey.current === key || remainingMs < START_INTRO.MIN_REMAINING_MS) return;
+            introKey.current = key;
+            const lobbyPlayers = gameSession.getSnapshot().lobby?.players ?? [];
+            const endsAt = performance.now() + remainingMs;
+            engine.playStartIntro({
+                spawns: spawns.map((spawn) => ({
+                    id: spawn.playerId,
+                    x: spawn.x,
+                    y: spawn.y,
+                    // 경기 중 색과 같아야 한다. 서버는 playerId - 1을 쓰고, 로비 값이 있으면 그것과 같다.
+                    colorIndex: lobbyPlayers.find((player) => player.playerId === spawn.playerId)?.colorIndex ?? spawn.playerId - 1,
+                    label: String(spawn.playerId),
+                })),
+                selfId,
+                endsAt,
+                reducedMotion,
+                selfLabel: t('game.introSelf'),
+            });
+            setIntro({ key, endsAt });
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [engineReady, mapLoaded, reducedMotion, session.role, session.roomState, session.selfId, session.startingReceivedAt, starting, startingKey, t, training]);
+
+    // 첫 스냅샷이 그려지면 연출을 끝낸다. 그때부터는 서버가 검열한 것만 보인다.
+    const introActive = intro !== null && intro.key === startingKey && !matchReady;
+    useEffect(() => {
+        if (matchReady && intro !== null) engineRef.current?.endStartIntro();
+    }, [intro, matchReady]);
     useEffect(() => {
         if (matchReady) return;
         const timer = window.setTimeout(() => setLoadingTimedOut(true), 12_000);
@@ -383,10 +437,11 @@ export const GamePage: React.FC<{ training?: boolean }> = ({ training = false })
                         )}
                     </>
                 )}
+                {introActive && <StartIntroCountdown key={intro.endsAt} theme={theme} endsAt={intro.endsAt}/>}
                 <GameLoadingOverlay
                     theme={theme}
-                    ready={matchReady}
-                    reducedMotion={motionLevel === 'reduced' || prefersReducedMotion}
+                    ready={matchReady || (introActive && !loadingTimedOut)}
+                    reducedMotion={reducedMotion}
                     waitingFor={waitingFor}
                     mapError={mapError}
                     timedOut={loadingTimedOut}

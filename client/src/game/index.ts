@@ -25,6 +25,8 @@ export {
     type EffectState,
     type Theme,
     type PlayerInit,
+    type StartIntro,
+    type StartIntroSpawn,
     type CameraMode,
     type StormRect,
     type FloorVariant,

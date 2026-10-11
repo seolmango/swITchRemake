@@ -19,4 +19,6 @@ export const DEPTH = {
     playerLabel: 6.1,
     playerBars: 8,
     playerEmoji: 9,
+    /** 시작 연출 표식. 카운트다운 동안에만 있고, 그때는 플레이어가 아직 없다. */
+    startIntro: 10,
 } as const;
