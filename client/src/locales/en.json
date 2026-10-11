@@ -16,7 +16,8 @@
     "nextPage": "Next page",
     "profile": "Profile",
     "settings": "Settings",
-    "admin": "Admin"
+    "admin": "Admin",
+    "replay": "Replays"
   },
   "serverStatus": {
     "checking": "Connecting to server…",
@@ -400,7 +401,10 @@
     "replayHint": "Replays are kept for {{hours}} hours. Save the ones you want.",
     "manageDevices": "Manage devices",
     "sessionCreated": "Signed in: {{date}}",
-    "sessionExpires": "Expires: {{date}}"
+    "sessionExpires": "Expires: {{date}}",
+    "replayPlay": "Play replay",
+    "replayPlayLabel": "Play the replay of the match on {{date}}",
+    "openReplayPlayer": "Open a saved file"
   },
   "settings": {
     "title": "Settings",
@@ -955,6 +959,77 @@
       "modified": "Chunk hashes don’t match. The file is damaged or edited.",
       "unverified": "Not signed by the server. We can’t confirm it came from a real match.",
       "unsupported": "Can’t be read safely. Wrong format or not a replay file."
+    },
+    "fetching": "Fetching the replay…",
+    "fetchFailed": "Couldn’t load the replay.",
+    "fetchGone": "This replay is no longer available.",
+    "fetchLogin": "Log in to watch replays of your matches.",
+    "save": "Save as file",
+    "saveHint": "The server keeps it for only {{hours}} hours.",
+    "analysis": {
+      "legendTagger": "Tagger",
+      "legendElimination": "Elimination",
+      "legendSwitch": "Switch",
+      "legendSkills": "Selected player’s skills",
+      "event": {
+        "elimination": "{{actor}} eliminated {{target}}",
+        "switch": "{{actor}} switched · {{target}} is it",
+        "switchMiss": "{{actor}}’s switch missed (aimed at {{target}})",
+        "switchMissNoTarget": "{{actor}}’s switch missed",
+        "taggerAssigned": "{{actor}} became the tagger",
+        "flash": "{{actor}} flashed",
+        "dash": "{{actor}} dashed",
+        "exhaust": "{{actor}} used exhaust · hit: {{count}}"
+      },
+      "statusOut": "Out at {{time}} ({{by}})",
+      "statusTagger": "Tagger",
+      "statusRunner": "Alive",
+      "focusHint": "Follow this player (key {{key}})",
+      "povHint": "Show only what this player could see (V)",
+      "pov": "POV",
+      "povOn": "Exit POV",
+      "statEliminations": "Eliminations",
+      "statSwitch": "Switch",
+      "statTagger": "Time as tagger",
+      "statSkills": "Skills",
+      "statSkillsHint": "Dash {{dash}} · Flash {{flash}} · Exhaust {{exhaust}}",
+      "statDistance": "Moved",
+      "tiles": "{{count}} tiles",
+      "statExhaustHits": "Exhaust hits",
+      "eventFilter": "Filter events",
+      "filter": {
+        "major": "Key",
+        "all": "All",
+        "focus": "Selected"
+      },
+      "noEvents": "No events to show.",
+      "pathMapLabel": "Match movement minimap",
+      "pathAll": "Everyone’s paths and elimination spots (×). Pick a player to highlight theirs.",
+      "pathFocus": "The selected player’s path is bold, others are faded. × marks eliminations.",
+      "povBanner": "{{name}}’s view · only players they could see",
+      "povEliminated": "{{name}} is out and spectating · everyone is visible",
+      "povExit": "Exit POV",
+      "panel": "Analysis",
+      "tab": {
+        "players": "Players",
+        "events": "Events",
+        "paths": "Paths"
+      },
+      "prevEvent": "Previous event ( [ )",
+      "back5": "Back 5s (J, Shift+←)",
+      "prevFrame": "Previous frame (←)",
+      "nextFrame": "Next frame (→)",
+      "fwd5": "Forward 5s (L, Shift+→)",
+      "nextEvent": "Next event ( ] )",
+      "speed": "Playback speed",
+      "wholeMap": "Whole map",
+      "wholeMapHint": "Stop following and show the whole map (0)",
+      "shortcuts": "Shortcuts · Space play/pause · ←/→ one frame · J/L 5s · [ ] prev/next event · -/= speed · 1–8 follow player · V POV · 0 whole map",
+      "players": "Players",
+      "eliminations": "Eliminations",
+      "fileInfo": "File info",
+      "frames": "Frames",
+      "openOther": "Open another file"
     }
   }
 }

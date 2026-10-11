@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 const HUD_DIR = fileURLToPath(new URL('.', import.meta.url));
 const GAME_PAGE = fileURLToPath(new URL('../../pages/GamePage.tsx', import.meta.url));
-const REPLAY_PAGE = fileURLToPath(new URL('../../pages/ReplayPage.tsx', import.meta.url));
+// 리플레이의 게임 화면은 분석 화면 안에 있다.
+const REPLAY_PAGE = fileURLToPath(new URL('../../pages/replay/ReplayAnalyzer.tsx', import.meta.url));
 
 const sourceFile = (file: string) => ts.createSourceFile(
     file,

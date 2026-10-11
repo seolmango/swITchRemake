@@ -199,27 +199,61 @@ test('three member browsers complete two games, persist results and stats, downl
         await host.goto('/replay');
         await host.locator('input[type=file]').setInputFiles({ name: 'audit.switchreplay', mimeType: 'application/octet-stream', buffer: replay });
         await expect(host.locator('.replay-verdict')).toContainText('검증됨');
-        await expect(host.locator('.replay-participants li')).toHaveCount(3);
-        await expect(host.locator('.replay-meta dl > div').filter({ has: host.getByText('길이', { exact: true }) }).locator('dd')).not.toHaveText('불러오는 중…');
+        await expect(host.locator('.replay-players > li')).toHaveCount(3);
         await expect(host.locator('.replay-stage canvas')).toBeVisible();
+        // 재생 버튼은 맵 번들에서 시뮬레이션 주기를 받아야 켜진다. 그 전에는 시간을 셀 수 없다.
         await expect(host.getByRole('button', { name: '재생', exact: true })).toBeEnabled();
         const seek = host.getByRole('slider', { name: '재생 위치', exact: true });
-        const finalFrame = Number(await seek.getAttribute('max'));
+        const frameAt = async () => Number(await seek.getAttribute('aria-valuenow'));
+        const finalFrame = Number(await seek.getAttribute('aria-valuemax'));
         expect(finalFrame, 'the actual completed match contains a replay timeline').toBeGreaterThan(10);
         await host.getByRole('button', { name: '재생', exact: true }).click();
-        await expect.poll(async () => Number(await seek.inputValue()), { message: 'replay advances actual recorded frames' }).toBeGreaterThan(0);
+        await expect.poll(frameAt, { message: 'replay advances actual recorded frames' }).toBeGreaterThan(0);
         await host.getByRole('button', { name: '멈춤', exact: true }).click();
-        const pausedFrame = await seek.inputValue();
+        const pausedFrame = await frameAt();
         await host.waitForTimeout(500);
-        expect(await seek.inputValue(), 'pause retains the same recorded frame').toBe(pausedFrame);
-        await seek.focus(); await seek.press('End');
-        await expect(seek).toHaveValue(String(finalFrame));
-        await expect(host.locator('.replay-position')).toHaveText(`${finalFrame + 1} / ${finalFrame + 1}`);
-        await seek.press('Home');
-        await expect(seek).toHaveValue('0');
-        await expect(host.locator('.replay-position')).toHaveText(`1 / ${finalFrame + 1}`);
+        expect(await frameAt(), 'pause retains the same recorded frame').toBe(pausedFrame);
+        const clock = host.locator('.replay-clock b');
+        const total = (await host.locator('.replay-clock > span').textContent())!.replace('/', '').trim();
+        await host.keyboard.press('End');
+        await expect(seek).toHaveAttribute('aria-valuenow', String(finalFrame));
+        await expect(clock).toHaveText(total);
+        await host.keyboard.press('Home');
+        await expect(seek).toHaveAttribute('aria-valuenow', '0');
+        await expect(clock).toHaveText('0:00.0');
+        // 분석: 실제 경기의 사건이 목록에 오르고, 누르면 그 사건 앞으로 간다. 경기는 자기장으로 끝날 수도 있어
+        // 탈락이 없을 수 있다 — 모든 경기에 있는 "술래로 정해짐"으로 본다.
+        await host.getByRole('tab', { name: '사건', exact: true }).click();
+        const taggerPicked = host.locator('.replay-events li').filter({ hasText: '술래로 정해짐' });
+        await expect(taggerPicked.first()).toBeVisible();
+        await host.keyboard.press('End');
+        await expect(seek).toHaveAttribute('aria-valuenow', String(finalFrame));
+        await taggerPicked.first().getByRole('button').click();
+        await expect.poll(frameAt, { message: 'an event jumps back into the match' }).toBeLessThan(finalFrame);
+        // 개인 시점: 녹화된 시야로 그 사람 화면을 보여 준다고 알린다.
+        await host.getByRole('tab', { name: '선수', exact: true }).click();
+        await host.locator('.replay-players > li').first().getByRole('button', { name: '시점', exact: true }).click();
+        await expect(host.locator('.replay-pov-banner')).toContainText('시점');
+        await host.locator('.replay-pov-banner').getByRole('button', { name: '시점 끄기', exact: true }).click();
+        await expect(host.locator('.replay-pov-banner')).toHaveCount(0);
         evidence.push({ replaySignatureVerified: true, replayParticipants: 3, replayFrames: finalFrame + 1,
-            playbackAdvanced: true, pauseHeld: true, seekForwardAndBackward: true });
+            playbackAdvanced: true, pauseHeld: true, seekForwardAndBackward: true, eventJump: true, pointOfView: true });
+        // 전적에서 바로 재생: 파일을 저장하지 않고 같은 표로 받아 재생기에 연다.
+        await host.goto('/profile');
+        const playButtons = host.getByRole('button', { name: /경기의 리플레이 바로 재생$/ });
+        await expect(playButtons).toHaveCount(2);
+        await playButtons.first().click();
+        await host.waitForURL(`**/replay?match=${matchIds[1]}`);
+        await expect(host.locator('.replay-verdict')).toContainText('검증됨');
+        await expect(host.locator('.replay-players > li')).toHaveCount(3);
+        await expect(host.getByRole('button', { name: '파일로 저장', exact: true })).toBeVisible();
+        // 파일이 지워진 경기에는 재생·저장 버튼이 없다. 눌러야 "없어요"를 알게 하지 않는다.
+        await db`update replays set status = 'deleted' where match_id = ${matchIds[0]!}`;
+        await host.goto('/profile');
+        await expect(host.locator('.match-history-list article')).toHaveCount(2);
+        await expect(playButtons).toHaveCount(1);
+        await expect(host.getByRole('button', { name: /경기의 리플레이 저장$/ })).toHaveCount(1);
+        evidence.push({ profileInstantPlay: true, goneReplayHidesButtons: true });
         const denied = await owner.context.request.get('/api/admin/overview', { headers: owner.headers });
         expect(denied.status()).toBe(403);
         expect((await owner.context.request.get(`/api/admin/reports/${reportCaseId}`, { headers: owner.headers })).status()).toBe(403);
@@ -267,8 +301,8 @@ test('three member browsers complete two games, persist results and stats, downl
             await expect(reader.getByRole('alert')).toContainText('읽을 수 없는 파일');
             await reader.locator('input[type=file]').setInputFiles({ name: 'valid.swrp', mimeType: 'application/octet-stream', buffer: replay });
             await expect(reader.locator('.replay-verdict')).toContainText('검증됨');
-            await expect(reader.locator('.replay-participants li')).toHaveCount(3);
-            await expect(reader.getByRole('slider', { name: '재생 위치', exact: true })).toHaveAttribute('max', String(finalFrame));
+            await expect(reader.locator('.replay-players > li')).toHaveCount(3);
+            await expect(reader.getByRole('slider', { name: '재생 위치', exact: true })).toHaveAttribute('aria-valuemax', String(finalFrame));
             expect(outsider.external).toEqual([]);
             evidence.push({ malformedReplayBytes: 32, rejectedWithVisibleError: true, validFileRecovery: true });
         } finally { await outsider.context.close(); }
