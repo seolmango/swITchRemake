@@ -296,7 +296,21 @@ export type GameStartingMessage = ServerEnvelope<'game.starting', {
     mapId: string;
     /** HUD가 필요한 쿨타임과 지속시간. 클라이언트에 같은 상수를 복사하지 않기 위한 통로다. */
     gameplay: Record<string, number>;
+    /**
+     * 참가자 전원의 시작 위치(월드 픽셀). 카운트다운 동안 시작 연출이 쓴다(BASE.md §2.8).
+     *
+     * 시뮬레이션이 실제로 세우는 자리와 같은 함수에서 나온다. 맵 번들에 이미 공개된 정보라 검열
+     * 대상이 아니고, 이 동안에는 아무도 움직이지 못하므로 그대로 실제 위치다. 선택 필드인 것은
+     * 배포 중 옛 인게임 서버가 섞일 수 있어서다 — 없으면 클라이언트는 연출 없이 시작한다.
+     */
+    spawns?: readonly GameSpawn[];
 }>;
+
+export interface GameSpawn {
+    playerId: number;
+    x: number;
+    y: number;
+}
 
 export type GameStartedMessage = ServerEnvelope<'game.started', { startTick: number; taggerId: number }>;
 /**

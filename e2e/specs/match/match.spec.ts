@@ -71,7 +71,10 @@ test.describe('경기 · 도중 이탈 · 결과', () => {
         for (const player of guests) await player.waitForURL('**/game**', { timeout: 60_000 });
 
         // 한 명이 도중에 창을 닫으면 즉시 아웃된다. 3인 경기라 남은 둘의 공동 승리로 바로 끝난다.
-        await page.waitForTimeout(3_000);
+        // 시작 카운트다운(연출)이 끝나 실제로 경기가 돌 때까지 기다린다. 시간으로 어림하면 카운트다운
+        // 중에 나가 "경기 도중"이 아닌 흐름을 보게 된다.
+        await expect(page.locator('.game-hud[data-hud-ready="true"]')).toBeVisible({ timeout: 90_000 });
+        await expect(guests[0].locator('.game-hud[data-hud-ready="true"]')).toBeVisible({ timeout: 90_000 });
         await guests[0].close();
 
         await page.waitForURL('**/result**', { timeout: 30_000 });

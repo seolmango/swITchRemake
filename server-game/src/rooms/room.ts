@@ -19,7 +19,7 @@ import {
     type RoomState as RoomStateValue,
     type ServerMessage,
     type SkillId,
-    type SkillRejection, type PlayerControl } from 'shared';
+    type SkillRejection, type PlayerControl, type GameSpawn } from 'shared';
 import type { SeatReservation } from '../gateway/ticket-store';
 import { resolveInput } from '../simulation/movement';
 import type { ResolvedInput } from '../simulation/world';
@@ -53,6 +53,11 @@ export interface GameStartInfo {
  */
 export interface RoomLifecyclePort {
     startGame(snapshot: RoomStartSnapshot): GameStartInfo;
+    /**
+     * 카운트다운이 시작될 때 참가자가 설 자리. `startGame`이 실제로 세우는 자리와 같아야 한다
+     * (같은 함수를 쓴다). 없으면 `game.starting`에 싣지 않고, 클라이언트는 시작 연출을 건너뛴다.
+     */
+    startPositions?(snapshot: RoomStartSnapshot): readonly GameSpawn[];
     /** 방이 사라졌다. 결과를 내보내지 않고 돌던 세션만 내린다. */
     stopRoom(roomId: string): void;
     connectionChanged(roomId: string, playerId: number, connected: boolean): void;
@@ -668,11 +673,13 @@ export class Room {
         this.#directoryChanged();
         const startsAtTick = this.#options.getServerTick()
             + Math.ceil((this.#options.timing.countdownMs / 1000) * this.#options.simulationHz);
+        const spawns = this.#options.lifecycle.startPositions?.(this.#startSnapshot);
         this.#resumeStarting = Object.freeze({
             startsAtTick,
             countdownMs: this.#options.timing.countdownMs,
             mapId: this.#mapId,
             gameplay: Object.freeze({ ...this.#options.hudGameplay }),
+            ...(spawns === undefined ? {} : { spawns: Object.freeze(spawns.map((spawn) => Object.freeze({ ...spawn }))) }),
         });
         this.#resumeStarted = null;
         this.#broadcast({ type: 'game.starting', payload: this.#resumeStarting });
