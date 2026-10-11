@@ -1855,6 +1855,25 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: var(--colo
 .lobby-footer-actions { display: flex; align-items: center; gap: 16px; }
 .lobby-footer,
 .lobby-footer-actions { min-width: 0; overflow: hidden; }
+/* 참가자 쪽 시작 대기. 방장 시작 버튼과 같은 자리·크기지만 버튼이 아니므로 채움 없이 테두리만. */
+.lobby-start-wait {
+  width: 300px;
+  height: 88px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: var(--border) solid var(--ui-neutral-border);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  color: var(--surface-muted);
+  white-space: nowrap;
+}
+.lobby-start-wait span { font-size: 18px; }
+.lobby-start-wait strong { font-size: 22px; }
+.lobby-start-wait.is-locked { color: var(--theme-text); border-color: var(--ui-blue-border); }
+.lobby-start-wait.is-locked strong { font-size: 34px; font-variant-numeric: tabular-nums; }
 
 .lobby-dialog-backdrop {
   position: absolute;

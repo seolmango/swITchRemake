@@ -133,6 +133,12 @@
     "startLocked": "Change your picks · start unlocks in {{seconds}}s",
     "canStart": "Everyone’s in. The host can start.",
     "waitingForHost": "Waiting for the host to start",
+    "memberWait": {
+      "lockedLabel": "Start unlocks in",
+      "seconds": "{{seconds}}s",
+      "host": "Host starts",
+      "players": "Gathering players"
+    },
     "locked": "Entry locked",
     "unlocked": "Entry open",
     "roomLocked": "Room locked to new players.",

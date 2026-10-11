@@ -385,7 +385,22 @@ export const LobbyPage: React.FC = () => {
                     </div>
                     <div className="lobby-footer-actions">
                         <RoundButton width={220} height={88} type={2} content={t('lobby.leave')} onClick={exitRoom}/>
-                        {isOwner && <RoundButton width={300} height={88} type={1} content={room.startLockMs > 0 ? t('lobby.startCountdown', { seconds: startLockSeconds }) : t('lobby.start')} disabled={!canStart} onClick={startMatch}/>} 
+                        {isOwner && <RoundButton width={300} height={88} type={1} content={room.startLockMs > 0 ? t('lobby.startCountdown', { seconds: startLockSeconds }) : t('lobby.start')} disabled={!canStart} onClick={startMatch}/>}
+                        {/* 참가자도 언제 시작될 수 있는지 봐야 한다. 예전에는 방장 버튼에만 초가 떠서 나머지는
+                            흐린 한 줄을 놓치면 몰랐다. 버튼이 아니다 — 누를 수 있는 것처럼 보이면 안 된다.
+                            읽어 주는 것은 위 상태 줄(aria-live)이 이미 하므로 여기서는 숨긴다. */}
+                        {!isOwner && (
+                            <div className={`lobby-start-wait${room.startLockMs > 0 ? ' is-locked' : ''}`} aria-hidden="true">
+                                {room.startLockMs > 0 ? (
+                                    <>
+                                        <span>{t('lobby.memberWait.lockedLabel')}</span>
+                                        <strong>{t('lobby.memberWait.seconds', { seconds: startLockSeconds })}</strong>
+                                    </>
+                                ) : (
+                                    <strong>{hasEnoughPlayers ? t('lobby.memberWait.host') : t('lobby.memberWait.players')}</strong>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </footer>
 
