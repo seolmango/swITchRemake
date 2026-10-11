@@ -50,8 +50,13 @@ test.describe('대기실', () => {
         const one = await guestInRoom(guests, code);
         const two = await guestInRoom(guests, code);
         await expect(seatedPlayers(page)).toHaveCount(3, { timeout: 25_000 });
+        // 참가자도 시작 잠금을 본다. 예전에는 방장 버튼에만 남은 초가 떠서 참가자는 언제 시작될지 몰랐다.
+        // 버튼이 아니어야 한다 — 참가자 쪽 버튼은 "방 나가기" 하나뿐이다.
+        await expect(two.locator('.lobby-start-wait')).toContainText(T.lobby.memberWait.lockedLabel, { timeout: 15_000 });
+        await expect(two.locator('.lobby-footer-actions button')).toHaveCount(1);
         // 세 명이 모이면 시작 잠금이 풀린다(사람이 들어올 때마다 잠금이 다시 걸린다).
         await expect(startButton(page)).toBeEnabled({ timeout: 40_000 });
+        await expect(two.locator('.lobby-start-wait')).toHaveText(T.lobby.memberWait.host, { timeout: 15_000 });
 
         await one.close();
         await two.close();

@@ -133,6 +133,12 @@
     "startLocked": "선택 변경 시간 · {{seconds}}초 뒤 시작 가능",
     "canStart": "모두 입장했어요. 방장이 시작할 수 있어요.",
     "waitingForHost": "방장의 시작을 기다리는 중",
+    "memberWait": {
+      "lockedLabel": "시작 가능까지",
+      "seconds": "{{seconds}}초",
+      "host": "방장이 시작해요",
+      "players": "인원 모으는 중"
+    },
     "locked": "입장 잠김",
     "unlocked": "입장 열림",
     "roomLocked": "새 참가자 입장을 잠갔어요.",
