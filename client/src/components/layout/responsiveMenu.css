@@ -260,6 +260,8 @@
   .responsive-form-container .match-history-panel > header span { font-size: 12px; }
   .responsive-form-container .match-history-list { max-height: 440px; padding-right: 0; }
   .responsive-form-container .profile-panel .match-history-list article { grid-template-columns: 74px minmax(0, 1fr) 44px; gap: 8px; padding: 10px; border-width: var(--border-thin); }
+  /* 폰에서는 두 버튼을 세로로 쌓는다. 가로로 두면 기록 글자가 들어갈 자리가 없다. */
+  .responsive-form-container .profile-panel .match-history-actions { flex-direction: column; }
   .responsive-form-container .match-history-list article > div:first-child strong { font-size: 16px; }
   .responsive-form-container .match-history-list article > div:first-child span,
   .responsive-form-container .match-history-list time,
@@ -328,19 +330,8 @@
   .responsive-form-container .replay-shell { position: relative; inset: auto; width: 100%; grid-template-rows: auto; gap: 16px; }
   .responsive-form-container .replay-dropzone { min-height: 250px; padding: 20px; border-width: var(--border); gap: 14px; font-size: 16px; }
   .responsive-form-container .replay-dropzone strong { font-size: 22px; }
-  .responsive-form-container .replay-meta { grid-template-columns: minmax(0, 1fr); gap: 14px; }
-  .responsive-form-container .replay-meta dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .responsive-form-container .replay-meta dd { font-size: 16px; white-space: normal; overflow-wrap: anywhere; }
   .responsive-form-container .replay-verdict { padding: 12px; border-width: var(--border-thin); }
   .responsive-form-container .replay-verdict strong { font-size: 19px; }
-  .responsive-form-container .replay-participants { grid-template-columns: repeat(2, minmax(0, 1fr)); font-size: 14px; }
-  .responsive-form-container .replay-participants li { overflow-wrap: anywhere; }
-  .responsive-form-container .replay-participants i { flex: none; }
-  .responsive-form-container .replay-stage { aspect-ratio: 16 / 9; border-width: var(--border-thin); }
-  .responsive-form-container .replay-controls { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; }
-  .responsive-form-container .replay-controls .round-button { width: 110px !important; }
-  .responsive-form-container .replay-controls input { min-width: 0; width: 100%; }
-  .responsive-form-container .replay-position { grid-column: 1 / -1; font-size: 14px; }
 
   .responsive-form-container .admin-shell,
   .responsive-form-container .admin-shell.has-tabs { position: relative; inset: auto; width: 100%; padding: 14px; border-width: var(--border); border-radius: var(--radius-md); grid-template-rows: auto; gap: 16px; overflow: visible; }

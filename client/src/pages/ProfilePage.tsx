@@ -291,6 +291,8 @@ export const ProfilePage: React.FC = () => {
                                         {t('profile.historyRetention', { days: retention.matchDays })}
                                         {' '}
                                         {t('profile.replayHint', { hours: retention.replayHours })}
+                                        {' '}
+                                        <button type="button" className="match-history-open-player" onClick={() => navigate('/replay')}>{t('profile.openReplayPlayer')}</button>
                                     </small>
                                 )}
                             </div>
@@ -315,15 +317,28 @@ export const ProfilePage: React.FC = () => {
                                             <span>{t('profile.matchSurvived', { duration: formatDuration(match.survivedMs) })}</span>
                                         </div>
                                         <time dateTime={match.endedAt}>{formatDate(match.endedAt)}</time>
-                                        <button
-                                            type="button"
-                                            className="match-history-download"
-                                            title={t('profile.replayDownload')}
-                                            aria-label={t('profile.replayDownloadLabel', { date: formatDate(match.endedAt) })}
-                                            onClick={() => void downloadReplay(match.matchId)}
-                                        >
-                                            <Icon name="external" size={22}/>
-                                        </button>
+                                        {/* 파일이 지워진 경기에는 버튼을 두지 않는다. 눌러야 "없어요"를 알게 하면 헛걸음이다. */}
+                                        {match.replayAvailable && <div className="match-history-actions">
+                                            {/* 받는 것과 보는 것을 나눈다. 대부분은 지금 보고 싶을 뿐이라 재생이 앞에 온다. */}
+                                            <button
+                                                type="button"
+                                                className="match-history-download"
+                                                title={t('profile.replayPlay')}
+                                                aria-label={t('profile.replayPlayLabel', { date: formatDate(match.endedAt) })}
+                                                onClick={() => navigate(`/replay?match=${encodeURIComponent(match.matchId)}`)}
+                                            >
+                                                <Icon name="play" size={22}/>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="match-history-download"
+                                                title={t('profile.replayDownload')}
+                                                aria-label={t('profile.replayDownloadLabel', { date: formatDate(match.endedAt) })}
+                                                onClick={() => void downloadReplay(match.matchId)}
+                                            >
+                                                <Icon name="download" size={22}/>
+                                            </button>
+                                        </div>}
                                     </article>
                                 ))}
                             </div>

@@ -15,6 +15,7 @@ type HistoryRow = {
     switchTry: number;
     switchSuccess: number;
     survivedMs: number;
+    replayAvailable: boolean;
 };
 
 const row = (matchId: string, offsetMinutes: number): HistoryRow => ({
@@ -27,6 +28,7 @@ const row = (matchId: string, offsetMinutes: number): HistoryRow => ({
     switchTry: 4,
     switchSuccess: 2,
     survivedMs: 60_000,
+    replayAvailable: offsetMinutes === 0,
 });
 
 function historyService(pages: HistoryRow[][]) {
@@ -75,6 +77,8 @@ test('match history cursor reaches the last page without duplicates', async () =
 
     const firstPage = await service.getMatches(7, 2);
     assert.deepEqual(firstPage.matches.map((match) => match.matchId), [firstId, secondId]);
+    // 보관이 끝난 경기는 화면이 리플레이 버튼을 감춘다.
+    assert.deepEqual(firstPage.matches.map((match) => match.replayAvailable), [true, false]);
     assert.equal(typeof firstPage.nextCursor, 'string');
 
     const lastPage = await service.getMatches(7, 2, firstPage.nextCursor!);

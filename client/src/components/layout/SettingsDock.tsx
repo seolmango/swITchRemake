@@ -19,6 +19,8 @@ export const SettingsDock: React.FC<{ showProfile?: boolean }> = ({ showProfile 
         <div className="settings-dock">
             <RoundButton width={DOCK_BUTTON_SIZE} height={DOCK_BUTTON_SIZE} type={2} content={<Icon name={theme === 0 ? 'moon' : 'sun'}/>} ariaLabel={t('common.toggleTheme')} onClick={toggleTheme}/>
             {showProfile && admin && <RoundButton width={DOCK_BUTTON_SIZE} height={DOCK_BUTTON_SIZE} type={2} content={<Icon name="shield"/>} ariaLabel={t('nav.admin')} onClick={() => navigate('/admin')}/>}
+            {/* 재생기는 로그인 없이도 연다. 저장해 둔 파일만 있으면 된다. */}
+            {showProfile && <RoundButton width={DOCK_BUTTON_SIZE} height={DOCK_BUTTON_SIZE} type={2} content={<Icon name="play"/>} ariaLabel={t('nav.replay')} onClick={() => navigate('/replay')}/>}
             {showProfile && <RoundButton width={DOCK_BUTTON_SIZE} height={DOCK_BUTTON_SIZE} type={2} content={<Icon name="person"/>} ariaLabel={t('nav.profile')} onClick={() => navigate('/profile')}/>}
             <RoundButton width={DOCK_BUTTON_SIZE} height={DOCK_BUTTON_SIZE} type={2} content={<Icon name="settings"/>} ariaLabel={t('nav.settings')} onClick={() => navigate('/settings')}/>
         </div>

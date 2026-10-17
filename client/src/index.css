@@ -2495,7 +2495,6 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: var(--colo
 .replay-error { margin: 0; color: var(--theme-text); font-size: 17px; display: grid; gap: 4px; }
 .replay-error small { color: var(--surface-muted); font-size: 14px; word-break: break-all; }
 
-.replay-meta { display: grid; grid-template-columns: 260px 1fr auto; gap: 24px; align-items: start; }
 .replay-verdict { display: grid; gap: 4px; padding: 14px 18px; border: var(--border) solid var(--surface-border); border-radius: var(--radius-md); }
 .replay-verdict strong { font-size: 22px; }
 .replay-verdict small { color: var(--surface-muted); font-size: 14px; line-height: 1.4; }
@@ -2508,18 +2507,6 @@ html[data-theme='dark'] .lobby-host-actions button.is-danger { color: var(--colo
 .replay-verdict.is-modified strong::before { content: '!'; color: var(--semantic-bad); }
 .replay-verdict.is-unverified strong::before { content: '?'; color: var(--semantic-warn); }
 .replay-verdict.is-unsupported strong::before { content: '×'; }
-.replay-meta dl { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 20px; }
-.replay-meta dl > div { display: grid; gap: 2px; min-width: 0; }
-.replay-meta dt { color: var(--surface-muted); font-size: 14px; }
-.replay-meta dd { margin: 0; font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.replay-participants { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 16px; }
-.replay-participants li { display: flex; align-items: center; gap: 8px; }
-.replay-participants i { width: 26px; height: 26px; display: grid; place-items: center; border: var(--border) solid var(--surface-border); border-radius: 50%; font-style: normal; font-size: 14px; }
-
-.replay-stage { min-height: 0; position: relative; border: var(--border) solid var(--surface-border); border-radius: var(--radius-md); overflow: hidden; }
-.replay-controls { display: flex; align-items: center; gap: 20px; }
-.replay-controls input[type='range'] { flex: 1; }
-.replay-position { color: var(--surface-muted); font-size: 16px; font-variant-numeric: tabular-nums; }
 
 /* 전적 줄의 리플레이 저장. 결과 표의 신고 버튼과 같은 규칙 — 그 줄에 손이 갔을 때만 드러난다. */
 .match-history-download {
