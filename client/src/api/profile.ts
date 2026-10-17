@@ -26,6 +26,8 @@ export interface UserMatchHistoryItem {
     switchTry: number;
     switchSuccess: number;
     survivedMs: number;
+    /** 리플레이 파일이 아직 서버에 있는가. 없으면 전적에서 재생·저장 버튼을 감춘다. */
+    replayAvailable: boolean;
 }
 
 export interface UserMatchHistoryPage {

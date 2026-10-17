@@ -293,6 +293,28 @@ describe('ws transport', () => {
         }
     });
 
+    it('허용된 화면이 리플레이를 바로 읽을 수 있게 CORS를 붙이고, 남의 Origin에는 붙이지 않는다', async () => {
+        const f = await fixture(200, undefined, {
+            readReplay: async (storageKey) => storageKey === 'match-1.swrp' ? new Uint8Array([7, 8]) : null,
+        });
+        const ticket = 'a'.repeat(32);
+        try {
+            const allowed = await fetch(`${f.replayUrl}?ticket=${ticket}`, { headers: { Origin: 'https://switch.example.com' } });
+            assert.equal(allowed.status, 200);
+            assert.equal(allowed.headers.get('access-control-allow-origin'), 'https://switch.example.com');
+            assert.deepEqual([...new Uint8Array(await allowed.arrayBuffer())], [7, 8]);
+            // 보관이 끝난 경기도 화면이 상태 코드를 읽어야 이유를 말할 수 있다.
+            const gone = await fetch(`${f.replayUrl.replace('match-1', 'match-2')}?ticket=${ticket}`, { headers: { Origin: 'https://switch.example.com' } });
+            assert.equal(gone.status, 404);
+            assert.equal(gone.headers.get('access-control-allow-origin'), 'https://switch.example.com');
+            const foreign = await fetch(`${f.replayUrl}?ticket=${ticket}`, { headers: { Origin: 'https://evil.example' } });
+            assert.equal(foreign.headers.get('access-control-allow-origin'), null);
+            await foreign.arrayBuffer();
+        } finally {
+            await f.transport.close();
+        }
+    });
+
     it('리플레이 조회를 IP별로 제한하고 동시 readFile 수에도 상한을 둔다', async () => {
         let releaseFirst!: () => void;
         const firstRead = new Promise<void>((resolve) => { releaseFirst = resolve; });

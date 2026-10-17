@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type IconName = 'home' | 'person' | 'settings' | 'back' | 'next' | 'refresh' | 'lock' | 'unlock' | 'users' | 'moon' | 'sun' | 'globe' | 'check' | 'keyboard' | 'touch' | 'gamepad' | 'trophy' | 'timer' | 'crown' | 'remove' | 'swap' | 'share' | 'external' | 'shield' | 'flag' | 'expand' | 'shrink' | 'close' | 'map';
+export type IconName = 'home' | 'person' | 'settings' | 'back' | 'next' | 'refresh' | 'lock' | 'unlock' | 'users' | 'moon' | 'sun' | 'globe' | 'check' | 'keyboard' | 'touch' | 'gamepad' | 'trophy' | 'timer' | 'crown' | 'remove' | 'swap' | 'share' | 'external' | 'shield' | 'flag' | 'expand' | 'shrink' | 'close' | 'map' | 'play' | 'download';
 
 interface IconProps {
     name: IconName;
@@ -38,6 +38,8 @@ const paths: Record<IconName, React.ReactNode> = {
     expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>,
     shrink: <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>,
     close: <path d="M6 6l12 12M18 6 6 18"/>,
+    play: <path d="M7 4.5v15L19 12 7 4.5Z"/>,
+    download: <><path d="M12 4v11M7 10.5l5 5 5-5"/><path d="M4 19.5h16"/></>,
     map: <><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20Z"/><path d="M9 4v13.5M15 6.5V20"/></>,
 };
 

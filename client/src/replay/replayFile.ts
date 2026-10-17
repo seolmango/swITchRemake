@@ -6,6 +6,7 @@ import {
     MAX_PLAYERS_PER_ROOM,
     REPLAY_FORMAT_VERSION,
     verifyRootHash,
+    type ChunkAccumulator,
     type ChunkIndexEntry,
     type RecordedFrame,
     type ReplayManifest,
@@ -189,10 +190,17 @@ export async function openReplay(bytes: Uint8Array, verifier?: ReplayVerifier): 
 
 /** chunk 하나를 풀어 프레임만 꺼낸다. 해시 검증은 `decodeChunk`가 한다. */
 export async function loadFrames(replay: OpenedReplay, chunkIndexPosition: number): Promise<RecordedFrame[]> {
+    return (await loadChunk(replay, chunkIndexPosition)).frames;
+}
+
+/**
+ * chunk 하나를 통째로 푼다. 분석 화면은 프레임 말고도 사건(태그·스킬)과 사람마다 누가 보였는지가
+ * 필요하다 — 둘 다 녹화 때 이미 chunk에 들어 있다.
+ */
+export async function loadChunk(replay: OpenedReplay, chunkIndexPosition: number): Promise<ChunkAccumulator> {
     const entry = replay.chunkIndex[chunkIndexPosition];
-    if (!entry) return [];
-    const chunk = await decodeChunk(replay.bytes, entry, browserReplayCodecWithLimit(entry.rawLen));
-    return chunk.frames;
+    if (!entry) return { frames: [], visibilities: [], events: [] };
+    return decodeChunk(replay.bytes, entry, browserReplayCodecWithLimit(entry.rawLen));
 }
 
 /** 프레임 바이트는 `ArrayBuffer`로 넘겨야 한다. 엔진의 스냅샷 디코더가 그것을 받는다. */

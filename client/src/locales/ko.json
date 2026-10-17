@@ -16,7 +16,8 @@
     "nextPage": "다음 페이지",
     "profile": "프로필",
     "settings": "설정",
-    "admin": "운영자"
+    "admin": "운영자",
+    "replay": "리플레이"
   },
   "serverStatus": {
     "checking": "서버 연결 중…",
@@ -400,7 +401,10 @@
     "replayHint": "리플레이는 {{hours}}시간 동안 보관돼요. 남기고 싶은 경기는 저장해 두세요.",
     "manageDevices": "기기 관리",
     "sessionCreated": "로그인: {{date}}",
-    "sessionExpires": "만료: {{date}}"
+    "sessionExpires": "만료: {{date}}",
+    "replayPlay": "바로 재생",
+    "replayPlayLabel": "{{date}} 경기의 리플레이 바로 재생",
+    "openReplayPlayer": "저장한 파일 열기"
   },
   "settings": {
     "title": "설정",
@@ -955,6 +959,77 @@
       "modified": "조각 해시가 맞지 않아요. 파일이 손상됐거나 수정됐어요.",
       "unverified": "서버가 서명한 파일이 아니에요. 실제 경기 기록인지 확인할 수 없어요.",
       "unsupported": "안전하게 읽을 수 없어요. 형식이 다르거나 리플레이 파일이 아니에요."
+    },
+    "fetching": "서버에서 리플레이를 받는 중…",
+    "fetchFailed": "리플레이를 받지 못했어요.",
+    "fetchGone": "이 경기의 리플레이는 더 이상 없어요.",
+    "fetchLogin": "로그인해야 내 경기의 리플레이를 볼 수 있어요.",
+    "save": "파일로 저장",
+    "saveHint": "서버에는 {{hours}}시간만 남아요.",
+    "analysis": {
+      "legendTagger": "술래",
+      "legendElimination": "탈락",
+      "legendSwitch": "스위치",
+      "legendSkills": "고른 사람의 스킬",
+      "event": {
+        "elimination": "{{actor}} → {{target}} 탈락",
+        "switch": "{{actor}}의 스위치 · {{target}}이(가) 술래",
+        "switchMiss": "{{actor}}의 스위치 실패 ({{target}} 지목)",
+        "switchMissNoTarget": "{{actor}}의 스위치 실패",
+        "taggerAssigned": "{{actor}}이(가) 술래로 정해짐",
+        "flash": "{{actor}}의 점멸",
+        "dash": "{{actor}}의 유체화",
+        "exhaust": "{{actor}}의 탈진 · {{count}}명 적중"
+      },
+      "statusOut": "{{time}}에 탈락 ({{by}})",
+      "statusTagger": "술래",
+      "statusRunner": "생존",
+      "focusHint": "이 사람을 따라가기 (단축키 {{key}})",
+      "povHint": "이 사람이 그때 본 화면만 보기 (V)",
+      "pov": "시점",
+      "povOn": "시점 끄기",
+      "statEliminations": "탈락시킴",
+      "statSwitch": "스위치",
+      "statTagger": "술래 시간",
+      "statSkills": "스킬",
+      "statSkillsHint": "유체화 {{dash}} · 점멸 {{flash}} · 탈진 {{exhaust}}",
+      "statDistance": "이동",
+      "tiles": "{{count}}칸",
+      "statExhaustHits": "탈진 적중",
+      "eventFilter": "사건 거르기",
+      "filter": {
+        "major": "주요",
+        "all": "전체",
+        "focus": "고른 사람"
+      },
+      "noEvents": "보여 줄 사건이 없어요.",
+      "pathMapLabel": "경기 동선 미니맵",
+      "pathAll": "모두의 동선과 탈락 자리(×). 사람을 고르면 그 사람의 길만 진하게 보여요.",
+      "pathFocus": "고른 사람의 동선이 진하게, 나머지는 옅게 보여요. ×는 탈락 자리예요.",
+      "povBanner": "{{name}}의 시점 · 그때 보이던 사람만 나와요",
+      "povEliminated": "{{name}}은(는) 탈락해서 관전 중이에요 · 전체가 보여요",
+      "povExit": "시점 끄기",
+      "panel": "분석",
+      "tab": {
+        "players": "선수",
+        "events": "사건",
+        "paths": "동선"
+      },
+      "prevEvent": "이전 사건 ( [ )",
+      "back5": "5초 뒤로 (J, Shift+←)",
+      "prevFrame": "한 프레임 뒤로 (←)",
+      "nextFrame": "한 프레임 앞으로 (→)",
+      "fwd5": "5초 앞으로 (L, Shift+→)",
+      "nextEvent": "다음 사건 ( ] )",
+      "speed": "재생 속도",
+      "wholeMap": "전체 맵",
+      "wholeMapHint": "따라가기를 끄고 맵 전체를 봐요 (0)",
+      "shortcuts": "단축키 · Space 재생/멈춤 · ←/→ 한 프레임 · J/L 5초 · [ ] 이전/다음 사건 · -/= 속도 · 1–8 선수 따라가기 · V 시점 · 0 전체 맵",
+      "players": "인원",
+      "eliminations": "탈락",
+      "fileInfo": "파일 정보",
+      "frames": "프레임",
+      "openOther": "다른 파일 열기"
     }
   }
 }

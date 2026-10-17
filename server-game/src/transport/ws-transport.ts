@@ -55,13 +55,29 @@ function hasRequestBody(request: IncomingMessage): boolean {
         || (length !== undefined && length !== '0');
 }
 
+/** 허용된 화면 Origin이면 그 Origin을 돌려준다. 화면과 인게임 서버의 주소가 다를 때 fetch가 응답을 읽으려면 필요하다. */
+function allowedCorsOrigin(request: IncomingMessage, allowedOrigins: readonly string[]): string | null {
+    const requestOrigin = typeof request.headers.origin === 'string' ? canonicalOrigin(request.headers.origin) : null;
+    return requestOrigin && allowedOrigins.some((origin) => canonicalOrigin(origin) === requestOrigin)
+        ? requestOrigin
+        : null;
+}
+
 async function serveReplay(
     request: IncomingMessage,
     response: ServerResponse,
+    allowedOrigins: readonly string[],
     readReplay: (storageKey: string, ticket: string) => Promise<Uint8Array | null>,
     admit: () => { readonly status: 429 | 503; readonly release?: never } | { readonly status: 200; readonly release: () => void },
 ): Promise<void> {
     let release: (() => void) | null = null;
+    // 재생기는 파일을 저장하지 않고 바로 fetch해서 연다. 실패 응답에도 붙여야 화면이 404(보관 끝)를
+    // 네트워크 오류와 구분해 이유를 말할 수 있다. 표가 곧 권한이라 Origin을 열어도 새는 것은 없다.
+    const corsOrigin = allowedCorsOrigin(request, allowedOrigins);
+    if (corsOrigin) {
+        response.setHeader('Access-Control-Allow-Origin', corsOrigin);
+        response.setHeader('Vary', 'Origin');
+    }
     try {
         if (request.method !== 'GET' && request.method !== 'HEAD') {
             response.writeHead(405, { Allow: 'GET, HEAD' }).end();
@@ -310,10 +326,7 @@ export class WsTransport implements GameTransport {
         this.#server = options.server ?? createServer((request, response) => {
             const bundlePath = `/map-bundles/${options.metadata.mapBundleHash}.json`;
             if ((request.method === 'GET' || request.method === 'HEAD') && request.url === bundlePath && options.mapBundleBody && !hasRequestBody(request)) {
-                const requestOrigin = typeof request.headers.origin === 'string' ? canonicalOrigin(request.headers.origin) : null;
-                const corsOrigin = requestOrigin && options.allowedOrigins.some((origin) => canonicalOrigin(origin) === requestOrigin)
-                    ? requestOrigin
-                    : null;
+                const corsOrigin = allowedCorsOrigin(request, options.allowedOrigins);
                 response.writeHead(200, {
                     'Content-Type': 'application/json; charset=utf-8',
                     'Cache-Control': 'public, max-age=31536000, immutable',
@@ -324,7 +337,7 @@ export class WsTransport implements GameTransport {
                 return;
             }
             if (request.url?.startsWith('/replays/') && options.readReplay) {
-                void serveReplay(request, response, options.readReplay, () => this.#admitReplay(request));
+                void serveReplay(request, response, options.allowedOrigins, options.readReplay, () => this.#admitReplay(request));
                 return;
             }
             response.writeHead(404).end();

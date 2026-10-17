@@ -56,6 +56,11 @@ export interface UserMatchHistoryItem {
     switchTry: number;
     switchSuccess: number;
     survivedMs: number;
+    /**
+     * 리플레이 파일이 아직 있는가. 표 발급(`ReplayDownloadService`)과 같은 기준이다 — 여기서 있다고 한
+     * 경기에 표가 404를 내면 화면이 거짓말을 한 셈이 된다.
+     */
+    replayAvailable: boolean;
 }
 
 export interface UserMatchHistoryResponse {
@@ -348,6 +353,11 @@ export class UserService {
             switchTry: schema.matchParticipants.switchTry,
             switchSuccess: schema.matchParticipants.switchSuccess,
             survivedMs: schema.matchParticipants.survivedMs,
+            replayAvailable: sql<boolean>`EXISTS (
+                SELECT 1 FROM ${schema.replays} replay
+                WHERE replay.match_id = ${schema.matchParticipants.matchId}
+                  AND replay.status = 'available'
+            )`,
         }).from(schema.matchParticipants)
             .innerJoin(schema.matches, eq(schema.matches.matchId, schema.matchParticipants.matchId))
             .where(and(
@@ -370,6 +380,7 @@ export class UserService {
             switchTry: row.switchTry,
             switchSuccess: row.switchSuccess,
             survivedMs: row.survivedMs,
+            replayAvailable: row.replayAvailable === true,
         }] : []);
         const last = hasMore ? matches.at(-1) : undefined;
         return {
